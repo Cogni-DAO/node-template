@@ -19,16 +19,17 @@ LinkedIn is a professional networking platform where content is tied to personal
 
 ## What We Optimize For
 
-| Goal | Weight | How |
-|------|--------|-----|
-| Comments (thoughtful) | Highest | End with a genuine question. Share a decision, not just a result. |
-| Professional authority | High | Show expertise through specifics, not claims |
-| Reach / impressions | Medium | First 1300 chars must hook — determines "see more" clicks |
-| Link clicks | Low | Links go in comments, not post body |
+| Goal                   | Weight  | How                                                               |
+| ---------------------- | ------- | ----------------------------------------------------------------- |
+| Comments (thoughtful)  | Highest | End with a genuine question. Share a decision, not just a result. |
+| Professional authority | High    | Show expertise through specifics, not claims                      |
+| Reach / impressions    | Medium  | First 1300 chars must hook — determines "see more" clicks         |
+| Link clicks            | Low     | Links go in comments, not post body                               |
 
 ## Tone & Voice
 
 **What works:**
+
 - First-person narratives ("I spent 6 months building X. Here's what I'd do differently.")
 - Lessons learned with specific numbers/outcomes
 - Contrarian professional takes backed by experience
@@ -36,6 +37,7 @@ LinkedIn is a professional networking platform where content is tied to personal
 - Acknowledging failure or difficulty (vulnerability + insight)
 
 **What fails:**
+
 - "We're hiring!" as the entire post
 - Humble brags disguised as gratitude ("Humbled to announce...")
 - Inspirational quotes without original thought
@@ -46,6 +48,7 @@ LinkedIn is a professional networking platform where content is tied to personal
 ## Content Patterns
 
 ### Thought Leadership
+
 ```
 [Hook: contrarian statement or surprising result]
 
@@ -59,6 +62,7 @@ LinkedIn is a professional networking platform where content is tied to personal
 ```
 
 ### Project Update
+
 ```
 [What we shipped and why it matters — 2 sentences]
 
@@ -77,6 +81,7 @@ What would you have done differently?
 ```
 
 ### Hiring / Team
+
 ```
 [Why this role exists — the mission, not the JD]
 
@@ -93,6 +98,7 @@ DM me or link in comments.
 ## Adaptation Rules
 
 When adapting content for LinkedIn:
+
 1. **Hook in the first 2 lines.** Everything after ~150 chars is behind "see more."
 2. **No links in the post body.** Put them in the first comment. The algorithm punishes external links.
 3. **Write in first person.** "We" is okay for company updates, but "I" performs better.
@@ -104,6 +110,7 @@ When adapting content for LinkedIn:
 ## Examples
 
 ### Strong
+
 > We put our entire billing system on a blockchain.
 >
 > Not because it's trendy. Because we have 47 DAO members who need to independently verify every transaction — and none of them should have to trust a central database.
@@ -123,4 +130,5 @@ When adapting content for LinkedIn:
 > #DAO #blockchain #fintech #accounting #web3
 
 ### Weak
+
 > Excited to announce our new blockchain-based billing system! This cutting-edge solution provides unprecedented transparency for our community. Check it out at https://example.com #innovation #blockchain #AI #crypto #startup #founder #tech #future

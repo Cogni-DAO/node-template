@@ -20,16 +20,17 @@ X is a high-velocity, public-by-default microblogging platform. Posts are short-
 
 ## What We Optimize For
 
-| Goal | Weight | How |
-|------|--------|-----|
-| Replies/engagement | High | Ask questions, be opinionated, invite debate |
-| Reposts | High | Make it quotable — strong standalone statements |
-| Link clicks | Medium | Tease value, don't give everything away |
-| Followers | Low | Comes from consistency, not individual posts |
+| Goal               | Weight | How                                             |
+| ------------------ | ------ | ----------------------------------------------- |
+| Replies/engagement | High   | Ask questions, be opinionated, invite debate    |
+| Reposts            | High   | Make it quotable — strong standalone statements |
+| Link clicks        | Medium | Tease value, don't give everything away         |
+| Followers          | Low    | Comes from consistency, not individual posts    |
 
 ## Tone & Voice
 
 **What works:**
+
 - Direct, confident assertions ("We built X because Y")
 - Hot takes with substance behind them
 - Showing work-in-progress, building in public
@@ -37,6 +38,7 @@ X is a high-velocity, public-by-default microblogging platform. Posts are short-
 - Self-deprecating humor about real problems
 
 **What fails:**
+
 - Corporate speak ("We're thrilled to announce...")
 - Excessive hashtags (#AI #ML #Innovation #Future)
 - Engagement bait without substance ("This changed everything...")
@@ -46,18 +48,21 @@ X is a high-velocity, public-by-default microblogging platform. Posts are short-
 ## Content Patterns
 
 ### Hook Patterns (first post of thread or standalone)
+
 - **Contrarian:** "Everyone says X. They're wrong. Here's why:"
 - **Result lead:** "We reduced latency by 80%. Here's the one change that mattered:"
 - **Question:** "Why does every AI startup claim 'production-ready' but none show error rates?"
 - **Show don't tell:** Screenshot/demo + one-line context
 
 ### Thread Structure
+
 1. **Hook** (standalone value, makes reader want more)
 2. **Context** (2-3 posts: what, why, for whom)
 3. **Substance** (3-5 posts: the actual insight/data/technique)
 4. **CTA** (1 post: link, ask, or invitation)
 
 ### Anti-Patterns
+
 - Starting with "Thread:" or "1/" — the platform shows thread indicators natively
 - Each post starting with a number — breaks standalone readability
 - Walls of text with no line breaks
@@ -66,6 +71,7 @@ X is a high-velocity, public-by-default microblogging platform. Posts are short-
 ## Adaptation Rules
 
 When adapting content for X:
+
 1. **Lead with the sharpest insight.** Cut preamble.
 2. **If > 280 chars, thread it.** Split at natural sentence boundaries.
 3. **Every post in a thread must be independently valuable.** Someone seeing post 3/7 in their timeline should still get something.
@@ -76,9 +82,11 @@ When adapting content for X:
 ## Examples
 
 ### Strong
+
 > We shipped our billing system on a blockchain. Not for the hype — because we needed 47 DAO members to independently verify every transaction without trusting a central database.
 >
 > Here's what we learned about the tradeoffs:
 
 ### Weak
+
 > We're excited to announce that our new billing system leverages cutting-edge blockchain technology to provide transparent and verifiable transactions for our DAO community! #blockchain #DAO #web3 #billing

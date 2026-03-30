@@ -43,13 +43,13 @@ export const BROADCAST_WRITER_GRAPH_NAME = "broadcast-writer" as const;
  * CompiledStateGraph type for LangGraph CLI schema extraction.
  */
 export function createBroadcastWriterGraph(opts: CreateReactAgentGraphOptions) {
-	const { llm, responseFormat } = opts;
+  const { llm, responseFormat } = opts;
 
-	return createReactAgent({
-		llm,
-		tools: [],
-		messageModifier: BROADCAST_WRITER_SYSTEM_PROMPT,
-		...(responseFormat === undefined && { stateSchema: MessagesAnnotation }),
-		...(responseFormat !== undefined && { responseFormat }),
-	});
+  return createReactAgent({
+    llm,
+    tools: [],
+    messageModifier: BROADCAST_WRITER_SYSTEM_PROMPT,
+    ...(responseFormat === undefined && { stateSchema: MessagesAnnotation }),
+    ...(responseFormat !== undefined && { responseFormat }),
+  });
 }

@@ -143,21 +143,25 @@ This verifies PUBLISH_IS_IDEMPOTENT. Use browser dev tools or curl.
 ## Test 10: Invalid Input Validation
 
 - [ ] Send a draft with empty body:
+
   ```bash
   curl -X POST http://localhost:3000/api/v1/broadcasting \
     -H "Content-Type: application/json" \
     -H "Cookie: <your session cookie>" \
     -d '{"body": "", "targetPlatforms": ["x"]}'
   ```
+
   Expected: 400 with "Invalid input format".
 
 - [ ] Send a draft with no platforms:
+
   ```bash
   curl -X POST http://localhost:3000/api/v1/broadcasting \
     -H "Content-Type: application/json" \
     -H "Cookie: <your session cookie>" \
     -d '{"body": "Hello", "targetPlatforms": []}'
   ```
+
   Expected: 400 with "Invalid input format".
 
 - [ ] Send a review with invalid decision:
@@ -172,6 +176,7 @@ This verifies PUBLISH_IS_IDEMPOTENT. Use browser dev tools or curl.
 ## Pass Criteria
 
 All checkboxes above must be checked. Any failure should be filed as a bug with:
+
 - The test number that failed
 - Expected vs actual behavior
 - Screenshot if UI-related

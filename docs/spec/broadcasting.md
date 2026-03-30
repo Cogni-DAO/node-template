@@ -548,6 +548,7 @@ These are rich markdown documents covering tone, constraints, examples, engageme
 anti-patterns. A single graph run receives one skill guide + the content and produces one post.
 
 This is simpler and more correct than running all platforms in one graph because:
+
 - Each run is **independent** — parallelizable, individually retryable
 - Each run's context window contains **only the relevant platform knowledge**
 - Adding a platform = adding a markdown file (no code changes for generation)
@@ -557,6 +558,7 @@ This is simpler and more correct than running all platforms in one graph because
 ### Platform Skill Guides
 
 Platform knowledge lives in `packages/broadcast-core/platform-skills/<platform>.md`. Each guide covers:
+
 - Platform identity, audience, content lifespan, how content spreads
 - Format constraints (char limits, media, threading, special features)
 - Optimization goals (what to maximize: replies, shares, SEO, authority)
@@ -566,6 +568,7 @@ Platform knowledge lives in `packages/broadcast-core/platform-skills/<platform>.
 - Strong vs weak examples
 
 Adding a new platform requires only:
+
 1. Create `<platform-id>.md` in `platform-skills/`
 2. Add the platform ID to `PLATFORM_IDS` in `types.ts`
 3. Register a `PublishPort` adapter
@@ -573,6 +576,7 @@ Adding a new platform requires only:
 ### Crawl Execution (Synchronous in HTTP Handlers)
 
 In Crawl, the pipeline runs synchronously within HTTP handlers for simplicity:
+
 - `POST /broadcasting` creates draft + runs optimization inline
 - `POST .../review` applies review + publishes inline
 
@@ -594,7 +598,9 @@ async function broadcastWorkflow(
   const graphRuns = await Promise.allSettled(
     targetPlatforms.map((platform) =>
       executeChild(GraphRunWorkflow, {
-        args: [{ graphId: "langgraph:broadcast-writer", platform, contentMessageId }],
+        args: [
+          { graphId: "langgraph:broadcast-writer", platform, contentMessageId },
+        ],
         workflowId: `broadcast-write-${contentMessageId}-${platform}`,
       })
     )

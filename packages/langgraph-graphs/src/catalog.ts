@@ -14,12 +14,12 @@
  * @public
  */
 
+import { BRAIN_GRAPH_NAME, createBrainGraph } from "./graphs/brain/graph";
+import { BRAIN_TOOL_IDS } from "./graphs/brain/tools";
 import {
   BROADCAST_WRITER_GRAPH_NAME,
   createBroadcastWriterGraph,
 } from "./graphs/broadcast-writer/graph";
-import { BRAIN_GRAPH_NAME, createBrainGraph } from "./graphs/brain/graph";
-import { BRAIN_TOOL_IDS } from "./graphs/brain/tools";
 import { BROWSER_GRAPH_NAME, createBrowserGraph } from "./graphs/browser/graph";
 import {
   createFrontendTesterGraph,
@@ -77,8 +77,7 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
    */
   [BROADCAST_WRITER_GRAPH_NAME]: {
     displayName: "Broadcast Writer",
-    description:
-      "Adapts content for a specific platform using its skill guide",
+    description: "Adapts content for a specific platform using its skill guide",
     toolIds: [],
     graphFactory: createBroadcastWriterGraph,
   },

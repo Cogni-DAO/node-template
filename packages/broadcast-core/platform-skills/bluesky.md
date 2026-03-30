@@ -21,16 +21,17 @@ Bluesky is a decentralized microblogging platform (AT Protocol) that positions i
 
 ## What We Optimize For
 
-| Goal | Weight | How |
-|------|--------|-----|
-| Reposts | High | Shareable insights, open-source wins, protocol-level takes |
-| Custom feed indexing | High | Use relevant terms that feed algorithms match on |
-| Community building | High | Engage genuinely, respond to replies, boost others |
-| Likes | Medium | Signal for feed algorithms |
+| Goal                 | Weight | How                                                        |
+| -------------------- | ------ | ---------------------------------------------------------- |
+| Reposts              | High   | Shareable insights, open-source wins, protocol-level takes |
+| Custom feed indexing | High   | Use relevant terms that feed algorithms match on           |
+| Community building   | High   | Engage genuinely, respond to replies, boost others         |
+| Likes                | Medium | Signal for feed algorithms                                 |
 
 ## Tone & Voice
 
 **What works:**
+
 - Genuine, unpolished, building-in-public energy
 - Technical depth appreciated (this audience is technical)
 - Open source announcements and contributions
@@ -38,6 +39,7 @@ Bluesky is a decentralized microblogging platform (AT Protocol) that positions i
 - Humor and personality — the culture is more relaxed than LinkedIn, more earnest than X
 
 **What fails:**
+
 - Polished corporate marketing
 - Growth hacking tactics (follow-for-follow, engagement pods)
 - Treating it as "backup Twitter" — the culture is distinct
@@ -47,6 +49,7 @@ Bluesky is a decentralized microblogging platform (AT Protocol) that positions i
 ## Content Patterns
 
 ### Announcement
+
 ```
 [What shipped] — [one-line why it matters]
 
@@ -56,6 +59,7 @@ Bluesky is a decentralized microblogging platform (AT Protocol) that positions i
 ```
 
 ### Technical Take
+
 ```
 [Observation about tech/protocol/industry]
 
@@ -63,6 +67,7 @@ Bluesky is a decentralized microblogging platform (AT Protocol) that positions i
 ```
 
 ### Open Source
+
 ```
 Just shipped [feature] to [project]
 
@@ -76,6 +81,7 @@ Feedback welcome
 ## Adaptation Rules
 
 When adapting content for Bluesky:
+
 1. **300 chars is tight.** Be ruthlessly concise. One idea per post.
 2. **Don't thread heavily.** If content needs > 3-4 posts, it's probably better as a blog post (link to it).
 3. **Links are first-class.** Unlike X/LinkedIn, links don't hurt reach. Include them freely.
@@ -87,9 +93,11 @@ When adapting content for Bluesky:
 ## Examples
 
 ### Strong
+
 > Shipped on-chain billing for our DAO today. 47 members can now independently verify every transaction without trusting a central DB.
 >
 > All open source: github.com/cogni-dao/node
 
 ### Weak
+
 > We're thrilled to announce our revolutionary blockchain billing solution! This innovative approach brings unprecedented transparency to DAO financial operations. Learn more at our website! #blockchain #DAO #web3 #innovation #crypto

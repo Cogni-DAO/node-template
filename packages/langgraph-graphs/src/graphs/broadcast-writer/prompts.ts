@@ -21,7 +21,8 @@
  * - Adding a platform = adding a markdown file, not changing prompts
  * - Updating platform strategy = editing markdown, not redeploying code
  */
-export const BROADCAST_WRITER_SYSTEM_PROMPT = `You are a content adaptation specialist. Your job is to take platform-agnostic content and adapt it for a specific platform, following the platform's skill guide exactly.
+export const BROADCAST_WRITER_SYSTEM_PROMPT =
+  `You are a content adaptation specialist. Your job is to take platform-agnostic content and adapt it for a specific platform, following the platform's skill guide exactly.
 
 ## Your Task
 
@@ -57,26 +58,26 @@ For Discord embeds: output the message body text (embed structure is handled by 
  * user message. The graph receives everything it needs in one shot.
  */
 export function buildBroadcastWriterMessage(params: {
-	readonly platformSkillGuide: string;
-	readonly platformId: string;
-	readonly body: string;
-	readonly title?: string;
-	readonly goals?: string;
+  readonly platformSkillGuide: string;
+  readonly platformId: string;
+  readonly body: string;
+  readonly title?: string;
+  readonly goals?: string;
 }): string {
-	const { platformSkillGuide, platformId, body, title, goals } = params;
+  const { platformSkillGuide, platformId, body, title, goals } = params;
 
-	const sections = [
-		`## Platform Skill Guide (${platformId})\n\n${platformSkillGuide}`,
-		`## Original Content\n\n${title ? `**Title:** ${title}\n\n` : ""}${body}`,
-	];
+  const sections = [
+    `## Platform Skill Guide (${platformId})\n\n${platformSkillGuide}`,
+    `## Original Content\n\n${title ? `**Title:** ${title}\n\n` : ""}${body}`,
+  ];
 
-	if (goals) {
-		sections.push(`## Optimization Goals\n\n${goals}`);
-	}
+  if (goals) {
+    sections.push(`## Optimization Goals\n\n${goals}`);
+  }
 
-	sections.push(
-		"## Instructions\n\nAdapt the original content for this platform following the skill guide above. Output ONLY the adapted post content.",
-	);
+  sections.push(
+    "## Instructions\n\nAdapt the original content for this platform following the skill guide above. Output ONLY the adapted post content."
+  );
 
-	return sections.join("\n\n---\n\n");
+  return sections.join("\n\n---\n\n");
 }

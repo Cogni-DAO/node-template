@@ -42,7 +42,6 @@
 | 1 | 1 | 3 | needs_review | task.0149 | GitOps k3s provisioning + scheduler-worker migration | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 1 | 1 | 2 | needs_implement | task.0154 | PR Review deployment finish — output polish, deployment verification, legacy bot retirement | VCS Integration | proj.vcs-integration |
 | 1 | 1 | 5 | needs_design | task.0202 | provisionNode Temporal workflow — zero-touch node launch | Node Formation & Launch | proj.node-formation-ui |
-| 1 | 1 | 3 | needs_merge | task.0228 | MCP Client MVP — McpToolSource + Playwright browser agent | Agentic Interoperability | proj.agentic-interop |
 | 1 | 1 | 3 | needs_design | spike.0229 | Knowledge Aggregation — KnowledgeCapability Port | OSS Research AI Node | proj.oss-research-node |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
@@ -104,6 +103,7 @@
 | 1 | 99 | 1 | needs_triage | bug.0166 | Stale Split contract holds $10 USDC — deployed with test wallet, cannot distribute | AI Operator Wallet | proj.ai-operator-wallet |
 | 1 | 99 | 2 | needs_triage | story.0193 | Lobster Racing: competitive OpenClaw agents funded by web3 wallets |  |  |
 | 1 | 99 | 2 | needs_triage | spike.0194 | Spike: Lobster Racing infrastructure and provisioning research |  |  |
+| 1 | 99 | 2 | needs_triage | bug.0232 | Activity charts show raw model IDs and "unknown" instead of human-friendly names |  |  |
 | 2 | 0 | 2 | needs_triage | task.0109 | Expand GitHub adapter — PR comments, review comments, issue creation | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 3 | 1 | needs_triage | bug.0012 | pre-commit check:docs validates all files, not just staged — blocks unrelated commits |  |  |
 | 2 | 3 | 3 | needs_design | story.0128 | Governance ops: manual workflow triggers, run history, and admin role gating | System Tenant & Governance Execution Infrastructure | proj.system-tenant-governance |
@@ -252,6 +252,7 @@
 | 1 | task.0208 | PR review webhook → Temporal parent workflow with durable GitHub writes | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0212 | Unified usage reporting — emit usage_report for all LLM providers (platform, codex, openai-compatible) | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 1 | story.0221 | Agent KPI Observability — agents measure and optimize against their own KPIs | Governance Agents | proj.governance-agents |
+| 1 | task.0228 | MCP Client MVP — McpToolSource + Playwright browser agent | Agentic Interoperability | proj.agentic-interop |
 | 1 | spike.0230 | AI Browser Automation Tools — OSS Survey & Integration Path | Agentic Interoperability | proj.agentic-interop |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
