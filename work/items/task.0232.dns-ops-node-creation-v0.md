@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.node-formation-ui
 branch: worktree-feat+domain-ops
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/665
 reviewer: derekg1729
 revision: 0
 blocked_by:
