@@ -2,7 +2,7 @@
 id: bug.0224
 type: bug
 title: "Codex binary not found in Docker — standalone misses platform-specific optional dep"
-status: needs_implement
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 1
@@ -12,7 +12,7 @@ spec_refs: [multi-provider-llm]
 assignees: [derekg1729]
 credit:
 project: proj.byo-ai
-branch: fix/codex-for-real
+branch: fix/codex-docker-platform-binary
 pr: https://github.com/Cogni-DAO/node-template/pull/654
 reviewer:
 revision: 1
