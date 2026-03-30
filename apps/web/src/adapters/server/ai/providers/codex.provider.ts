@@ -23,6 +23,7 @@ import type {
   ResolvedConnection,
 } from "@/ports";
 import { CodexLlmAdapter } from "../codex/codex-llm.adapter";
+import type { CodexMcpConfig } from "../codex/codex-mcp-config";
 
 /**
  * Known ChatGPT subscription model IDs available via Codex transport.
@@ -49,6 +50,8 @@ export class CodexModelProvider implements ModelProviderPort {
   readonly usageSource = "codex" as const;
   readonly requiresConnection = true;
 
+  constructor(private readonly mcpConfig?: CodexMcpConfig) {}
+
   async listModels(_ctx: ProviderContext): Promise<ModelOption[]> {
     // TODO: Only return models when user has an active openai-chatgpt connection.
     // For now, always return the full list — the UI handles connection gating.
@@ -72,7 +75,7 @@ export class CodexModelProvider implements ModelProviderPort {
         "CodexModelProvider.createLlmService requires a resolved connection"
       );
     }
-    return new CodexLlmAdapter(connection);
+    return new CodexLlmAdapter(connection, this.mcpConfig);
   }
 
   async requiresPlatformCredits(_ref: ModelRef): Promise<boolean> {

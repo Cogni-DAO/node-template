@@ -24,6 +24,7 @@ import type { FinancialLedgerPort } from "@cogni/financial-ledger";
 import { createTigerBeetleAdapter } from "@cogni/financial-ledger/adapters";
 import type { UserId } from "@cogni/ids";
 import { toUserId, userActor } from "@cogni/ids";
+import { parseMcpConfigFromEnv } from "@cogni/langgraph-graphs";
 import { numberToPpm } from "@cogni/operator-wallet";
 import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
@@ -70,6 +71,7 @@ import {
   AggregatingModelCatalog,
   ProviderResolver,
 } from "@/adapters/server/ai/catalog";
+import { mcpServersToCodexConfig } from "@/adapters/server/ai/codex/codex-mcp-config";
 import {
   CodexModelProvider,
   OpenAiCompatibleModelProvider,
@@ -681,7 +683,10 @@ function createContainer(): Container {
     // Multi-provider model ports
     ...(() => {
       const platformProvider = new PlatformModelProvider(llmService);
-      const codexProvider = new CodexModelProvider();
+      // Parse MCP server config for Codex native MCP support (bug.0232).
+      // parseMcpConfigFromEnv is synchronous (reads file + env vars).
+      const codexMcpConfig = mcpServersToCodexConfig(parseMcpConfigFromEnv());
+      const codexProvider = new CodexModelProvider(codexMcpConfig);
       const openAiCompatibleProvider = new OpenAiCompatibleModelProvider(
         connectionBroker,
         resolveAppDb

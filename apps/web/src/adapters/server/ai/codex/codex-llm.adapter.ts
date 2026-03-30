@@ -13,8 +13,12 @@
  *   - SUBPROCESS_PER_REQUEST: Each LLM call spawns an isolated `codex exec` subprocess.
  *   - TOKENS_NEVER_LOGGED: Credential values never appear in logs.
  *   - TEMP_AUTH_CLEANUP: Temp auth dir always cleaned up in finally block.
- * Side-effects: IO (spawns subprocess, writes temp auth.json, cleans up)
- * Links: docs/research/openai-oauth-byo-ai.md
+ *   - CODEX_ENV_SCOPED: Codex subprocess receives only whitelisted env vars (bug.0232).
+ *   - NO_SILENT_TOOL_DROP: Tools received but not usable via params → WARN log with INVARIANT_DEVIATION prefix (bug.0232).
+ *   - INVARIANT_DEVIATION: TOOLS_VIA_TOOLRUNNER — Codex calls MCP tools directly via config.toml,
+ *     bypassing toolRunner.exec(). Mitigated by server-level scoping + $0 billing (user-funded).
+ * Side-effects: IO (spawns subprocess, writes temp auth.json + config.toml, cleans up)
+ * Links: docs/research/openai-oauth-byo-ai.md, bug.0232
  * @internal
  */
 
@@ -33,6 +37,11 @@ import type {
   ResolvedConnection,
 } from "@/ports";
 import { makeLogger } from "@/shared/observability";
+import {
+  buildScopedEnv,
+  type CodexMcpConfig,
+  generateConfigToml,
+} from "./codex-mcp-config";
 
 const log = makeLogger({ component: "CodexLlmAdapter" });
 
@@ -46,7 +55,10 @@ const log = makeLogger({ component: "CodexLlmAdapter" });
  * Only the LLM completion call routes through ChatGPT instead of LiteLLM/OpenRouter.
  */
 export class CodexLlmAdapter implements LlmService {
-  constructor(private readonly connection: ResolvedConnection) {}
+  constructor(
+    private readonly connection: ResolvedConnection,
+    private readonly mcpConfig?: CodexMcpConfig
+  ) {}
 
   async completion(
     params: Parameters<LlmService["completion"]>[0]
@@ -67,6 +79,24 @@ export class CodexLlmAdapter implements LlmService {
   }> {
     const connection = this.connection;
     const callLog = log.child({ model: params.model });
+
+    // NO_SILENT_TOOL_DROP: Log when tools are passed but cannot be used via params.tools.
+    // Codex uses MCP tools natively via config.toml, NOT via OpenAI function-calling format.
+    if (params.tools && params.tools.length > 0) {
+      callLog.warn(
+        {
+          toolCount: params.tools.length,
+          mcpServerCount: this.mcpConfig
+            ? Object.keys(this.mcpConfig).length
+            : 0,
+        },
+        "INVARIANT_DEVIATION: TOOLS_VIA_TOOLRUNNER — Codex adapter received %d tools via params.tools " +
+          "but cannot use OpenAI function-calling format. Tools stripped from LLM request. " +
+          "MCP tools available via config.toml (%d servers configured).",
+        params.tools.length,
+        this.mcpConfig ? Object.keys(this.mcpConfig).length : 0
+      );
+    }
 
     type Deferred<T> = {
       promise: Promise<T>;
@@ -89,6 +119,7 @@ export class CodexLlmAdapter implements LlmService {
       messages: params.messages,
       ...(params.model ? { model: params.model } : {}),
       connection,
+      ...(this.mcpConfig ? { mcpConfig: this.mcpConfig } : {}),
       log: callLog,
       onResult: deferred.resolve,
       onError: deferred.reject,
@@ -106,6 +137,7 @@ async function* runCodexExec(params: {
   messages: Message[];
   model?: string;
   connection: ResolvedConnection;
+  mcpConfig?: CodexMcpConfig;
   log: Logger;
   onResult: (r: LlmCompletionResult) => void;
   onError: (e: unknown) => void;
@@ -115,6 +147,7 @@ async function* runCodexExec(params: {
     messages,
     model,
     connection,
+    mcpConfig,
     log: callLog,
     onResult,
     onError,
@@ -144,6 +177,20 @@ async function* runCodexExec(params: {
       { mode: 0o600 }
     );
 
+    // Write config.toml for Codex-native MCP server access (bug.0232).
+    // INVARIANT_DEVIATION: TOOLS_VIA_TOOLRUNNER — Codex calls MCP tools directly
+    // via its own agent loop, bypassing toolRunner.exec().
+    const configToml = mcpConfig ? generateConfigToml(mcpConfig) : undefined;
+    if (configToml) {
+      await writeFile(join(codexDir, "config.toml"), configToml, {
+        mode: 0o600,
+      });
+      callLog.debug(
+        { mcpServerCount: Object.keys(mcpConfig!).length },
+        "Wrote Codex config.toml with MCP servers"
+      );
+    }
+
     // Dynamic import to avoid module-scope subprocess spawn
     const { Codex } = await import("@openai/codex-sdk");
     // SDK's findCodexPath() resolves the native binary via createRequire(import.meta.url).
@@ -151,12 +198,10 @@ async function* runCodexExec(params: {
     // serverExternalPackages so standalone doesn't bundle/prune them.
     // Dev: resolved from repo node_modules. Docker: resolved from global pnpm install.
 
-    // Build env — inherit current + override HOME for auth isolation
+    // CODEX_ENV_SCOPED: Only whitelisted env vars + MCP bearer token vars.
+    // Prevents leaking DATABASE_URL, LITELLM_MASTER_KEY, AUTH_SECRET, etc.
     const { env: currentEnv } = await import("node:process");
-    const envRecord: Record<string, string> = {};
-    for (const [k, v] of Object.entries(currentEnv)) {
-      if (v != null) envRecord[k] = v;
-    }
+    const envRecord = buildScopedEnv(currentEnv, mcpConfig);
     envRecord.HOME = tempDir;
 
     const codex = new Codex({
