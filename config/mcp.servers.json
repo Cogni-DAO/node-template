@@ -1,24 +1,9 @@
 {
   "mcpServers": {
     "grafana": {
-      "transport": "stdio",
-      "command": "docker",
-      "args": [
-        "run",
-        "--rm",
-        "--init",
-        "-i",
-        "--network",
-        "cogni-edge",
-        "-e",
-        "GRAFANA_URL=${GRAFANA_URL}",
-        "-e",
-        "GRAFANA_SERVICE_ACCOUNT_TOKEN=${GRAFANA_SERVICE_ACCOUNT_TOKEN}",
-        "mcp/grafana",
-        "-t",
-        "stdio"
-      ],
-      "disabled": true
+      "transport": "http",
+      "url": "${MCP_GRAFANA_URL}",
+      "disabled": false
     },
     "playwright": {
       "transport": "http",

@@ -141,9 +141,9 @@ export const LANGGRAPH_CATALOG: Readonly<Record<string, CatalogEntry>> = {
   [FRONTEND_TESTER_GRAPH_NAME]: {
     displayName: "Frontend Tester",
     description:
-      "QA agent that tests web UIs via Playwright — verifies layouts, interactions, forms, and navigation",
+      "QA agent that tests web UIs via Playwright and monitors system health via Grafana",
     toolIds: [],
-    mcpServerIds: ["playwright"],
+    mcpServerIds: ["playwright", "grafana"],
     graphFactory: createFrontendTesterGraph,
   },
 } as const;
