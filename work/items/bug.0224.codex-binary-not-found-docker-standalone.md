@@ -13,7 +13,7 @@ assignees: [derekg1729]
 credit:
 project: proj.byo-ai
 branch: fix/codex-dockerfile-hotfix
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/662
 reviewer:
 revision: 1
 blocked_by: []
