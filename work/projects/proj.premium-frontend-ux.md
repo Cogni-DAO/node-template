@@ -49,6 +49,7 @@ Deliver a top-tier frontend experience across the three core user surfaces: chat
 ### Chat status line, not chat sidebar
 
 The activity indicator is a single line above the composer, not a sidebar or panel. Reasons:
+
 - Minimal visual weight — doesn't compete with message content
 - Matches the ephemeral nature of StatusEvent (best-effort, transient)
 - Easy to enhance later (expandable log, tool call history)
@@ -75,10 +76,10 @@ Each phase delivers standalone value. No throwaway work.
 
 **Goal:** Users see what the AI is doing. Fixes the highest-impact UX gap.
 
-| Deliverable | Status | Est | Work Item |
-|---|---|---|---|
-| Chat activity status line — consume StatusEvent, show phase above composer | Not Started | 2 | task.0235 |
-| Dashboard statusLabel wiring — RunCard shows live phase from SSE | Not Started | 2 | task.0236 |
+| Deliverable                                                                | Status      | Est | Work Item |
+| -------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Chat activity status line — consume StatusEvent, show phase above composer | Not Started | 2   | task.0235 |
+| Dashboard statusLabel wiring — RunCard shows live phase from SSE           | Not Started | 2   | task.0236 |
 
 **P0 delivers:** "Thinking...", "Using search_web...", "Compacting context..." visible in chat. Dashboard cards show live phase instead of static "Running".
 
@@ -86,18 +87,18 @@ Each phase delivers standalone value. No throwaway work.
 
 **Goal:** Work items feel like a real product. Agents have visual identity.
 
-| Deliverable | Status | Est | Work Item |
-|---|---|---|---|
-| Work items table — ReUI data-grid, detail panel, visual type icons, keyboard nav | Not Started | 3 | task.0237 |
-| Agent avatars — Rive/Lottie animated characters on run cards + chat | Not Started | 3 | task.0238 |
+| Deliverable                                                                      | Status      | Est | Work Item |
+| -------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Work items table — ReUI data-grid, detail panel, visual type icons, keyboard nav | Not Started | 3   | task.0237 |
+| Agent avatars — Rive/Lottie animated characters on run cards + chat              | Not Started | 3   | task.0238 |
 
 ### Run (P2): Three.js Observatory
 
 **Goal:** Dedicated page with 3D agent characters in an isometric workspace, driven by real-time activity.
 
-| Deliverable | Status | Est | Work Item |
-|---|---|---|---|
-| Three.js observatory prototype + performance budget | Not Started | 2 | spike.0239 |
+| Deliverable                                         | Status      | Est | Work Item  |
+| --------------------------------------------------- | ----------- | --- | ---------- |
+| Three.js observatory prototype + performance budget | Not Started | 2   | spike.0239 |
 
 ## Architecture
 
@@ -118,11 +119,11 @@ Graph execution → StatusEvent → Redis Streams → SSE endpoint
 
 ### Relationship to Other Projects
 
-| Project | Relationship |
-|---|---|
-| `proj.live-dashboard` | **Complementary.** Dashboard P1 phase badges are unblocked by this project's shared SSE hook. |
-| `proj.unified-graph-launch` | **Backend dependency.** Provides StatusEvent, Redis Streams, SSE endpoints. |
-| `proj.workflow-building-monitoring` | **Independent.** Admin CRUD is separate from UX polish. |
+| Project                             | Relationship                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------------------- |
+| `proj.live-dashboard`               | **Complementary.** Dashboard P1 phase badges are unblocked by this project's shared SSE hook. |
+| `proj.unified-graph-launch`         | **Backend dependency.** Provides StatusEvent, Redis Streams, SSE endpoints.                   |
+| `proj.workflow-building-monitoring` | **Independent.** Admin CRUD is separate from UX polish.                                       |
 
 ## Constraints
 

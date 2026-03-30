@@ -2,7 +2,7 @@
 id: task.0237
 type: task
 title: "Work items table — ReUI data-grid + detail panel + visual identity"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 1
 estimate: 3
@@ -19,7 +19,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-30
-updated: 2026-03-30
+updated: 2026-03-31
 labels: [ui, work-items]
 external_refs:
   - https://reui.io/docs/data-grid
@@ -43,6 +43,7 @@ Work items table goes from "admin spreadsheet" to "top 0.1% CMS" — sortable, f
 **Why ReUI over OpenStatus data-table-filters**: OpenStatus is excellent but uses `nuqs` for URL state. We already have URL-driven state via `useSearchParams` + `useRouter`. ReUI is more composable and doesn't prescribe state management.
 
 **Reuses**:
+
 - `@reui/data-grid` registry (already configured in `components.json`)
 - `@tanstack/react-table` v8 (installed as ReUI dependency)
 - Existing `Sheet` component (shadcn/ui, already installed) for detail panel
@@ -52,6 +53,7 @@ Work items table goes from "admin spreadsheet" to "top 0.1% CMS" — sortable, f
 - `cmdk` (already installed, unused) — activate for command palette search
 
 **Rejected**:
+
 - **AG Grid** — heavy (200KB+), enterprise features we don't need, different styling paradigm from our shadcn design system
 - **Material React Table** — Material Design conflicts with our Tailwind/shadcn aesthetic
 - **Handsontable** — spreadsheet-oriented, wrong UX metaphor for work items
@@ -63,6 +65,7 @@ Work items table goes from "admin spreadsheet" to "top 0.1% CMS" — sortable, f
 Each work item type and status gets a distinct visual icon optimized for human recall:
 
 **Type icons** (lucide-react, already installed):
+
 - `task` → CheckSquare (concrete, actionable)
 - `bug` → Bug (universal recognition)
 - `story` → BookOpen (narrative, scope)
@@ -70,6 +73,7 @@ Each work item type and status gets a distinct visual icon optimized for human r
 - `subtask` → CornerDownRight (child relationship)
 
 **Status icons** (color + icon pairing for dual-channel encoding):
+
 - `needs_triage` → CircleDashed (gray) — unprocessed
 - `needs_research` → Search (amber) — investigating
 - `needs_design` → Pencil (amber) — designing
@@ -96,19 +100,23 @@ Each work item type and status gets a distinct visual icon optimized for human r
 ### Files
 
 **Install (one-time)**:
+
 - `npx shadcn@latest add @reui/data-grid` — pulls TanStack Table + ReUI grid components into `components/vendor/`
 
 **Create**:
+
 - `apps/web/src/app/(app)/work/_components/columns.tsx` — column definitions with type/status icon renderers
 - `apps/web/src/app/(app)/work/_components/WorkItemDetail.tsx` — Sheet/Drawer detail panel
 - `apps/web/src/app/(app)/work/_components/type-icons.tsx` — type/status icon maps (lucide-react)
 - `apps/web/src/app/(app)/work/_components/faceted-filter.tsx` — faceted filter for status/type/project (if not in ReUI)
 
 **Modify**:
+
 - `apps/web/src/app/(app)/work/view.tsx` — rewrite with ReUI data-grid, wire column defs + detail panel
 - `apps/web/src/app/(app)/work/_api/fetchWorkItems.ts` — add `fetchWorkItem(id)` for detail panel
 
 **Test**:
+
 - Manual: sort by each column, filter by type/status/project, keyboard j/k/enter, row click → detail
 - `pnpm check:fast` — typecheck + lint + unit tests
 

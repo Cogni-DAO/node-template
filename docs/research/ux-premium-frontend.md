@@ -167,10 +167,10 @@ How do we deliver a top-tier frontend UX for our three core surfaces: (1) work i
 
 ### Tasks (rough)
 
-| ID | Title | Phase | Est |
-|----|-------|-------|-----|
-| task.0235 | Chat activity status line — consume StatusEvent in thread UI | P0 | 2 |
-| task.0236 | Dashboard statusLabel wiring — RunCard shows live phase from SSE | P0 | 2 |
-| task.0237 | Work items table — TanStack Table migration + detail panel | P1 | 3 |
-| task.0238 | Agent avatars — Rive/Lottie animated characters on run cards | P1 | 3 |
-| spike.0239 | Three.js observatory — prototype + performance budget | P2 | 2 |
+| ID         | Title                                                            | Phase | Est |
+| ---------- | ---------------------------------------------------------------- | ----- | --- |
+| task.0235  | Chat activity status line — consume StatusEvent in thread UI     | P0    | 2   |
+| task.0236  | Dashboard statusLabel wiring — RunCard shows live phase from SSE | P0    | 2   |
+| task.0237  | Work items table — TanStack Table migration + detail panel       | P1    | 3   |
+| task.0238  | Agent avatars — Rive/Lottie animated characters on run cards     | P1    | 3   |
+| spike.0239 | Three.js observatory — prototype + performance budget            | P2    | 2   |
