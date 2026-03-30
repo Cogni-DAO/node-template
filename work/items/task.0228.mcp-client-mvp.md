@@ -1,7 +1,7 @@
 ---
 id: task.0228
 type: task
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 title: "MCP Client MVP — McpToolSource + Playwright browser agent"
@@ -10,7 +10,7 @@ outcome: Agents use external MCP tools (Playwright, Grafana) via standard policy
 project: proj.agentic-interop
 branch: feat/mcp-client-mvp
 created: 2026-03-28
-updated: 2026-03-28
+updated: 2026-03-29
 assignees:
   - cogni-dev
 labels:

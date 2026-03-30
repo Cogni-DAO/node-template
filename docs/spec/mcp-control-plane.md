@@ -47,14 +47,16 @@ Define a control plane where MCP servers are managed resources with stable ident
 
 ### Deployment Registry
 
-MCP servers are registered as **deployments** with stable slug identifiers. Agents reference slugs, never raw URLs.
+MCP servers are registered as **deployments** with stable slug identifiers. Agents reference slugs, never raw URLs. Slugs are durable across redeployments — the slug identifies a logical capability (`browser-playwright`, `grafana-prod`), while each rollout gets an immutable revision ID.
 
 ```
 mcp_deployments
 ├── slug (PK)          — e.g., "playwright-dev", "grafana-prod"
+├── revision_id        — immutable per rollout (UUID), current healthy = latest
 ├── display_name       — human label
 ├── endpoint           — resolved URL (e.g., "http://playwright-mcp:3003/mcp")
 ├── transport          — "streamable-http" | "sse" | "stdio"
+├── auth_mode          — "none" | "static_token" | "connection" | "toolhive"
 ├── auth_ref           — reference to credentials (k8s secret name, connection ID, or null)
 ├── status             — "healthy" | "unhealthy" | "provisioning" | "decommissioned"
 ├── capabilities_hash  — SHA256 of last tools/list response (detect drift)
@@ -63,6 +65,8 @@ mcp_deployments
 ├── updated_at
 └── billing_account_id — NULL for shared, set for tenant-scoped
 ```
+
+Slug resolution picks the current healthy revision. Active revision tracking uses either a dedicated `active_slug_revision` table or a unique partial index on `(slug) WHERE status = 'healthy'`.
 
 **Shared deployments** (Grafana, filesystem tools): `billing_account_id = NULL`, service account credentials via `auth_ref`.
 
@@ -126,6 +130,12 @@ MCP server credentials follow the existing `ConnectionBrokerPort` pattern:
 
 **NO_SECRETS_IN_CONTEXT applies.** The resolved Bearer token is set on the MCP HTTP client, never in `ToolInvocationContext` or `RunnableConfig.configurable`.
 
+**connectionId and MCP deployments:** Treat an MCP deployment like any other remote connection target. `connectionId` points to tenant-scoped credentials needed to call the MCP endpoint when it requires auth. The deployment row stores `auth_mode` and `auth_ref` (what kind of auth, where to find it); the actual secret resolution happens at invocation time via `ConnectionBrokerPort`, never baked into the deployment row or agent spec.
+
+- **Public/internal unauthenticated MCP:** `deployment_slug` only, no `connectionId`
+- **Tenant-authenticated MCP:** `deployment_slug` + `connectionId` (resolved per-invocation)
+- **Delegated auth (MCP→backend):** Two layers — broker owns client→MCP auth, ToolHive/server-side token exchange owns MCP→backend auth
+
 ### Transport
 
 **Default: Streamable HTTP** (`/mcp` endpoint). This is the current MCP spec's HTTP transport (replaced legacy SSE).
@@ -168,9 +178,17 @@ DELETE /api/internal/mcp/deployments/:slug/bind/:agentId — unbind
 
 These are internal APIs (Bearer SCHEDULER_API_TOKEN). No public API for MCP management in Phase 1.
 
+### Dynamic Deployment
+
+The fastest path to dynamic MCP hosting: an internal admin action creates an `mcp_deployments` record + applies a ToolHive/Helm/K8s template for a known server type, then stores back slug, endpoint, status, and auth ref.
+
+`deployMcpServer(serverType, secrets, policy)` → creates the infra resource (ToolHive MCPServer CRD or Helm release) and upserts the deployment row. ToolHive owns MCP runtime mechanics (container lifecycle, health probes, secret injection). We own the thin product layer: templates, bindings, auth refs, and UX.
+
+**Scope guard:** This is "operator-backed deploy/teardown of approved MCP templates," not a general app platform. Do not build a Heroku clone for arbitrary containers.
+
 ## Invariants
 
-1. **BINDING_SLUG_NOT_URL**: Agents reference MCP servers by deployment slug, never by raw URL. URLs live in the deployment registry only.
+1. **BINDING_SLUG_NOT_URL**: Agents reference MCP servers by deployment slug, never by raw URL. URLs live in the deployment registry only. Slugs are stable across redeployments; revision IDs are immutable per rollout.
 2. **STREAMABLE_HTTP_DEFAULT**: New deployments use Streamable HTTP transport unless explicitly overridden.
 3. **TOOL_MANIFEST_SNAPSHOT**: Each run freezes its tool manifest at start. Mid-run tool changes are ignored.
 4. **NO_SECRETS_IN_CONTEXT**: MCP credentials never appear in ToolInvocationContext, RunnableConfig, or ALS context.

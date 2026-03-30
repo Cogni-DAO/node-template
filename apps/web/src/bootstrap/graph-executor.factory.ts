@@ -4,7 +4,7 @@
 /**
  * Module: `@bootstrap/graph-executor.factory`
  * Purpose: Factory for creating GraphExecutorPort implementations with observability and billing.
- * Scope: Bridges app layer (facades) to adapters layer via bootstrap. Does not contain business logic.
+ * Scope: Bridges app layer (facades) to adapters layer via bootstrap. Does NOT contain business logic.
  * Invariants:
  *   - Facade NEVER imports adapters directly (use this factory)
  *   - Per UNIFIED_GRAPH_EXECUTOR: all graph execution flows through GraphExecutorPort
@@ -13,8 +13,10 @@
  *   - Per CALLBACK_WRITES_PLATFORM_RECEIPTS: UsageCommitDecorator validates usage_report events. Platform receipts via LiteLLM callback; BYO receipts committed directly.
  *   - Per CREDITS_ENFORCED_AT_EXECUTION_PORT: PreflightCreditCheckDecorator rejects runs with insufficient credits
  *   - LAZY_SANDBOX_IMPORT: Sandbox provider loaded via dynamic import() to defer dockerode native addon chain (SandboxRunnerAdapter)
- * Side-effects: global (module-scoped cached sandbox provider promise)
- * Links: container.ts, NamespaceGraphRouter, GRAPH_EXECUTION.md, OBSERVABILITY.md
+ *   - MCP_NOT_SINGLETON: MCP connections use McpConnectionCache with reconnect-on-error + TTL backstop
+ *   - MCP_RECONNECT_ON_ERROR: ErrorDetectingMcpToolSource invalidates cache on transport-level connection errors
+ * Side-effects: global (module-scoped McpConnectionCache, cached sandbox provider promise)
+ * Links: container.ts, NamespaceGraphRouter, GRAPH_EXECUTION.md, OBSERVABILITY.md, mcp-control-plane.md
  * @public
  */
 

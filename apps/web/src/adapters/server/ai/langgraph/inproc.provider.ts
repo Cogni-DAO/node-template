@@ -11,7 +11,8 @@
  *   - CATALOG_SINGLE_SOURCE_OF_TRUTH: Uses catalog from @cogni/langgraph-graphs
  *   - TOOL_CATALOG_IS_CANONICAL: Resolves BoundTool from TOOL_CATALOG using entry.toolIds
  *   - DENY_BY_DEFAULT: Tool policy explicitly provided per graph
- * Side-effects: IO (executes graphs via package runner)
+ *   - MCP_VIA_ASYNC_SOURCE: MCP tools resolved via async getMcpToolSource() function (shared cache with reconnect-on-error)
+ * Side-effects: IO (executes graphs via package runner, MCP tool resolution via HTTP)
  * Notes: Discovery is in LangGraphInProcAgentCatalogProvider, not here.
  * Links: GRAPH_EXECUTION.md, LANGGRAPH_AI.md
  * @internal
