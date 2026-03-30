@@ -30,7 +30,9 @@ async function main(): Promise<void> {
   }
 
   console.log("💰 Dev Seed: Credit Balance Top-Up");
-  console.log(`   Target balance: $${Number(TARGET_BALANCE) / Number(CREDITS_PER_USD)}`);
+  console.log(
+    `   Target balance: $${Number(TARGET_BALANCE) / Number(CREDITS_PER_USD)}`
+  );
   console.log(`   Database: ${dbUrl.replace(/\/\/[^@]+@/, "//***@")}`);
   console.log();
 
