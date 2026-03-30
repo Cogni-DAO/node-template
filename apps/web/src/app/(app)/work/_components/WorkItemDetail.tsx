@@ -5,12 +5,7 @@
 
 import type { ReactElement } from "react";
 
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/vendor/shadcn/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components";
 import type { WorkItemDto } from "@/contracts/work.items.list.v1.contract";
 
 import { StatusPill, TypeIcon } from "./work-item-icons";
@@ -107,7 +102,7 @@ export function WorkItemDetail({
               {/* Blocked by */}
               {item.blockedBy && (
                 <Field label="Blocked By">
-                  <span className="font-mono text-red-500 text-xs">
+                  <span className="font-mono text-destructive text-xs">
                     {item.blockedBy}
                   </span>
                 </Field>

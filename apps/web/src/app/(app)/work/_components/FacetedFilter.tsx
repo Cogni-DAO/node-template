@@ -6,15 +6,15 @@
 import { ListFilter } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { Badge } from "@/components/kit/data-display/Badge";
-import { Button } from "@/components/vendor/shadcn/button";
-import { Checkbox } from "@/components/vendor/shadcn/checkbox";
 import {
+  Badge,
+  Button,
+  Checkbox,
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "@/components/vendor/shadcn/popover";
-import { Separator } from "@/components/vendor/shadcn/separator";
+  Separator,
+} from "@/components";
 
 interface FacetedFilterProps {
   title: string;
