@@ -40,6 +40,7 @@ You are setting up the Cogni-Template repo for the first time, or need a referen
    ```bash
    cp .env.local.example .env.local
    cp .env.test.example .env.test
+   cp .env.docker.example .env.docker   # docker:dev:stack container-internal overrides
    ```
 
 3. **Setup development database:**
