@@ -2,7 +2,7 @@
 id: bug.0234
 type: bug
 title: Activity charts show raw model IDs and "unknown" instead of human-friendly names
-status: needs_merge
+status: done
 priority: 1
 rank: 99
 estimate: 2
