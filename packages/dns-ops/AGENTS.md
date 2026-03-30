@@ -3,6 +3,7 @@
 > Scope: this directory only. Keep ≤150 lines. Do not restate root policies.
 
 ## Metadata
+
 - **Owners:** @cogni-dao
 - **Status:** draft
 
@@ -11,18 +12,26 @@
 Programmatic DNS management for Cogni multi-node infrastructure. Provides a port-based abstraction over DNS providers (Cloudflare, Namecheap) with safety guards that prevent modification of production records.
 
 ## Pointers
+
 - [Cloudflare Setup Guide](docs/cloudflare-dns-setup.md)
 - [task.0232](../../work/items/task.0232.dns-ops-node-creation-v0.md)
 - [node-launch spec](../../docs/spec/node-launch.md)
 - [dns-ops skill](../../.claude/skills/dns-ops/SKILL.md)
 
 ## Boundaries
+
 ```json
 {
   "layer": "packages",
   "may_import": ["packages"],
   "must_not_import": [
-    "app", "features", "ports", "core", "adapters", "shared", "services"
+    "app",
+    "features",
+    "ports",
+    "core",
+    "adapters",
+    "shared",
+    "services"
   ]
 }
 ```
@@ -67,6 +76,11 @@ npx tsx packages/dns-ops/scripts/test-live.ts
 
 - **Internal:** none
 - **External:** `fast-xml-parser` (Namecheap XML parsing)
+
+## Notes
+
+- Cloudflare adapter is the primary path (free API, JSON, instant). Namecheap adapter exists for domain registration (requires $50 spend for API access).
+- `setDnsRecords` on Cloudflare is non-atomic (delete-all then create-all). Always prefer the targeted methods (`createRecord`/`updateRecord`/`deleteRecord`) via `upsertDnsRecord`/`removeDnsRecord` helpers.
 
 ## Change Protocol
 

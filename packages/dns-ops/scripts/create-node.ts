@@ -25,17 +25,25 @@ const CLUSTER_TARGET = "84.32.109.162"; // current cognidao.org A record — pla
 const slug = process.argv[2];
 if (!slug || !/^[a-z0-9-]+$/.test(slug)) {
   // biome-ignore lint/suspicious/noConsole: CLI script
-  console.error("Usage: npx tsx packages/dns-ops/scripts/create-node.ts <slug>");
+  console.error(
+    "Usage: npx tsx packages/dns-ops/scripts/create-node.ts <slug>"
+  );
   // biome-ignore lint/suspicious/noConsole: CLI script
-  console.error("  slug: lowercase alphanumeric + hyphens (e.g., resy, music-dao)");
+  console.error(
+    "  slug: lowercase alphanumeric + hyphens (e.g., resy, music-dao)"
+  );
   process.exit(1);
 }
 
+// biome-ignore lint/style/noProcessEnv: CLI script reads env directly
 const token = process.env.CLOUDFLARE_API_TOKEN;
+// biome-ignore lint/style/noProcessEnv: CLI script reads env directly
 const zoneId = process.env.CLOUDFLARE_ZONE_ID;
 if (!token || !zoneId) {
   // biome-ignore lint/suspicious/noConsole: CLI script
-  console.error("Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID in .env.local");
+  console.error(
+    "Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ZONE_ID in .env.local"
+  );
   process.exit(1);
 }
 

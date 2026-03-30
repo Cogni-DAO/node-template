@@ -41,11 +41,11 @@ grep CLOUDFLARE .env.local 2>/dev/null
 5. **Create API token**: [dash.cloudflare.com/profile/api-tokens](https://dash.cloudflare.com/profile/api-tokens)
    - Create Token → **"Edit zone DNS"** template (or Custom Token with these permissions):
 
-   | Field | Value |
-   |-------|-------|
-   | Permissions | **Zone** · **DNS** · **Edit** |
+   | Field          | Value                           |
+   | -------------- | ------------------------------- |
+   | Permissions    | **Zone** · **DNS** · **Edit**   |
    | Zone Resources | Specific zone · **your domain** |
-   | Account/IP/TTL | Leave defaults |
+   | Account/IP/TTL | Leave defaults                  |
 
 6. **Get Zone ID**: [dash.cloudflare.com](https://dash.cloudflare.com) → click domain → right sidebar → API section → Zone ID
 7. **Add to `.env.local`**:
@@ -55,11 +55,13 @@ grep CLOUDFLARE .env.local 2>/dev/null
    ```
 
 **Verify setup works:**
+
 ```bash
 source .env.local && export CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID
 curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" | jq '.result | length'
 ```
+
 Should return a number (your existing record count).
 
 ## Operations
@@ -78,7 +80,11 @@ Creates: `resy-helper.nodes.cognidao.org` → cluster IP. Outputs node-spec JSON
 ### Programmatic usage (from TypeScript)
 
 ```typescript
-import { CloudflareAdapter, upsertDnsRecord, removeDnsRecord } from "@cogni/dns-ops";
+import {
+  CloudflareAdapter,
+  upsertDnsRecord,
+  removeDnsRecord,
+} from "@cogni/dns-ops";
 
 const cf = new CloudflareAdapter({
   apiToken: process.env.CLOUDFLARE_API_TOKEN,
@@ -113,6 +119,7 @@ dig <subdomain>.cognidao.org +short @1.1.1.1
 ## Safety Rules
 
 ### NEVER modify these records:
+
 - `@` (root domain — cognidao.org)
 - `www` (www.cognidao.org)
 - Any MX records (email delivery)
@@ -120,11 +127,13 @@ dig <subdomain>.cognidao.org +short @1.1.1.1
 The `upsertDnsRecord` and `removeDnsRecord` helpers **enforce this automatically** — they throw `PROTECTED` errors on `@` and `www`. If you need to modify these, use the Cloudflare dashboard directly (never programmatically).
 
 ### Safe patterns:
+
 - `*.nodes.cognidao.org` — node subdomains (create freely)
 - `*.preview.cognidao.org` — preview deploy subdomains (create/delete freely)
 - Any subdomain that isn't `@`, `www`, or existing production records
 
 ### Before modifying DNS:
+
 1. Always list existing records first
 2. Verify you're targeting the right record (name + type)
 3. For non-node records, confirm with the user before proceeding
@@ -145,9 +154,11 @@ TODO:   task.0202 — full provisionNode Temporal workflow
 ### Wildcard DNS (upcoming)
 
 Once cluster ingress is stable, create one wildcard record:
+
 ```
 *.nodes.cognidao.org → <cluster-ingress-ip>
 ```
+
 This eliminates per-node DNS creation — all `*.nodes` subdomains auto-resolve.
 
 ### TLS (upcoming)
@@ -156,11 +167,11 @@ Subdomains won't serve HTTPS until the cluster's reverse proxy (Caddy) has a wil
 
 ## Troubleshooting
 
-| Symptom | Fix |
-|---------|-----|
-| `ERR_NAME_NOT_RESOLVED` | DNS not propagated. Check: `dig <domain> +short @1.1.1.1`. Flush local: `sudo dscacheutil -flushcache` |
-| `ERR_CONNECTION_CLOSED` / "not secure" | DNS works but no server/TLS for that hostname. Expected until cluster ingress is configured. |
-| `PROTECTED: refusing to modify` | You tried to change `@` or `www`. Use Cloudflare dashboard for protected records. |
-| `Cloudflare API error: 403` | Token permissions wrong. Needs: Zone · DNS · Edit. Recreate token. |
-| `Invalid zone identifier` | Wrong Zone ID. Copy from Cloudflare dashboard → domain → right sidebar → API section. |
-| `A CNAME record with that host already exists` | Can't have both A and CNAME on same name. Remove old record type first, then create new one. |
+| Symptom                                        | Fix                                                                                                    |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `ERR_NAME_NOT_RESOLVED`                        | DNS not propagated. Check: `dig <domain> +short @1.1.1.1`. Flush local: `sudo dscacheutil -flushcache` |
+| `ERR_CONNECTION_CLOSED` / "not secure"         | DNS works but no server/TLS for that hostname. Expected until cluster ingress is configured.           |
+| `PROTECTED: refusing to modify`                | You tried to change `@` or `www`. Use Cloudflare dashboard for protected records.                      |
+| `Cloudflare API error: 403`                    | Token permissions wrong. Needs: Zone · DNS · Edit. Recreate token.                                     |
+| `Invalid zone identifier`                      | Wrong Zone ID. Copy from Cloudflare dashboard → domain → right sidebar → API section.                  |
+| `A CNAME record with that host already exists` | Can't have both A and CNAME on same name. Remove old record type first, then create new one.           |

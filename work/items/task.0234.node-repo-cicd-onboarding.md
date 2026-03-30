@@ -33,12 +33,12 @@ After task.0232 creates DNS and task.0233 defines the node-template boundary, we
 
 ### Key decision: how does a node repo relate to the operator?
 
-| Strategy | Pros | Cons |
-|----------|------|------|
-| **GitHub Template repo** | Clean fork, independent history, GitHub-native | Fork-sync is manual, drift accumulates |
-| **Git submodule** | Shared code stays in sync, operator can reference | Complex git workflow, submodule UX is painful |
-| **Monorepo with scoped apps** | Single repo, shared CI, no sync problem | All nodes share one repo — permission/isolation issues |
-| **GitHub fork + upstream remote** | Can pull upstream changes, independent commits | Fork network visible, PR noise, not a template |
+| Strategy                          | Pros                                              | Cons                                                   |
+| --------------------------------- | ------------------------------------------------- | ------------------------------------------------------ |
+| **GitHub Template repo**          | Clean fork, independent history, GitHub-native    | Fork-sync is manual, drift accumulates                 |
+| **Git submodule**                 | Shared code stays in sync, operator can reference | Complex git workflow, submodule UX is painful          |
+| **Monorepo with scoped apps**     | Single repo, shared CI, no sync problem           | All nodes share one repo — permission/isolation issues |
+| **GitHub fork + upstream remote** | Can pull upstream changes, independent commits    | Fork network visible, PR noise, not a template         |
 
 Reference: cogni-resy-helper (PR #11) is a real child node — study its structure.
 
@@ -47,7 +47,7 @@ Reference: cogni-resy-helper (PR #11) is a real child node — study its structu
 ### Repo Creation
 
 - [ ] GitHub Template vs fork vs `gh repo create --clone`?
-- [ ] What secrets does the new repo need? (CLOUDFLARE_*, DB creds, PRIVY_*, INTERNAL_OPS_TOKEN)
+- [ ] What secrets does the new repo need? (CLOUDFLARE*\*, DB creds, PRIVY*\*, INTERNAL_OPS_TOKEN)
 - [ ] How are secrets provisioned? (GitHub API `PUT /repos/{owner}/{repo}/actions/secrets`)
 - [ ] Who owns the repo? Cogni-DAO org? Founder's org?
 
