@@ -102,6 +102,10 @@ RUN corepack enable pnpm && pnpm add -g @openai/codex@0.116.0 @openai/codex-sdk@
 # platform binary where the SDK's createRequire chain finds it. See bug.0224.
 COPY --from=builder --chown=nextjs:nodejs /tmp/codex-native/@openai/ ./node_modules/@openai/
 
+# MCP server config — parseMcpConfigFromEnv reads config/mcp.servers.json relative to CWD.
+# Standalone CWD is /app/apps/web, so place at /app/apps/web/config/.
+COPY --from=builder --chown=nextjs:nodejs /app/config/mcp.servers.json ./config/mcp.servers.json
+
 USER nextjs
 
 EXPOSE 3000
