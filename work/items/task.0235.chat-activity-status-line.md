@@ -2,7 +2,7 @@
 id: task.0235
 type: task
 title: "Chat activity status line — consume StatusEvent in thread UI"
-status: needs_design
+status: needs_implement
 priority: 1
 rank: 1
 estimate: 2
@@ -12,43 +12,76 @@ spec_refs:
 assignees: []
 credit:
 project: proj.premium-frontend-ux
-branch:
+branch: feat/chat-activity-status-line
 pr:
 reviewer:
 revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-03-30
-updated: 2026-03-30
+updated: 2026-03-31
 labels: [ui, chat, ai-graphs]
 external_refs:
 ---
 
 # Chat Activity Status Line
 
-## Requirements
+## Design
 
-1. Subscribe to `data-status` transient chunks from `@assistant-ui/react` runtime
-2. Render a `<StatusLine>` component between last message and composer
-3. Show phase-appropriate icon + text:
-   - `thinking` → brain icon + "Thinking..."
-   - `tool_use` → wrench icon + "Using {label}..." (label = tool name)
-   - `compacting` → compress icon + "Compacting context..."
-4. Animate enter/exit with Framer Motion (fade + slide)
-5. Auto-dismiss when first `text_delta` arrives or stream ends (`done`)
+### Outcome
 
-## Allowed Changes
+When the AI is processing, users see a single animated line above the composer: "Thinking...", "Using search_web...", or "Compacting context...". Replaces the current void between sending a message and seeing the first text chunk.
 
-- `apps/web/src/components/vendor/assistant-ui/thread.tsx` — add StatusLine to AssistantMessage or Thread
-- `apps/web/src/components/kit/chat/StatusLine.tsx` — new component
-- `apps/web/src/features/ai/chat/` — hook to consume status events if needed
+### Approach
 
-## Plan
+**Solution**: Use `@assistant-ui/react`'s `useThreadRuntime` to subscribe to the latest assistant message's content parts. Extract `DataMessagePart` with `name === "status"` and render a `<StatusLine>` component between messages and composer in the Thread. Animate with Framer Motion.
 
-- [ ] Prototype: verify `@assistant-ui/react` exposes `data-status` chunks via runtime API or message parts
-- [ ] Create `StatusLine` component with phase icon map + Framer Motion animations
-- [ ] Wire into Thread component (render between messages and composer when running)
-- [ ] Test with manual StatusEvent emission in dev
+**Why this works**: The backend already emits `StatusEvent` → the chat route maps it to `data-status` UIMessageChunk with `transient: true` → `@assistant-ui/react` converts it to a `DataMessagePart` in the in-progress message's content array. We just need to read it and render.
+
+**Reuses**:
+
+- Existing `StatusEvent` → `data-status` pipeline (zero backend changes)
+- `@assistant-ui/react` v0.12.10 `useThreadRuntime` + `ThreadPrimitive.If running` (already installed)
+- `framer-motion` (already installed) for enter/exit animation
+- `lucide-react` icons (already installed): Brain, Wrench, Minimize2
+- Status icon pattern from `work-item-icons.tsx` (same icon+color approach)
+
+**Rejected**:
+
+- **`useMessagePartData` hook**: Requires being inside a MessagePart context — can't use at thread level
+- **Separate SSE connection**: Overkill — the status is already in the AI SDK stream
+- **onData callback**: Would require switching from `useChatRuntime` to `useDataStreamRuntime` — invasive change
+
+### Invariants
+
+- [ ] STATUS_IS_EPHEMERAL: Status line is transient — never persisted, disappears when stream ends
+- [ ] STATUS_BEST_EFFORT: Missing status events gracefully fall back to no indicator (not an error)
+- [ ] CONTRACTS_ARE_TRUTH: Status data shape matches `CogniStatus` from ai.completions.v1.contract
+- [ ] ARCHITECTURE_ALIGNMENT: New component in kit/chat/, wired in vendor/assistant-ui/thread.tsx
+
+### Files
+
+**Create**:
+
+- `apps/web/src/components/kit/chat/StatusLine.tsx` — presentational component with phase icon + animated text
+
+**Modify**:
+
+- `apps/web/src/components/vendor/assistant-ui/thread.tsx` — add StatusLine between messages and composer, gated by `ThreadPrimitive.If running`
+
+### Implementation Plan
+
+- [ ] **Checkpoint 1**: StatusLine component renders statically with all three phases
+  - Create `StatusLine.tsx` with phase→icon+text map
+  - Accept `phase` and `label` props
+  - Framer Motion `AnimatePresence` for enter/exit
+  - Validation: component renders in isolation
+
+- [ ] **Checkpoint 2**: Wire into Thread, extract status from runtime
+  - Add `useThreadRuntime` subscription in Thread to read latest message's data parts
+  - Find last `DataMessagePart` with `name === "status"` in the in-progress message
+  - Render `StatusLine` inside `ThreadPrimitive.If running` block between messages and composer
+  - Validation: send a message in dev, see status line appear during processing
 
 ## Validation
 
