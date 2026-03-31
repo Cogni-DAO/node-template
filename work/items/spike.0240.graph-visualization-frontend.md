@@ -231,3 +231,8 @@ MVP data comes from **existing + in-flight APIs** — no new routes needed for g
 - [ ] TimelineScrubber controls playback speed and position
 - [ ] Dashboard Graph tab loads existing run data through LangGraph adapter
 - [ ] `pnpm check` passes
+
+## PR / Links
+
+- PR: [Cogni-DAO/node-template#671](https://github.com/Cogni-DAO/node-template/pull/671)
+- Handoff: [handoff](../handoffs/spike.0240.handoff.md)
