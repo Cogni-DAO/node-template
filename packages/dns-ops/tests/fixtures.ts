@@ -5,7 +5,7 @@
  * Module: `@cogni/dns-ops/tests/fixtures`
  * Purpose: Shared test constants for dns-ops unit tests. Does NOT contain test logic.
  * Scope: Test fixtures only. Does NOT export runtime code.
- * Invariants: All IPs are RFC 5737 TEST-NET addresses (192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24) — safe for docs/tests, never routed on the public internet.
+ * Invariants: All IPs are RFC 5737 TEST-NET addresses — never routed on the public internet.
  * Side-effects: none
  * Links: https://datatracker.ietf.org/doc/html/rfc5737
  * @internal
