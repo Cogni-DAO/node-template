@@ -53,6 +53,7 @@ export function MobileNav({ className }: MobileNavProps): ReactElement {
           aria-label="Mobile navigation"
         >
           <NavigationLink href="/chat">Chat</NavigationLink>
+          <NavigationLink href="/graph">Graph</NavigationLink>
           <NavigationLink href="/work">Work</NavigationLink>
           <NavigationLink href="/activity">Activity</NavigationLink>
           <NavigationLink href="/gov">Gov</NavigationLink>
