@@ -1,5 +1,5 @@
 ---
-id: task.0234
+id: task.0241
 type: task
 title: "Schedule Management AI Tools + Planner UI"
 status: needs_merge
@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.scheduler-evolution
 branch: feat/scheduled-sweep-v0
-pr: https://github.com/Cogni-DAO/node-template/pull/670
+pr:
 reviewer:
 revision: 2
 blocked_by:
