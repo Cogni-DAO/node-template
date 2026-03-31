@@ -1,7 +1,7 @@
 ---
 id: spike.0240
 type: spike
-status: done
+status: needs_merge
 priority: 0
 rank: 2
 estimate: 3
