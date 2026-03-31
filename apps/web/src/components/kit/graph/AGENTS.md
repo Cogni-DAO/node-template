@@ -14,15 +14,14 @@ Reusable graph visualization components wrapping `@xyflow/react` (DAG flow diagr
 ## Pointers
 
 - [types.ts](./types.ts): `GraphNode`, `GraphEdge`, `GraphSnapshot` — the universal data model
-- [Architecture Spec](../../../../../../docs/spec/architecture.md): SSR-unsafe library handling
 
 ## Boundaries
 
 ```json
 {
-  "layer": "components/kit",
-  "may_import": ["@/styles/ui", "@radix-ui/*", "@/components/vendor/shadcn/*", "@/shared/util"],
-  "must_not_import": ["@/features", "@/app", "@/adapters", "@/ports", "@/core"]
+  "layer": "components",
+  "may_import": ["shared", "types", "styles"],
+  "must_not_import": ["features", "app", "adapters", "ports", "core"]
 }
 ```
 
@@ -40,3 +39,9 @@ Reusable graph visualization components wrapping `@xyflow/react` (DAG flow diagr
 
 - This directory **does**: wrap vendor graph libraries behind kit components, define the shared graph data model, handle SSR-safe dynamic imports
 - This directory **does not**: fetch data, define adapters, implement business logic, access ports or services
+
+## Notes
+
+- `ForceGraph` uses `next/dynamic` with `ssr: false` — Canvas API not available server-side
+- `FlowGraph` imports `@xyflow/react` directly (v12 handles SSR natively)
+- Canvas rendering in ForceGraph uses raw hex colors (CSS custom properties not available in Canvas API)

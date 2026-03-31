@@ -14,15 +14,14 @@ Feature slice for graph visualization. Composes kit/graph components into view-l
 ## Pointers
 
 - [kit/graph](../../components/kit/graph/AGENTS.md): underlying visualization components
-- [Feature Development Guide](../../../../../docs/guides/feature-development.md)
 
 ## Boundaries
 
 ```json
 {
   "layer": "features",
-  "may_import": ["@/components", "@/components/kit/graph/*", "@/core", "@/ports", "@/shared", "@/types"],
-  "must_not_import": ["@/adapters", "@/app", "@/styles/ui"]
+  "may_import": ["components", "core", "ports", "shared", "types", "contracts"],
+  "must_not_import": ["adapters", "app"]
 }
 ```
 
@@ -39,3 +38,8 @@ Feature slice for graph visualization. Composes kit/graph components into view-l
 
 - This directory **does**: compose kit graph components, transform API data into `GraphSnapshot`, manage view-level state (selected node, playback, time filtering)
 - This directory **does not**: fetch data directly (consumers pass data via props), define new ports, access database or external services
+
+## Notes
+
+- Monitor adapter types match future `packages/monitor-core` schemas (task.0227) — ready when APIs land
+- Dolt adapter deferred to Phase 2
