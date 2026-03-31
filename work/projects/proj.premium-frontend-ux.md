@@ -76,10 +76,11 @@ Each phase delivers standalone value. No throwaway work.
 
 **Goal:** Users see what the AI is doing. Fixes the highest-impact UX gap.
 
-| Deliverable                                                                | Status      | Est | Work Item |
-| -------------------------------------------------------------------------- | ----------- | --- | --------- |
-| Chat activity status line — consume StatusEvent, show phase above composer | Not Started | 2   | task.0235 |
-| Dashboard statusLabel wiring — RunCard shows live phase from SSE           | Not Started | 2   | task.0236 |
+| Deliverable                                                                | Status      | Est | Work Item  |
+| -------------------------------------------------------------------------- | ----------- | --- | ---------- |
+| Chat activity status line — consume StatusEvent, show phase above composer | Not Started | 2   | task.0235  |
+| Dashboard statusLabel wiring — RunCard shows live phase from SSE           | Not Started | 2   | task.0236  |
+| Dource — Gource-style visualization for Dolt database history              | Not Started | 2   | spike.0240 |
 
 **P0 delivers:** "Thinking...", "Using search_web...", "Compacting context..." visible in chat. Dashboard cards show live phase instead of static "Running".
 

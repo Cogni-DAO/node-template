@@ -52,6 +52,7 @@ import type {
 import type { WorkItemDto } from "@/contracts/work.items.list.v1.contract";
 import { cn } from "@/shared/util/cn";
 import { fetchActivity } from "../activity/_api/fetchActivity";
+import { WorkItemDetail } from "../work/_components/WorkItemDetail";
 import { StatusPill, TypeIcon } from "../work/_components/work-item-icons";
 import { fetchRuns } from "./_api/fetchRuns";
 
@@ -171,6 +172,9 @@ export function DashboardView(): ReactElement {
   const [activityGroupBy, setActivityGroupBy] = useState<
     ActivityGroupBy | undefined
   >("model");
+  const [selectedWorkItem, setSelectedWorkItem] = useState<WorkItemDto | null>(
+    null
+  );
 
   const { data: runsData, isLoading: runsLoading } = useQuery({
     queryKey: ["dashboard-runs", tab],
@@ -385,9 +389,11 @@ export function DashboardView(): ReactElement {
             ) : workItems.length > 0 ? (
               <div className="divide-y divide-border">
                 {workItems.map((item) => (
-                  <div
+                  <button
+                    type="button"
                     key={item.id}
-                    className="flex items-center gap-3 px-5 py-2.5"
+                    className="flex w-full items-center gap-3 px-5 py-2.5 text-left hover:bg-muted/50"
+                    onClick={() => setSelectedWorkItem(item)}
                   >
                     <TypeIcon type={item.type} className="size-3.5 shrink-0" />
                     <StatusPill status={item.status} className="shrink-0" />
@@ -399,7 +405,7 @@ export function DashboardView(): ReactElement {
                         P{item.priority}
                       </span>
                     )}
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
@@ -473,6 +479,14 @@ export function DashboardView(): ReactElement {
           </div>
         ) : null}
       </div>
+
+      <WorkItemDetail
+        item={selectedWorkItem}
+        open={selectedWorkItem !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedWorkItem(null);
+        }}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@
 id: task.0237
 type: task
 title: "Work items table — ReUI data-grid + detail panel + visual identity"
-status: needs_closeout
+status: done
 priority: 1
 rank: 1
 estimate: 3
