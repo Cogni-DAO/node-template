@@ -13,7 +13,6 @@
 | 0 | 1 | 3 | needs_merge | task.0161 | Governance signal executor: Alchemy webhook → on-chain verification → GitHub actions | System Tenant & Governance Execution Infrastructure | proj.system-tenant-governance |
 | 0 | 1 | 3 | needs_implement | task.0179 | Extract packages/graph-execution-core — decouple execution ports from Next.js | Unified Graph Launch | proj.unified-graph-launch |
 | 0 | 1 | 1 | needs_merge | bug.0224 | Codex binary not found in Docker — standalone misses platform-specific optional dep | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
-| 0 | 1 | 2 | needs_design | spike.0240 | Dource — Gource-style visualization for Dolt database history | Premium Frontend UX | proj.premium-frontend-ux |
 | 0 | 3 | 2 | needs_design | bug.0062 | OpenClaw gateway: single webchat message can trigger multi-call GOVERN loop (call storm) | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 0 | 3 | 3 | needs_merge | bug.0232 | LlmService port silently drops tools — Codex adapter ignores params.tools, MCP tools invisible to Codex agents | Agentic Interoperability | proj.agentic-interop |
 | 0 | 4 | 2 | needs_design | bug.0037 | Gateway proxy billing records $0 cost — x-litellm-response-cost header absent for streaming | Unified Graph Launch | proj.unified-graph-launch |
@@ -50,14 +49,17 @@
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD & Services GitOps | proj.cicd-services-gitops |
+| 1 | 2 | 3 | needs_merge | task.0232 | dns-ops v0 — DNS layer for multi-node creation pipeline | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0236 | Dashboard statusLabel wiring — RunCard shows live phase from SSE | Premium Frontend UX | proj.premium-frontend-ux |
 | 1 | 3 | 1 | needs_design | bug.0011 | Gateway streaming truncates output mid-sentence in UI | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 3 | 3 | needs_design | task.0099 | Node + scope identity infra: repo-spec, DB persistence, scope_id columns, boot-time drift protection |  |  |
 | 1 | 3 | 3 | needs_research | spike.0119 | Quarterly people-centric attribution review — evaluation payload, governance input, and signal collection | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 3 | 5 | needs_design | task.0188 | Per-branch preview environments (~5 simultaneous) for AI dev-lifecycle agents | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 1 | 3 | 3 | needs_merge | bug.0196 | Scheduled runs attributed to system tenant instead of schedule owner |  |  |
+| 1 | 3 | 5 | needs_design | task.0233 | Design: extract node-template from operator repo — identity split + repo-spec merge | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 4 | 1 | needs_design | bug.0009 | Mock-LLM SSE streaming incompatible with OpenClaw pi-ai parser — gateway returns empty payloads | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 4 | 2 | needs_merge | bug.0197 | Scheduled runs accumulate messages in a single shared thread per schedule |  |  |
+| 1 | 4 | 5 | needs_design | task.0234 | Design: node repo creation + CI/CD onboarding pipeline | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 5 | 2 | needs_triage | bug.0044 | Gateway billing reader finds 0 entries in stale audit log — kills execution after graph switch | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 5 | 2 | needs_triage | bug.0069 | Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite |  |  |
 | 1 | 5 | 2 | needs_design | bug.0200 | setup-secrets has no validation that generated secrets are deploy-safe | Database Operations | proj.database-ops |
