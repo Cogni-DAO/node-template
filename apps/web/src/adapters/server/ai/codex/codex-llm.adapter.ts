@@ -230,6 +230,7 @@ async function* runCodexExec(params: {
 
     const { events } = await thread.runStreamed(prompt);
 
+    let fullText = "";
     let itemText = "";
     let usage: { promptTokens: number; completionTokens: number } | undefined;
 
@@ -249,6 +250,7 @@ async function* runCodexExec(params: {
             if (newText.length > itemText.length) {
               const delta = newText.slice(itemText.length);
               itemText = newText;
+              fullText += delta;
               yield { type: "text_delta", delta } as ChatDeltaEvent;
             }
           }
