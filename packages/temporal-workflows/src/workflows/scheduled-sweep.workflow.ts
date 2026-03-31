@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/temporal-workflows/workflows/scheduled-sweep`
  * Purpose: Reusable Temporal workflow for queue-sweeping agent roles.
- * Scope: Deterministic orchestration only. All I/O in activities. Graph execution via child GraphRunWorkflow.
+ * Scope: Deterministic orchestration only. Does not perform I/O directly — all I/O delegated to activities.
  * Invariants:
  *   - Per TEMPORAL_DETERMINISM: No I/O in workflow code
  *   - ONE_WORKFLOW_ALL_ROLES: parameterized by roleId/graphId/queueFilter

@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/temporal-workflows/domain/role-spec`
  * Purpose: RoleSpec type + constants for operator roles. Binds capability (graph) to operational config.
- * Scope: Pure types and constants. No I/O, no runtime deps.
+ * Scope: Pure types and constants. Does not perform I/O or depend on runtime infrastructure.
  * Invariants:
  *   - THREE_REGISTRIES: RoleSpec is operational config, NOT graph config (that's CatalogEntry)
  *   - Code-first constants for crawl. Walk phase may extract to config files.
