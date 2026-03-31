@@ -90,7 +90,7 @@ Evolve the scheduled graph execution system from Graphile Worker to Temporal Sch
 
 | Deliverable                                                 | Status      | Est | Work Item |
 | ----------------------------------------------------------- | ----------- | --- | --------- |
-| Day plan contract, facade, API routes, AI tools, planner UI | Not Started | 3   | task.0234 |
+| Schedule AI tools + capability wiring (planner UI deferred)  | In Review   | 3   | task.0241 |
 
 ### Run (P2+)
 
