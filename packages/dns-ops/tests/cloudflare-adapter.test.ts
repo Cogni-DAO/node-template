@@ -13,6 +13,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CloudflareAdapter } from "../src/index.js";
+import { TEST_IP_1, TEST_IP_2, TEST_IP_3 } from "./fixtures.js";
 
 // ── JSON response fixtures ──────────────────────────────────
 
@@ -23,7 +24,7 @@ const LIST_RECORDS_RESPONSE = {
       id: "rec-1",
       type: "A",
       name: "cognidao.org",
-      content: "1.2.3.4",
+      content: TEST_IP_1,
       ttl: 1,
       proxied: false,
     },
@@ -151,7 +152,7 @@ describe("CloudflareAdapter", () => {
           id: "rec-1",
           name: "cognidao.org",
           type: "A",
-          value: "1.2.3.4",
+          value: TEST_IP_1,
           ttl: 1,
           proxied: false,
           mxPref: undefined,
@@ -278,7 +279,7 @@ describe("CloudflareAdapter", () => {
         {
           name: "new.cognidao.org",
           type: "A",
-          value: "5.6.7.8",
+          value: TEST_IP_2,
           ttl: 300,
         },
       ]);
@@ -294,7 +295,7 @@ describe("CloudflareAdapter", () => {
       const createInit = fetchSpy.mock.calls[3]?.[1] as RequestInit;
       expect(createInit.method).toBe("POST");
       const body = JSON.parse(createInit.body as string);
-      expect(body.content).toBe("5.6.7.8");
+      expect(body.content).toBe(TEST_IP_2);
     });
   });
 
@@ -307,7 +308,7 @@ describe("CloudflareAdapter", () => {
             id: "rec-p1",
             type: "A",
             name: "a.cognidao.org",
-            content: "1.1.1.1",
+            content: TEST_IP_1,
             ttl: 1,
             proxied: false,
           },
@@ -321,7 +322,7 @@ describe("CloudflareAdapter", () => {
             id: "rec-p2",
             type: "A",
             name: "b.cognidao.org",
-            content: "2.2.2.2",
+            content: TEST_IP_3,
             ttl: 1,
             proxied: false,
           },
@@ -333,8 +334,8 @@ describe("CloudflareAdapter", () => {
       const records = await adapter.getDnsRecords("cognidao", "org");
 
       expect(records).toHaveLength(2);
-      expect(records[0]?.value).toBe("1.1.1.1");
-      expect(records[1]?.value).toBe("2.2.2.2");
+      expect(records[0]?.value).toBe(TEST_IP_1);
+      expect(records[1]?.value).toBe(TEST_IP_3);
       expect(fetchSpy).toHaveBeenCalledTimes(2);
     });
   });
@@ -367,7 +368,7 @@ describe("CloudflareAdapter", () => {
         {
           name: "test",
           type: "A",
-          value: "1.2.3.4",
+          value: TEST_IP_1,
         },
         "cognidao.org"
       );

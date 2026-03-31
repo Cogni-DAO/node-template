@@ -13,6 +13,7 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { NamecheapAdapter } from "../src/index.js";
+import { TEST_CLIENT_IP, TEST_IP_1 } from "./fixtures.js";
 
 // ── XML response fixtures ───────────────────────────────────
 
@@ -35,7 +36,7 @@ const GET_HOSTS_XML = `<?xml version="1.0" encoding="utf-8"?>
 <ApiResponse Status="OK">
   <CommandResponse Type="namecheap.domains.dns.getHosts">
     <DomainDNSGetHostsResult Domain="cognidao.org" IsUsingOurDNS="true">
-      <host Name="@" Type="A" Address="1.2.3.4" TTL="1800" />
+      <host Name="@" Type="A" Address="${TEST_IP_1}" TTL="1800" />
       <host Name="www" Type="CNAME" Address="cognidao.org." TTL="1800" />
       <host Name="mail" Type="MX" Address="mx.example.com" MXPref="10" TTL="1800" />
     </DomainDNSGetHostsResult>
@@ -77,7 +78,7 @@ describe("NamecheapAdapter", () => {
   const adapter = new NamecheapAdapter({
     apiUser: "testuser",
     apiKey: "test-api-key",
-    clientIp: "127.0.0.1",
+    clientIp: TEST_CLIENT_IP,
     sandbox: true,
   });
 
@@ -144,7 +145,7 @@ describe("NamecheapAdapter", () => {
         {
           name: "@",
           type: "A",
-          value: "1.2.3.4",
+          value: TEST_IP_1,
           ttl: 1800,
           mxPref: undefined,
         },
@@ -183,7 +184,7 @@ describe("NamecheapAdapter", () => {
       mockFetch(SET_HOSTS_SUCCESS_XML);
 
       await adapter.setDnsRecords("cognidao", "org", [
-        { name: "@", type: "A", value: "1.2.3.4", ttl: 1800 },
+        { name: "@", type: "A", value: TEST_IP_1, ttl: 1800 },
         {
           name: "pr-1.preview",
           type: "CNAME",
@@ -195,7 +196,7 @@ describe("NamecheapAdapter", () => {
       const url = new URL(fetchSpy.mock.calls[0]?.[0] as string);
       expect(url.searchParams.get("HostName1")).toBe("@");
       expect(url.searchParams.get("RecordType1")).toBe("A");
-      expect(url.searchParams.get("Address1")).toBe("1.2.3.4");
+      expect(url.searchParams.get("Address1")).toBe(TEST_IP_1);
       expect(url.searchParams.get("HostName2")).toBe("pr-1.preview");
       expect(url.searchParams.get("RecordType2")).toBe("CNAME");
       expect(url.searchParams.get("TTL2")).toBe("300");
@@ -272,7 +273,7 @@ describe("NamecheapAdapter", () => {
       const prod = new NamecheapAdapter({
         apiUser: "user",
         apiKey: "key",
-        clientIp: "1.2.3.4",
+        clientIp: TEST_IP_1,
         sandbox: false,
       });
       mockFetch(CHECK_AVAILABLE_XML);

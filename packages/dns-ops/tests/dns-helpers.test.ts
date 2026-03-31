@@ -14,6 +14,7 @@
 import { describe, expect, it, vi } from "vitest";
 import type { DnsRecord, DomainRegistrarPort } from "../src/index.js";
 import { removeDnsRecord, splitDomain, upsertDnsRecord } from "../src/index.js";
+import { TEST_IP_1 } from "./fixtures.js";
 
 // ── splitDomain ─────────────────────────────────────────────
 
@@ -51,7 +52,7 @@ describe("upsertDnsRecord", () => {
 
   it("appends a new record when no match exists", async () => {
     const existing: DnsRecord[] = [
-      { name: "@", type: "A", value: "1.2.3.4", ttl: 1800 },
+      { name: "@", type: "A", value: TEST_IP_1, ttl: 1800 },
     ];
     const registrar = mockRegistrar(existing);
 
@@ -77,7 +78,7 @@ describe("upsertDnsRecord", () => {
 
   it("replaces an existing record with same name+type", async () => {
     const existing: DnsRecord[] = [
-      { name: "@", type: "A", value: "1.2.3.4", ttl: 1800 },
+      { name: "@", type: "A", value: TEST_IP_1, ttl: 1800 },
       { name: "pr-42.preview", type: "CNAME", value: "old-deploy.vercel.app" },
     ];
     const registrar = mockRegistrar(existing);
@@ -99,7 +100,7 @@ describe("upsertDnsRecord", () => {
 
   it("preserves unrelated records when upserting", async () => {
     const existing: DnsRecord[] = [
-      { name: "@", type: "A", value: "1.2.3.4" },
+      { name: "@", type: "A", value: TEST_IP_1 },
       { name: "mail", type: "MX", value: "mx.example.com", mxPref: 10 },
     ];
     const registrar = mockRegistrar(existing);
@@ -112,7 +113,7 @@ describe("upsertDnsRecord", () => {
 
     const setCall = vi.mocked(registrar.setDnsRecords).mock.calls.at(0) ?? [];
     const records = setCall[2] as DnsRecord[];
-    expect(records[0]).toEqual({ name: "@", type: "A", value: "1.2.3.4" });
+    expect(records[0]).toEqual({ name: "@", type: "A", value: TEST_IP_1 });
     expect(records[1]).toEqual({
       name: "mail",
       type: "MX",
@@ -136,7 +137,7 @@ describe("removeDnsRecord", () => {
 
   it("removes a matching record", async () => {
     const existing: DnsRecord[] = [
-      { name: "@", type: "A", value: "1.2.3.4" },
+      { name: "@", type: "A", value: TEST_IP_1 },
       { name: "pr-42.preview", type: "CNAME", value: "deploy.vercel.app" },
     ];
     const registrar = mockRegistrar(existing);
@@ -149,7 +150,7 @@ describe("removeDnsRecord", () => {
   });
 
   it("is a no-op when record does not exist", async () => {
-    const existing: DnsRecord[] = [{ name: "@", type: "A", value: "1.2.3.4" }];
+    const existing: DnsRecord[] = [{ name: "@", type: "A", value: TEST_IP_1 }];
     const registrar = mockRegistrar(existing);
 
     await removeDnsRecord(registrar, "cognidao.org", "nonexistent", "CNAME");
@@ -320,7 +321,7 @@ describe("protected record safeguards", () => {
       upsertDnsRecord(registrar, "cognidao.org", {
         name: "@",
         type: "A",
-        value: "1.2.3.4",
+        value: TEST_IP_1,
       })
     ).rejects.toThrow("PROTECTED");
   });

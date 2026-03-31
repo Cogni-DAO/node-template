@@ -18,7 +18,9 @@ import { CloudflareAdapter, upsertDnsRecord } from "../src/index.js";
 
 const DOMAIN = "cognidao.org";
 const NODES_SUBDOMAIN = "nodes"; // all nodes live under *.nodes.cognidao.org
-const CLUSTER_TARGET = "84.32.109.162"; // current cognidao.org A record — placeholder for cluster ingress
+// TODO: replace with actual cluster ingress IP when infra is provisioned
+// biome-ignore lint/style/noProcessEnv: CLI script reads env directly
+const CLUSTER_TARGET = process.env.CLUSTER_INGRESS_IP ?? "192.0.2.1"; // RFC 5737 TEST-NET placeholder
 
 // ── Input ───────────────────────────────────────────────────
 

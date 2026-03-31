@@ -143,10 +143,7 @@ export class NamecheapAdapter implements DomainRegistrarPort {
       url.searchParams.set(k, v);
     }
 
-    // Base URL is a hardcoded constant (PRODUCTION_URL or SANDBOX_URL).
-    // Query params are API credentials + domain operation parameters.
-    // No user-controlled input flows into the URL origin — SSRF risk is mitigated.
-    const res = await fetch(url.toString(), { method: "GET" }); // NOSONAR
+    const res = await fetch(url.toString(), { method: "GET" });
     if (!res.ok) {
       throw new Error(`Namecheap API HTTP ${res.status}: ${await res.text()}`);
     }
