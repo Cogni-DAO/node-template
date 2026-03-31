@@ -95,7 +95,7 @@ Each data source gets a lightweight **adapter function** that maps its native sh
 
 ### Q4: Fastest path to MVP?
 
-Three components, one route, zero backend changes.
+Five kit components, one new route (`/graph`), zero backend changes.
 
 ---
 
@@ -103,13 +103,15 @@ Three components, one route, zero backend changes.
 
 ### Outcome
 
-Interactive graph visualization on the dashboard: click a run → see its execution graph (DAG view) or browse system-wide activity over time (force-directed timeline view). Zero video generation.
+Interactive graph visualization as a first-class sidebar page: live system activity timeline (Gource-style) + click-to-inspect run DAGs. Zero video generation.
 
 ### Approach
 
-**Solution:** Two visualization modes sharing a unified data model, integrated as a new dashboard section.
+**Solution:** Own sidebar route (`/graph`) with two visualization modes sharing a unified data model.
 
-**Mode 1 — Flow View** (`@xyflow/react`): Structured DAG for a single run's execution graph. Shows LangGraph node flow, Temporal workflow steps, tool call chains. Click a node → inspect panel with metadata. This is the "what happened in this run" view.
+**Default state:** Timeline view loads the **current week** of runs/signals/entities, auto-advances to "now". New events appear live via React Query polling (5s). Scrub back through the week to replay history. Click any node in the timeline → switches to its run's DAG in flow view.
+
+**Mode 1 — Flow View** (`@xyflow/react`): Structured DAG for a single run's execution graph. Shows LangGraph node flow, Temporal workflow steps, tool call chains. Click a node → inspect panel with metadata. This is the "what happened in this run" view. Defaults to the most recent run.
 
 **Mode 2 — Timeline View** (`react-force-graph-2d`): Force-directed animated graph showing activity over time — Gource-style. Nodes appear/pulse as events happen, edges show relationships. Time scrubber controls playback. This is the "what's happening across the system" view.
 
@@ -120,7 +122,7 @@ Interactive graph visualization on the dashboard: click a run → see its execut
 - Existing dashboard polling pattern (React Query, 5s interval)
 - Recharts stays for bar/pie charts — these libs are additive, not replacing
 
-**Integration point:** The existing dashboard `view.tsx` already shows runs and activity. The graph views become a new tab or expandable section alongside existing content.
+**Integration point:** New sidebar item in the app shell navigation, peer to Dashboard/Chat/Activity. Own route at `(app)/graph/`.
 
 ### Component Architecture
 
@@ -144,8 +146,9 @@ apps/web/src/
 │               ├── monitor.adapter.ts      # monitor-core entities/signals/runs → GraphSnapshot
 │               ├── temporal.adapter.ts     # Temporal workflow execution → GraphSnapshot
 │               └── dolt.adapter.ts         # Dolt commit log → GraphSnapshot (Phase 2)
-└── app/(app)/dashboard/
-    └── view.tsx                            # MODIFY — add Graph tab
+└── app/(app)/graph/                        # NEW — own sidebar route
+    ├── page.tsx                            # Server component (auth gate)
+    └── view.tsx                            # Client view (timeline + flow toggle)
 ```
 
 ### SSR Safety
@@ -195,7 +198,9 @@ MVP data comes from **existing + in-flight APIs** — no new routes needed for g
 - **Create:** `apps/web/src/features/graph-viz/components/RunFlowView.tsx` — single-run DAG view
 - **Create:** `apps/web/src/features/graph-viz/components/SystemTimelineView.tsx` — system timeline
 - **Create:** `apps/web/src/features/graph-viz/components/adapters/*.ts` — data mappers
-- **Modify:** `apps/web/src/app/(app)/dashboard/view.tsx` — add Graph tab
+- **Create:** `apps/web/src/app/(app)/graph/page.tsx` — server component (auth gate)
+- **Create:** `apps/web/src/app/(app)/graph/view.tsx` — client view (timeline + flow toggle)
+- **Modify:** sidebar nav config — add Graph item (peer to Dashboard/Chat)
 - **Modify:** `apps/web/src/components/index.ts` — export new kit components
 - **Modify:** `package.json` — add `@xyflow/react`, `react-force-graph-2d`
 
