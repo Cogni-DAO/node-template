@@ -10,6 +10,7 @@ summary: "Research and design spec for interactive Gource-style graph visualizat
 outcome: "Design doc with library recommendations, component architecture, and implementation plan for graph visualization MVP."
 assignees: [derekg1729]
 initiative: ini.mission-control
+pr: https://github.com/Cogni-DAO/node-template/pull/671
 project: proj.premium-frontend-ux
 created: 2026-03-30
 updated: 2026-03-31
