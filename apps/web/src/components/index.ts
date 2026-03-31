@@ -53,6 +53,21 @@ export {
 } from "./kit/feedback/ErrorAlert";
 export { HintText } from "./kit/feedback/HintText";
 export { Progress } from "./kit/feedback/Progress";
+export { FlowGraph, type FlowGraphProps } from "./kit/graph/FlowGraph";
+export { ForceGraph, type ForceGraphProps } from "./kit/graph/ForceGraph";
+export {
+  GraphInspector,
+  type GraphInspectorProps,
+} from "./kit/graph/GraphInspector";
+export {
+  TimelineScrubber,
+  type TimelineScrubberProps,
+} from "./kit/graph/TimelineScrubber";
+export type {
+  GraphEdge,
+  GraphNode,
+  GraphSnapshot,
+} from "./kit/graph/types";
 export { Button } from "./kit/inputs/Button";
 export { Input } from "./kit/inputs/Input";
 export { ModeToggle } from "./kit/inputs/ModeToggle";

@@ -1,7 +1,7 @@
 ---
 id: spike.0240
 type: spike
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 2
 estimate: 3
@@ -12,7 +12,7 @@ assignees: [derekg1729]
 initiative: ini.mission-control
 project: proj.premium-frontend-ux
 created: 2026-03-30
-updated: 2026-03-30
+updated: 2026-03-31
 branch: worktree-spike+0240-graph-visualization
 ---
 
