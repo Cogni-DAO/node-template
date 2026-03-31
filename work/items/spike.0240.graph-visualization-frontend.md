@@ -64,12 +64,17 @@ We love the Gource aesthetic (animated graph of activity over time) but:
 ```typescript
 interface GraphNode {
   id: string;
-  type: "workflow" | "graph-node" | "commit" | "agent" | "tool";
+  type: string; // open union — adapters define their own types
   label: string;
   status?: "running" | "completed" | "failed" | "pending";
   timestamp?: number; // for timeline playback
   metadata?: Record<string, unknown>; // click-to-inspect payload
 }
+// Known types per adapter:
+//   monitor: 'entity' | 'signal' | 'trigger' | 'run' (from monitor-core schemas)
+//   langgraph: 'graph-node' | 'tool'
+//   temporal: 'workflow' | 'activity'
+//   dolt: 'commit' | 'branch'
 
 interface GraphEdge {
   id: string;
@@ -136,9 +141,9 @@ apps/web/src/
 │           ├── SystemTimelineView.tsx      # Composes ForceGraph + Scrubber for system view
 │           └── adapters/                   # Data shape mappers (pure functions)
 │               ├── langgraph.adapter.ts    # LangGraph run → GraphSnapshot
-│               ├── temporal.adapter.ts     # Temporal workflow → GraphSnapshot
-│               ├── dolt.adapter.ts         # Dolt commit log → GraphSnapshot
-│               └── agent.adapter.ts        # Agent timeline → GraphSnapshot
+│               ├── monitor.adapter.ts      # monitor-core entities/signals/runs → GraphSnapshot
+│               ├── temporal.adapter.ts     # Temporal workflow execution → GraphSnapshot
+│               └── dolt.adapter.ts         # Dolt commit log → GraphSnapshot (Phase 2)
 └── app/(app)/dashboard/
     └── view.tsx                            # MODIFY — add Graph tab
 ```
@@ -159,11 +164,13 @@ const ReactFlow = dynamic(
 
 ### Data Flow (No Backend Changes)
 
-MVP data comes from **existing APIs** — no new routes needed:
+MVP data comes from **existing + in-flight APIs** — no new routes needed for graph viz itself:
 
-1. **LangGraph runs:** Already have `fetchRuns()` returning run data with graph structure. Map to `GraphSnapshot`.
-2. **Activity feed:** Already have `fetchActivity()`. Map aggregate events to force-graph nodes.
-3. **Temporal/Dolt:** Phase 2 — when those APIs exist, add adapter functions. The component architecture is ready.
+1. **LangGraph runs:** `fetchRuns()` returns run data. Map to `GraphSnapshot` for flow view.
+2. **Activity feed:** `fetchActivity()` provides aggregate events. Map to force-graph nodes.
+3. **Monitor pipeline** (task.0227): `analysisRuns`, `signals`, `monitoredEntities`, `entitySnapshots` — continuous time-series data from the generic monitoring engine. The monitor-core schemas (`MonitoredEntity`, `Signal`, `AnalysisRun`, `TriggerCheck`) map naturally to graph nodes with IDs, timestamps, relationships, and status. API routes (`/brain/status`, `/brain/signals`) provide the data; the monitor adapter transforms to `GraphSnapshot`.
+4. **Temporal workflows:** `DataStreamWorkflow` + `AnalysisRunWorkflow` execution history — workflow steps, activity calls, retries, timing. Available via Temporal API when wired.
+5. **Dolt:** Phase 2 — when Dolt HTTP API available, add adapter.
 
 ### Invariants
 
@@ -201,11 +208,10 @@ MVP data comes from **existing APIs** — no new routes needed:
 5. Dashboard integration (new tab)
 6. `pnpm check` gate
 
-### Phase 2 (Not This Spike)
+### Phase 2 (After Monitor Engine Lands)
 
-- Temporal workflow adapter (when Temporal API wired to frontend)
 - Dolt commit graph adapter (when Dolt HTTP API available)
-- Real-time SSE streaming into force graph (live mode)
+- Real-time SSE streaming into force graph (live mode via `/brain/stream`)
 - Graph persistence / shareable URLs
 - 3D mode via `react-force-graph-3d` (same API, drop-in upgrade if needed)
 
