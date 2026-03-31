@@ -28,7 +28,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Message } from "@cogni/ai-core";
 import type { Logger } from "pino";
-
+import { CODEX_MODEL_LABELS } from "@/adapters/server/ai/providers/codex.provider";
 import type {
   ChatDeltaEvent,
   CompletionStreamParams,
@@ -309,6 +309,11 @@ async function* runCodexExec(params: {
         : {}),
       finishReason: "stop",
       resolvedProvider: "openai-chatgpt",
+      ...(model ? { resolvedModel: model } : {}),
+      ...((): Record<string, never> | { resolvedDisplayName: string } => {
+        const label = model ? CODEX_MODEL_LABELS.get(model) : undefined;
+        return label ? { resolvedDisplayName: label } : {};
+      })(),
     });
 
     yield { type: "done" } as ChatDeltaEvent;

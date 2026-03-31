@@ -252,6 +252,7 @@
 | 1 | task.0212 | Unified usage reporting — emit usage_report for all LLM providers (platform, codex, openai-compatible) | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 1 | story.0221 | Agent KPI Observability — agents measure and optimize against their own KPIs | Governance Agents | proj.governance-agents |
 | 1 | spike.0230 | AI Browser Automation Tools — OSS Survey & Integration Path | Agentic Interoperability | proj.agentic-interop |
+| 1 | bug.0234 | Activity charts show raw model IDs and "unknown" instead of human-friendly names |  |  |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 3 | bug.0193 | scheduler-worker houses workflow definitions — should be thin composition root | Unified Graph Launch | proj.unified-graph-launch |
