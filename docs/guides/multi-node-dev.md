@@ -1,7 +1,15 @@
 ---
-doc-id: guide.multi-node-dev
+id: guide.multi-node-dev
+type: guide
+title: Multi-Node Development Guide
 status: draft
-trust: measured
+trust: draft
+summary: Layout, dev commands, testing, and DB setup for running operator + node apps locally
+read_when: Running multi-node dev stack, adding a new node, or debugging node auth
+owner: derekg1729
+created: 2026-04-01
+verified: null
+tags: [nodes, dev, infrastructure]
 ---
 
 # Multi-Node Development Guide
