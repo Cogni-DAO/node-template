@@ -110,27 +110,36 @@ improvement if isolation needs tighten.
 - Milestone: 3 separate databases on shared Postgres, each node connects to its own
 - Invariants: DB_PER_NODE, DB_IS_BOUNDARY
 - Todos:
-  - [ ] Update `provision.sh` to create `cogni_operator`, `cogni_poly`, `cogni_resy` databases
-  - [ ] Update `docker-compose.dev.yml` with per-node `DATABASE_URL` env vars
-  - [ ] Update `.env.local.example` with per-node DATABASE_URL pattern
-  - [ ] Update root `package.json` dev:poly/dev:resy scripts to pass per-node DATABASE_URL
-  - [ ] Run migrations per-node (each DB gets its own schema)
+  - [ ] Update `infra/compose/runtime/postgres-init/provision.sh` to loop over
+        `COGNI_NODE_DBS` env var (default: `cogni_operator,cogni_poly,cogni_resy`)
+        creating each DB + granting app_user/app_service roles on each
+  - [ ] Add per-node env vars to `.env.local.example`:
+        `DATABASE_URL_OPERATOR`, `DATABASE_URL_POLY`, `DATABASE_URL_RESY`
+        (+ SERVICE variants). Keep `DATABASE_URL` as operator default for backward compat.
+  - [ ] Update `docker-compose.dev.yml` `db-provision` to pass `COGNI_NODE_DBS`
+  - [ ] Add `db:provision:nodes` and `db:migrate:nodes` scripts to root `package.json`
+        that provision + migrate all 3 node DBs
+  - [ ] Update `dev:poly` script to pass `DATABASE_URL=$DATABASE_URL_POLY`
+        and `DATABASE_SERVICE_URL=$DATABASE_SERVICE_URL_POLY`
+  - [ ] Update `dev:resy` script similarly with resy DB vars
 - Validation:
-  - [ ] `docker compose up postgres` creates 3 databases
-  - [ ] Each node connects to its own DB (verify with `SELECT current_database()`)
+  - [ ] `pnpm db:provision:nodes` creates 3 databases on shared Postgres
+  - [ ] `pnpm db:migrate:nodes` runs migrations on all 3
   - [ ] `pnpm check` passes
 
 ### Checkpoint 2: Per-node auth isolation
 
 - Milestone: Sign in on poly does NOT grant session on resy
-- Invariants: ORIGIN_SCOPED_COOKIES, SSO_THEN_LOCAL_SESSION
+- Invariants: ORIGIN_SCOPED_COOKIES
 - Todos:
-  - [ ] Add per-node AUTH_SECRET to `.env.local.example`
-  - [ ] Update dev:poly/dev:resy scripts to pass per-node NEXTAUTH_SECRET
-  - [ ] Verify cookie is origin-scoped (different ports = different sessions)
+  - [ ] Add `AUTH_SECRET_POLY` and `AUTH_SECRET_RESY` to `.env.local.example`
+        (generated via `openssl rand -base64 32`, distinct from `AUTH_SECRET`)
+  - [ ] Update `dev:poly` script: pass `AUTH_SECRET=$AUTH_SECRET_POLY`
+  - [ ] Update `dev:resy` script: pass `AUTH_SECRET=$AUTH_SECRET_RESY`
+  - [ ] Operator keeps using `AUTH_SECRET` (default, backward compat)
 - Validation:
-  - [ ] Sign in on :3100 (poly) → session exists
-  - [ ] Navigate to :3300 (resy) → no session, must sign in
+  - [ ] Sessions are already origin-scoped on different ports (NextAuth default).
+        Per-node secrets ensure tokens minted by poly can't be verified by resy.
   - [ ] `pnpm check` passes
 
 ### Checkpoint 3: LiteLLM callback routing
@@ -139,17 +148,23 @@ improvement if isolation needs tighten.
 - Invariants: NODE_LOCAL_METERING_PRIMARY, NO_CROSS_NODE_QUERIES,
   CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID, CALLBACK_AUTHENTICATED
 - Todos:
-  - [ ] Inject `node_id` into outgoing LiteLLM metadata from each node's LLM adapter
-  - [ ] Create callback router (nginx config or compose service) that inspects
-        metadata.node_id and forwards to correct node endpoint
-  - [ ] Update `litellm.config.yaml` to point callback at router, not app:3000
-  - [ ] Update `docker-compose.dev.yml` with router service
+  - [ ] Add `node_id` to `spendLogsMetadata` type in LLM port
+        (`apps/operator/src/ports/llm.port.ts:147` and all node copies)
+  - [ ] Set `node_id` in LiteLLM adapter when building metadata
+        (`apps/operator/src/adapters/server/ai/litellm.adapter.ts:240` and node copies)
+        Source: new `COGNI_NODE_ID` env var (e.g., "operator", "poly", "resy")
+  - [ ] Create `infra/compose/runtime/configs/billing-callback-router.conf` —
+        nginx config that receives POST from LiteLLM, parses JSON body for
+        `[0].metadata.spend_logs_metadata.node_id`, proxies to correct node
+  - [ ] Add `billing-callback-router` service to `docker-compose.dev.yml`
+        (nginx container with the above config)
+  - [ ] Update `GENERIC_LOGGER_ENDPOINT` to point at router service
+  - [ ] Pass `COGNI_NODE_ID` env to each node's dev script and compose service
 - Validation:
-  - [ ] Trigger LLM call from poly → charge_receipt in poly_db
-  - [ ] Trigger LLM call from resy → charge_receipt in resy_db
-  - [ ] Trigger LLM call from operator → charge_receipt in operator_db
-  - [ ] `poly_db.charge_receipts` has zero resy/operator entries
-  - [ ] Single-node (operator-only) deployment still works unchanged
+  - [ ] LLM call from poly → callback routed to poly:3100 → charge in poly_db
+  - [ ] LLM call from resy → callback routed to resy:3300 → charge in resy_db
+  - [ ] LLM call from operator → callback routed to operator:3000 → charge in operator_db
+  - [ ] Cross-query: `SELECT count(*) FROM cogni_poly.charge_receipts` has zero resy entries
   - [ ] `pnpm check` passes
 
 ## Validation
