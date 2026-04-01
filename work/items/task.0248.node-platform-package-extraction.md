@@ -59,8 +59,10 @@ When extracting the platform package, also standardize these UI patterns
 across all nodes so new nodes get them for free:
 
 - Clean GitHub icon link in header (poly's pattern — no stars counter widget)
-- Sign-in button/link in landing page header (not "Join waitlist")
+- Sign-in button/link in landing page header — keep the current teal-outlined style (poly's Header.tsx pattern is clean). Fix auth flow per bug.0255
 - Per-node color theming via CSS variables only (operator=blue, poly=teal, resy=blue)
+
+Related: bug.0255 (node landing page auth flow broken — useTryDemo not wired)
 
 ## Non-goals
 
