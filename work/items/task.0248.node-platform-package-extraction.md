@@ -53,6 +53,15 @@ thin shells that import shared infrastructure:
 - `src/bootstrap/container.ts` — node-specific capability wiring
 - `graphs/` — node-specific AI graphs
 
+## Shared UI standardization (part of extraction)
+
+When extracting the platform package, also standardize these UI patterns
+across all nodes so new nodes get them for free:
+
+- Clean GitHub icon link in header (poly's pattern — no stars counter widget)
+- Sign-in button/link in landing page header (not "Join waitlist")
+- Per-node color theming via CSS variables only (operator=blue, poly=teal, resy=blue)
+
 ## Non-goals
 
 - Runtime plugin system (nodes are still separate Next.js apps)
