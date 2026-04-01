@@ -15,7 +15,7 @@
 
 "use client";
 
-import Image from "next/image";
+import { Activity } from "lucide-react";
 import Link from "next/link";
 import type { ReactElement } from "react";
 
@@ -35,15 +35,9 @@ export function AppHeader(): ReactElement {
               href="/"
               className="flex min-w-0 items-center gap-2 pl-4 sm:pl-0"
             >
-              <Image
-                src="/TransparentBrainOnly.png"
-                alt="Cogni Brain Logo"
-                width={24}
-                height={24}
-                className="shrink-0"
-              />
-              <span className="hidden truncate font-bold text-gradient-accent text-xl md:inline">
-                Cogni
+              <Activity className="size-5 shrink-0 text-primary" />
+              <span className="hidden truncate font-bold text-xl md:inline">
+                cogni<span className="text-primary">/poly</span>
               </span>
             </Link>
 
