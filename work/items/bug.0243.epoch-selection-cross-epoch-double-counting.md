@@ -2,7 +2,7 @@
 id: bug.0243
 type: bug
 title: "Same-scope epoch selection re-selects receipts from prior epochs — credits double-counted"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 2
@@ -19,7 +19,7 @@ revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-03-31
-updated: 2026-03-31
+updated: 2026-04-01
 labels: [attribution, correctness, idempotency, critical]
 external_refs:
 ---
@@ -46,7 +46,7 @@ A receipt selected for epoch 1 has no selection row for epoch 2, so the query re
 
 **Contributing factors:**
 
-1. **SCOPE_GATED_QUERIES does not help here** — `resolveEpochScoped(epochId)` (line 373) validates the current epoch belongs to this adapter's `scopeId`, but `getSelectionCandidates` never checks whether the receipt already has a selection row in a *different* epoch of the *same* scope.
+1. **SCOPE_GATED_QUERIES does not help here** — `resolveEpochScoped(epochId)` (line 373) validates the current epoch belongs to this adapter's `scopeId`, but `getSelectionCandidates` never checks whether the receipt already has a selection row in a _different_ epoch of the _same_ scope.
 
 2. **SelectionContext has no prior-epoch data** — `SelectionContext` (`packages/attribution-pipeline-contracts/src/selection.ts:32-37`) provides `receiptsToSelect` and `allReceipts` but no prior-epoch selection information. The policy cannot deduplicate even if it wanted to.
 
@@ -59,6 +59,7 @@ Within a single `(node_id, scope_id)`, each receipt is selected for at most one 
 ### Reproduction
 
 Visible on production dashboard right now:
+
 - Epoch #1 (3/22–3/29): 13 PRs, all score 1000
 - Epoch #2 (3/29–4/5): 16 PRs — the same 13 from epoch 1 plus 3 new ones
 
@@ -98,14 +99,20 @@ const priorEpochIds = await this.db
   .from(epochs)
   .where(and(eq(epochs.scopeId, this.scopeId), ne(epochs.id, epochId)));
 
-const alreadySelected = priorEpochIds.length > 0
-  ? await this.db
-      .selectDistinct({ receiptId: epochSelection.receiptId })
-      .from(epochSelection)
-      .where(inArray(epochSelection.epochId, priorEpochIds.map(e => e.id)))
-  : [];
+const alreadySelected =
+  priorEpochIds.length > 0
+    ? await this.db
+        .selectDistinct({ receiptId: epochSelection.receiptId })
+        .from(epochSelection)
+        .where(
+          inArray(
+            epochSelection.epochId,
+            priorEpochIds.map((e) => e.id)
+          )
+        )
+    : [];
 
-const excludeIds = new Set(alreadySelected.map(r => r.receiptId));
+const excludeIds = new Set(alreadySelected.map((r) => r.receiptId));
 
 // 2. Existing query + filter
 // Add to WHERE: excludeIds.size > 0 ? notInArray(ingestionReceipts.receiptId, [...excludeIds]) : undefined

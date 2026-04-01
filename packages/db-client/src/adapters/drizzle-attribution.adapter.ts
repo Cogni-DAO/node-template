@@ -88,6 +88,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   notInArray,
   or,
   sql,
@@ -1774,6 +1775,26 @@ export class DrizzleAttributionAdapter implements AttributionStore {
     epochId: bigint
   ): Promise<UnselectedReceipt[]> {
     await this.resolveEpochScoped(epochId);
+
+    // Exclude receipts already selected in prior same-scope epochs.
+    // RECEIPT_SCOPE_AGNOSTIC: cross-scope selection is preserved — filter is same-scope only.
+    const priorEpochRows = await this.db
+      .select({ id: epochs.id })
+      .from(epochs)
+      .where(and(eq(epochs.scopeId, this.scopeId), ne(epochs.id, epochId)));
+
+    const priorEpochIds = priorEpochRows.map((e) => e.id);
+
+    const alreadySelected =
+      priorEpochIds.length > 0
+        ? await this.db
+            .selectDistinct({ receiptId: epochSelection.receiptId })
+            .from(epochSelection)
+            .where(inArray(epochSelection.epochId, priorEpochIds))
+        : [];
+
+    const excludeIds = alreadySelected.map((r) => r.receiptId);
+
     const rows = await this.db
       .select({
         receipt: ingestionReceipts,
@@ -1793,7 +1814,10 @@ export class DrizzleAttributionAdapter implements AttributionStore {
           or(
             isNull(epochSelection.id), // no selection row
             isNull(epochSelection.userId) // selection exists but unresolved
-          )
+          ),
+          excludeIds.length > 0
+            ? notInArray(ingestionReceipts.receiptId, excludeIds)
+            : undefined
         )
       )
       .orderBy(ingestionReceipts.eventTime);
