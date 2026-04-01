@@ -28,8 +28,9 @@ const manrope = Manrope({
 });
 
 export const metadata: Metadata = {
-  title: "Cogni",
-  description: "Web3 Gov + Web2 AI",
+  title: "Resy Helper — Your Table, Not Theirs",
+  description:
+    "Stop losing reservations to scalper bots. We claim your table in seconds using official channels.",
 };
 
 export default function RootLayout({

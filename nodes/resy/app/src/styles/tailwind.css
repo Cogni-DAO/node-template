@@ -129,7 +129,7 @@
     --accent: 210 40% 96.1%;
     --accent-foreground: 222.2 47.4% 11.2%;
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: var(--color-red-800);
+    --destructive-foreground: 210 40% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
     --ring: 222.2 84% 4.9%;
@@ -168,22 +168,6 @@
     --sidebar-ring: 222.2 84% 4.9%;
 
     --radius: 0.5rem;
-
-    --success: var(--color-emerald-500);
-
-    --success-foreground: var(--color-emerald-900);
-
-    --info: var(--color-violet-500);
-
-    --info-foreground: var(--color-violet-900);
-
-    --warning: var(--color-yellow-500);
-
-    --warning-foreground: var(--color-yellow-900);
-
-    --invert: var(--color-zinc-900);
-
-    --invert-foreground: var(--color-zinc-50);
   }
 
   .dark {
@@ -193,19 +177,19 @@
     --card-foreground: 210 40% 98%;
     --popover: 217.2 32.6% 9%;
     --popover-foreground: 215 20.2% 76.1%;
-    --primary: 217 71% 40%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 217.2 32.6% 17.5%;
+    --primary: 42 90% 50%;
+    --primary-foreground: 0 0% 5%;
+    --secondary: 35 20% 14%;
     --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 9%;
+    --muted: 35 15% 10%;
     --muted-foreground: 215 20.2% 76.1%;
-    --accent: 217.2 32.6% 17.5%;
+    --accent: 35 20% 14%;
     --accent-foreground: 210 40% 98%;
     --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: var(--color-red-600);
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 217 71% 40%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 35 15% 17%;
+    --input: 35 15% 17%;
+    --ring: 42 90% 50%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -220,28 +204,20 @@
     --syntax-string: 20 90% 80%; /* peach/orange - strings & variables */
     --syntax-keyword: 220 100% 65%; /* blue - keywords */
 
-    /* Accent gradient stops (aligned with brand hue 217, darker for dark mode) */
-    --accent-from: 217 80% 45%;
-    --accent-to: 217 100% 60%;
-    --accent-glow: 217 90% 52%;
+    /* Accent gradient stops (warm amber brand) */
+    --accent-from: 42 90% 50%;
+    --accent-to: 35 95% 60%;
+    --accent-glow: 40 92% 55%;
 
     /* Sidebar */
     --sidebar: 0 0% 3%;
     --sidebar-foreground: 210 40% 98%;
-    --sidebar-primary: 217 71% 40%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 217.2 32.6% 17.5%;
+    --sidebar-primary: 42 90% 50%;
+    --sidebar-primary-foreground: 0 0% 5%;
+    --sidebar-accent: 35 20% 14%;
     --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217.2 32.6% 17.5%;
-    --sidebar-ring: 217 71% 40%;
-    --success: var(--color-emerald-500);
-    --success-foreground: var(--color-emerald-600);
-    --info: var(--color-violet-500);
-    --info-foreground: var(--color-violet-600);
-    --warning: var(--color-yellow-500);
-    --warning-foreground: var(--color-yellow-600);
-    --invert: var(--color-zinc-700);
-    --invert-foreground: var(--color-zinc-50);
+    --sidebar-border: 35 15% 17%;
+    --sidebar-ring: 42 90% 50%;
   }
 
   /* Hero animation tokens (isolated, code.ts only) */
