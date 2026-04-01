@@ -15,6 +15,7 @@
  */
 
 import type {
+  MarketCapability,
   MetricsCapability,
   RepoCapability,
   ScheduleCapability,
@@ -23,6 +24,7 @@ import type {
   WorkItemCapability,
 } from "@cogni/ai-tools";
 import {
+  createMarketListImplementation,
   createMetricsQueryImplementation,
   createRepoListImplementation,
   createRepoOpenImplementation,
@@ -34,6 +36,7 @@ import {
   createWorkItemTransitionImplementation,
   GET_CURRENT_TIME_NAME,
   getCurrentTimeImplementation,
+  MARKET_LIST_NAME,
   METRICS_QUERY_NAME,
   REPO_LIST_NAME,
   REPO_OPEN_NAME,
@@ -50,6 +53,7 @@ import {
  * These are resolved from the container at bootstrap time.
  */
 export interface ToolBindingDeps {
+  readonly marketCapability: MarketCapability;
   readonly metricsCapability: MetricsCapability;
   readonly webSearchCapability: WebSearchCapability;
   readonly repoCapability: RepoCapability;
@@ -87,6 +91,10 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
       getCurrentTimeImplementation as AnyToolImplementation,
 
     // I/O tools (require capability injection)
+    [MARKET_LIST_NAME]: createMarketListImplementation({
+      marketCapability: deps.marketCapability,
+    }) as AnyToolImplementation,
+
     [METRICS_QUERY_NAME]: createMetricsQueryImplementation({
       metricsCapability: deps.metricsCapability,
     }) as AnyToolImplementation,
