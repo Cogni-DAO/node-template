@@ -1,13 +1,13 @@
 ---
 id: task.0245
 type: task
-title: "Multi-node app architecture — 3 apps, per-node graph packages"
+title: "Multi-node architecture — nodes/ directory, per-node graph packages, dep-cruiser boundaries"
 status: needs_design
 priority: 0
 rank: 1
 estimate: 5
-summary: "Split monorepo into 3 deployable node apps (operator, poly, resy) with per-node langgraph packages. Apps are the only node-specific code. Packages and services are shared."
-outcome: "cognidao.org (operator), poly.cognidao.org (poly), resy.cognidao.org (resy) each have independent sign-in, independent graph catalogs, and independent deployments — all from one repo."
+summary: "Introduce nodes/ as the bounded-context directory for node-specific code. Each node gets app/, graphs/, and bespoke code. Shared packages/ and services/ are operator-level. Dep-cruiser enforces no cross-node imports."
+outcome: "nodes/node-template/ is the forkable base. nodes/poly/ holds poly-specific code. Clear dep-cruiser rules prevent import leakage across node boundaries. pnpm workspace resolves nodes/*/app and nodes/*/graphs."
 spec_refs:
   - docs/spec/node-operator-contract.md
   - docs/spec/node-launch.md
@@ -28,111 +28,132 @@ external_refs:
 
 ## Context
 
-task.0244 established the multi-app monorepo pattern by pulling `apps/poly` and
-`packages/market-provider` from the cogni-resy-helper fork. But the current state
-still has problems:
+task.0244 absorbed cogni-resy-helper into the monorepo, but node-specific code
+is scattered: `apps/poly/` alongside the operator app, `poly-brain` in the shared
+`packages/langgraph-graphs/`, market-list tool in shared `packages/ai-tools/`.
 
-1. `apps/poly` is just a landing page — no auth, no chat, no AI runtime
-2. Resy features live inside `apps/web` — no separate resy app exists
-3. `poly-brain` graph lives in the shared `packages/langgraph-graphs/` — every
-   node gets every graph, violating node sovereignty
-4. Auth (NextAuth/Auth0) is hardcoded for `apps/web`'s domain
+The repo needs a clear partition: **everything outside `nodes/` is operator
+(shared infra). Everything inside `nodes/{name}/` is that node's sovereign code.**
 
-## Architecture Principle
-
-> **Apps are the only duplicated code across nodes.**
-
-Everything else is shared:
+## Architecture
 
 ```
-apps/
-  operator/        ← cognidao.org — DAO admin, node management, chat
-  poly/            ← poly.cognidao.org — prediction market node
-  resy/            ← resy.cognidao.org — reservation helper node
+nodes/
+  node-template/               ← the forkable base (ROADMAP Phase 0.5)
+    app/                       ← Next.js webapp shell (auth, chat, bootstrap)
+    graphs/                    ← base node graphs package (@cogni/node-template-graphs)
+    .cogni/repo-spec.yaml      ← node identity template
 
-packages/          ← ALL shared across every node
-  ai-core/         ← AI primitives
-  ai-tools/        ← tool contracts + implementations
-  db-schema/       ← shared DB schema (Drizzle)
-  langgraph-graphs/           ← shared graph runtime + base graphs (brain, poet, research)
-  langgraph-graphs-poly/      ← poly-specific graphs (poly-brain) + poly catalog
-  langgraph-graphs-resy/      ← resy-specific graphs (future) + resy catalog
-  market-provider/             ← Polymarket + Kalshi adapters
-  ... (all other packages)
+  poly/                        ← poly prediction market node
+    app/                       ← poly webapp (@cogni/poly-app)
+    graphs/                    ← poly-specific graphs (@cogni/poly-graphs: poly-brain)
 
-services/          ← ALL shared — operator-level infrastructure
+  resy/                        ← resy reservation helper node
+    app/                       ← resy webapp (@cogni/resy-app)
+    graphs/                    ← resy-specific graphs (@cogni/resy-graphs)
+
+packages/                      ← shared across ALL nodes + operator
+  ai-core/                     ← AI primitives
+  ai-tools/                    ← tool contracts (market-list stays here — any node can use it)
+  langgraph-graphs/            ← shared graph runtime + base graphs (brain, poet, research)
+  market-provider/             ← Polymarket + Kalshi adapters (shared capability)
+  db-schema/                   ← shared DB schema
+  ...
+
+services/                      ← shared operator-level infrastructure
   scheduler-worker/
   sandbox-openclaw/
   sandbox-runtime/
+
+apps/web/                      ← operator app (rename to apps/operator in separate PR)
 ```
 
-Each node app contains ONLY:
+### Per-node contents
 
-- Next.js shell (layout, routes, pages)
-- Auth config (NextAuth provider, domain, callbacks)
-- Bootstrap/container.ts (registers which graph packages + tools are available)
-- UI components (landing page, chat, admin)
-- Per-node env config (.env overrides for domain, auth, features)
+Each node directory contains exactly:
 
-## Design Questions
+| Directory | Purpose                                      | pnpm package name      |
+| --------- | -------------------------------------------- | ---------------------- |
+| `app/`    | Next.js webapp (auth, routes, UI, bootstrap) | `@cogni/{node}-app`    |
+| `graphs/` | Node-specific langgraph graphs package       | `@cogni/{node}-graphs` |
+| `.cogni/` | repo-spec.yaml (node identity)               | n/a                    |
+| `...`     | Any bespoke node code (domain packages)      | varies                 |
 
-1. **Graph catalog composition**: Each node app builds its catalog by importing
-   from shared `langgraph-graphs` + its own `langgraph-graphs-{node}`. How?
-   - Option A: Each node app has its own catalog.ts that merges shared + node entries
-   - Option B: Shared catalog exports a `createCatalog()` that accepts extensions
-   - Option C: Each langgraph-graphs-{node} exports a partial catalog; app merges at bootstrap
+Each node's `app/` bootstrap composes its catalog by importing:
 
-2. **Shared app shell vs. full duplication**: How much of `apps/web` gets shared?
-   - Chat UI components → shared package? Or copy per app?
-   - Auth setup → shared auth package? Or per-app config?
-   - Bootstrap container → each app wires its own (different capabilities per node)
+- Shared base graphs from `@cogni/langgraph-graphs`
+- Node-specific graphs from `@cogni/{node}-graphs`
 
-3. **DB schema**: Single shared DB schema or per-node schema extensions?
-   - V0: single schema, all nodes use same tables
-   - V1: per-node schema packages extending base
+### Dependency-cruiser rules
 
-4. **apps/web rename**: Should `apps/web` become `apps/operator`? The ROADMAP
-   and node-operator-contract both reference `apps/operator/` as the target name.
+```
+nodes/poly/**  →  nodes/resy/**    ✗  NO_CROSS_NODE
+nodes/poly/**  →  nodes/template/**  ✗  NO_CROSS_NODE (fork, don't import)
+nodes/**       →  apps/**           ✗  NODE_NOT_OPERATOR
+nodes/**       →  services/**       ✗  NODE_NOT_OPERATOR
+packages/**    →  nodes/**          ✗  SHARED_NOT_NODE
+nodes/{x}/**   →  packages/**       ✓  nodes consume shared
+nodes/{x}/**   →  nodes/{x}/**      ✓  intra-node OK
+```
+
+### pnpm workspace changes
+
+```yaml
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "services/*"
+  - "nodes/*/app" # NEW — node webapps
+  - "nodes/*/graphs" # NEW — node graph packages
+```
 
 ## Plan
 
-### Phase 1: Per-node graph packages
+### Phase 1: Create nodes/ structure + move poly
 
-1. Create `packages/langgraph-graphs-poly/` — move poly-brain from shared
-2. Export `POLY_CATALOG` (partial catalog) from the new package
-3. Update `apps/web` bootstrap to merge shared + poly catalog
-4. Remove poly-brain from `packages/langgraph-graphs/`
+1. Create `nodes/poly/app/` — move `apps/poly/` content here
+2. Create `nodes/poly/graphs/` — move poly-brain from `packages/langgraph-graphs/`
+3. Update `pnpm-workspace.yaml` with `nodes/*/app` and `nodes/*/graphs`
+4. Remove poly-brain from shared catalog; poly app composes its own
+5. Update `pnpm install`, verify resolution
 
-### Phase 2: Rename + extract apps
+### Phase 2: Create node-template/
 
-1. Rename `apps/web` → `apps/operator` (or keep as `apps/web` if too disruptive)
-2. Create `apps/resy` — clone operator app shell, strip non-resy features
-3. Create `apps/poly` as full app (auth, chat, AI runtime) — not just landing page
-4. Each app gets its own `next.config.ts`, `package.json`, bootstrap
+1. Create `nodes/node-template/app/` — minimal Next.js shell with auth + chat
+2. Create `nodes/node-template/graphs/` — re-exports shared base graphs
+3. Create `nodes/node-template/.cogni/repo-spec.yaml` — template identity
+4. Document: "to create a new node, copy node-template/ and customize"
 
-### Phase 3: Per-node auth
+### Phase 3: Dep-cruiser rules
 
-1. Each app configures its own NextAuth domain
-2. Shared auth utilities in a package (e.g., `packages/auth-core`)
-3. Per-node Auth0 tenant or shared tenant with different callbacks
+1. Add NO_CROSS_NODE rule (nodes/{a} cannot import nodes/{b})
+2. Add NODE_NOT_OPERATOR rule (nodes/ cannot import apps/ or services/)
+3. Add SHARED_NOT_NODE rule (packages/ cannot import nodes/)
+4. Validate with `pnpm arch:check`
 
-### Phase 4: DNS + deployment
+### Phase 4: Wire resy node (follow-up)
 
-1. Wire `operator.cognidao.org`, `poly.cognidao.org`, `resy.cognidao.org` via dns-ops
-2. Per-app Dockerfile (or shared Dockerfile with build arg)
-3. Per-app k8s overlay (infra/cd/nodes/)
+1. Create `nodes/resy/app/` — clone from node-template, add resy features
+2. Create `nodes/resy/graphs/` — resy-specific graphs
+
+## Separate PR (not this task)
+
+- Rename `apps/web` → `apps/operator` — one clear rename PR, no mixing concerns
 
 ## Non-goals
 
-- Per-node databases (V1+ concern)
-- Operator repo extraction (Phase 6 per ROADMAP — needs paying customer)
+- Per-node databases (V1+)
+- Operator repo extraction (ROADMAP Phase 6)
 - Per-node CI isolation (proj.cicd-services-gitops P2+)
+- DNS wiring (dns-ops follow-up)
 
 ## Validation
 
-- [ ] `packages/langgraph-graphs-poly/` builds and typechecks independently
-- [ ] Poly-brain graph no longer in shared `packages/langgraph-graphs/`
-- [ ] Each of 3 apps starts independently on different ports
-- [ ] Each app shows only its own graphs in the chat picker
+- [ ] `nodes/poly/app/` starts on port 3100
+- [ ] `nodes/poly/graphs/` builds and exports poly-brain
+- [ ] Poly-brain no longer in shared `packages/langgraph-graphs/`
+- [ ] `nodes/node-template/` exists as forkable base
+- [ ] Dep-cruiser blocks cross-node imports
+- [ ] Dep-cruiser blocks nodes/ → apps/ imports
+- [ ] Dep-cruiser blocks packages/ → nodes/ imports
 - [ ] `pnpm check` passes
-- [ ] dns-ops can create subdomains for each node
