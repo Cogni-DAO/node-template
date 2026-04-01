@@ -16,6 +16,7 @@
 | 0 | 1 | 5 | needs_triage | bug.0242 | Codex MCP tool calls invisible to platform — no persistence, no observability, no history |  |  |
 | 0 | 1 | 3 | needs_merge | task.0243 | Work item AI tools + actor eligibility + Operating Review agent | DAO Agentic Project Management | proj.agentic-project-management |
 | 0 | 1 | 5 | needs_closeout | task.0245 | Multi-node architecture — nodes/ directory, per-node graph packages, dep-cruiser boundaries | CI/CD & Services GitOps | proj.cicd-services-gitops |
+| 0 | 1 | 5 | needs_implement | task.0256 | Per-node billing pipeline: DB isolation + auth isolation + LiteLLM callback routing | Operator Plane | proj.operator-plane |
 | 0 | 3 | 2 | needs_design | bug.0062 | OpenClaw gateway: single webchat message can trigger multi-call GOVERN loop (call storm) | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 0 | 3 | 3 | needs_merge | bug.0232 | LlmService port silently drops tools — Codex adapter ignores params.tools, MCP tools invisible to Codex agents | Agentic Interoperability | proj.agentic-interop |
 | 0 | 4 | 2 | needs_design | bug.0037 | Gateway proxy billing records $0 cost — x-litellm-response-cost header absent for streaming | Unified Graph Launch | proj.unified-graph-launch |
@@ -87,7 +88,6 @@
 | 1 | 10 | 3 | needs_merge | bug.0195 | TigerBeetle unreachable in all envs — native client floods ~72M garbage log lines/day to Grafana Cloud | Financial Ledger | proj.financial-ledger |
 | 1 | 10 | 1 | needs_review | task.0210 | BYO-AI ChatGPT v0 — OAuth hardening + security review fixes | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 1 | 10 | 1 | needs_implement | spike.0220 | Validate AiMo Network x402 passthrough — 402 flow, model coverage, E2E feasibility | x402 E2E Migration: Hyperbolic + Per-Request Settlement | proj.x402-e2e-migration |
-| 1 | 10 | 3 | needs_design | task.0256 | Multi-Node LiteLLM Callback Routing: Dynamic Per-Node Billing Ingest | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 1 | 11 | 3 | needs_design | task.0045 | Enable OpenClaw subagent spawning — upstream header fix + Cogni config + delegation instructions | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 12 | 2 | needs_design | task.0034 | Wire OpenClaw memory search + bootstrap files for cogni-template repo context | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 13 | 1 | needs_design | task.0018 | Dynamic agent catalog in UI + OpenClaw model sync | OpenClaw Capabilities Integration | proj.openclaw-capabilities |

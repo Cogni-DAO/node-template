@@ -12,7 +12,7 @@ spec_refs: billing-ingest-spec, node-operator-x402-spec, node-operator-contract,
 assignees: derekg1729
 credit:
 project: proj.operator-plane
-branch:
+branch: feat/task-0256-per-node-billing-v2
 pr:
 reviewer:
 revision: 0
