@@ -4,8 +4,8 @@
 /**
  * Module: `@tests/component/db/drizzle-attribution.adapter.int`
  * Purpose: Component tests for DrizzleAttributionAdapter against real PostgreSQL via testcontainers.
- * Scope: Verifies adapter + DB triggers (RECEIPT_APPEND_ONLY, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, RECEIPT_IDEMPOTENT). Does not test domain logic or routes.
- * Invariants: RECEIPT_APPEND_ONLY, RECEIPT_IDEMPOTENT, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, SCOPE_GATED_QUERIES
+ * Scope: Verifies adapter + DB triggers (RECEIPT_APPEND_ONLY, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, RECEIPT_IDEMPOTENT) and cross-epoch dedup (SELECTION_POLICY_AUTHORITY, RECEIPT_SCOPE_AGNOSTIC). Does not test domain logic or routes.
+ * Invariants: RECEIPT_APPEND_ONLY, RECEIPT_IDEMPOTENT, SELECTION_FREEZE_ON_FINALIZE, ONE_OPEN_EPOCH, SCOPE_GATED_QUERIES, SELECTION_POLICY_AUTHORITY, RECEIPT_SCOPE_AGNOSTIC
  * Side-effects: IO (database operations via testcontainers)
  * Links: packages/db-client/src/adapters/drizzle-attribution.adapter.ts, packages/attribution-ledger/src/store.ts
  * @public
