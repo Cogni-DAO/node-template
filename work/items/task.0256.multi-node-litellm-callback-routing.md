@@ -8,7 +8,7 @@ rank: 10
 estimate: 3
 summary: "Route LiteLLM generic_api callbacks to the correct node app when multiple nodes share a single LiteLLM proxy. Each node's billing data must remain sovereign."
 outcome: "All nodes sharing one LiteLLM instance receive their own billing callbacks with correct charge_receipt attribution, no cross-node data leakage."
-spec_refs: billing-ingest-spec, node-operator-x402-spec, node-operator-contract
+spec_refs: billing-ingest-spec, node-operator-x402-spec, node-operator-contract, spec.multi-node-tenancy
 assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
@@ -83,8 +83,14 @@ How does each node stamp its identity on outgoing LLM requests so callbacks can 
 
 ### 4. Database Routing
 
-- If using centralized ingest (option D), how does the router access each node's DB?
-- If using per-node endpoints (options A/B/C/E), each node writes to its own DB -- simpler but requires correct routing.
+Per multi-node-tenancy spec (DB_PER_NODE, NO_CROSS_NODE_QUERIES):
+- Each node has its own database. The callback must route to the node's own
+  ingest endpoint, which writes to that node's DB.
+- **Option D (centralized ingest) is ruled out** — it violates NO_CROSS_NODE_QUERIES
+  by requiring a single service with connections to all node databases.
+- Per-node endpoints (options A/B/C/E) are the only viable path.
+- NODE_LOCAL_METERING_PRIMARY: the node's charge_receipts are authoritative.
+  Operator aggregation is derived separately (V2 concern).
 
 ## Allowed Changes
 
