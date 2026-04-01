@@ -20,27 +20,22 @@ database. Auth sessions are shared — sign in once, use any node.
 ## Running Locally
 
 ```bash
-# Operator only (infra + operator on port 3000)
-pnpm dev:stack
+# Start infra + operator (always first)
+pnpm dev:stack                   # infra + operator on :3000
 
-# Single node (infra + one node)
-pnpm dev:stack:poly              # port 3100
-pnpm dev:stack:resy              # port 3300
+# Then add nodes in separate terminals
+pnpm dev:poly                    # poly on :3100
+pnpm dev:resy                    # resy on :3300
 
-# Everything (infra + operator + all nodes)
-pnpm dev:stack:full              # ports 3000, 3100, 3300
-
-# Docker (containerized) — TODO: task.0247 adds per-node containers
-pnpm docker:stack:full           # currently launches operator only
+# Or start everything at once (one terminal)
+pnpm dev:stack:full              # infra + operator + poly + resy
 ```
 
-For manual control, start infra separately and run apps individually:
+Auth is shared — sign in on any port, the cookie works on all (same `localhost`).
 
 ```bash
-pnpm dev:infra                              # shared services
-pnpm dev                                    # operator (port 3000)
-pnpm --filter @cogni/poly-app dev           # poly (port 3100)
-pnpm --filter @cogni/resy-app dev           # resy (port 3300)
+# Docker (containerized) — TODO: task.0247 adds per-node containers
+pnpm docker:stack:full           # currently launches operator only
 ```
 
 ## Typechecking
