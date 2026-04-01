@@ -2,7 +2,7 @@
 id: bug.0243
 type: bug
 title: "Same-scope epoch selection re-selects receipts from prior epochs — credits double-counted"
-status: needs_closeout
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 2

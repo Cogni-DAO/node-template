@@ -1781,7 +1781,13 @@ export class DrizzleAttributionAdapter implements AttributionStore {
     const priorEpochRows = await this.db
       .select({ id: epochs.id })
       .from(epochs)
-      .where(and(eq(epochs.scopeId, this.scopeId), ne(epochs.id, epochId)));
+      .where(
+        and(
+          eq(epochs.nodeId, nodeId),
+          eq(epochs.scopeId, this.scopeId),
+          ne(epochs.id, epochId)
+        )
+      );
 
     const priorEpochIds = priorEpochRows.map((e) => e.id);
 
