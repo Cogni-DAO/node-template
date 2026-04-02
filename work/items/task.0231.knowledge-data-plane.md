@@ -14,6 +14,7 @@ spec_refs:
 assignees: derekg1729
 project: proj.poly-prediction-bot
 branch: feat/knowledge-data-plane
+pr: https://github.com/Cogni-DAO/node-template/pull/692
 created: 2026-03-31
 updated: 2026-04-02
 ---
