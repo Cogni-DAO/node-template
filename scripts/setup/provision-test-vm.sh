@@ -74,7 +74,7 @@ cat > "$TFVARS" << EOF
 environment          = "preview"
 vm_name_prefix       = "cogni-test"
 project_id           = "${CHERRY_PROJECT_ID}"
-plan                 = "B1-8-8gb-80s-shared"
+plan                 = "B1-6-6gb-100s-shared"
 region               = "LT-Siauliai"
 public_key_path      = "keys/cogni_template_test_deploy.pub"
 ghcr_deploy_username = "${GHCR_USERNAME}"

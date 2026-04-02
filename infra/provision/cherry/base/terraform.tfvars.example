@@ -10,8 +10,8 @@ vm_name_prefix = "cogni-template"
 # Required: Your Cherry Servers project ID
 project_id = "YOUR_PROJECT_ID"
 
-# Required: Server plan (8GB+ recommended for k3s + Argo CD)
-plan = "B1-8-8gb-80s-shared"
+# Required: Server plan (6GB is max Cherry VPS; sufficient for k3s + Argo CD)
+plan = "B1-6-6gb-100s-shared"
 
 # Required: Region
 region = "LT-Siauliai"
