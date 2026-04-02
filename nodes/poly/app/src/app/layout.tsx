@@ -10,7 +10,8 @@ import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
 
-import { AppProviders } from "./providers/app-providers.client";
+import { AppProviders } from "@cogni/node-app/providers";
+import { wagmiConfig } from "@/shared/web3/wagmi.config";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -39,7 +40,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppProviders>
+          <AppProviders wagmiConfig={wagmiConfig}>
             <div id="main">{children}</div>
           </AppProviders>
         </ThemeProvider>

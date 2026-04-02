@@ -15,13 +15,13 @@
 import "@/styles/tailwind.css";
 import "@rainbow-me/rainbowkit/styles.css";
 
+import { AppProviders } from "@cogni/node-app/providers";
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
 import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
-
-import { AppProviders } from "./providers/app-providers.client";
+import { wagmiConfig } from "@/shared/web3/wagmi.config";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -49,7 +49,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <AppProviders>
+          <AppProviders wagmiConfig={wagmiConfig}>
             <div id="main">{children}</div>
           </AppProviders>
         </ThemeProvider>
