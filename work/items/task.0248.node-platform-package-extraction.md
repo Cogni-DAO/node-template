@@ -24,6 +24,7 @@ blocked_by: []
 deploy_verified: false
 created: 2026-04-01
 updated: 2026-04-03
+review_notes: "Phase 2 design review (2026-04-02): 3 blocking issues resolved — see Phase 2 section"
 
 labels: [refactor, architecture, nodes, packages]
 external_refs:
@@ -119,10 +120,23 @@ Results recorded in spec.node-app-shell.
   - Branch: `feat/task-0248-phase1b-node-shared`
 - [ ] Move `shared/hooks/useIsMobile.ts` to app-local (deferred to Phase 3 @cogni/node-app)
 
-### Phase 2: Graph execution extraction (task.0250, consumed by scheduler-worker)
+### Phase 2: Graph execution extraction (task.0250) — IN PROGRESS
 
-- [ ] Create `@cogni/graph-execution-host` per task.0250 design
-- [ ] Rewire apps/operator + nodes to import from package
+**Status:** Phase 1b merged. Implementing.
+
+**Scope:** Extract 5 pure decorator/router classes into `@cogni/graph-execution-host`. Delete dead `BillingGraphExecutorDecorator`. ~4,300 lines eliminated. See `work/items/task.0250` for full design.
+
+**Design review findings (all 3 blocking issues resolved):**
+
+1. Factory + providers **stay app-local** — only pure decorators + router extracted
+2. Port deps solved via **package-defined structural interfaces** (no port extraction needed)
+3. `execution-scope.ts` **stays app-local** — decorators don't use it, invariant preserved
+
+- [x] Complete Phase 1b (`@cogni/node-shared`) — merged
+- [ ] Delete dead `BillingGraphExecutorDecorator` (8 files)
+- [ ] Create `@cogni/graph-execution-host` package (5 classes + port interfaces)
+- [ ] Rewire consumers (4 apps × barrel + factory)
+- [ ] Delete originals (36 files)
 - [ ] `pnpm check` passes
 
 ### Phase 3: Thin app shell (`@cogni/node-app`) — spike passed, ready to implement

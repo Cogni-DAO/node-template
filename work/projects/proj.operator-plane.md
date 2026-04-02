@@ -229,7 +229,7 @@ See: `docs/spec/multi-node-tenancy.md`
 | Fix node identity via repo-spec                                    | Done           | task.0257 |
 | Multi-node stack test infrastructure                               | Needs Design   | task.0258 |
 | Multi-node CI/CD deployment                                        | Needs Design   | task.0247 |
-| Extract shared platform package                                    | Needs Design   | task.0248 |
+| Extract shared platform package (Phase 2 deferred — see review)    | In Progress    | task.0248 |
 | Port resy reservations feature                                     | Needs Design   | task.0253 |
 | Node landing page auth flow                                        | Needs Triage   | bug.0255  |
 | Auto-generate COGNI_NODE_ENDPOINTS from repo-spec                  | TODO (future)  | —         |

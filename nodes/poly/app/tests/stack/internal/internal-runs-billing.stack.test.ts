@@ -27,7 +27,7 @@ import { executionGrants, llmChargeDetails, users } from "@/shared/db/schema";
 const SCHEDULER_TOKEN = process.env.SCHEDULER_API_TOKEN ?? "";
 const TEST_GRAPH_ID = "langgraph:poet";
 
-describe("[internal] billing via BillingGraphExecutorDecorator (bug.0005 regression)", () => {
+describe("[internal] billing via UsageCommitDecorator (bug.0005 regression)", () => {
   let testActor: TestActor;
   let grantId: string;
 

@@ -2,26 +2,27 @@
 id: task.0250
 type: task
 title: "Extract @cogni/graph-execution-host package"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 21
 estimate: 3
-summary: Move graph executor factory, providers, decorators, and MCP cache from apps/operator into a shared PURE_LIBRARY package
-outcome: "@cogni/graph-execution-host exports all execution components; apps/operator imports from package instead of local adapters; no behavior change"
+summary: "Extract 5 pure decorator/router classes from 4 duplicate app copies into @cogni/graph-execution-host. Delete dead BillingGraphExecutorDecorator. Package defines its own minimal port interfaces via structural typing."
+outcome: "Decorators + router in shared package; 44 files deleted from apps; ~4,300 lines eliminated; no behavior change"
 spec_refs:
   - packages-architecture-spec
   - spec.unified-graph-launch
 assignees: []
 credit:
 project: proj.unified-graph-launch
-branch: feat/worker-local-execution
+branch: feat/task-0250-graph-execution-host
 pr:
 reviewer:
-revision: 0
-blocked_by: []
+revision: 1
+blocked_by:
+  - "Phase 1b: @cogni/node-shared extraction (makeLogger, EVENT_NAMES, content-scrubbing)"
 deploy_verified: false
 created: 2026-04-01
-updated: 2026-04-01
+updated: 2026-04-03
 labels:
   - ai-graphs
   - packages
@@ -32,122 +33,168 @@ external_refs:
 
 ## Context
 
-Parent: task.0181. Step 1 of 3 in moving AI runtime out of Next.js.
-Absorbed into task.0248 Phase 2 — but can be implemented independently as the first extraction.
+4 apps (operator, node-template, poly, resy) each contain identical copies of 36 AI execution files in `src/adapters/server/ai/` (~6K lines each = ~20K duplicated lines). This task extracts the 5 pure decorator/router classes into a shared PURE_LIBRARY package. Also deletes the dead `BillingGraphExecutorDecorator` (superseded by `UsageCommitDecorator`, never wired in factory).
 
-Move graph execution components from `apps/operator/src/adapters/server/ai/` and `apps/operator/src/bootstrap/graph-executor.factory.ts` into `packages/graph-execution-host/`. This is a **move, not rewrite** — copy existing working logic verbatim and change only the import paths.
+Part of task.0248 Phase 2. Enables future worker-local execution (task.0181).
 
-After this task, `apps/operator` imports from `@cogni/graph-execution-host` instead of local adapter paths. No behavior change. The internal API route still works. This enables task.0248 (scheduler-worker wiring).
+## Design (approved 2026-04-02)
 
-## Requirements
+### What moves to package (5 classes, ~900 lines)
 
-- Package satisfies `PURE_LIBRARY` (no env vars, no ports, no process lifecycle)
-- All providers take injected deps via constructor (no `serverEnv()` calls inside package)
-- All decorators take injected deps via constructor (no `getContainer()` calls inside package)
-- `apps/operator/src/bootstrap/` rewired to import from `@cogni/graph-execution-host`
-- Dependency-cruiser passes (no `@/` imports in package, no `src/` imports)
-- `pnpm check` passes with no behavior change
+| Source file                           | Class                                     | Why extractable                     |
+| ------------------------------------- | ----------------------------------------- | ----------------------------------- |
+| `billing-enrichment.decorator.ts`     | `BillingEnrichmentGraphExecutorDecorator` | Pure DI, no @/shared deps           |
+| `usage-commit.decorator.ts`           | `UsageCommitDecorator`                    | Pure DI, injected commit fn         |
+| `observability-executor.decorator.ts` | `ObservabilityGraphExecutorDecorator`     | Pure DI after OTel/Logger injection |
+| `preflight-credit-check.decorator.ts` | `PreflightCreditCheckDecorator`           | Pure DI, injected check fn          |
+| `aggregating-executor.ts`             | `NamespaceGraphRouter`                    | Pure routing, no state              |
 
-## Files
+### What stays in app
 
-**Create: `packages/graph-execution-host/`**
+- `graph-executor.factory.ts` — reads `serverEnv()`, manages MCP cache singleton, composition root
+- `execution-scope.ts` — used only by providers (NOT by decorators), ALS_NOT_SHARED invariant preserved
+- All providers (LangGraph InProc/Dev, sandbox, platform, codex, openai-compatible)
+- `InProcCompletionUnitAdapter` — features-layer completion function coupling
+- All other adapters (LiteLLM, Redis, Tavily, thread persistence)
+- Agent catalog infrastructure
 
-- `src/index.ts` — public barrel export
-- `src/factory.ts` — `createGraphExecutor`, `createScopedGraphExecutor` (adapted from `graph-executor.factory.ts`)
-- `src/providers/inproc.provider.ts` — from `adapters/server/ai/langgraph/inproc.provider.ts`
-- `src/providers/dev.provider.ts` — from `adapters/server/ai/langgraph/dev.provider.ts`
-- `src/providers/sandbox.provider.ts` — lazy sandbox (from `graph-executor.factory.ts`)
-- `src/providers/namespace-router.ts` — from `adapters/server/ai/langgraph/namespace-router.ts`
-- `src/decorators/billing-enrichment.decorator.ts`
-- `src/decorators/usage-commit.decorator.ts`
-- `src/decorators/preflight-credit-check.decorator.ts`
-- `src/decorators/observability-executor.decorator.ts`
-- `src/execution-scope.ts` — AsyncLocalStorage scope
-- `src/mcp-cache.ts` — MCP connection cache with error detection
-- `package.json` — deps: `@cogni/graph-execution-core`, `@cogni/ai-core`, `@cogni/langgraph-graphs`, `@cogni/ai-tools`
-- `tsconfig.json`, `tsup.config.ts`
+### Dead code to delete
 
-**Modify: `apps/operator/src/bootstrap/graph-executor.factory.ts`**
+- `BillingGraphExecutorDecorator` — superseded by `UsageCommitDecorator` (task.0212), never wired in factory
+- Its unit tests (4 files) and stack test describe string updates (4 files)
+- Ghost AGENTS.md refs to non-existent `litellm.activity-usage.adapter.ts` and `litellm.usage-service.adapter.ts`
+- Stale comment in `features/ai/public.server.ts` referencing dead class
 
-- Replace local adapter imports with `@cogni/graph-execution-host` imports
-- Keep as thin wiring layer (reads `serverEnv()`, passes to package factory)
+### Key design decisions
 
-**Modify: `apps/operator/src/adapters/server/` barrel exports**
+1. **Package-defined port interfaces via structural typing** — the package defines minimal interfaces (`TracingPort`, `PlatformCreditChecker`, `LoggerPort`, etc.) that the app's existing implementations satisfy structurally. No need to extract app-local ports to shared packages.
 
-- Re-export from `@cogni/graph-execution-host` where needed for backward compat during migration
+2. **No `pino` dep** — `LoggerPort` with 4 methods (debug/info/warn/error) structurally compatible with pino Logger.
 
-## Design Decisions (needs review)
+3. **No `@opentelemetry/api` dep** — `GetTraceIdFn = () => string` callback injected via decorator config. App provides: `() => trace.getActiveSpan()?.spanContext().traceId ?? "0000..."`.
 
-### Type ownership
+4. **`crypto.randomUUID()` via global** — available since Node 19, repo targets Node 22. No `node:crypto` import.
 
-- App-local types (`LlmService`, `BillingContext`, `LangfusePort`, `ModelProviderResolverPort`) must live somewhere the package can import them. Options:
-  - **A. Define in package, app re-exports** — single source of truth moves to package
-  - **B. Move to `@cogni/ai-core` or `@cogni/graph-execution-core`** — existing shared packages grow
-  - **C. App types stay, package uses structural typing** — no type duplication but fragile
+5. **`PlatformCreditChecker` replaces `ModelProviderResolverPort`** — narrowed to `resolve(key).requiresPlatformCredits(ref)` which is all the decorator calls.
 
-### Constructor injection vs module-scoped singletons
+6. **`TracingPort` replaces `LangfusePort`** — narrowed to 3 methods the decorator actually uses. `LangfuseAdapter` satisfies it structurally.
 
-- Files like `NamespaceGraphRouter` call `makeLogger()` internally. Moving to package means either:
-  - **A. Inject Logger via constructor** — changes call sites, but PURE_LIBRARY compliant
-  - **B. Package exports its own `makeLogger`** — adds pino dep, duplicates pattern
-  - **C. Accept app-specific logger import** — violates NO_SRC_IMPORTS
+7. **All event types from `@cogni/ai-core`** — `AiEvent`, `UsageFact`, `UsageReportEvent`, schemas are canonical there.
 
-### `isInsufficientCreditsPortError` guard
+### Package structure
 
-- App uses class-based `instanceof` + `name` check. Package can either:
-  - **A. Name-based check** (`error.name === "InsufficientCreditsPortError"`) — fragile
-  - **B. Import error class from a shared package** — clean but scope expansion
-  - **C. Inject error classification function** — most portable
+```
+packages/graph-execution-host/
+├── package.json               # deps: ai-core, graph-execution-core, node-shared
+├── tsconfig.json              # composite, refs to dep packages
+├── tsup.config.ts             # ESM, neutral platform
+├── vitest.config.ts
+├── AGENTS.md
+├── src/
+│   ├── index.ts               # barrel
+│   ├── ports/
+│   │   ├── logger.port.ts              # LoggerPort (4 methods, pino-compatible)
+│   │   ├── tracing.port.ts             # TracingPort + CreateTraceWithIOParams + GetTraceIdFn
+│   │   ├── billing-identity.ts         # BillingIdentity { billingAccountId, virtualKeyId }
+│   │   ├── commit-usage-fact.ts        # CommitUsageFactFn type
+│   │   └── preflight-credit-check.ts   # PreflightCreditCheckFn + PlatformCreditChecker
+│   ├── decorators/
+│   │   ├── billing-enrichment.decorator.ts
+│   │   ├── usage-commit.decorator.ts
+│   │   ├── observability-executor.decorator.ts
+│   │   └── preflight-credit-check.decorator.ts
+│   └── routing/
+│       └── namespace-graph-router.ts
+└── tests/
+    ├── _helpers/usage-fact-builders.ts
+    ├── billing-enrichment.decorator.spec.ts
+    ├── usage-commit.decorator.spec.ts
+    ├── preflight-credit-check.decorator.spec.ts
+    └── namespace-graph-router.spec.ts
+```
 
-### EVENT_NAMES constants
+### Dependencies
 
-- Observability decorator uses structured log event names from `@/shared/observability/events`
-  - **A. Inline strings** — divergence risk
-  - **B. Export from package, app imports** — package becomes source of truth for event names
-  - **C. Inject event name constants** — over-engineered
+```
+@cogni/graph-execution-host
+  ├── @cogni/graph-execution-core  (GraphExecutorPort, ExecutionContext, GraphRunRequest, etc.)
+  ├── @cogni/ai-core               (AiEvent, UsageFact, UsageFactSchemas, AiExecutionErrorCode, normalizeErrorToExecutionCode, ModelRef)
+  └── @cogni/node-shared           (makeLogger, EVENT_NAMES, scrubTraceInput, scrubTraceOutput, etc.)
+```
 
 ## Plan
 
-### Checkpoint 1: Package compiles standalone (ports + decorators + router)
+### Step 1: Dead code deletion
 
-- Milestone: Package exports decorators, namespace router, execution scope. Compiles with `tsc --noEmit`.
-- Invariants: PURE_LIBRARY, NO_SRC_IMPORTS
-- Todos:
-  - [ ] Finalize port type definitions based on design review
-  - [ ] Move 4 decorators with fixed imports
-  - [ ] Move NamespaceGraphRouter with Logger injection
-  - [ ] Move execution-scope.ts
-  - [ ] Move content-scrubbing.ts (pure functions)
-  - [ ] `tsc --noEmit` on package passes
-- Validation: `npx tsc --noEmit --project packages/graph-execution-host/tsconfig.json`
+- [ ] Delete `billing-executor.decorator.ts` from all 4 apps (4 files)
+- [ ] Delete `billing-executor-decorator.spec.ts` unit tests from all 4 apps (4 files)
+- [ ] Update `internal-runs-billing.stack.test.ts` describe string in all 4 apps
+- [ ] Update stale comment in `features/ai/public.server.ts` in all 4 apps
+- [ ] Remove ghost AGENTS.md refs to non-existent files
+- [ ] `pnpm check:fast`
 
-### Checkpoint 2: Add providers + MCP cache
+### Step 2: Package scaffold
 
-- Milestone: Package exports all providers. Compiles standalone.
-- Todos:
-  - [ ] Move InProcCompletionUnitAdapter
-  - [ ] Move LangGraphInProcProvider
-  - [ ] Move Dev provider (4 files: client, thread, stream-translator, provider)
-  - [ ] Move MCP connection cache from graph-executor.factory.ts
-  - [ ] Update index.ts barrel exports
-  - [ ] `tsc --noEmit` on package passes
+- [ ] Create `packages/graph-execution-host/` with package.json, tsconfig.json, tsup.config.ts, vitest.config.ts
+- [ ] Add `"@cogni/graph-execution-host": "workspace:*"` to root package.json
+- [ ] Add `{ "path": "./packages/graph-execution-host" }` to root tsconfig.json references
+- [ ] Add tsup/vitest configs to `biome/base.json` noDefaultExport override
+- [ ] `pnpm install`
+- [ ] `pnpm packages:build` — verify scaffold compiles
 
-### Checkpoint 3: Rewire apps/operator + validate
+### Step 3: Port interfaces + decorators + router
 
-- Milestone: apps/operator imports from `@cogni/graph-execution-host`. `pnpm check` passes. No behavior change.
-- Invariants: All from Design section in task.0181
-- Todos:
-  - [ ] Update `apps/operator/src/bootstrap/graph-executor.factory.ts` to import from package
-  - [ ] Update `apps/operator/src/adapters/server/ai/` barrel to re-export from package
-  - [ ] Update all consumers that imported from old paths
-  - [ ] Remove moved source files from apps/operator (or keep as re-export shims)
-  - [ ] `pnpm check` passes
-  - [ ] Commit + push
+- [ ] Create 5 port files in `src/ports/`
+- [ ] Copy 4 decorators, change imports:
+  - `@/ports` → `@cogni/graph-execution-core` + `@cogni/ai-core` + local ports
+  - `@/shared/observability` → `@cogni/node-shared`
+  - `@/shared/ai/content-scrubbing` → `@cogni/node-shared`
+  - `pino` Logger → local `LoggerPort`
+  - `@opentelemetry/api` trace → `GetTraceIdFn` in config
+- [ ] Copy `aggregating-executor.ts` → `routing/namespace-graph-router.ts`, change imports
+- [ ] Build barrel `src/index.ts`
+- [ ] `pnpm packages:build` — verify clean compile
+
+### Step 4: Package tests
+
+- [ ] Create `tests/_helpers/usage-fact-builders.ts`
+- [ ] Port 4 test files from app tests, adapt to package imports
+- [ ] `pnpm test` in package
+
+### Step 5: Rewire consumers (all 4 apps)
+
+- [ ] Update `adapters/server/index.ts` — remove extracted exports (4 files)
+- [ ] Update `bootstrap/graph-executor.factory.ts` — import from `@cogni/graph-execution-host`, add `getTraceId` to observability config (4 files)
+- [ ] Update `CommitUsageFactFn` type import in factory (4 files)
+
+### Step 6: Delete originals
+
+- [ ] Delete 5 source files × 4 apps = 20 files
+- [ ] Delete 4 test files × 4 apps = 16 files
+
+### Step 7: Validate
+
+- [ ] `pnpm check:fast` during iteration
+- [ ] Verify: `grep -r "@/" packages/graph-execution-host/src/` returns empty
+- [ ] Verify: `grep -r "from.*pino" packages/graph-execution-host/src/` returns empty
+- [ ] Verify: `grep -r "opentelemetry" packages/graph-execution-host/src/` returns empty
+- [ ] `pnpm check` once before commit
+
+## File change summary
+
+| Action             | Count | What                                                                       |
+| ------------------ | ----- | -------------------------------------------------------------------------- |
+| Create             | ~18   | Package scaffold + port interfaces + decorators + tests                    |
+| Delete (dead code) | 8     | BillingGraphExecutorDecorator source (4) + unit tests (4)                  |
+| Delete (migrated)  | 36    | 5 source files × 4 apps (20) + 4 test files × 4 apps (16)                  |
+| Modify             | ~16   | 4× barrel, 4× factory, 4× public.server.ts comment, 4× stack test describe |
+| Modify (infra)     | 3     | root package.json, root tsconfig.json, biome/base.json                     |
+
+**Net**: -44 files deleted, +18 created = **-26 files**, ~4,300 lines eliminated.
 
 ## Validation
 
 ```bash
-pnpm check
+pnpm check:fast     # during iteration
+pnpm check          # once before commit
 ```
-
-**Expected:** All checks pass. No behavior change. Internal API route still works.

@@ -10,6 +10,7 @@
     { "path": "./packages/cogni-contracts" },
     { "path": "./packages/langgraph-graphs/tsconfig.build.json" },
     { "path": "./packages/graph-execution-core" },
+    { "path": "./packages/graph-execution-host" },
     { "path": "./packages/db-client" },
     { "path": "./packages/ids" },
     { "path": "./packages/db-schema" },

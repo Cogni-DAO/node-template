@@ -113,7 +113,7 @@
 | 1 | 20 | 3 | needs_design | task.0141 | Category pool allocation — split epoch budget across source categories before per-source scoring | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 20 | 5 | needs_implement | task.0181 | Worker-local graph execution — move AI runtime out of Next.js | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | 21 | 2 | needs_triage | task.0076 | Dedicated Discord community agent — separate agent config with Discord-specific personality and skills | Messenger Channels | proj.messenger-channels |
-| 1 | 21 | 3 | needs_implement | task.0250 | Extract @cogni/graph-execution-host package | Unified Graph Launch | proj.unified-graph-launch |
+| 1 | 21 | 3 | needs_closeout | task.0250 | Extract @cogni/graph-execution-host package | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | 22 | 2 | needs_design | task.0038 | Rename tests/integration → tests/component with dependency-class subdirs | Reusable CI/CD Rails & Multi-Node Pipeline | proj.ci-cd-reusable |
 | 1 | 22 | 2 | needs_design | task.0142 | Epoch pool value stabilization — minimum activity threshold + carry-over policy | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 22 | 3 | needs_implement | task.0251 | Wire in-process graph execution in scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |

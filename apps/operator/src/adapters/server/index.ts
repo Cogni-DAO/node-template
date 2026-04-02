@@ -28,9 +28,6 @@ export { UserDrizzleAccountService } from "./accounts/drizzle.adapter";
 export type { AgentCatalogProvider } from "./ai/agent-catalog.provider";
 // Agent discovery infrastructure
 export { AggregatingAgentCatalog } from "./ai/aggregating-agent-catalog";
-// Graph execution infrastructure
-export { NamespaceGraphRouter } from "./ai/aggregating-executor";
-export { BillingEnrichmentGraphExecutorDecorator } from "./ai/billing-enrichment.decorator";
 export type { ExecutionScope } from "./ai/execution-scope";
 // Execution scope (ALS) — per-run billing + actor context for tools
 export { getExecutionScope, runInScope } from "./ai/execution-scope";
@@ -62,11 +59,6 @@ export {
   LangGraphInProcProvider,
 } from "./ai/langgraph";
 export { LiteLlmAdapter } from "./ai/litellm.adapter";
-export type { ObservabilityDecoratorConfig } from "./ai/observability-executor.decorator";
-// Observability decorator for Langfuse traces
-export { ObservabilityGraphExecutorDecorator } from "./ai/observability-executor.decorator";
-// Preflight credit check decorator — rejects runs with insufficient credits before LLM execution
-export { PreflightCreditCheckDecorator } from "./ai/preflight-credit-check.decorator";
 export { RedisRunStreamAdapter } from "./ai/redis-run-stream.adapter";
 export {
   TavilyWebSearchAdapter,
@@ -76,11 +68,6 @@ export {
   DrizzleThreadPersistenceAdapter,
   MAX_THREAD_MESSAGES,
 } from "./ai/thread-persistence.adapter";
-// Usage commit decorator: validates usage_report events, commits BYO receipts directly
-export {
-  type CommitUsageFactFn,
-  UsageCommitDecorator,
-} from "./ai/usage-commit.decorator";
 export { DrizzleAiTelemetryAdapter } from "./ai-telemetry/drizzle.adapter";
 export {
   type CreateTraceWithIOParams,
