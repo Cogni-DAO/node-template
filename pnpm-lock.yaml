@@ -1819,6 +1819,9 @@ importers:
       '@cogni/ai-core':
         specifier: workspace:*
         version: link:../ai-core
+      '@cogni/attribution-ledger':
+        specifier: workspace:*
+        version: link:../attribution-ledger
     devDependencies:
       tsup:
         specifier: ^8.5.1

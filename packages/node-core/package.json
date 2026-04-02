@@ -20,7 +20,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@cogni/ai-core": "workspace:*"
+    "@cogni/ai-core": "workspace:*",
+    "@cogni/attribution-ledger": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

@@ -15,5 +15,5 @@
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"],
-  "references": [{ "path": "../ai-core" }]
+  "references": [{ "path": "../ai-core" }, { "path": "../attribution-ledger" }]
 }
