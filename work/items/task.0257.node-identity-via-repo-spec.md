@@ -35,6 +35,7 @@ from `.cogni/repo-spec.yaml`, not a hardcoded env var.
 
 `getNodeId()` already exists in `shared/config/repoSpec.server.ts` and reads from
 repo-spec. But:
+
 - Poly has no `.cogni/repo-spec.yaml`
 - Resy/node-template have stale `version: 1` format that doesn't match the real schema
 - Container uses `env.COGNI_NODE_ID` instead of `getNodeId()`
@@ -47,7 +48,7 @@ Add `nodes[]` to operator's `.cogni/repo-spec.yaml`:
 
 ```yaml
 nodes:
-  - node_id: "4ff8eac1-..."       # operator (self)
+  - node_id: "4ff8eac1-..." # operator (self)
     node_name: "Cogni Operator"
     path: "."
     endpoint: "http://app:3000"
@@ -67,6 +68,7 @@ Operator repo-spec is the node registry. Node formation appends to this list.
 ### Per-node repo-spec files
 
 Create/rewrite `.cogni/repo-spec.yaml` for each node with real schema:
+
 - `node_id` (UUID), `scope_id`, `scope_key`, `cogni_dao.chain_id` (minimum)
 - Node-template uses placeholder UUIDs with comments
 
@@ -81,10 +83,12 @@ Create/rewrite `.cogni/repo-spec.yaml` for each node with real schema:
 ### Schema changes
 
 `packages/repo-spec/src/schema.ts`:
+
 - Add `nodeRegistryEntrySchema` (node_id, node_name, path, endpoint)
 - Add `nodes: z.array(nodeRegistryEntrySchema).optional()` to `repoSpecSchema`
 
 `packages/repo-spec/src/accessors.ts`:
+
 - Add `extractNodes()` accessor
 
 ## Allowed Changes
@@ -101,6 +105,19 @@ Create/rewrite `.cogni/repo-spec.yaml` for each node with real schema:
 - `nodes/*/app/src/shared/env/server-env.ts` — same
 - `.env.local.example` — remove COGNI_NODE_ID, update COGNI_NODE_ENDPOINTS
 - `package.json` — COGNI_REPO_ROOT per node in dev scripts
+
+## Notes from task.0256 review
+
+**Seed data for multi-node:** System tenant (billing account + virtual key) is
+created by migration 0008, so `db:migrate:nodes` handles it — each node boots
+fine. But `seed-money.mts` (dev credit top-up) only ran against operator.
+Fixed in task.0256: `db:seed-money:nodes` tops up all 3 DBs, and
+`db:setup:nodes` now includes it. Governance seed data (`seed.mts`) remains
+operator-only — poly/resy have different features, not attribution.
+
+When wiring `COGNI_NODE_ENDPOINTS` to use repo-spec UUIDs, update
+`.env.local.example` and `COGNI_NODE_ENDPOINTS` format accordingly
+(e.g., `<uuid>=http://...` instead of `operator=http://...`).
 
 ## Validation
 
