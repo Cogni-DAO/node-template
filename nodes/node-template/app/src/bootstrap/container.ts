@@ -96,7 +96,14 @@ import {
 } from "@/bootstrap/capabilities/metrics";
 import { createRepoCapability } from "@/bootstrap/capabilities/repo";
 import { createScheduleCapability } from "@/bootstrap/capabilities/schedule";
+import { stubVcsCapability } from "@/bootstrap/capabilities/vcs";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
+import type { KnowledgeCapability } from "@cogni/ai-tools";
+import { createKnowledgeCapability } from "@cogni/knowledge-store";
+import {
+  buildDoltgresClient,
+  DoltgresKnowledgeStoreAdapter,
+} from "@cogni/knowledge-store/adapters/doltgres";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
@@ -549,12 +556,8 @@ function createContainer(): Container {
   // KnowledgeCapability for AI tools (optional — requires DOLTGRES_WRITER_URL)
   // When configured, wraps KnowledgeStorePort with auto-commit on writes.
   // When not configured, tools throw "not configured" at invocation time.
-  let knowledgeCapability: import("@cogni/ai-tools").KnowledgeCapability;
+  let knowledgeCapability: KnowledgeCapability;
   if (env.DOLTGRES_WRITER_URL) {
-    const { buildDoltgresClient, DoltgresKnowledgeStoreAdapter } = await import(
-      "@cogni/knowledge-store/adapters/doltgres"
-    );
-    const { createKnowledgeCapability } = await import("@cogni/knowledge-store");
     const doltClient = buildDoltgresClient({
       connectionString: env.DOLTGRES_WRITER_URL,
       applicationName: `cogni_knowledge_${env.SERVICE_NAME ?? "app"}`,
@@ -583,6 +586,7 @@ function createContainer(): Container {
     webSearchCapability,
     repoCapability,
     scheduleCapability,
+    vcsCapability: stubVcsCapability,
     workItemCapability,
   });
   const toolSource = createBoundToolSource(toolBindings);

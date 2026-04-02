@@ -98,6 +98,7 @@ import { createRepoCapability } from "@/bootstrap/capabilities/repo";
 import { createScheduleCapability } from "@/bootstrap/capabilities/schedule";
 import { stubVcsCapability } from "@/bootstrap/capabilities/vcs";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
+import type { KnowledgeCapability } from "@cogni/ai-tools";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import type {
@@ -547,8 +548,17 @@ function createContainer(): Container {
     KALSHI_API_SECRET: env.KALSHI_API_SECRET,
   });
 
+  // KnowledgeCapability stub — resy does not use knowledge store
+  const knowledgeCapability: KnowledgeCapability = {
+    search: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
+    list: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
+    get: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
+    write: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
+  };
+
   // ToolSource with real implementations (per CAPABILITY_INJECTION)
   const toolBindings = createToolBindings({
+    knowledgeCapability,
     marketCapability,
     metricsCapability,
     webSearchCapability,

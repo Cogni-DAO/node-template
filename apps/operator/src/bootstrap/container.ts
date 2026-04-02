@@ -14,6 +14,7 @@
 
 import type { ToolSourcePort } from "@cogni/ai-core";
 import type {
+  KnowledgeCapability,
   MetricsCapability,
   RepoCapability,
   WebSearchCapability,
@@ -553,8 +554,33 @@ function createContainer(): Container {
     KALSHI_API_SECRET: env.KALSHI_API_SECRET,
   });
 
+  // KnowledgeCapability stub — operator does not use knowledge store
+  const knowledgeCapability: KnowledgeCapability = {
+    search: async () => {
+      throw new Error(
+        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
+      );
+    },
+    list: async () => {
+      throw new Error(
+        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
+      );
+    },
+    get: async () => {
+      throw new Error(
+        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
+      );
+    },
+    write: async () => {
+      throw new Error(
+        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
+      );
+    },
+  };
+
   // ToolSource with real implementations (per CAPABILITY_INJECTION)
   const toolBindings = createToolBindings({
+    knowledgeCapability,
     marketCapability,
     metricsCapability,
     webSearchCapability,
