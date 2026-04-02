@@ -151,6 +151,51 @@ export {
   marketListContract,
   marketListStubImplementation,
 } from "./tools/market-list";
+// Node creation display-only tools (task.0260)
+export {
+  PRESENT_NODE_SUMMARY_NAME,
+  type PresentNodeSummaryInput,
+  PresentNodeSummaryInputSchema,
+  type PresentNodeSummaryOutput,
+  PresentNodeSummaryOutputSchema,
+  type PresentNodeSummaryRedacted,
+  presentNodeSummaryBoundTool,
+  presentNodeSummaryContract,
+  presentNodeSummaryImplementation,
+} from "./tools/present-node-summary";
+export {
+  PRESENT_PR_NAME,
+  type PresentPrInput,
+  PresentPrInputSchema,
+  type PresentPrOutput,
+  PresentPrOutputSchema,
+  type PresentPrRedacted,
+  presentPrBoundTool,
+  presentPrContract,
+  presentPrImplementation,
+} from "./tools/present-pr";
+export {
+  PROPOSE_NODE_IDENTITY_NAME,
+  type ProposeNodeIdentityInput,
+  ProposeNodeIdentityInputSchema,
+  type ProposeNodeIdentityOutput,
+  ProposeNodeIdentityOutputSchema,
+  type ProposeNodeIdentityRedacted,
+  proposeNodeIdentityBoundTool,
+  proposeNodeIdentityContract,
+  proposeNodeIdentityImplementation,
+} from "./tools/propose-node-identity";
+export {
+  REQUEST_DAO_FORMATION_NAME,
+  type RequestDaoFormationInput,
+  RequestDaoFormationInputSchema,
+  type RequestDaoFormationOutput,
+  RequestDaoFormationOutputSchema,
+  type RequestDaoFormationRedacted,
+  requestDaoFormationBoundTool,
+  requestDaoFormationContract,
+  requestDaoFormationImplementation,
+} from "./tools/request-dao-formation";
 export {
   createMetricsQueryImplementation,
   METRICS_QUERY_NAME,
