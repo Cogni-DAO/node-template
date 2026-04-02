@@ -17,7 +17,7 @@ assignees: derekg1729
 credit:
 project: proj.operator-plane
 branch: feat/task-0248-node-platform-extraction
-pr: https://github.com/Cogni-DAO/node-template/pull/693
+pr: https://github.com/Cogni-DAO/node-template/pull/694
 reviewer:
 revision: 2
 blocked_by: []
