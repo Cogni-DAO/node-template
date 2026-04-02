@@ -89,11 +89,11 @@ Establish a clear security boundary between provisioning and runtime database cr
 
 ### Per-Container Env Contract
 
-| Container          | Receives |
-| ------------------ | -------- |
-| `app`              | `DATABASE_URL`, `DATABASE_SERVICE_URL` |
-| `scheduler-worker` | `DATABASE_SERVICE_URL` |
-| `migrate`          | `DATABASE_URL` |
+| Container          | Receives                                                           |
+| ------------------ | ------------------------------------------------------------------ |
+| `app`              | `DATABASE_URL`, `DATABASE_SERVICE_URL`                             |
+| `scheduler-worker` | `DATABASE_SERVICE_URL`                                             |
+| `migrate`          | `DATABASE_URL`                                                     |
 | `db-provision`     | `POSTGRES_ROOT_*`, `APP_DB_*`, `COGNI_NODE_DBS`, `LITELLM_DB_NAME` |
 
 **Forbidden in runtime containers:** `APP_DB_*`, `POSTGRES_ROOT_*`, `COGNI_NODE_DBS`, `LITELLM_DB_NAME`

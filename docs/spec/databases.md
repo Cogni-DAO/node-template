@@ -45,12 +45,12 @@ pnpm dev:stack                # Same as above, but hits real LiteLLM/OpenRouter
 
 **Per-Node Databases (DB_PER_NODE):** Each node gets its own database on a shared Postgres server. The database IS the node boundary — no tenancy columns. See [Multi-Node Tenancy](multi-node-tenancy.md).
 
-| Environment | Databases | Configured via |
-|---|---|---|
-| Development | `cogni_operator`, `cogni_poly`, `cogni_resy` | `COGNI_NODE_DBS` in `.env.local` |
-| Test | `cogni_template_stack_test`, `cogni_poly_test`, `cogni_resy_test` | `COGNI_NODE_DBS` in `.env.test` |
-| CI | `cogni_template_test` | `COGNI_NODE_DBS` in `ci.yaml` |
-| Production | `cogni_operator` (single-node for now) | `COGNI_NODE_DBS` in deploy env |
+| Environment | Databases                                                         | Configured via                   |
+| ----------- | ----------------------------------------------------------------- | -------------------------------- |
+| Development | `cogni_operator`, `cogni_poly`, `cogni_resy`                      | `COGNI_NODE_DBS` in `.env.local` |
+| Test        | `cogni_template_stack_test`, `cogni_poly_test`, `cogni_resy_test` | `COGNI_NODE_DBS` in `.env.test`  |
+| CI          | `cogni_template_test`                                             | `COGNI_NODE_DBS` in `ci.yaml`    |
+| Production  | `cogni_operator` (single-node for now)                            | `COGNI_NODE_DBS` in deploy env   |
 
 `COGNI_NODE_DBS` is required — `provision.sh` fails fast if not set. No defaults, no fallback chain.
 
@@ -126,22 +126,22 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 
 **Provisioning Variables** (used by `provision.sh`, not by runtime app):
 
-| Variable | Purpose | Required |
-|---|---|---|
-| `POSTGRES_ROOT_USER` | Superuser for role/DB creation | Yes |
-| `POSTGRES_ROOT_PASSWORD` | Superuser password | Yes |
-| `COGNI_NODE_DBS` | Comma-separated node database names | Yes (no default) |
-| `LITELLM_DB_NAME` | LiteLLM database name | Yes (no default) |
-| `APP_DB_USER` | Application role name | Yes |
-| `APP_DB_PASSWORD` | Application role password | Yes |
-| `APP_DB_SERVICE_USER` | Service role name | Yes |
-| `APP_DB_SERVICE_PASSWORD` | Service role password | Yes |
+| Variable                  | Purpose                             | Required         |
+| ------------------------- | ----------------------------------- | ---------------- |
+| `POSTGRES_ROOT_USER`      | Superuser for role/DB creation      | Yes              |
+| `POSTGRES_ROOT_PASSWORD`  | Superuser password                  | Yes              |
+| `COGNI_NODE_DBS`          | Comma-separated node database names | Yes (no default) |
+| `LITELLM_DB_NAME`         | LiteLLM database name               | Yes (no default) |
+| `APP_DB_USER`             | Application role name               | Yes              |
+| `APP_DB_PASSWORD`         | Application role password           | Yes              |
+| `APP_DB_SERVICE_USER`     | Service role name                   | Yes              |
+| `APP_DB_SERVICE_PASSWORD` | Service role password               | Yes              |
 
 **Runtime Variables** (used by app, never by provisioning):
 
-| Variable | Purpose |
-|---|---|
-| `DATABASE_URL` | app_user role (RLS enforced) |
+| Variable               | Purpose                      |
+| ---------------------- | ---------------------------- |
+| `DATABASE_URL`         | app_user role (RLS enforced) |
 | `DATABASE_SERVICE_URL` | app_service role (BYPASSRLS) |
 
 > **Note:** The runtime app never receives `POSTGRES_ROOT_*`, `APP_DB_*`, or `COGNI_NODE_DBS`. These are provisioning-only.
@@ -312,10 +312,10 @@ env:
   POSTGRES_ROOT_PASSWORD: ${{ secrets.POSTGRES_ROOT_PASSWORD }}
   APP_DB_USER: ${{ secrets.APP_DB_USER }}
   APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
-  COGNI_NODE_DBS: ${{ secrets.COGNI_NODE_DBS }}  # Required, comma-separated
+  COGNI_NODE_DBS: ${{ secrets.COGNI_NODE_DBS }} # Required, comma-separated
   DATABASE_URL: ${{ secrets.DATABASE_URL }}
   DATABASE_SERVICE_URL: ${{ secrets.DATABASE_SERVICE_URL }}
-  COGNI_NODE_ENDPOINTS: ${{ secrets.COGNI_NODE_ENDPOINTS }}  # Per-node billing routing
+  COGNI_NODE_ENDPOINTS: ${{ secrets.COGNI_NODE_ENDPOINTS }} # Per-node billing routing
   LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
   OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
   AUTH_SECRET: ${{ secrets.AUTH_SECRET }}

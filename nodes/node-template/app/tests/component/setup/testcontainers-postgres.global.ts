@@ -47,7 +47,7 @@ export async function setup() {
 
   // Run provision.sh inside the container (where psql is available).
   // Creates app_user (DB owner, RLS enforced) + app_service (BYPASSRLS),
-  // creates APP_DB_NAME database, grants DML to both roles.
+  // creates per-node database + litellm database, grants DML to both roles.
   const result = await c.exec([
     "bash",
     "-c",
@@ -56,7 +56,8 @@ export async function setup() {
       `DB_PORT=5432`,
       `POSTGRES_ROOT_USER=${superuser}`,
       `POSTGRES_ROOT_PASSWORD=${superpass}`,
-      `APP_DB_NAME=${APP_DB_NAME}`,
+      `COGNI_NODE_DBS=${APP_DB_NAME}`,
+      `LITELLM_DB_NAME=litellm_test`,
       `APP_DB_USER=${APP_DB_USER}`,
       `APP_DB_PASSWORD=${APP_DB_PASSWORD}`,
       `APP_DB_SERVICE_USER=${APP_DB_SERVICE_USER}`,
