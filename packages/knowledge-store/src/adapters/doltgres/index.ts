@@ -38,10 +38,12 @@ function escapeValue(val: unknown): string {
   if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
   if (val instanceof Date) return `'${val.toISOString()}'`;
   if (Array.isArray(val) || typeof val === "object") {
-    return `'${JSON.stringify(val).replace(/'/g, "''")}'::jsonb`;
+    return `'${JSON.stringify(val).replace(/\0/g, "").replace(/'/g, "''")}'::jsonb`;
   }
-  // String — escape single quotes
-  return `'${String(val).replace(/'/g, "''")}'`;
+  // SECURITY: Strip NUL bytes and escape single quotes.
+  // Doltgres uses standard_conforming_strings (backslashes are literal).
+  // Only internal agents call this port — harden further before external exposure (x402).
+  return `'${String(val).replace(/\0/g, "").replace(/'/g, "''")}'`;
 }
 
 /** Escape a Dolt ref for use in dolt_diff/dolt_log. Only allows safe characters. */
@@ -135,7 +137,9 @@ export class DoltgresKnowledgeStoreAdapter implements KnowledgeStorePort {
   ): Promise<Knowledge[]> {
     const limit = opts?.limit ?? 20;
     // Doltgres doesn't support ILIKE. Use LOWER() + LIKE as fallback.
-    const lowerQuery = escapeValue(`%${query.toLowerCase()}%`);
+    // Escape LIKE wildcards in user query to prevent unintended pattern matching.
+    const escaped = query.toLowerCase().replace(/[%_\\]/g, "\\$&");
+    const lowerQuery = escapeValue(`%${escaped}%`);
     const rows = await this.sql.unsafe(
       `SELECT * FROM knowledge WHERE domain = ${escapeValue(domain)} AND (LOWER(title) LIKE ${lowerQuery} OR LOWER(content) LIKE ${lowerQuery}) ORDER BY created_at DESC LIMIT ${limit}`
     );

@@ -168,7 +168,7 @@ describe.skipIf(!doltgresUp)("DoltgresKnowledgeStoreAdapter", () => {
     expect(results.some((r) => r.id === "test-add-001")).toBe(true);
   });
 
-  it("searchKnowledge matches title and content via ILIKE", async () => {
+  it("searchKnowledge matches title and content case-insensitively", async () => {
     const results = await adapter.searchKnowledge(
       "prediction-market",
       "calibration"

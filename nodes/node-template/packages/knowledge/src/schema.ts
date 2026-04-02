@@ -20,6 +20,8 @@ import { index, jsonb, pgTable, text, integer, timestamp } from "drizzle-orm/pg-
  *
  * This is the base table inherited by all nodes. Nodes may add companion tables
  * for domain-specific extensions (e.g., poly_market_categories).
+ *
+ * SYNC: KNOWLEDGE_TABLE_DDL and KNOWLEDGE_INDEXES_DDL below must match this definition.
  */
 export const knowledge = pgTable(
   "knowledge",

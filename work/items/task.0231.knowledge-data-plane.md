@@ -2,7 +2,7 @@
 id: task.0231
 type: task
 title: "Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds"
-status: needs_implement
+status: done
 priority: 2
 rank: 1
 estimate: 4
@@ -15,7 +15,7 @@ assignees: derekg1729
 project: proj.poly-prediction-bot
 branch: feat/knowledge-data-plane
 created: 2026-03-31
-updated: 2026-04-01
+updated: 2026-04-02
 ---
 
 # Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds

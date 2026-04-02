@@ -49,9 +49,14 @@ echo "✅ Doltgres is up."
 
 # ── Roles ──────────────────────────────────────────────────────────────────
 echo "🔧 Creating roles..."
-# Doltgres may not have pg_roles, so use CREATE ... IF NOT EXISTS pattern via error suppression
-run_sql_quiet "postgres" "CREATE ROLE knowledge_reader WITH LOGIN PASSWORD '$DG_READER_PASS'"
-run_sql_quiet "postgres" "CREATE ROLE knowledge_writer WITH LOGIN PASSWORD '$DG_WRITER_PASS'"
+# Doltgres may not have pg_roles, so use error suppression for idempotency.
+# Use psql variable binding (:'var') for passwords to prevent SQL injection.
+PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d postgres \
+  -v reader_pass="$DG_READER_PASS" \
+  -c "CREATE ROLE knowledge_reader WITH LOGIN PASSWORD :'reader_pass'" 2>/dev/null || true
+PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d postgres \
+  -v writer_pass="$DG_WRITER_PASS" \
+  -c "CREATE ROLE knowledge_writer WITH LOGIN PASSWORD :'writer_pass'" 2>/dev/null || true
 echo "   -> Roles ready (knowledge_reader, knowledge_writer)"
 
 # ── Per-node databases + schema ────────────────────────────────────────────
