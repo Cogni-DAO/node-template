@@ -191,7 +191,10 @@
       "formatter": { "enabled": false }
     },
     {
-      "includes": ["apps/operator/src/**/__arch_probes__/**"],
+      "includes": [
+        "apps/operator/src/**/__arch_probes__/**",
+        "nodes/*/app/src/**/__arch_probes__/**"
+      ],
       "linter": {
         "rules": {
           "style": {

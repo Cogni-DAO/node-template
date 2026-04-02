@@ -3,13 +3,14 @@ id: task.0248
 type: task
 title: "Extract shared node platform into packages/node-platform"
 status: needs_design
-priority: 2
+priority: 1
 rank: 5
 estimate: 5
 summary: "Refactor the shared platform code (ports, core, shared, contracts, components, bootstrap patterns) out of apps/operator into a packages/node-platform package. All nodes and operator import from it instead of duplicating ~700 files."
 outcome: "nodes/node-template/app is a thin shell (~50 files) that imports @cogni/node-platform for all shared platform functionality. Adding a new node means creating a thin app + graphs, not copying 800 files."
 spec_refs:
   - docs/spec/architecture.md
+  - docs/spec/multi-node-tenancy.md
 assignees: derekg1729
 credit:
 project: proj.operator-plane
@@ -64,10 +65,45 @@ across all nodes so new nodes get them for free:
 
 Related: bug.0255 (node landing page auth flow broken — useTryDemo not wired)
 
+## Auth extraction (per multi-node-tenancy spec)
+
+The auth model must move from "4 identical auth.ts files" to "operator is IdP,
+nodes are SSO relying parties" (SHARED_IDENTITY_ISOLATED_SESSIONS):
+
+- Extract shared auth config (providers, callbacks, user_bindings logic) into
+  `packages/node-platform` or a dedicated `packages/auth-core`
+- Each node mints its own origin-scoped session after IdP verification
+  (SSO_THEN_LOCAL_SESSION) — no parent-domain cookies (ORIGIN_SCOPED_COOKIES)
+- Operator owns the identity provider; nodes configure SSO against it
+- Per-node AUTH_SECRET (not shared) in production
+
+## Per-node database (per multi-node-tenancy spec)
+
+Per DB_PER_NODE: each node gets its own database on a shared Postgres server.
+This task must ensure the extracted platform supports per-node DATABASE_URL:
+
+- `packages/node-platform` DB client accepts connection config at construction
+  (PACKAGES_NO_ENV — credentials injected, not read from env)
+- Migration tooling runs per-node (each node manages its own schema version)
+- RLS policies remain within each node's DB (user/account-scoped)
+- No tenancy columns (node_id) in node-local tables (DB_IS_BOUNDARY)
+
+## Urgency: dev memory pressure
+
+Each Next.js node dev server (Turbopack) uses ~3 GB RAM for the 840-file app.
+Running operator + poly + resy = ~9 GB just for dev servers, before Docker infra.
+This makes local multi-node development impractical on most machines.
+
+Extracting the shared platform means each node compiles only its ~50 thin-shell
+files + the pre-built package — dramatically reducing per-node Turbopack memory.
+Combined with task.0181 (move AI runtime to scheduler-worker), node apps shed
+AI deps entirely, further shrinking the compilation footprint.
+
 ## Non-goals
 
 - Runtime plugin system (nodes are still separate Next.js apps)
-- Shared database migrations (each node manages own schema)
+- Operator aggregation plane (separate concern, V2 per migration path)
+- Federation auth protocol (V3 concern)
 
 ## Validation
 
