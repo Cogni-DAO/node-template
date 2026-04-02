@@ -71,6 +71,8 @@ All invariants are detailed in their respective sections below. Summary:
 | NODE_LOCAL_METERING_PRIMARY       | Data Isolation           |
 | NO_CROSS_NODE_QUERIES             | Data Isolation           |
 | OPERATOR_AGGREGATES_ARE_DERIVED   | Data Isolation           |
+| MISSING_NODE_ID_DEFAULTS_OPERATOR | Data Isolation           |
+| CALLBACK_IS_ADAPTER_GLUE          | Data Isolation           |
 | NO_CROSS_IMPORTS                  | Inter-Node Communication |
 | NODE_TO_OPERATOR_READ_ONLY        | Inter-Node Communication |
 | OPERATOR_READS_NODE_VIA_VCS       | Inter-Node Communication |
@@ -97,13 +99,13 @@ All invariants are detailed in their respective sections below. Summary:
 
 ### As-built gap analysis
 
-| Aspect            | Current (V0)                                             | Target (V1)                                           |
-| ----------------- | -------------------------------------------------------- | ----------------------------------------------------- |
-| Auth config       | 4 identical `auth.ts` files doing full NextAuth per-node | Operator = IdP, nodes = SSO relying parties           |
-| Session sharing   | Implicit via `localhost` cookie sharing                  | Per-node origin-scoped cookies, no cross-node session |
-| AUTH_SECRET       | Single shared secret                                     | Per-node secrets; operator IdP has its own            |
-| SIWE verification | Domain-bound to `NEXTAUTH_URL.host`                      | Verify against domain in signed SIWE message          |
-| OAuth callbacks   | Per-port in dev (`localhost:3100/api/auth/callback`)     | Per-domain registration with providers                |
+| Aspect            | V0 (before task.0256)                                    | V1 (task.0256 — dev)                        | V1 (production — task.0248)                  |
+| ----------------- | -------------------------------------------------------- | ------------------------------------------- | -------------------------------------------- |
+| Auth config       | 4 identical `auth.ts` files doing full NextAuth per-node | Same (functional for dev)                   | Operator = IdP, nodes = SSO relying parties  |
+| Session sharing   | Implicit via `localhost` cookie sharing                  | **Built:** per-port origin-scoped cookies   | Per-domain origin-scoped cookies             |
+| AUTH_SECRET       | Single shared secret                                     | **Built:** per-node secrets via dev scripts | Per-node secrets; operator IdP has its own   |
+| SIWE verification | Domain-bound to `NEXTAUTH_URL.host`                      | Same (dev uses localhost)                   | Verify against domain in signed SIWE message |
+| OAuth callbacks   | Per-port in dev (`localhost:3100/api/auth/callback`)     | Same (functional for dev)                   | Per-domain registration with providers       |
 
 ### Production multi-domain requirements
 
@@ -117,13 +119,15 @@ All invariants are detailed in their respective sections below. Summary:
 
 ### Data invariants
 
-| Invariant                       | Rule                                                                                                                                                                                                       |
-| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DB_PER_NODE                     | 1 Postgres server, 1 database per node. Each node has its own database, its own migrations, its own schema version.                                                                                        |
-| DB_IS_BOUNDARY                  | The database itself is the node boundary. No `node_id` columns needed in node-local tables — the DB already scopes to this node. User/account-scoped RLS within the node is still legitimate and expected. |
-| NODE_LOCAL_METERING_PRIMARY     | Each node's local billing/metering data is authoritative. Operator aggregation is derived, never the source of truth. If operator aggregate diverges from node-local, **node-local wins**.                 |
-| NO_CROSS_NODE_QUERIES           | Nodes never query each other's database. The operator never queries a node's database directly.                                                                                                            |
-| OPERATOR_AGGREGATES_ARE_DERIVED | Cross-node views are read-only projections from node-local data, not independent records. They may lag, they may be incomplete, they are never primary.                                                    |
+| Invariant                         | Rule                                                                                                                                                                                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DB_PER_NODE                       | 1 Postgres server, 1 database per node. Each node has its own database, its own migrations, its own schema version.                                                                                                                         |
+| DB_IS_BOUNDARY                    | The database itself is the node boundary. No `node_id` columns needed in node-local tables — the DB already scopes to this node. User/account-scoped RLS within the node is still legitimate and expected.                                  |
+| NODE_LOCAL_METERING_PRIMARY       | Each node's local billing/metering data is authoritative. Operator aggregation is derived, never the source of truth. If operator aggregate diverges from node-local, **node-local wins**.                                                  |
+| MISSING_NODE_ID_DEFAULTS_OPERATOR | If `node_id` is absent from callback metadata (e.g., direct LiteLLM call, legacy client), the custom callback defaults to the operator node and logs a warning. This prevents silent data loss while making misrouted callbacks detectable. |
+| CALLBACK_IS_ADAPTER_GLUE          | The LiteLLM custom callback class (`cogni_callbacks.py`) is adapter glue only: extract routing metadata, validate it, forward the canonical callback POST, fail loudly. No pricing logic, no policy logic, no reconciliation logic.         |
+| NO_CROSS_NODE_QUERIES             | Nodes never query each other's database. The operator never queries a node's database directly.                                                                                                                                             |
+| OPERATOR_AGGREGATES_ARE_DERIVED   | Cross-node views are read-only projections from node-local data, not independent records. They may lag, they may be incomplete, they are never primary.                                                                                     |
 
 ### Architecture
 
@@ -148,12 +152,14 @@ All invariants are detailed in their respective sections below. Summary:
 
 ### As-built gap analysis
 
-| Aspect         | Current (V0)                                    | Target (V1)                                                                                              |
-| -------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| Database       | Single `cogni_template_dev` shared by all nodes | Per-node database (`operator_db`, `poly_db`, `resy_db`)                                                  |
-| `DATABASE_URL` | Same connection string for all nodes            | Per-node env: each node's `DATABASE_URL` points to its own DB                                            |
-| Provisioning   | Manual                                          | `provisionDatabase` step in [node-launch](./node-launch.md) workflow creates DB + user + runs migrations |
-| Schema         | Single shared schema                            | Per-node schema, versioned independently (same base, diverges over time)                                 |
+| Aspect          | V0 (before task.0256)                           | Current (task.0256 — built)                                                                            |
+| --------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Database        | Single `cogni_template_dev` shared by all nodes | **Built:** `cogni_operator`, `cogni_poly`, `cogni_resy` via `provision.sh` + `COGNI_NODE_DBS`          |
+| `DATABASE_URL`  | Same connection string for all nodes            | **Built:** per-node env in dev scripts (`DATABASE_URL_POLY`, `DATABASE_URL_RESY`)                      |
+| Provisioning    | Manual                                          | **Built:** `pnpm db:setup:nodes` provisions + migrates + seeds all 3 DBs                               |
+| Schema          | Single shared schema                            | **Built:** per-node schema via `db:migrate:nodes` (same base, will diverge over time)                  |
+| Billing routing | Single `GENERIC_LOGGER_ENDPOINT` to operator    | **Built:** custom LiteLLM callback (`CogniNodeRouter`) routes per `node_id` via `COGNI_NODE_ENDPOINTS` |
+| Seed data       | Single DB seeded with governance + credits      | **Built:** system tenant via migration; `db:seed-money:nodes` tops up all 3 DBs                        |
 
 ### Operator aggregation plane
 

@@ -171,6 +171,7 @@ export interface Container {
   aiTelemetry: AiTelemetryPort;
   /** Langfuse tracer - undefined when LANGFUSE_SECRET_KEY not set */
   langfuse: LangfusePort | undefined;
+  nodeId: string;
   // Scheduling ports (split by trust boundary)
   scheduleControl: ScheduleControlPort;
   executionGrantPort: ExecutionGrantUserPort;
@@ -222,6 +223,7 @@ export type AiAdapterDeps = {
   clock: Clock;
   aiTelemetry: AiTelemetryPort;
   langfuse: LangfusePort | undefined;
+  nodeId: string;
 };
 
 /**
@@ -692,6 +694,7 @@ function createContainer(): Container {
     treasuryReadPort,
     aiTelemetry,
     langfuse,
+    nodeId: env.COGNI_NODE_ID,
     scheduleControl,
     executionGrantPort,
     executionGrantWorkerPort,
@@ -757,6 +760,7 @@ export function resolveAiAdapterDeps(userId: UserId): AiAdapterDeps {
     clock: container.clock,
     aiTelemetry: container.aiTelemetry,
     langfuse: container.langfuse,
+    nodeId: container.nodeId,
   };
 }
 

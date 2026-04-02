@@ -99,6 +99,14 @@ files + the pre-built package — dramatically reducing per-node Turbopack memor
 Combined with task.0181 (move AI runtime to scheduler-worker), node apps shed
 AI deps entirely, further shrinking the compilation footprint.
 
+## Expected test deduplication
+
+Each node currently has ~200 identical test fixture files copied from operator.
+After platform extraction, test helpers (seed-client, seedTestActor, poll-db,
+stack setup pipeline) live in the shared package or a test-utils package. Nodes
+only add node-specific test cases. Multi-node system tests (task.0258) stay in
+operator as the test infrastructure host.
+
 ## Non-goals
 
 - Runtime plugin system (nodes are still separate Next.js apps)
