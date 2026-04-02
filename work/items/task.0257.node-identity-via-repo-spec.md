@@ -16,7 +16,7 @@ assignees: derekg1729
 credit:
 project: proj.operator-plane
 branch: feat/task-0257-repo-spec-identity
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/690
 reviewer:
 revision: 0
 blocked_by:
