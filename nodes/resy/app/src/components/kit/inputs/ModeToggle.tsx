@@ -123,7 +123,7 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             {...props}
           >
             <CURRENT_ICON
-              className={themeIcon({ state: "visible" })}
+              className={cn("size-4", themeIcon({ state: "visible" }))}
               strokeWidth={1.5}
             />
           </button>
