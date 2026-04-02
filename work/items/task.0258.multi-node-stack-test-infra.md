@@ -76,8 +76,12 @@ for all 3 nodes, not just operator).
 
 ### CI integration
 
-- `check:full`: operator stack tests (existing, single-node)
-- Multi-node tests: separate CI job requiring `dev:stack:full` (expensive)
+- `check:full`: operator stack tests (existing, single-node) — runs in CI today
+- Multi-node tests (`test:stack:multi`): local only for now. CI job requires
+  building poly + resy Docker images and booting 3 app containers — deferred
+  until task.0247 (multi-node CICD deployment) adds node services to compose.
+- Follow-up: add `stack-test-multi` CI job gated on task.0247 completion.
+  Needs: per-node image builds, per-node test DB provisioning, 3-node compose up.
 - Future: per-node test shorthands (`test:stack:poly`, `test:stack:resy`)
 
 ### Note for task.0248 (package extraction)
