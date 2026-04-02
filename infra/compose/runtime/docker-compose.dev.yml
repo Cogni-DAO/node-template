@@ -324,6 +324,7 @@ services:
       DOLTGRES_PASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
       DOLTGRES_READER_PASSWORD: ${DOLTGRES_READER_PASSWORD:-knowledge_reader}
       DOLTGRES_WRITER_PASSWORD: ${DOLTGRES_WRITER_PASSWORD:-knowledge_writer}
+      COGNI_NODE_DBS: ${COGNI_NODE_DBS}
     volumes:
       - ./doltgres-init/provision.sh:/app/provision.sh:ro
     entrypoint: ["/bin/bash", "/app/provision.sh"]

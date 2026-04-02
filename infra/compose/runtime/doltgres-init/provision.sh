@@ -18,8 +18,12 @@ DG_PASS="${DOLTGRES_PASSWORD:-doltgres}"
 DG_READER_PASS="${DOLTGRES_READER_PASSWORD:-knowledge_reader}"
 DG_WRITER_PASS="${DOLTGRES_WRITER_PASSWORD:-knowledge_writer}"
 
-# Databases to provision (one per node)
-KNOWLEDGE_DBS="knowledge_operator knowledge_poly"
+# Derive knowledge DB names from COGNI_NODE_DBS (same list as Postgres provisioning)
+# cogni_operator → knowledge_operator, cogni_poly → knowledge_poly, etc.
+if [ -z "${COGNI_NODE_DBS:-}" ]; then
+  echo "❌ ERROR: COGNI_NODE_DBS is required (comma-separated list of node databases)"
+  exit 1
+fi
 
 run_sql() {
   local db="$1"
@@ -60,7 +64,9 @@ PGPASSWORD="$DG_PASS" psql -h "$DG_HOST" -p "$DG_PORT" -U postgres -d postgres \
 echo "   -> Roles ready (knowledge_reader, knowledge_writer)"
 
 # ── Per-node databases + schema ────────────────────────────────────────────
-for DB in $KNOWLEDGE_DBS; do
+for COGNI_DB in $(echo "$COGNI_NODE_DBS" | tr ',' ' '); do
+  # cogni_operator → knowledge_operator
+  DB="knowledge_${COGNI_DB#cogni_}"
   echo "🔧 Provisioning database '$DB'..."
   run_sql_quiet "postgres" "CREATE DATABASE $DB"
 

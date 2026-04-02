@@ -557,24 +557,16 @@ function createContainer(): Container {
   // KnowledgeCapability stub — operator does not use knowledge store
   const knowledgeCapability: KnowledgeCapability = {
     search: async () => {
-      throw new Error(
-        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
-      );
+      throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL.");
     },
     list: async () => {
-      throw new Error(
-        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
-      );
+      throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL.");
     },
     get: async () => {
-      throw new Error(
-        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
-      );
+      throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL.");
     },
     write: async () => {
-      throw new Error(
-        "KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."
-      );
+      throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL.");
     },
   };
 

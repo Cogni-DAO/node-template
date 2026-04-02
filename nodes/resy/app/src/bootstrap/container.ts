@@ -550,10 +550,10 @@ function createContainer(): Container {
 
   // KnowledgeCapability stub — resy does not use knowledge store
   const knowledgeCapability: KnowledgeCapability = {
-    search: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
-    list: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
-    get: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
-    write: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_WRITER_URL."); },
+    search: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL."); },
+    list: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL."); },
+    get: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL."); },
+    write: async () => { throw new Error("KnowledgeCapability not configured. Set DOLTGRES_URL."); },
   };
 
   // ToolSource with real implementations (per CAPABILITY_INJECTION)
