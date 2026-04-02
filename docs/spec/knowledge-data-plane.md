@@ -288,7 +288,50 @@ interface KnowledgeStorePort {
 }
 ```
 
-Adapter: `DoltgresKnowledgeStoreAdapter` — Drizzle for reads/writes, raw SQL for `dolt_commit()`/`dolt_log()`/`hashof('HEAD')`. Scoped to the node's database.
+Adapter: `DoltgresKnowledgeStoreAdapter` — uses `sql.unsafe()` for all queries (Doltgres doesn't support the extended query protocol). Scoped to the node's database.
+
+---
+
+## Agent Access
+
+Agents access knowledge through the tool catalog, not raw database connections.
+
+### Tool Catalog
+
+Three tools in `@cogni/ai-tools`, registered in `TOOL_CATALOG`:
+
+| Tool                     | Effect       | Description                        |
+| ------------------------ | ------------ | ---------------------------------- |
+| `core__knowledge_search` | read_only    | Text search by domain + query      |
+| `core__knowledge_read`   | read_only    | Get by ID or list by domain + tags |
+| `core__knowledge_write`  | state_change | Add entry + auto-commit            |
+
+### Capability Wiring
+
+```
+packages/knowledge-store/           ← KnowledgeStorePort + adapter + createKnowledgeCapability()
+packages/ai-tools/                  ← KnowledgeCapability interface + tool contracts
+nodes/{node}/app/src/bootstrap/     ← env vars → client → adapter → capability → tool bindings
+```
+
+`createKnowledgeCapability(port)` lives in `packages/knowledge-store/` (pure function, shared across all nodes). It wraps `KnowledgeStorePort` as a `KnowledgeCapability` with auto-commit on every write. Per-node bootstrap creates the Doltgres client from env vars and passes the port.
+
+### Confidence Defaults
+
+| Level    | Score | When                                                               |
+| -------- | ----- | ------------------------------------------------------------------ |
+| Draft    | 30%   | Default for all new agent writes                                   |
+| Verified | 80%   | Human-reviewed or agent-confirmed with fresh sources               |
+| Hardened | 95%   | Outcome-validated, statistically significant, repeatedly confirmed |
+
+### Agent Recall Protocol
+
+Agents search knowledge BEFORE web search. The recall loop:
+
+1. `core__knowledge_search(domain, query)` — check existing knowledge
+2. Found + high confidence? → Use it, cite the entry ID
+3. Found but stale/low confidence? → Re-research, update via `core__knowledge_write`
+4. Not found? → `core__web_search`, then `core__knowledge_write` to save findings
 
 ---
 

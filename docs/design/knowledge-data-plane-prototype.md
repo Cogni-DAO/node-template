@@ -110,32 +110,26 @@ Postgres migrations use `drizzle-kit push` → `migrations/` directory → seque
 
 Every internal agent can query the knowledge store. The fastest path to first-class tools:
 
-### Phase 1: BoundTool in ai-tools (Immediate)
+### Phase 1: BoundTools + Capability Wiring (Done)
 
-Add `core__knowledge_search`, `core__knowledge_read`, `core__knowledge_write` to the existing tool catalog.
-
-```typescript
-// packages/ai-tools/src/tools/knowledge-search.ts
-export const knowledgeSearchContract: ToolContract<...> = {
-  name: "core__knowledge_search",
-  description: "Search the node's knowledge store for domain-specific facts, strategies, and curated assertions.",
-  effect: "read_only",
-  inputSchema: z.object({
-    domain: z.string().describe("Knowledge domain (e.g., 'prediction-market')"),
-    query: z.string().describe("Search query (matches title and content)"),
-    limit: z.number().optional().default(10),
-  }),
-  // ...
-};
-```
-
-**Three tools:**
+Three tools registered in `TOOL_CATALOG` (`packages/ai-tools/src/catalog.ts`):
 
 | Tool                     | Effect       | Description                                             |
 | ------------------------ | ------------ | ------------------------------------------------------- |
 | `core__knowledge_search` | read_only    | Search by domain + text query                           |
 | `core__knowledge_read`   | read_only    | Get a specific knowledge entry by ID, or list by domain |
-| `core__knowledge_write`  | state_change | Add/update knowledge + auto-commit                      |
+| `core__knowledge_write`  | state_change | Add entry + auto-commit (confidence defaults to 30%)    |
+
+Wiring chain:
+
+```
+packages/knowledge-store/src/capability.ts    ← createKnowledgeCapability(port) — shared, pure
+packages/ai-tools/src/capabilities/knowledge  ← KnowledgeCapability interface + CONFIDENCE defaults
+packages/ai-tools/src/tools/knowledge-*.ts    ← 3 BoundTool implementations
+nodes/{node}/app/src/bootstrap/container.ts   ← env → client → adapter → capability → bindings
+```
+
+`createKnowledgeCapability(port)` wraps `KnowledgeStorePort` as a `KnowledgeCapability`. Every `write()` auto-commits with a descriptive message. Confidence defaults: `DRAFT=30`, `VERIFIED=80`, `HARDENED=95`.
 
 ### Phase 2: Portable CLI (Walk)
 

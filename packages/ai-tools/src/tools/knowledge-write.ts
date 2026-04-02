@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/ai-tools/tools/knowledge-write`
  * Purpose: AI tool for writing knowledge entries + auto-commit.
- * Scope: Writes a single knowledge entry and commits the change. Confidence defaults to DRAFT (30).
+ * Scope: Writes a single knowledge entry and commits the change. Does not handle branching or bulk imports.
  * Invariants:
  *   - TOOL_ID_NAMESPACED: ID is `core__knowledge_write`
  *   - EFFECT_TYPED: effect is `state_change`
