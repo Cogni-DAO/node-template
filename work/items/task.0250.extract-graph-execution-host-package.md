@@ -14,11 +14,12 @@ spec_refs:
 assignees: []
 credit:
 project: proj.unified-graph-launch
-branch: feat/worker-local-execution
+branch:
 pr:
 reviewer:
 revision: 0
-blocked_by: []
+blocked_by:
+  - task.0257
 deploy_verified: false
 created: 2026-04-01
 updated: 2026-04-01
@@ -75,35 +76,27 @@ After this task, `apps/operator` imports from `@cogni/graph-execution-host` inst
 
 - Re-export from `@cogni/graph-execution-host` where needed for backward compat during migration
 
-## Design Decisions (needs review)
+## Design Decisions (reviewed 2026-04-01)
 
-### Type ownership
+### Type ownership — DECIDED: Option A
 
-- App-local types (`LlmService`, `BillingContext`, `LangfusePort`, `ModelProviderResolverPort`) must live somewhere the package can import them. Options:
-  - **A. Define in package, app re-exports** — single source of truth moves to package
-  - **B. Move to `@cogni/ai-core` or `@cogni/graph-execution-core`** — existing shared packages grow
-  - **C. App types stay, package uses structural typing** — no type duplication but fragile
+Define types in package, app re-exports. **Constraint: Checkpoint 3 (rewire app re-exports) must ship in the same PR as Checkpoints 1-2.** Two sources of truth for `LlmService` etc. cannot persist across PRs.
 
-### Constructor injection vs module-scoped singletons
+### Constructor injection — DECIDED: Option A
 
-- Files like `NamespaceGraphRouter` call `makeLogger()` internally. Moving to package means either:
-  - **A. Inject Logger via constructor** — changes call sites, but PURE_LIBRARY compliant
-  - **B. Package exports its own `makeLogger`** — adds pino dep, duplicates pattern
-  - **C. Accept app-specific logger import** — violates NO_SRC_IMPORTS
+Inject Logger via constructor. Only PURE_LIBRARY-compliant option. Mechanical call-site updates in `graph-executor.factory.ts` are part of Checkpoint 3.
 
-### `isInsufficientCreditsPortError` guard
+### `isInsufficientCreditsPortError` — DECIDED: Option A (accept as-is)
 
-- App uses class-based `instanceof` + `name` check. Package can either:
-  - **A. Name-based check** (`error.name === "InsufficientCreditsPortError"`) — fragile
-  - **B. Import error class from a shared package** — clean but scope expansion
-  - **C. Inject error classification function** — most portable
+Name-based check matches app's existing pattern (`accounts.port.ts` uses same `error.name` check). Both break if class renamed — acceptable tech debt.
 
-### EVENT_NAMES constants
+### EVENT_NAMES — DECIDED: Option A (inline strings)
 
-- Observability decorator uses structured log event names from `@/shared/observability/events`
-  - **A. Inline strings** — divergence risk
-  - **B. Export from package, app imports** — package becomes source of truth for event names
-  - **C. Inject event name constants** — over-engineered
+3 constants used across 2 files. Inline in package. Not worth injection complexity.
+
+### `AccountService` / `AiTelemetryPort` typing — DECIDED: make CompletionStreamFn opaque
+
+Don't expose `CompletionStreamParams` internals from the package. The `CompletionStreamFn` is a fully injected function — the package doesn't validate its params, the injecting app does. Remove `AccountService` / `AiTelemetryPort` / `Clock` / `RequestContext` from package port types entirely. Use a generic or opaque function signature.
 
 ## Plan
 
