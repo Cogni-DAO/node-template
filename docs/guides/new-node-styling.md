@@ -97,11 +97,20 @@ export const metadata: Metadata = {
 The public landing page. Customize the hero, CTAs, and content.
 Signed-in users redirect to `/chat`.
 
+### 5. Chat suggested messages
+
+**File:** `src/features/ai/components/ChatComposerExtras.tsx` (or equivalent)
+
+Each node should tailor the chat welcome suggestions to its domain.
+Operator shows generic prompts; poly should show prediction market prompts;
+resy should show reservation prompts.
+
 ## Checklist for a new node
 
 - [ ] Choose a Lucide icon — update `AppHeader.tsx` + `AppSidebar.tsx`
 - [ ] Pick a primary hue — update `tailwind.css` (both `:root` and `.dark`)
 - [ ] Set metadata — update `layout.tsx` title + description
 - [ ] Customize homepage — edit `(public)/page.tsx`
+- [ ] Customize chat suggestions — edit `ChatComposerExtras.tsx`
 - [ ] Verify: `pnpm typecheck:{node-name}` passes
 - [ ] Verify: dev server shows correct icon, colors, and name

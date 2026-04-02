@@ -122,7 +122,10 @@ export const ModeToggle = forwardRef<HTMLButtonElement, ModeToggleProps>(
             aria-label="Select theme"
             {...props}
           >
-            <CURRENT_ICON className={themeIcon({ state: "visible" })} />
+            <CURRENT_ICON
+              className={themeIcon({ state: "visible" })}
+              strokeWidth={1.5}
+            />
           </button>
         </DROPDOWN_MENU_TRIGGER>
         <DROPDOWN_MENU_CONTENT align="end" size="md">
