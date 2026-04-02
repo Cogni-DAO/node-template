@@ -25,7 +25,7 @@ import {
   MAX_MESSAGE_CHARS,
   type Message,
   trimConversationHistory,
-} from "@/core";
+} from "@cogni/node-core";
 import {
   computePromptHash,
   DEFAULT_MAX_TOKENS,

@@ -15,6 +15,7 @@
  * @internal
  */
 
+import { CREDITS_PER_USD } from "@cogni/node-core";
 import {
   TEST_GRAPH_NAME,
   TEST_GRAPH_NAME_2,
@@ -23,8 +24,6 @@ import {
   TEST_SESSION_USER_3,
 } from "@tests/_fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
-import { CREDITS_PER_USD } from "@/core/billing/pricing";
 
 // Mock the dependencies before importing getActivity
 const mockListChargeReceipts = vi.fn();

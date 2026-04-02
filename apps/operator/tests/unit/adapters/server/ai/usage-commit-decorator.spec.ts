@@ -11,6 +11,13 @@
  * @internal
  */
 
+import type {
+  AiEvent,
+  DoneEvent,
+  TextDeltaEvent,
+  UsageFact,
+  UsageReportEvent,
+} from "@cogni/node-core";
 import {
   buildByoUsageFact,
   buildExternalUsageFact,
@@ -18,7 +25,6 @@ import {
   buildSandboxUsageFact,
 } from "@tests/_fakes";
 import { describe, expect, it, vi } from "vitest";
-
 import {
   type CommitUsageFactFn,
   UsageCommitDecorator,
@@ -29,13 +35,6 @@ import type {
   GraphRunResult,
 } from "@/ports";
 import { makeNoopLogger } from "@/shared/observability";
-import type {
-  AiEvent,
-  DoneEvent,
-  TextDeltaEvent,
-  UsageReportEvent,
-} from "@/types/ai-events";
-import type { UsageFact } from "@/types/usage";
 
 // ---------------------------------------------------------------------------
 // Helpers

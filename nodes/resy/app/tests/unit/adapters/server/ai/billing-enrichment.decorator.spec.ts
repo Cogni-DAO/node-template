@@ -1,16 +1,15 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+import type { AiEvent, UsageReportEvent } from "@cogni/node-core";
 import { buildExternalUsageFact, buildInprocUsageFact } from "@tests/_fakes";
 import { describe, expect, it } from "vitest";
-
 import { BillingEnrichmentGraphExecutorDecorator } from "@/adapters/server/ai/billing-enrichment.decorator";
 import type {
   GraphExecutorPort,
   GraphRunRequest,
   GraphRunResult,
 } from "@/ports";
-import type { AiEvent, UsageReportEvent } from "@/types/ai-events";
 
 function createFakeInnerExecutor(events: AiEvent[]): GraphExecutorPort {
   return {

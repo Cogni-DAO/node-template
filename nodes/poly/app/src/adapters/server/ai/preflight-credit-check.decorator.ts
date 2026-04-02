@@ -16,6 +16,7 @@
  * @public
  */
 
+import type { AiEvent } from "@cogni/node-core";
 import type { Logger } from "pino";
 import type {
   ExecutionContext,
@@ -25,7 +26,6 @@ import type {
   ModelProviderResolverPort,
   PreflightCreditCheckFn,
 } from "@/ports";
-import type { AiEvent } from "@/types/ai-events";
 
 /**
  * Decorator that wraps GraphExecutorPort with pre-execution credit validation.

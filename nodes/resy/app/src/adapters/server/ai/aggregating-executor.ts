@@ -138,7 +138,7 @@ export class NamespaceGraphRouter implements GraphExecutorPort {
    */
   private async *createErrorStream(
     code: AiExecutionErrorCode
-  ): AsyncIterable<import("@/types/ai-events").AiEvent> {
+  ): AsyncIterable<import("@cogni/node-core").AiEvent> {
     yield { type: "error", error: code };
     yield { type: "done" };
   }

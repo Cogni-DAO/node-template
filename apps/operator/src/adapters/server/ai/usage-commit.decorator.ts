@@ -16,6 +16,7 @@
  */
 
 import { UsageFactHintsSchema, UsageFactStrictSchema } from "@cogni/ai-core";
+import type { AiEvent, UsageFact } from "@cogni/node-core";
 import type { Logger } from "pino";
 import type {
   ExecutionContext,
@@ -23,8 +24,6 @@ import type {
   GraphRunRequest,
   GraphRunResult,
 } from "@/ports";
-import type { AiEvent } from "@/types/ai-events";
-import type { UsageFact } from "@/types/usage";
 
 /**
  * Function signature for committing a usage fact to the billing ledger.

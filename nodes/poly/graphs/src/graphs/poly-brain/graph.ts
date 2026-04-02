@@ -11,10 +11,9 @@
  * @public
  */
 
+import type { CreateReactAgentGraphOptions } from "@cogni/langgraph-graphs/graphs";
 import { MessagesAnnotation } from "@langchain/langgraph";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
-
-import type { CreateReactAgentGraphOptions } from "@cogni/langgraph-graphs/graphs";
 import { POLY_BRAIN_SYSTEM_PROMPT } from "./prompts";
 
 export const POLY_BRAIN_GRAPH_NAME = "poly-brain" as const;

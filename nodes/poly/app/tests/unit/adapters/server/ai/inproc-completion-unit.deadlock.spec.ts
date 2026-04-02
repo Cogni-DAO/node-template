@@ -11,12 +11,11 @@
  * @internal
  */
 
+import type { AiEvent } from "@cogni/node-core";
 import { describe, expect, it } from "vitest";
-
 import { runInScope } from "@/adapters/server/ai/execution-scope";
 import { InProcCompletionUnitAdapter } from "@/adapters/server/ai/inproc-completion-unit.adapter";
 import type { ChatDeltaEvent } from "@/ports";
-import type { AiEvent } from "@/types/ai-events";
 
 const TEST_SCOPE = {
   billing: {

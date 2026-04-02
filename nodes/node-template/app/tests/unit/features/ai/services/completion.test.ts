@@ -12,6 +12,7 @@
  * @public
  */
 
+import { ChatValidationError, MAX_MESSAGE_CHARS } from "@cogni/node-core";
 import {
   createConversation,
   createLongMessage,
@@ -24,8 +25,6 @@ import {
   TEST_MODEL_ID,
 } from "@tests/_fakes";
 import { describe, expect, it, vi } from "vitest";
-
-import { ChatValidationError, MAX_MESSAGE_CHARS } from "@/core";
 import { execute } from "@/features/ai/services/completion";
 import type { LlmCaller } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";

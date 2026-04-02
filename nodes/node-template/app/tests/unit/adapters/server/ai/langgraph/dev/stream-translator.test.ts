@@ -11,6 +11,7 @@
  * @internal
  */
 
+import type { AiEvent } from "@cogni/node-core";
 import { describe, expect, it } from "vitest";
 import { runInScope } from "@/adapters/server/ai/execution-scope";
 import {
@@ -18,7 +19,6 @@ import {
   type StreamRunContext,
   translateDevServerStream,
 } from "@/adapters/server/ai/langgraph/dev/stream-translator";
-import type { AiEvent } from "@/types/ai-events";
 
 const TEST_SCOPE = {
   billing: {

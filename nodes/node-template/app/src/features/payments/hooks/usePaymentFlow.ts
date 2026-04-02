@@ -14,19 +14,19 @@
 
 "use client";
 
+import type { PaymentFlowState } from "@cogni/node-core";
+import { usdCentsToCredits } from "@cogni/node-core";
 import { useCallback, useEffect, useReducer, useRef } from "react";
 import { useWaitForTransactionReceipt, useWriteContract } from "wagmi";
-import { usdCentsToCredits } from "@/core";
 import * as clientLogger from "@/shared/observability/client";
 import { EVENT_NAMES } from "@/shared/observability/events";
 import { ERC20_ABI, getTransactionExplorerUrl } from "@/shared/web3";
-import type { PaymentFlowState } from "@/types/payments";
 import { paymentsClient } from "../api/paymentsClient";
 import { formatPaymentError } from "../utils/formatPaymentError";
 import { mapBackendStatus } from "../utils/mapBackendStatus";
 
 // Re-export types for convenience
-export type { PaymentFlowPhase, PaymentFlowState } from "@/types/payments";
+export type { PaymentFlowPhase, PaymentFlowState } from "@cogni/node-core";
 
 export interface UsePaymentFlowOptions {
   amountUsdCents: number;

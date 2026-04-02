@@ -10,7 +10,6 @@
  * Links: `src/core/billing/pricing.ts`
  */
 
-import { describe, expect, it } from "vitest";
 import {
   CREDITS_PER_USD,
   calculateLlmUserCharge,
@@ -19,7 +18,8 @@ import {
   isMarginPreserved,
   usdCentsToCredits,
   usdToCredits,
-} from "@/core/billing/pricing";
+} from "@cogni/node-core";
+import { describe, expect, it } from "vitest";
 
 describe("Pricing Logic", () => {
   describe("CREDITS_PER_USD constant", () => {

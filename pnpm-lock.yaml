@@ -50,6 +50,9 @@ importers:
       '@cogni/langgraph-graphs':
         specifier: workspace:*
         version: link:packages/langgraph-graphs
+      '@cogni/node-core':
+        specifier: workspace:*
+        version: link:packages/node-core
       '@cogni/operator-wallet':
         specifier: workspace:*
         version: link:packages/operator-wallet
@@ -357,6 +360,9 @@ importers:
       '@cogni/market-provider':
         specifier: workspace:*
         version: link:../../packages/market-provider
+      '@cogni/node-core':
+        specifier: workspace:*
+        version: link:../../packages/node-core
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../packages/repo-spec
@@ -646,6 +652,9 @@ importers:
       '@cogni/market-provider':
         specifier: workspace:*
         version: link:../../../packages/market-provider
+      '@cogni/node-core':
+        specifier: workspace:*
+        version: link:../../../packages/node-core
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../../packages/repo-spec
@@ -951,6 +960,9 @@ importers:
       '@cogni/market-provider':
         specifier: workspace:*
         version: link:../../../packages/market-provider
+      '@cogni/node-core':
+        specifier: workspace:*
+        version: link:../../../packages/node-core
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../../packages/repo-spec
@@ -1274,6 +1286,9 @@ importers:
       '@cogni/market-provider':
         specifier: workspace:*
         version: link:../../../packages/market-provider
+      '@cogni/node-core':
+        specifier: workspace:*
+        version: link:../../../packages/node-core
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../../packages/repo-spec
@@ -1791,6 +1806,19 @@ importers:
       zod:
         specifier: ^3.24.0
         version: 3.25.76
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(@swc/core@1.15.10)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5
+        version: 5.9.3
+
+  packages/node-core:
+    dependencies:
+      '@cogni/ai-core':
+        specifier: workspace:*
+        version: link:../ai-core
     devDependencies:
       tsup:
         specifier: ^8.5.1

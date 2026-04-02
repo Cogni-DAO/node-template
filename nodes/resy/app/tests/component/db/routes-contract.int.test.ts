@@ -13,6 +13,11 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type {
+  PaymentAttemptStatus,
+  PaymentErrorCode,
+  PaymentStatus,
+} from "@cogni/node-core";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
 import { eq } from "drizzle-orm";
@@ -24,11 +29,6 @@ import {
 } from "@/adapters/test";
 import type { SessionUser } from "@/shared/auth";
 import { CHAIN_ID } from "@/shared/web3/chain";
-import type {
-  PaymentAttemptStatus,
-  PaymentErrorCode,
-  PaymentStatus,
-} from "@/types/payments";
 
 // Mock session auth
 vi.mock("@/app/_lib/auth/session", () => ({

@@ -18,6 +18,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import type { AiEvent } from "@cogni/node-core";
 import { trace } from "@opentelemetry/api";
 import type { Logger } from "pino";
 import {
@@ -37,7 +38,6 @@ import {
   truncateSessionId,
 } from "@/shared/ai/content-scrubbing";
 import { EVENT_NAMES } from "@/shared/observability/events";
-import type { AiEvent } from "@/types/ai-events";
 
 /**
  * Terminal state tracking for once-guard.

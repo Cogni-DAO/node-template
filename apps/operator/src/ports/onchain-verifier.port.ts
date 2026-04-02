@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { PaymentErrorCode } from "@/core";
+import type { PaymentErrorCode } from "@cogni/node-core";
 
 /**
  * Verification status returned by OnChainVerifier

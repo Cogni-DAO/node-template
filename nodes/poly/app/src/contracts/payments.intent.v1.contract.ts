@@ -12,9 +12,8 @@
  * @public
  */
 
+import { MAX_PAYMENT_CENTS, MIN_PAYMENT_CENTS } from "@cogni/node-core";
 import { z } from "zod";
-
-import { MAX_PAYMENT_CENTS, MIN_PAYMENT_CENTS } from "@/types/payments";
 
 export const paymentIntentOperation = {
   id: "payments.intent.v1",

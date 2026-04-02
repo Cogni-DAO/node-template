@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { usdCentsToCredits } from "@cogni/node-core";
 import { makeTestCtx } from "@tests/_fakes";
 import { seedAuthenticatedUser } from "@tests/_fixtures/auth/db-helpers";
 import { getSeedDb } from "@tests/_fixtures/db/seed-client";
@@ -27,7 +28,6 @@ import {
   createPaymentIntentFacade,
   submitPaymentTxHashFacade,
 } from "@/app/_facades/payments/attempts.server";
-import { usdCentsToCredits } from "@/core";
 import type { SessionUser } from "@/shared/auth";
 import {
   billingAccounts,

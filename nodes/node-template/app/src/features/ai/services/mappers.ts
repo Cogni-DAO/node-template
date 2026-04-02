@@ -12,14 +12,14 @@
  * @public
  */
 
-import type { DynamicToolUIPart, TextUIPart, UIMessage } from "ai";
 import {
   ChatErrorCode,
   ChatValidationError,
   type Message,
   type MessageToolCall,
   normalizeMessageRole,
-} from "@/core";
+} from "@cogni/node-core";
+import type { DynamicToolUIPart, TextUIPart, UIMessage } from "ai";
 
 /**
  * Tool call structure in DTO format.

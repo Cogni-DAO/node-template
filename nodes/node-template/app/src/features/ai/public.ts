@@ -16,7 +16,7 @@
  */
 
 // Model selection rules (re-exported from core for app layer access)
-export { pickDefaultModel } from "@/core";
+export { pickDefaultModel } from "@cogni/node-core";
 // Thread data hooks
 export {
   useDeleteThread,

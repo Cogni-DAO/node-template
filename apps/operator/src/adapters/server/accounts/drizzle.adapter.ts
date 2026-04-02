@@ -31,8 +31,8 @@ import {
   uuidToBigInt,
 } from "@cogni/financial-ledger";
 import { type ActorId, type UserId, userActor } from "@cogni/ids";
+import type { SourceSystem } from "@cogni/node-core";
 import { and, desc, eq, gte, inArray, lt, sql } from "drizzle-orm";
-
 import type { Database } from "@/adapters/server/db/client";
 import {
   type AccountService,
@@ -55,7 +55,6 @@ import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 import { EVENT_NAMES } from "@/shared/observability/events";
 import { isValidUuid } from "@/shared/util/uuid";
-import type { SourceSystem } from "@/types/billing";
 
 const logger = makeLogger({ component: "DrizzleAccountService" });
 

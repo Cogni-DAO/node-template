@@ -20,7 +20,7 @@ import {
   ESTIMATED_USD_PER_1K_TOKENS,
   estimateTotalTokens,
   type Message,
-} from "@/core";
+} from "@cogni/node-core";
 import type { AccountService } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
 import { isModelFree } from "@/shared/ai/model-catalog.server";

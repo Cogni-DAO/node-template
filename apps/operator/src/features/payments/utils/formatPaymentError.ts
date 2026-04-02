@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { PaymentErrorCode } from "@/types/payments";
+import type { PaymentErrorCode } from "@cogni/node-core";
 
 export interface FormattedError {
   code: string;

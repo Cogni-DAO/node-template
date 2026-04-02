@@ -11,7 +11,7 @@
  * @public
  */
 
-import { calculateLlmUserCharge } from "@/core";
+import { calculateLlmUserCharge } from "@cogni/node-core";
 import { serverEnv } from "@/shared/env";
 
 /**

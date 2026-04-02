@@ -12,9 +12,8 @@
  * @public
  */
 
+import { rawUsdcToUsdCents, usdCentsToRawUsdc } from "@cogni/node-core";
 import { describe, expect, it } from "vitest";
-
-import { rawUsdcToUsdCents, usdCentsToRawUsdc } from "@/core";
 
 describe("core/payments/util", () => {
   describe("usdCentsToRawUsdc", () => {

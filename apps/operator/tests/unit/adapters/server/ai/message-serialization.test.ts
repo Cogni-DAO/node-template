@@ -16,6 +16,7 @@
  * @public
  */
 
+import type { Message } from "@cogni/node-core";
 import {
   createAssistantMessageWithToolCalls,
   createMessageToolCall,
@@ -25,8 +26,6 @@ import {
   TEST_TOOL_NAME,
 } from "@tests/_fakes";
 import { describe, expect, it } from "vitest";
-
-import type { Message } from "@/core";
 
 /**
  * Message serialization logic extracted for testing.

@@ -11,7 +11,7 @@
  * @public
  */
 
-import type { UsageFact } from "@/types/usage";
+import type { UsageFact } from "@cogni/node-core";
 
 /**
  * Create a valid UsageFact for billing-authoritative inproc executor.

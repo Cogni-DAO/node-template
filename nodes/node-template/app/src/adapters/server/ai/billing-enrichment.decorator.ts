@@ -13,13 +13,13 @@
  * @public
  */
 
+import type { AiEvent, UsageReportEvent } from "@cogni/node-core";
 import type {
   ExecutionContext,
   GraphExecutorPort,
   GraphRunRequest,
   GraphRunResult,
 } from "@/ports";
-import type { AiEvent, UsageReportEvent } from "@/types/ai-events";
 
 export interface BillingIdentity {
   readonly billingAccountId: string;
