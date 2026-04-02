@@ -39,7 +39,21 @@ The vision: a **single chat thread** where the operator AI guides the human thro
 
 ### Outcome
 
-User says "create a new node" in operator chat → AI guides through intake/identity → inline DAO formation with wallet signing (no page navigation) → AI autonomously scaffolds, brands, creates PR, configures DNS → node is live in local dev.
+User says "create a new node" in operator chat → AI guides through intake/identity (conversational) → inline DAO formation with wallet signing (preset workflow) → deterministic scaffolding + branding (server-side workflow) → PR created → DNS configured → node is live in local dev.
+
+### Key Principle: Preset Workflows, Not LLM-Led Execution
+
+The AI's role is **conversational intake and orchestration** — deciding what to do next and collecting inputs. The mechanical operations are **deterministic preset workflows** that take structured config and execute without LLM involvement:
+
+| Operation | Who drives | Inputs |
+|-----------|-----------|--------|
+| Intake + Identity | AI (conversational) | User's answers |
+| DAO Formation | Preset workflow (formation reducer + wagmi) | `{ tokenName, tokenSymbol, initialHolder }` |
+| Scaffolding | Server-side workflow / script | `{ name, port, nodeId, icon, hue, mission }` |
+| PR Creation | Server-side workflow (git ops) | `{ branch, title, description }` |
+| DNS | Server-side workflow (dns-ops) | `{ name }` |
+
+The AI calls display-only tools to trigger these workflows. The workflows execute deterministically. No LLM is editing files, running shell commands, or making git commits.
 
 ### Critical Design Decision: Display-Only Tools, Not HIL
 
@@ -118,18 +132,18 @@ AI: → [autonomous: DNS creation via dns-ops]
 ```
 ┌──────────────────────────────────────────────┐
 │  node-creator graph (LangGraph ReAct)        │
-│  System prompt: node creation lifecycle      │
-│  Tools: display-only + existing VCS/repo     │
+│  Role: conversational intake + orchestration │
+│  Tools: display-only triggers for workflows  │
 ├──────────────────────────────────────────────┤
-│  Turn 1-N: Intake + Identity (conversational)│
+│  Turn 1-N: Intake + Identity (AI-led)        │
 │    → propose_node_identity tool call         │
 │  Turn N+1: User confirms identity            │
 │    → request_dao_formation tool call         │
 │  Turn N+2: User sends formation result       │
-│    → autonomous scaffolding (VCS + repo)     │
+│    → scaffold_node tool call (server-side)   │
 │    → present_pr tool call                    │
 │  Turn N+3: User approves PR                  │
-│    → autonomous DNS (dns-ops)                │
+│    → create_node_dns tool call (server-side) │
 │    → present_node_summary tool call          │
 └──────────────────────────────────────────────┘
         ↕ stateKey (thread replay persistence)
@@ -143,7 +157,9 @@ AI: → [autonomous: DNS creation via dns-ops]
 └──────────────────────────────────────────────┘
 ```
 
-### Display-Only Tools (4 new)
+### Tools (6 total)
+
+**Display-only** (trigger UI rendering, no server I/O):
 
 | Tool | Args (AI provides) | Server result | Client renders |
 |------|-------------------|---------------|----------------|
@@ -152,7 +168,14 @@ AI: → [autonomous: DNS creation via dns-ops]
 | `present_pr` | `{ url, diffStats, summary }` | `{ status: "awaiting_review" }` | PRReviewCard |
 | `present_node_summary` | `{ name, port, prUrl, dnsRecord }` | `{ status: "complete" }` | NodeSummaryCard |
 
-These tools have **no server-side I/O** — they exist solely to create structured tool-call events that the client renders as rich cards. The tool handler is a pure function returning the static status.
+**Workflow tools** (deterministic server-side execution):
+
+| Tool | Args | What it does | Returns |
+|------|------|-------------|---------|
+| `scaffold_node` | `{ name, port, nodeId, icon, hue, mission, repoSpecYaml }` | Branch, copy template, rename, wire env/scripts/DB, apply branding, create brain graph, create PR | `{ prUrl, branch, diffStats }` |
+| `create_node_dns` | `{ name }` | Create `{name}.nodes.cognidao.org` via dns-ops | `{ record, verified }` |
+
+The workflow tools are **not LLM-led** — they execute deterministic scripts. The AI provides the config inputs; the workflow handles all file operations, git, and DNS.
 
 ### Thread Replay Safety
 
@@ -186,7 +209,8 @@ Data-driven config rendered by IdentityProposalCard. Not in P0.
 - [ ] TOOL_CATALOG_IS_CANONICAL: Display-only tools registered in catalog with toolIds, resolved at runtime
 - [ ] NO_SIDE_EFFECTS_BEFORE_APPROVAL: DAO formation (wallet signing) only happens after user explicitly clicks sign in the card
 - [ ] PACKAGES_NO_SRC_IMPORTS: Tool contracts in `@cogni/ai-tools`, not in `src/`
-- [ ] THREAD_REPLAY_SAFE: Tool renderers detect completed-vs-active state from surrounding messages
+- [ ] TOOL_RENDERER_IDEMPOTENT: Tool renderers are safe to re-render at any point (page reload mid-signing, stale thread replay). DAOFormationCard checks on-chain state on mount, not message ordering
+- [ ] THREAD_REPLAY_SAFE: Completed workflows render as static summary cards, not re-triggered interactive flows
 - [ ] CAPABILITY_INJECTION: Display-only tools need no capabilities (pure functions), but follow the binding pattern
 - [ ] UI_COMPONENT_PIPELINE: Cards use kit wrappers, not direct vendor imports
 
@@ -225,7 +249,9 @@ Data-driven config rendered by IdentityProposalCard. Not in P0.
 | `packages/ai-tools/src/node-creation/request-formation.contract.ts` | DAO formation tool contract |
 | `packages/ai-tools/src/node-creation/present-pr.contract.ts` | PR presentation tool contract |
 | `packages/ai-tools/src/node-creation/present-summary.contract.ts` | Summary tool contract |
-| `packages/ai-tools/src/node-creation/*.impl.ts` | Pure tool implementations (no I/O) |
+| `packages/ai-tools/src/node-creation/scaffold-node.contract.ts` | Scaffolding workflow tool contract |
+| `packages/ai-tools/src/node-creation/create-dns.contract.ts` | DNS workflow tool contract |
+| `packages/ai-tools/src/node-creation/*.impl.ts` | Tool implementations (display-only: pure; workflow: I/O via capabilities) |
 | `packages/langgraph-graphs/src/graphs/operator/node-creator/graph.ts` | Graph factory |
 | `packages/langgraph-graphs/src/graphs/operator/node-creator/prompts.ts` | System prompt |
 | `apps/operator/src/features/ai/components/tools/DAOFormationCard.tsx` | Inline formation renderer |

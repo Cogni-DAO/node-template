@@ -37,15 +37,9 @@ Enable any founder to create a fully-verified Cogni DAO node through a unified c
 
 ## Chat-Native Node Creation (task.0260)
 
-The legacy `/setup/dao` wizard page is being superseded by a chat-native flow where DAO formation happens inline. The formation logic (reducer, tx builders, hooks, verification) is **pure and reusable** — it moves from a wizard page into a chat tool renderer component with zero changes to the underlying code.
+The legacy `/setup/dao` wizard page is being superseded by a chat-native flow where DAO formation happens inline. The formation logic (reducer, tx builders, hooks, verification) is **pure and reusable** — it moves from a wizard page into a chat tool renderer component with zero changes to the underlying code. Mechanical operations (scaffolding, PR, DNS) are deterministic server-side workflows, not LLM-led.
 
-### Interrupt Kinds
-
-| Kind | What Renders | Human Action | Resume Data |
-|------|-------------|--------------|-------------|
-| `identity_proposal` | Editable card: name, icon, hue, mission, tokenName, tokenSymbol | Confirm or edit | `{ name, icon, hue, mission, tokenName, tokenSymbol, initialHolder }` |
-| `dao_formation` | Pre-filled formation card with inline wallet signing | Sign 2 transactions | `{ repoSpecYaml, addresses, chainId }` |
-| `pr_review` | PR summary with diff stats + link | Approve or request changes | `{ approved: boolean, feedback?: string }` |
+See [task.0260](../../work/items/task.0260.node-creation-chat-orchestration.md) for the full design: tool contracts, UI renderers, graph architecture, and phased delivery.
 
 ### Field Mutability
 
@@ -55,15 +49,6 @@ In the identity proposal, **all fields become immutable after formation except:*
 - `tokenSymbol` — can be updated via governance proposal (on-chain metadata)
 
 The node name, icon, hue, and mission are baked into code and branding at scaffolding time. The UI must clearly communicate this distinction so founders understand the commitment.
-
-### Governance Templates (v2)
-
-| Template | Token Supply | Allocation | Voting | Best For |
-|----------|-------------|------------|--------|----------|
-| Standard DAO | 1M | 100% founder | Simple majority, 1h min | Solo founders, MVPs |
-| Multi-Holder | 1M | 50% founder / 30% treasury / 20% contributors | Weighted, 3-day timelock | Teams, communities |
-
-Templates are data-driven config rendered by the IdentityProposalCard. See [task.0260](../../work/items/task.0260.node-creation-chat-orchestration.md) for full design.
 
 ## Non-Goals
 

@@ -89,6 +89,8 @@ Suggest a Lucide icon and a primary hue (HSL). Present 2-3 options with rational
 
 **Goal:** On-chain DAO deployed, repo-spec fragment generated.
 
+> **v0 path (Claude Code):** This phase directs the user to the web wizard. task.0260 replaces this with inline chat-native formation where wallet signing happens in the chat thread.
+
 This phase requires the user's browser and wallet. You cannot do it for them.
 
 1. Confirm the dev server is running (`pnpm dev:stack` or `pnpm dev`)
