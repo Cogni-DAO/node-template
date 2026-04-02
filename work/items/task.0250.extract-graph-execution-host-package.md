@@ -33,6 +33,7 @@ external_refs:
 ## Context
 
 Parent: task.0181. Step 1 of 3 in moving AI runtime out of Next.js.
+Absorbed into task.0248 Phase 2 — but can be implemented independently as the first extraction.
 
 Move graph execution components from `apps/operator/src/adapters/server/ai/` and `apps/operator/src/bootstrap/graph-executor.factory.ts` into `packages/graph-execution-host/`. This is a **move, not rewrite** — copy existing working logic verbatim and change only the import paths.
 
