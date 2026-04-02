@@ -23,11 +23,11 @@
  */
 
 import { randomUUID } from "node:crypto";
-import { createServiceDbClient } from "@cogni/db-client/service";
 import type { Database } from "@cogni/db-client";
-import { chargeReceipts } from "@/shared/db/schema";
+import { createServiceDbClient } from "@cogni/db-client/service";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { chargeReceipts } from "@/shared/db/schema";
 
 // ── Node configuration ─────────────────────────────────────────────────────
 
@@ -37,8 +37,7 @@ interface NodeConfig {
   dbUrl: string;
 }
 
-const BILLING_INGEST_TOKEN =
-  process.env.BILLING_INGEST_TOKEN ?? "local-dev-billing-ingest-token-min32ch";
+const BILLING_INGEST_TOKEN = process.env.BILLING_INGEST_TOKEN ?? "";
 
 const NODES: Record<string, NodeConfig> = {
   operator: {
@@ -46,21 +45,21 @@ const NODES: Record<string, NodeConfig> = {
     baseUrl: process.env.TEST_BASE_URL_OPERATOR ?? "http://localhost:3000",
     dbUrl:
       process.env.DATABASE_SERVICE_URL ??
-      "postgresql://app_service:service_password@localhost:55432/cogni_operator",
+      "postgresql://app_service:service_password@localhost:55432/cogni_template_stack_test",
   },
   poly: {
     name: "poly",
     baseUrl: process.env.TEST_BASE_URL_POLY ?? "http://localhost:3100",
     dbUrl:
       process.env.DATABASE_SERVICE_URL_POLY ??
-      "postgresql://app_service:service_password@localhost:55432/cogni_poly",
+      "postgresql://app_service:service_password@localhost:55432/cogni_poly_test",
   },
   resy: {
     name: "resy",
     baseUrl: process.env.TEST_BASE_URL_RESY ?? "http://localhost:3300",
     dbUrl:
       process.env.DATABASE_SERVICE_URL_RESY ??
-      "postgresql://app_service:service_password@localhost:55432/cogni_resy",
+      "postgresql://app_service:service_password@localhost:55432/cogni_resy_test",
   },
 };
 
@@ -85,7 +84,7 @@ function getNodeDb(nodeName: string): Database {
 // service client (BYPASSRLS). This avoids importing node-specific seed
 // fixtures and keeps the test self-contained.
 
-import { users, billingAccounts, virtualKeys } from "@/shared/db/schema";
+import { billingAccounts, users, virtualKeys } from "@/shared/db/schema";
 
 interface TestActor {
   userId: string;
@@ -126,10 +125,7 @@ async function seedTestActorInDb(db: Database): Promise<TestActor> {
   return { userId, billingAccountId, virtualKeyId };
 }
 
-async function cleanupTestActor(
-  db: Database,
-  actor: TestActor
-): Promise<void> {
+async function cleanupTestActor(db: Database, actor: TestActor): Promise<void> {
   // Delete in reverse FK order
   await db
     .delete(chargeReceipts)

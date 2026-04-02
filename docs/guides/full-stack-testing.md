@@ -18,14 +18,14 @@ Stack tests run against real HTTP endpoints with real databases, real LiteLLM, a
 
 ## Test Levels
 
-| Level | Infra | LLM | Database | Command |
-|---|---|---|---|---|
-| Unit | None | None | None | `pnpm test` |
-| Component | Testcontainers (Postgres) | None | Isolated per-test | `pnpm test:component` |
-| Contract | None (in-memory route handlers) | None | None | `pnpm test:contract` |
-| **Stack (single-node)** | Docker Compose (test mode) | mock-llm via LiteLLM | `cogni_template_stack_test` | `pnpm test:stack:dev` |
-| **Stack (multi-node)** | Docker Compose (dev mode) | mock-llm or real LLM | Per-node dev DBs | `pnpm test:stack:multi` |
-| E2E | Full Docker stack (production mode) | Real LLM | Production-like DB | `pnpm e2e` |
+| Level                   | Infra                               | LLM                  | Database                    | Command                 |
+| ----------------------- | ----------------------------------- | -------------------- | --------------------------- | ----------------------- |
+| Unit                    | None                                | None                 | None                        | `pnpm test`             |
+| Component               | Testcontainers (Postgres)           | None                 | Isolated per-test           | `pnpm test:component`   |
+| Contract                | None (in-memory route handlers)     | None                 | None                        | `pnpm test:contract`    |
+| **Stack (single-node)** | Docker Compose (test mode)          | mock-llm via LiteLLM | `cogni_template_stack_test` | `pnpm test:stack:dev`   |
+| **Stack (multi-node)**  | Docker Compose (test mode)          | mock-llm via LiteLLM | Per-node test DBs           | `pnpm test:stack:multi` |
+| E2E                     | Full Docker stack (production mode) | Real LLM             | Production-like DB          | `pnpm e2e`              |
 
 ## Single-Node Stack Tests
 
@@ -110,6 +110,7 @@ describe("[internal] my billing test", () => {
 ```
 
 **Key patterns:**
+
 - Use `getSeedDb()` for service-role DB access (BYPASSRLS)
 - Use `seedTestActor()` to create user + billing account + virtual key
 - Use `waitForReceipts()` to poll for async callback results (10s timeout, 250ms interval)
@@ -120,35 +121,41 @@ describe("[internal] my billing test", () => {
 ### Setup
 
 ```bash
-# Start all 3 nodes + shared infra (keep running)
-pnpm dev:stack:full
+# First time: create per-node test databases + run migrations
+pnpm dev:stack:test:full:setup
+
+# Daily: start test infra + all 3 nodes (keep running)
+pnpm dev:stack:test:full
 
 # Run multi-node tests (in another terminal)
 pnpm test:stack:multi
 ```
 
-### What `dev:stack:full` provides
+### What `dev:stack:test:full` provides
 
-- **Operator** on `localhost:3000` with `cogni_operator` database
-- **Poly** on `localhost:3100` with `cogni_poly` database
-- **Resy** on `localhost:3300` with `cogni_resy` database
-- **Shared LiteLLM** on `localhost:4000` with `CogniNodeRouter` callback routing
-- **Shared Postgres** on `localhost:55432` with per-node databases
+- **Operator** on `localhost:3000` with `cogni_template_stack_test` database
+- **Poly** on `localhost:3100` with `cogni_poly_test` database
+- **Resy** on `localhost:3300` with `cogni_resy_test` database
+- **Shared LiteLLM** on `localhost:4000` with test config + `CogniNodeRouter` callback routing
+- **mock-llm** — deterministic responses (same as single-node)
+- **Shared Postgres** on `localhost:55432` with per-node test databases
+- All nodes run with `APP_ENV=test` and `.env.test`
 
 ### How multi-node tests differ
 
-| Aspect | Single-node | Multi-node |
-|---|---|---|
-| Target | One app on :3000 | 3 apps on :3000, :3100, :3300 |
-| Database | Single test DB | Per-node dev DBs |
-| LLM config | `litellm.test.config.yaml` (mock-llm) | `litellm.config.yaml` (real or mock) |
-| Route access | Import handlers directly | `fetch()` to HTTP endpoints |
-| DB reset | Global `reset-db.ts` | Tests seed/cleanup their own data |
-| Env file | `.env.test` | `.env.local` |
+| Aspect       | Single-node                           | Multi-node                        |
+| ------------ | ------------------------------------- | --------------------------------- |
+| Target       | One app on :3000                      | 3 apps on :3000, :3100, :3300     |
+| Database     | Single test DB                        | Per-node test DBs                 |
+| LLM config   | `litellm.test.config.yaml` (mock-llm) | Same (mock-llm)                   |
+| Route access | Import handlers directly              | `fetch()` to HTTP endpoints       |
+| DB reset     | Global `reset-db.ts`                  | Tests seed/cleanup their own data |
+| Env file     | `.env.test`                           | `.env.test`                       |
 
 ### Why fetch() instead of route imports
 
 Multi-node tests must use `fetch()` because:
+
 - Route handler imports bypass the HTTP layer — they don't prove callback routing works
 - Each node runs as a separate process on a different port
 - The test needs to verify that LiteLLM routes the callback to the correct node
@@ -180,13 +187,15 @@ it("poly callback → receipt in poly DB only", async () => {
 
   // 3. Verify receipt in poly DB
   const polyReceipts = await polyDb
-    .select().from(chargeReceipts)
+    .select()
+    .from(chargeReceipts)
     .where(eq(chargeReceipts.billingAccountId, actor.billingAccountId));
   expect(polyReceipts.length).toBe(1);
 
   // 4. Verify receipt NOT in operator or resy DBs
   const operatorReceipts = await operatorDb
-    .select().from(chargeReceipts)
+    .select()
+    .from(chargeReceipts)
     .where(eq(chargeReceipts.billingAccountId, actor.billingAccountId));
   expect(operatorReceipts.length).toBe(0);
 });
@@ -196,19 +205,20 @@ it("poly callback → receipt in poly DB only", async () => {
 
 Each test should prove one of these spec invariants:
 
-| Invariant | What to test |
-|---|---|
-| NODE_LOCAL_METERING_PRIMARY | Callback to node X → receipt in node X's DB |
-| DB_PER_NODE | Receipt in node X's DB absent from node Y's DB |
-| MISSING_NODE_ID_DEFAULTS_OPERATOR | Callback without node_id → receipt in operator DB |
-| CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID | Same callback twice → one receipt |
-| CALLBACK_AUTHENTICATED | Wrong Bearer token → 401 |
+| Invariant                             | What to test                                      |
+| ------------------------------------- | ------------------------------------------------- |
+| NODE_LOCAL_METERING_PRIMARY           | Callback to node X → receipt in node X's DB       |
+| DB_PER_NODE                           | Receipt in node X's DB absent from node Y's DB    |
+| MISSING_NODE_ID_DEFAULTS_OPERATOR     | Callback without node_id → receipt in operator DB |
+| CHARGE_RECEIPTS_IDEMPOTENT_BY_CALL_ID | Same callback twice → one receipt                 |
+| CALLBACK_AUTHENTICATED                | Wrong Bearer token → 401                          |
 
 ## Troubleshooting
 
 ### "waitForReceipts timed out"
 
 The LiteLLM callback didn't fire. Check:
+
 1. LiteLLM container logs: `docker logs litellm 2>&1 | tail -20`
 2. `COGNI_NODE_ENDPOINTS` is set correctly on the litellm container
 3. `BILLING_INGEST_TOKEN` matches between LiteLLM env and app env
@@ -217,6 +227,7 @@ The LiteLLM callback didn't fire. Check:
 ### "Node not reachable at localhost:3100"
 
 Multi-node tests require `pnpm dev:stack:full` running. Check:
+
 1. All 3 node processes are running (check terminal output)
 2. Per-node databases exist: `pnpm db:setup:nodes`
 3. Per-node env vars are set in `.env.local` (DATABASE_URL_POLY, AUTH_SECRET_POLY, etc.)
