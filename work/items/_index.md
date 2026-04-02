@@ -14,9 +14,10 @@
 | 0 | 1 | 3 | needs_implement | task.0179 | Extract packages/graph-execution-core — decouple execution ports from Next.js | Unified Graph Launch | proj.unified-graph-launch |
 | 0 | 1 | 1 | needs_merge | bug.0224 | Codex binary not found in Docker — standalone misses platform-specific optional dep | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 0 | 1 | 5 | needs_triage | bug.0242 | Codex MCP tool calls invisible to platform — no persistence, no observability, no history |  |  |
+| 0 | 1 | 3 | needs_merge | task.0242 | VCS tool plane + PR Manager agent | DAO Agentic Project Management | proj.agentic-project-management |
 | 0 | 1 | 3 | needs_merge | task.0243 | Work item AI tools + actor eligibility + Operating Review agent | DAO Agentic Project Management | proj.agentic-project-management |
 | 0 | 1 | 5 | needs_closeout | task.0245 | Multi-node architecture — nodes/ directory, per-node graph packages, dep-cruiser boundaries | CI/CD & Services GitOps | proj.cicd-services-gitops |
-| 0 | 1 | 5 | needs_closeout | task.0256 | Per-node billing pipeline: DB isolation + auth isolation + LiteLLM callback routing | Operator Plane | proj.operator-plane |
+| 0 | 1 | 5 | needs_merge | task.0256 | Per-node billing pipeline: DB isolation + auth isolation + LiteLLM callback routing | Operator Plane | proj.operator-plane |
 | 0 | 1 | 3 | needs_implement | task.0257 | Fix node identity — wire node_id from repo-spec, not env var slug | Operator Plane | proj.operator-plane |
 | 0 | 2 | 3 | needs_design | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 3 | 2 | needs_design | bug.0062 | OpenClaw gateway: single webchat message can trigger multi-call GOVERN loop (call storm) | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
@@ -77,6 +78,7 @@
 | 1 | 5 | 2 | needs_design | bug.0200 | setup-secrets has no validation that generated secrets are deploy-safe | Database Operations | proj.database-ops |
 | 1 | 5 | 3 | needs_merge | task.0209 | Multi-provider LLM rearchitecture — ModelCatalogPort + ModelRef | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 1 | 5 | 2 | needs_triage | bug.0231 | Token usage has three disagreeing sources — app logs, LiteLLM spend_logs, and billing callback |  |  |
+| 1 | 5 | 5 | needs_design | task.0248 | Extract shared node platform into packages/node-platform | Operator Plane | proj.operator-plane |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -134,7 +136,6 @@
 | 2 | 3 | 3 | needs_design | story.0128 | Governance ops: manual workflow triggers, run history, and admin role gating | System Tenant & Governance Execution Infrastructure | proj.system-tenant-governance |
 | 2 | 4 | 2 | needs_triage | bug.0013 | Sandbox stack tests flaky — proxy container vanishes during readiness check | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 2 | 5 | 1 | needs_merge | bug.0233 | Model picker shows wrong icons, leaks codex models into OpenRouter tab, shows embedding models |  |  |
-| 2 | 5 | 5 | needs_design | task.0248 | Extract shared node platform into packages/node-platform | Operator Plane | proj.operator-plane |
 | 2 | 8 | 1 | needs_design | task.0064 | OpenClaw preflight cost estimate 10x audit — real token consumption | Reliability & Uptime | proj.reliability |
 | 2 | 9 | 2 | needs_design | task.0039 | Billing reconciler — LiteLLM spend/logs polling in scheduler worker | Unified Graph Launch | proj.unified-graph-launch |
 | 2 | 10 | 2 | needs_triage | task.0055 | Dedicated DB migrator role — separate DDL from runtime DML | Database Operations | proj.database-ops |

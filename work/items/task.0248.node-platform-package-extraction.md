@@ -3,7 +3,7 @@ id: task.0248
 type: task
 title: "Extract shared node platform into packages/node-platform"
 status: needs_design
-priority: 2
+priority: 1
 rank: 5
 estimate: 5
 summary: "Refactor the shared platform code (ports, core, shared, contracts, components, bootstrap patterns) out of apps/operator into a packages/node-platform package. All nodes and operator import from it instead of duplicating ~700 files."
@@ -87,6 +87,17 @@ This task must ensure the extracted platform supports per-node DATABASE_URL:
 - Migration tooling runs per-node (each node manages its own schema version)
 - RLS policies remain within each node's DB (user/account-scoped)
 - No tenancy columns (node_id) in node-local tables (DB_IS_BOUNDARY)
+
+## Urgency: dev memory pressure
+
+Each Next.js node dev server (Turbopack) uses ~3 GB RAM for the 840-file app.
+Running operator + poly + resy = ~9 GB just for dev servers, before Docker infra.
+This makes local multi-node development impractical on most machines.
+
+Extracting the shared platform means each node compiles only its ~50 thin-shell
+files + the pre-built package — dramatically reducing per-node Turbopack memory.
+Combined with task.0181 (move AI runtime to scheduler-worker), node apps shed
+AI deps entirely, further shrinking the compilation footprint.
 
 ## Expected test deduplication
 

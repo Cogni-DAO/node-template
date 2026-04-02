@@ -75,6 +75,74 @@ After this task, `apps/operator` imports from `@cogni/graph-execution-host` inst
 
 - Re-export from `@cogni/graph-execution-host` where needed for backward compat during migration
 
+## Design Decisions (needs review)
+
+### Type ownership
+
+- App-local types (`LlmService`, `BillingContext`, `LangfusePort`, `ModelProviderResolverPort`) must live somewhere the package can import them. Options:
+  - **A. Define in package, app re-exports** — single source of truth moves to package
+  - **B. Move to `@cogni/ai-core` or `@cogni/graph-execution-core`** — existing shared packages grow
+  - **C. App types stay, package uses structural typing** — no type duplication but fragile
+
+### Constructor injection vs module-scoped singletons
+
+- Files like `NamespaceGraphRouter` call `makeLogger()` internally. Moving to package means either:
+  - **A. Inject Logger via constructor** — changes call sites, but PURE_LIBRARY compliant
+  - **B. Package exports its own `makeLogger`** — adds pino dep, duplicates pattern
+  - **C. Accept app-specific logger import** — violates NO_SRC_IMPORTS
+
+### `isInsufficientCreditsPortError` guard
+
+- App uses class-based `instanceof` + `name` check. Package can either:
+  - **A. Name-based check** (`error.name === "InsufficientCreditsPortError"`) — fragile
+  - **B. Import error class from a shared package** — clean but scope expansion
+  - **C. Inject error classification function** — most portable
+
+### EVENT_NAMES constants
+
+- Observability decorator uses structured log event names from `@/shared/observability/events`
+  - **A. Inline strings** — divergence risk
+  - **B. Export from package, app imports** — package becomes source of truth for event names
+  - **C. Inject event name constants** — over-engineered
+
+## Plan
+
+### Checkpoint 1: Package compiles standalone (ports + decorators + router)
+
+- Milestone: Package exports decorators, namespace router, execution scope. Compiles with `tsc --noEmit`.
+- Invariants: PURE_LIBRARY, NO_SRC_IMPORTS
+- Todos:
+  - [ ] Finalize port type definitions based on design review
+  - [ ] Move 4 decorators with fixed imports
+  - [ ] Move NamespaceGraphRouter with Logger injection
+  - [ ] Move execution-scope.ts
+  - [ ] Move content-scrubbing.ts (pure functions)
+  - [ ] `tsc --noEmit` on package passes
+- Validation: `npx tsc --noEmit --project packages/graph-execution-host/tsconfig.json`
+
+### Checkpoint 2: Add providers + MCP cache
+
+- Milestone: Package exports all providers. Compiles standalone.
+- Todos:
+  - [ ] Move InProcCompletionUnitAdapter
+  - [ ] Move LangGraphInProcProvider
+  - [ ] Move Dev provider (4 files: client, thread, stream-translator, provider)
+  - [ ] Move MCP connection cache from graph-executor.factory.ts
+  - [ ] Update index.ts barrel exports
+  - [ ] `tsc --noEmit` on package passes
+
+### Checkpoint 3: Rewire apps/operator + validate
+
+- Milestone: apps/operator imports from `@cogni/graph-execution-host`. `pnpm check` passes. No behavior change.
+- Invariants: All from Design section in task.0181
+- Todos:
+  - [ ] Update `apps/operator/src/bootstrap/graph-executor.factory.ts` to import from package
+  - [ ] Update `apps/operator/src/adapters/server/ai/` barrel to re-export from package
+  - [ ] Update all consumers that imported from old paths
+  - [ ] Remove moved source files from apps/operator (or keep as re-export shims)
+  - [ ] `pnpm check` passes
+  - [ ] Commit + push
+
 ## Validation
 
 ```bash
