@@ -33,7 +33,7 @@ import { NodeSummaryCard } from "@/features/ai/components/tools/NodeSummaryCard"
 import { PRReviewCard } from "@/features/ai/components/tools/PRReviewCard";
 
 /**
- * Node creation tool renderers (task.0260).
+ * Node creation tool renderers (task.0261).
  * Maps tool name → custom card component. Unregistered tools use ToolFallback.
  */
 const NODE_CREATION_TOOLS: Record<string, ToolCallMessagePartComponent> = {

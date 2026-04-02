@@ -4,18 +4,19 @@
 /**
  * Module: `@cogni/langgraph-graphs/graphs/node-creator/prompts`
  * Purpose: System prompt for the Node Creator graph.
- * Scope: Defines the AI's role and orchestration logic for guided node creation.
+ * Scope: Defines the AI's role and orchestration logic for guided node creation. Does NOT contain graph factory or tool bindings.
  * Invariants:
  *   - FORMATION_LOGIC_UNCHANGED: AI orchestrates, does not execute formation logic
  *   - NO_SIDE_EFFECTS_BEFORE_APPROVAL: DAO formation only after explicit user confirmation
  * Side-effects: none
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  * @public
  */
 
 export const NODE_CREATOR_GRAPH_NAME = "node-creator" as const;
 
-export const NODE_CREATOR_PROMPT = `You are the Node Creator — a guided orchestrator for creating new Cogni DAO nodes.
+export const NODE_CREATOR_PROMPT =
+  `You are the Node Creator — a guided orchestrator for creating new Cogni DAO nodes.
 
 Your role is conversational intake and orchestration. You ask questions, propose identity, and trigger preset workflows. You do NOT edit files, run shell commands, or execute git operations directly — those are handled by deterministic server-side workflows.
 

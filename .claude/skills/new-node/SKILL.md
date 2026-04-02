@@ -67,6 +67,7 @@ Don't rush this. A node that nobody needs is worse than no node at all. If the r
 ### Mission statement
 
 One sentence. Goes in `repo-spec.yaml` description and `layout.tsx` metadata. Examples:
+
 - poly: "Community AI prediction trading"
 - resy: "AI-powered restaurant reservations"
 
@@ -74,12 +75,12 @@ One sentence. Goes in `repo-spec.yaml` description and `layout.tsx` metadata. Ex
 
 Suggest a Lucide icon and a primary hue (HSL). Present 2-3 options with rationale. The user picks.
 
-| Hue range | Feel | Example nodes |
-|-----------|------|---------------|
-| 160-170 (teal/emerald) | Data, prediction, growth | poly |
-| 20-35 (amber/orange) | Energy, food, warmth | resy candidate |
-| 270-290 (purple) | Creative, governance, premium | — |
-| 340-355 (rose) | Social, health, care | — |
+| Hue range              | Feel                          | Example nodes  |
+| ---------------------- | ----------------------------- | -------------- |
+| 160-170 (teal/emerald) | Data, prediction, growth      | poly           |
+| 20-35 (amber/orange)   | Energy, food, warmth          | resy candidate |
+| 270-290 (purple)       | Creative, governance, premium | —              |
+| 340-355 (rose)         | Social, health, care          | —              |
 
 **Gate:** User has confirmed: name, mission sentence, icon choice, and primary hue.
 
@@ -89,7 +90,7 @@ Suggest a Lucide icon and a primary hue (HSL). Present 2-3 options with rational
 
 **Goal:** On-chain DAO deployed, repo-spec fragment generated.
 
-> **v0 path (Claude Code):** This phase directs the user to the web wizard. task.0260 replaces this with inline chat-native formation where wallet signing happens in the chat thread.
+> **v0 path (Claude Code):** This phase directs the user to the web wizard. task.0261 replaces this with inline chat-native formation where wallet signing happens in the chat thread.
 
 This phase requires the user's browser and wallet. You cannot do it for them.
 
@@ -127,11 +128,11 @@ cp -r nodes/node-template/ nodes/{name}/
 
 ### 4c. Rename packages
 
-| File | Change |
-|------|--------|
-| `nodes/{name}/app/package.json` | `name` → `@cogni/{name}-app`, port in `dev`/`start` |
-| `nodes/{name}/graphs/package.json` | `name` → `@cogni/{name}-graphs` |
-| `nodes/{name}/.cogni/repo-spec.yaml` | Already populated from Phase 3 wizard output |
+| File                                 | Change                                              |
+| ------------------------------------ | --------------------------------------------------- |
+| `nodes/{name}/app/package.json`      | `name` → `@cogni/{name}-app`, port in `dev`/`start` |
+| `nodes/{name}/graphs/package.json`   | `name` → `@cogni/{name}-graphs`                     |
+| `nodes/{name}/.cogni/repo-spec.yaml` | Already populated from Phase 3 wizard output        |
 
 **Port assignment:** Check existing ports (`grep -r '"dev":.*-p' nodes/*/app/package.json`) and pick the next available in the 3x00 range.
 
@@ -285,12 +286,14 @@ pnpm dev:{name}
 Target branch: `integration/multi-node` (or `staging` if integration branch is merged).
 
 The PR should include:
+
 - `nodes/{name}/` — full node directory
 - Root `package.json` — new `dev:{name}` and `typecheck:{name}` scripts
 - `.env.local.example` / `.env.test.example` — new per-node env vars
 - Any other env propagation changes (see `.cursor/commands/env-update.md` for the full checklist)
 
 The PR description should include:
+
 - Node mission (one sentence)
 - What the brain does
 - Screenshot of the branded homepage (if possible)

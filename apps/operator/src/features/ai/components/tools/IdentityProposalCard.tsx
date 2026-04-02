@@ -10,7 +10,7 @@
  *   - THREAD_REPLAY_SAFE: renders as static summary if confirmation message follows
  *   - UI_COMPONENT_PIPELINE: uses kit components only
  * Side-effects: none
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  */
 
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";

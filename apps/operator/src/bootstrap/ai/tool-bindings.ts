@@ -116,6 +116,7 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     [GET_CURRENT_TIME_NAME]:
       getCurrentTimeImplementation as AnyToolImplementation,
 
+<<<<<<< HEAD
     // Knowledge tools (Doltgres-backed knowledge store)
     [KNOWLEDGE_SEARCH_NAME]: createKnowledgeSearchImplementation({
       knowledgeCapability: deps.knowledgeCapability,
@@ -127,6 +128,9 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
       knowledgeCapability: deps.knowledgeCapability,
     }) as AnyToolImplementation,
     // Node creation display-only tools (task.0260) — pure, no capabilities
+=======
+    // Node creation display-only tools (task.0261) — pure, no capabilities
+>>>>>>> e33285d61 (style: fix DH004 headers, rename task.0260→0261 (ID conflict), biome formatting)
     [PROPOSE_NODE_IDENTITY_NAME]:
       proposeNodeIdentityImplementation as AnyToolImplementation,
     [REQUEST_DAO_FORMATION_NAME]:

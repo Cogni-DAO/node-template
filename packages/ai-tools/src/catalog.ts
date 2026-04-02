@@ -23,10 +23,10 @@ import { metricsQueryBoundTool } from "./tools/metrics-query";
 import { presentNodeSummaryBoundTool } from "./tools/present-node-summary";
 import { presentPrBoundTool } from "./tools/present-pr";
 import { proposeNodeIdentityBoundTool } from "./tools/propose-node-identity";
-import { requestDaoFormationBoundTool } from "./tools/request-dao-formation";
 import { repoListBoundTool } from "./tools/repo-list";
 import { repoOpenBoundTool } from "./tools/repo-open";
 import { repoSearchBoundTool } from "./tools/repo-search";
+import { requestDaoFormationBoundTool } from "./tools/request-dao-formation";
 import { scheduleListBoundTool } from "./tools/schedule-list";
 import { scheduleManageBoundTool } from "./tools/schedule-manage";
 import { vcsCreateBranchBoundTool } from "./tools/vcs-create-branch";
@@ -114,7 +114,7 @@ export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
   knowledgeWriteBoundTool as CatalogBoundTool,
   marketListBoundTool as CatalogBoundTool,
   metricsQueryBoundTool as CatalogBoundTool,
-  // Node creation display-only tools (task.0260)
+  // Node creation display-only tools (task.0261)
   presentNodeSummaryBoundTool as CatalogBoundTool,
   presentPrBoundTool as CatalogBoundTool,
   proposeNodeIdentityBoundTool as CatalogBoundTool,

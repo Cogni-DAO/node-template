@@ -4,15 +4,14 @@
 /**
  * Module: `@cogni/ai-tools/tools/propose-node-identity`
  * Purpose: Display-only tool that renders an identity proposal card in the chat UI.
- * Scope: AI calls this with proposed node identity fields. Server returns static status.
- *   Client renders IdentityProposalCard via makeAssistantToolUI. No server-side I/O.
+ * Scope: Display-only tool for identity proposal card rendering. Does NOT perform I/O or modify state.
  * Invariants:
  *   - TOOL_ID_NAMESPACED: ID is `core__propose_node_identity`
  *   - EFFECT_TYPED: effect is `read_only` (pure, no side effects)
  *   - Display-only: exists to create a typed tool-call event for client rendering
  *   - NO LangChain imports
  * Side-effects: none
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  * @public
  */
 
@@ -26,18 +25,32 @@ import type { BoundTool, ToolContract, ToolImplementation } from "../types";
 
 export const ProposeNodeIdentityInputSchema = z.object({
   name: z.string().min(1).max(32).describe("Node slug (lowercase, one word)"),
-  icon: z.string().describe("Lucide icon name (e.g., 'Activity', 'UtensilsCrossed')"),
+  icon: z
+    .string()
+    .describe("Lucide icon name (e.g., 'Activity', 'UtensilsCrossed')"),
   hue: z.number().min(0).max(360).describe("Primary HSL hue for theme colors"),
-  mission: z.string().min(1).max(200).describe("One-sentence mission statement"),
+  mission: z
+    .string()
+    .min(1)
+    .max(200)
+    .describe("One-sentence mission statement"),
   tokenName: z.string().min(1).max(64).describe("DAO governance token name"),
-  tokenSymbol: z.string().min(1).max(10).describe("DAO governance token symbol"),
+  tokenSymbol: z
+    .string()
+    .min(1)
+    .max(10)
+    .describe("DAO governance token symbol"),
 });
-export type ProposeNodeIdentityInput = z.infer<typeof ProposeNodeIdentityInputSchema>;
+export type ProposeNodeIdentityInput = z.infer<
+  typeof ProposeNodeIdentityInputSchema
+>;
 
 export const ProposeNodeIdentityOutputSchema = z.object({
   status: z.literal("awaiting_confirmation"),
 });
-export type ProposeNodeIdentityOutput = z.infer<typeof ProposeNodeIdentityOutputSchema>;
+export type ProposeNodeIdentityOutput = z.infer<
+  typeof ProposeNodeIdentityOutputSchema
+>;
 
 export type ProposeNodeIdentityRedacted = ProposeNodeIdentityOutput;
 
@@ -45,7 +58,8 @@ export type ProposeNodeIdentityRedacted = ProposeNodeIdentityOutput;
 // Contract
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const PROPOSE_NODE_IDENTITY_NAME = "core__propose_node_identity" as const;
+export const PROPOSE_NODE_IDENTITY_NAME =
+  "core__propose_node_identity" as const;
 
 export const proposeNodeIdentityContract: ToolContract<
   typeof PROPOSE_NODE_IDENTITY_NAME,
@@ -60,7 +74,8 @@ export const proposeNodeIdentityContract: ToolContract<
   inputSchema: ProposeNodeIdentityInputSchema,
   outputSchema: ProposeNodeIdentityOutputSchema,
 
-  redact: (output: ProposeNodeIdentityOutput): ProposeNodeIdentityRedacted => output,
+  redact: (output: ProposeNodeIdentityOutput): ProposeNodeIdentityRedacted =>
+    output,
   allowlist: ["status"] as const,
 };
 

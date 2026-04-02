@@ -151,7 +151,24 @@ export {
   marketListContract,
   marketListStubImplementation,
 } from "./tools/market-list";
-// Node creation display-only tools (task.0260)
+export {
+  createMetricsQueryImplementation,
+  METRICS_QUERY_NAME,
+  type MetricsDataPoint,
+  MetricsDataPointSchema,
+  type MetricsQueryDeps,
+  type MetricsQueryInput,
+  MetricsQueryInputSchema,
+  type MetricsQueryOutput,
+  MetricsQueryOutputSchema,
+  type MetricsQueryRedacted,
+  type MetricsSummary,
+  MetricsSummarySchema,
+  metricsQueryBoundTool,
+  metricsQueryContract,
+  metricsQueryStubImplementation,
+} from "./tools/metrics-query";
+// Node creation display-only tools (task.0261)
 export {
   PRESENT_NODE_SUMMARY_NAME,
   type PresentNodeSummaryInput,
@@ -185,34 +202,6 @@ export {
   proposeNodeIdentityContract,
   proposeNodeIdentityImplementation,
 } from "./tools/propose-node-identity";
-export {
-  REQUEST_DAO_FORMATION_NAME,
-  type RequestDaoFormationInput,
-  RequestDaoFormationInputSchema,
-  type RequestDaoFormationOutput,
-  RequestDaoFormationOutputSchema,
-  type RequestDaoFormationRedacted,
-  requestDaoFormationBoundTool,
-  requestDaoFormationContract,
-  requestDaoFormationImplementation,
-} from "./tools/request-dao-formation";
-export {
-  createMetricsQueryImplementation,
-  METRICS_QUERY_NAME,
-  type MetricsDataPoint,
-  MetricsDataPointSchema,
-  type MetricsQueryDeps,
-  type MetricsQueryInput,
-  MetricsQueryInputSchema,
-  type MetricsQueryOutput,
-  MetricsQueryOutputSchema,
-  type MetricsQueryRedacted,
-  type MetricsSummary,
-  MetricsSummarySchema,
-  metricsQueryBoundTool,
-  metricsQueryContract,
-  metricsQueryStubImplementation,
-} from "./tools/metrics-query";
 export {
   createRepoListImplementation,
   REPO_LIST_NAME,
@@ -254,6 +243,17 @@ export {
   repoSearchContract,
   repoSearchStubImplementation,
 } from "./tools/repo-search";
+export {
+  REQUEST_DAO_FORMATION_NAME,
+  type RequestDaoFormationInput,
+  RequestDaoFormationInputSchema,
+  type RequestDaoFormationOutput,
+  RequestDaoFormationOutputSchema,
+  type RequestDaoFormationRedacted,
+  requestDaoFormationBoundTool,
+  requestDaoFormationContract,
+  requestDaoFormationImplementation,
+} from "./tools/request-dao-formation";
 export {
   createScheduleListImplementation,
   SCHEDULE_LIST_NAME,

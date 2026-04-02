@@ -4,15 +4,14 @@
 /**
  * Module: `@cogni/ai-tools/tools/present-pr`
  * Purpose: Display-only tool that renders a PR review card in the chat UI.
- * Scope: AI calls this after creating a PR. Server returns static status.
- *   Client renders PRReviewCard via makeAssistantToolUI showing diff summary + link.
+ * Scope: Display-only tool for PR review card rendering. Does NOT interact with GitHub or modify PR state.
  * Invariants:
  *   - TOOL_ID_NAMESPACED: ID is `core__present_pr`
  *   - EFFECT_TYPED: effect is `read_only` (pure, no side effects)
  *   - Display-only: exists to create a typed tool-call event for client rendering
  *   - NO LangChain imports
  * Side-effects: none
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  * @public
  */
 
@@ -28,7 +27,11 @@ export const PresentPrInputSchema = z.object({
   url: z.string().url().describe("Pull request URL"),
   title: z.string().describe("PR title"),
   summary: z.string().describe("One-paragraph summary of changes"),
-  filesChanged: z.number().int().nonnegative().describe("Number of files changed"),
+  filesChanged: z
+    .number()
+    .int()
+    .nonnegative()
+    .describe("Number of files changed"),
   additions: z.number().int().nonnegative().describe("Lines added"),
   deletions: z.number().int().nonnegative().describe("Lines removed"),
 });

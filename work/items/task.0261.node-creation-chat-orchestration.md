@@ -1,18 +1,18 @@
 ---
-id: task.0260
+id: task.0261
 type: task
 title: "Node creation orchestration — chat-native guided flow"
 status: needs_implement
 priority: 1
 rank: 2
-estimate: 8
+estimate: 5
 summary: "Unified chat experience for creating a new Cogni node. Operator AI guides human through intake, identity, DAO formation (inline wallet signing via display-only tool + makeAssistantToolUI), scaffolding, branding, PR, and DNS — all in one thread. P0 uses multi-turn tool renderers; P1 migrates to formal HIL interrupt/resume."
 outcome: "User says 'create a new node' in chat → AI walks them through identity → inline DAO formation with wallet signing → autonomous scaffolding + branding → PR created → DNS configured. Zero page navigation."
 spec_refs:
   - docs/spec/node-formation.md
   - docs/spec/human-in-the-loop.md
   - docs/spec/multi-node-tenancy.md
-assignees:
+assignees: derekg1729
 credit:
 project: proj.node-formation-ui
 branch:
@@ -45,13 +45,13 @@ User says "create a new node" in operator chat → AI guides through intake/iden
 
 The AI's role is **conversational intake and orchestration** — deciding what to do next and collecting inputs. The mechanical operations are **deterministic preset workflows** that take structured config and execute without LLM involvement:
 
-| Operation | Who drives | Inputs |
-|-----------|-----------|--------|
-| Intake + Identity | AI (conversational) | User's answers |
-| DAO Formation | Preset workflow (formation reducer + wagmi) | `{ tokenName, tokenSymbol, initialHolder }` |
-| Scaffolding | Server-side workflow / script | `{ name, port, nodeId, icon, hue, mission }` |
-| PR Creation | Server-side workflow (git ops) | `{ branch, title, description }` |
-| DNS | Server-side workflow (dns-ops) | `{ name }` |
+| Operation         | Who drives                                  | Inputs                                       |
+| ----------------- | ------------------------------------------- | -------------------------------------------- |
+| Intake + Identity | AI (conversational)                         | User's answers                               |
+| DAO Formation     | Preset workflow (formation reducer + wagmi) | `{ tokenName, tokenSymbol, initialHolder }`  |
+| Scaffolding       | Server-side workflow / script               | `{ name, port, nodeId, icon, hue, mission }` |
+| PR Creation       | Server-side workflow (git ops)              | `{ branch, title, description }`             |
+| DNS               | Server-side workflow (dns-ops)              | `{ name }`                                   |
 
 The AI calls display-only tools to trigger these workflows. The workflows execute deterministically. No LLM is editing files, running shell commands, or making git commits.
 
@@ -84,6 +84,7 @@ This is the current Claude Code skill approach. Works for developers, not for fo
 **Solution:** Display-only tools + `makeAssistantToolUI` for interactive cards, multi-turn chat for state continuity, existing VCS/repo tools for autonomous scaffolding.
 
 **Reuses:**
+
 - `formation.reducer.ts` — 9-phase FSM (zero changes)
 - `txBuilders.ts` — transaction argument builders (zero changes)
 - `useDAOFormation.ts` — wagmi hook integration (zero changes)
@@ -161,25 +162,26 @@ AI: → [autonomous: DNS creation via dns-ops]
 
 **Display-only** (trigger UI rendering, no server I/O):
 
-| Tool | Args (AI provides) | Server result | Client renders |
-|------|-------------------|---------------|----------------|
-| `propose_node_identity` | `{ name, icon, hue, mission, tokenName, tokenSymbol }` | `{ status: "awaiting_confirmation" }` | IdentityProposalCard |
-| `request_dao_formation` | `{ tokenName, tokenSymbol }` | `{ status: "awaiting_wallet_action" }` | DAOFormationCard |
-| `present_pr` | `{ url, diffStats, summary }` | `{ status: "awaiting_review" }` | PRReviewCard |
-| `present_node_summary` | `{ name, port, prUrl, dnsRecord }` | `{ status: "complete" }` | NodeSummaryCard |
+| Tool                    | Args (AI provides)                                     | Server result                          | Client renders       |
+| ----------------------- | ------------------------------------------------------ | -------------------------------------- | -------------------- |
+| `propose_node_identity` | `{ name, icon, hue, mission, tokenName, tokenSymbol }` | `{ status: "awaiting_confirmation" }`  | IdentityProposalCard |
+| `request_dao_formation` | `{ tokenName, tokenSymbol }`                           | `{ status: "awaiting_wallet_action" }` | DAOFormationCard     |
+| `present_pr`            | `{ url, diffStats, summary }`                          | `{ status: "awaiting_review" }`        | PRReviewCard         |
+| `present_node_summary`  | `{ name, port, prUrl, dnsRecord }`                     | `{ status: "complete" }`               | NodeSummaryCard      |
 
 **Workflow tools** (deterministic server-side execution):
 
-| Tool | Args | What it does | Returns |
-|------|------|-------------|---------|
-| `scaffold_node` | `{ name, port, nodeId, icon, hue, mission, repoSpecYaml }` | Branch, copy template, rename, wire env/scripts/DB, apply branding, create brain graph, create PR | `{ prUrl, branch, diffStats }` |
-| `create_node_dns` | `{ name }` | Create `{name}.nodes.cognidao.org` via dns-ops | `{ record, verified }` |
+| Tool              | Args                                                       | What it does                                                                                      | Returns                        |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- | ------------------------------ |
+| `scaffold_node`   | `{ name, port, nodeId, icon, hue, mission, repoSpecYaml }` | Branch, copy template, rename, wire env/scripts/DB, apply branding, create brain graph, create PR | `{ prUrl, branch, diffStats }` |
+| `create_node_dns` | `{ name }`                                                 | Create `{name}.nodes.cognidao.org` via dns-ops                                                    | `{ record, verified }`         |
 
 The workflow tools are **not LLM-led** — they execute deterministic scripts. The AI provides the config inputs; the workflow handles all file operations, git, and DNS.
 
 ### Thread Replay Safety
 
 On thread replay (page reload), tool renderers must handle stale state:
+
 - Check if a subsequent user message contains the expected result
 - If yes: render a static "completed" summary card (not the interactive flow)
 - If no: render the interactive card (user hasn't completed this step yet)
@@ -187,6 +189,7 @@ On thread replay (page reload), tool renderers must handle stale state:
 ### Identity Proposal — Mutability Note
 
 All fields become immutable after DAO formation **except**:
+
 - `tokenName` — changeable via governance proposal (on-chain metadata)
 - `tokenSymbol` — changeable via governance proposal (on-chain metadata)
 
@@ -194,10 +197,10 @@ Node name, icon, hue, and mission are baked into code/branding at scaffolding ti
 
 ### Governance Templates (v2)
 
-| Template | Supply | Allocation | Voting | Best For |
-|----------|--------|------------|--------|----------|
-| Standard DAO | 1M | 100% founder | Simple majority, 1h min | Solo, MVPs |
-| Multi-Holder | 1M | 50/30/20 split | Weighted, 3-day timelock | Teams |
+| Template     | Supply | Allocation     | Voting                   | Best For   |
+| ------------ | ------ | -------------- | ------------------------ | ---------- |
+| Standard DAO | 1M     | 100% founder   | Simple majority, 1h min  | Solo, MVPs |
+| Multi-Holder | 1M     | 50/30/20 split | Weighted, 3-day timelock | Teams      |
 
 Data-driven config rendered by IdentityProposalCard. Not in P0.
 
@@ -243,39 +246,39 @@ Data-driven config rendered by IdentityProposalCard. Not in P0.
 
 ### Create
 
-| File | Purpose |
-|------|---------|
-| `packages/ai-tools/src/node-creation/propose-identity.contract.ts` | Identity proposal tool contract |
-| `packages/ai-tools/src/node-creation/request-formation.contract.ts` | DAO formation tool contract |
-| `packages/ai-tools/src/node-creation/present-pr.contract.ts` | PR presentation tool contract |
-| `packages/ai-tools/src/node-creation/present-summary.contract.ts` | Summary tool contract |
-| `packages/ai-tools/src/node-creation/scaffold-node.contract.ts` | Scaffolding workflow tool contract |
-| `packages/ai-tools/src/node-creation/create-dns.contract.ts` | DNS workflow tool contract |
-| `packages/ai-tools/src/node-creation/*.impl.ts` | Tool implementations (display-only: pure; workflow: I/O via capabilities) |
-| `packages/langgraph-graphs/src/graphs/operator/node-creator/graph.ts` | Graph factory |
-| `packages/langgraph-graphs/src/graphs/operator/node-creator/prompts.ts` | System prompt |
-| `apps/operator/src/features/ai/components/tools/DAOFormationCard.tsx` | Inline formation renderer |
-| `apps/operator/src/features/ai/components/tools/IdentityProposalCard.tsx` | Identity proposal renderer |
-| `apps/operator/src/features/ai/components/tools/PRReviewCard.tsx` | PR review renderer |
-| `apps/operator/src/features/ai/components/tools/NodeSummaryCard.tsx` | Summary renderer |
+| File                                                                      | Purpose                                                                   |
+| ------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `packages/ai-tools/src/node-creation/propose-identity.contract.ts`        | Identity proposal tool contract                                           |
+| `packages/ai-tools/src/node-creation/request-formation.contract.ts`       | DAO formation tool contract                                               |
+| `packages/ai-tools/src/node-creation/present-pr.contract.ts`              | PR presentation tool contract                                             |
+| `packages/ai-tools/src/node-creation/present-summary.contract.ts`         | Summary tool contract                                                     |
+| `packages/ai-tools/src/node-creation/scaffold-node.contract.ts`           | Scaffolding workflow tool contract                                        |
+| `packages/ai-tools/src/node-creation/create-dns.contract.ts`              | DNS workflow tool contract                                                |
+| `packages/ai-tools/src/node-creation/*.impl.ts`                           | Tool implementations (display-only: pure; workflow: I/O via capabilities) |
+| `packages/langgraph-graphs/src/graphs/operator/node-creator/graph.ts`     | Graph factory                                                             |
+| `packages/langgraph-graphs/src/graphs/operator/node-creator/prompts.ts`   | System prompt                                                             |
+| `apps/operator/src/features/ai/components/tools/DAOFormationCard.tsx`     | Inline formation renderer                                                 |
+| `apps/operator/src/features/ai/components/tools/IdentityProposalCard.tsx` | Identity proposal renderer                                                |
+| `apps/operator/src/features/ai/components/tools/PRReviewCard.tsx`         | PR review renderer                                                        |
+| `apps/operator/src/features/ai/components/tools/NodeSummaryCard.tsx`      | Summary renderer                                                          |
 
 ### Modify
 
-| File | Change |
-|------|--------|
-| `packages/langgraph-graphs/src/catalog.ts` | Add `node-creator` graph entry |
+| File                                                          | Change                                            |
+| ------------------------------------------------------------- | ------------------------------------------------- |
+| `packages/langgraph-graphs/src/catalog.ts`                    | Add `node-creator` graph entry                    |
 | `apps/operator/src/components/vendor/assistant-ui/thread.tsx` | Register tool renderers via `makeAssistantToolUI` |
-| `apps/operator/src/bootstrap/ai/tool-bindings.ts` | Add display-only tool bindings |
+| `apps/operator/src/bootstrap/ai/tool-bindings.ts`             | Add display-only tool bindings                    |
 
 ### Reuse (no changes)
 
-| File | What |
-|------|------|
-| `features/setup/daoFormation/formation.reducer.ts` | 9-phase FSM |
-| `features/setup/daoFormation/txBuilders.ts` | Transaction argument builders |
-| `features/setup/hooks/useDAOFormation.ts` | wagmi wiring |
-| `features/setup/daoFormation/api.ts` | Server verification client |
-| `app/api/setup/verify/route.ts` | Server verification endpoint |
+| File                                               | What                          |
+| -------------------------------------------------- | ----------------------------- |
+| `features/setup/daoFormation/formation.reducer.ts` | 9-phase FSM                   |
+| `features/setup/daoFormation/txBuilders.ts`        | Transaction argument builders |
+| `features/setup/hooks/useDAOFormation.ts`          | wagmi wiring                  |
+| `features/setup/daoFormation/api.ts`               | Server verification client    |
+| `app/api/setup/verify/route.ts`                    | Server verification endpoint  |
 
 ## Validation
 

@@ -4,12 +4,12 @@
 /**
  * Module: `@cogni/langgraph-graphs/graphs/node-creator/tools`
  * Purpose: Tool IDs for the Node Creator graph.
- * Scope: Display-only tools for rendering interactive cards + existing VCS/repo tools.
+ * Scope: Exports tool capability metadata for node-creator graph. Does NOT define tool contracts or implementations.
  * Invariants:
  *   - SINGLE_SOURCE_OF_TRUTH: THE list of tools the node-creator graph can use
  *   - CAPABILITY_NOT_POLICY: Capabilities, not authorization
  * Side-effects: none
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  * @public
  */
 
@@ -43,7 +43,7 @@ import {
  * - get_current_time: timestamps
  */
 export const NODE_CREATOR_TOOL_IDS = [
-  // Display-only (task.0260)
+  // Display-only (task.0261)
   PROPOSE_NODE_IDENTITY_NAME,
   REQUEST_DAO_FORMATION_NAME,
   PRESENT_PR_NAME,

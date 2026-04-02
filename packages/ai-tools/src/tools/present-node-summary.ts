@@ -4,15 +4,14 @@
 /**
  * Module: `@cogni/ai-tools/tools/present-node-summary`
  * Purpose: Display-only tool that renders a node creation summary card in the chat UI.
- * Scope: AI calls this at the end of node creation to show the final status.
- *   Client renders NodeSummaryCard via makeAssistantToolUI.
+ * Scope: Display-only tool for node summary card rendering. Does NOT create or modify any resources.
  * Invariants:
  *   - TOOL_ID_NAMESPACED: ID is `core__present_node_summary`
  *   - EFFECT_TYPED: effect is `read_only` (pure, no side effects)
  *   - Display-only: exists to create a typed tool-call event for client rendering
  *   - NO LangChain imports
  * Side-effects: none
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  * @public
  */
 
@@ -30,15 +29,22 @@ export const PresentNodeSummaryInputSchema = z.object({
   mission: z.string().describe("One-sentence mission"),
   port: z.number().int().describe("Local dev port"),
   prUrl: z.string().url().describe("Pull request URL"),
-  dnsRecord: z.string().optional().describe("DNS subdomain (e.g., resy.nodes.cognidao.org)"),
+  dnsRecord: z
+    .string()
+    .optional()
+    .describe("DNS subdomain (e.g., resy.nodes.cognidao.org)"),
   daoAddress: z.string().optional().describe("DAO contract address"),
 });
-export type PresentNodeSummaryInput = z.infer<typeof PresentNodeSummaryInputSchema>;
+export type PresentNodeSummaryInput = z.infer<
+  typeof PresentNodeSummaryInputSchema
+>;
 
 export const PresentNodeSummaryOutputSchema = z.object({
   status: z.literal("complete"),
 });
-export type PresentNodeSummaryOutput = z.infer<typeof PresentNodeSummaryOutputSchema>;
+export type PresentNodeSummaryOutput = z.infer<
+  typeof PresentNodeSummaryOutputSchema
+>;
 
 export type PresentNodeSummaryRedacted = PresentNodeSummaryOutput;
 
@@ -61,7 +67,8 @@ export const presentNodeSummaryContract: ToolContract<
   inputSchema: PresentNodeSummaryInputSchema,
   outputSchema: PresentNodeSummaryOutputSchema,
 
-  redact: (output: PresentNodeSummaryOutput): PresentNodeSummaryRedacted => output,
+  redact: (output: PresentNodeSummaryOutput): PresentNodeSummaryRedacted =>
+    output,
   allowlist: ["status"] as const,
 };
 

@@ -60,7 +60,7 @@ node:
 ### Assigned ports
 
 | Node     | Port |
-|----------|------|
+| -------- | ---- |
 | Operator | 3000 |
 | Poly     | 3100 |
 | Template | 3200 |
@@ -140,11 +140,11 @@ pnpm typecheck:{name}
 
 Create `nodes/{name}/graphs/src/graphs/{name}-brain/`:
 
-| File | Purpose |
-|------|---------|
-| `graph.ts` | Graph factory — `createReactAgent` or custom `StateGraph` |
-| `prompts.ts` | System prompt — the brain's personality |
-| `tools.ts` | Tool ID constants for capability lookup |
+| File         | Purpose                                                   |
+| ------------ | --------------------------------------------------------- |
+| `graph.ts`   | Graph factory — `createReactAgent` or custom `StateGraph` |
+| `prompts.ts` | System prompt — the brain's personality                   |
+| `tools.ts`   | Tool ID constants for capability lookup                   |
 
 Export from `nodes/{name}/graphs/src/graphs/index.ts`:
 
@@ -165,6 +165,7 @@ pnpm dev:{name}         # terminal 2: your node
 ```
 
 Check:
+
 - `http://localhost:{port}` loads
 - Branding shows (after styling guide is applied)
 - Auth works (shared cookies across localhost ports)
@@ -172,15 +173,15 @@ Check:
 
 ## Gotchas
 
-| Issue | Fix |
-|-------|-----|
-| `tsconfig.app.json` base path | Must use `../../../tsconfig.base.json` (3 levels up) |
-| `next.config.ts` `outputFileTracingRoot` | Must be `../../../` not `../../` |
-| ~3 GB RAM per node | Each is a full Next.js app; task.0248 fixes this |
-| Biome doesn't lint nodes | By design — catch issues via typecheck |
-| Port collisions | Always check existing assignments first |
-| `node-template` references left behind | Grep: `grep -r "node-template" nodes/{name}/` |
-| Env vars only in `.env.local` | v0 limitation — see `.cursor/commands/env-update.md` for full propagation (CI, Docker, deploy) |
+| Issue                                    | Fix                                                                                            |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `tsconfig.app.json` base path            | Must use `../../../tsconfig.base.json` (3 levels up)                                           |
+| `next.config.ts` `outputFileTracingRoot` | Must be `../../../` not `../../`                                                               |
+| ~3 GB RAM per node                       | Each is a full Next.js app; task.0248 fixes this                                               |
+| Biome doesn't lint nodes                 | By design — catch issues via typecheck                                                         |
+| Port collisions                          | Always check existing assignments first                                                        |
+| `node-template` references left behind   | Grep: `grep -r "node-template" nodes/{name}/`                                                  |
+| Env vars only in `.env.local`            | v0 limitation — see `.cursor/commands/env-update.md` for full propagation (CI, Docker, deploy) |
 
 ## See also
 

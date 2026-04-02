@@ -4,9 +4,7 @@
 /**
  * Module: `@cogni/ai-tools/tools/request-dao-formation`
  * Purpose: Display-only tool that renders a DAO formation card with inline wallet signing.
- * Scope: AI calls this with pre-filled DAO params. Server returns static status.
- *   Client renders DAOFormationCard via makeAssistantToolUI, which uses the existing
- *   useDAOFormation hook for wallet transactions. No server-side I/O in the tool itself.
+ * Scope: Display-only tool for DAO formation card rendering. Does NOT perform wallet signing or modify formation logic.
  * Invariants:
  *   - TOOL_ID_NAMESPACED: ID is `core__request_dao_formation`
  *   - EFFECT_TYPED: effect is `read_only` (tool itself is pure; wallet signing is client-side)
@@ -14,7 +12,7 @@
  *   - FORMATION_LOGIC_UNCHANGED: does NOT modify formation.reducer.ts or txBuilders.ts
  *   - NO LangChain imports
  * Side-effects: none (wallet signing happens client-side, not in this tool)
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  * @public
  */
 
@@ -27,15 +25,27 @@ import type { BoundTool, ToolContract, ToolImplementation } from "../types";
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const RequestDaoFormationInputSchema = z.object({
-  tokenName: z.string().min(1).max(64).describe("Governance token name (e.g., 'Resy Governance')"),
-  tokenSymbol: z.string().min(1).max(10).describe("Token symbol (e.g., 'RESY')"),
+  tokenName: z
+    .string()
+    .min(1)
+    .max(64)
+    .describe("Governance token name (e.g., 'Resy Governance')"),
+  tokenSymbol: z
+    .string()
+    .min(1)
+    .max(10)
+    .describe("Token symbol (e.g., 'RESY')"),
 });
-export type RequestDaoFormationInput = z.infer<typeof RequestDaoFormationInputSchema>;
+export type RequestDaoFormationInput = z.infer<
+  typeof RequestDaoFormationInputSchema
+>;
 
 export const RequestDaoFormationOutputSchema = z.object({
   status: z.literal("awaiting_wallet_action"),
 });
-export type RequestDaoFormationOutput = z.infer<typeof RequestDaoFormationOutputSchema>;
+export type RequestDaoFormationOutput = z.infer<
+  typeof RequestDaoFormationOutputSchema
+>;
 
 export type RequestDaoFormationRedacted = RequestDaoFormationOutput;
 
@@ -43,7 +53,8 @@ export type RequestDaoFormationRedacted = RequestDaoFormationOutput;
 // Contract
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const REQUEST_DAO_FORMATION_NAME = "core__request_dao_formation" as const;
+export const REQUEST_DAO_FORMATION_NAME =
+  "core__request_dao_formation" as const;
 
 export const requestDaoFormationContract: ToolContract<
   typeof REQUEST_DAO_FORMATION_NAME,
@@ -58,7 +69,8 @@ export const requestDaoFormationContract: ToolContract<
   inputSchema: RequestDaoFormationInputSchema,
   outputSchema: RequestDaoFormationOutputSchema,
 
-  redact: (output: RequestDaoFormationOutput): RequestDaoFormationRedacted => output,
+  redact: (output: RequestDaoFormationOutput): RequestDaoFormationRedacted =>
+    output,
   allowlist: ["status"] as const,
 };
 

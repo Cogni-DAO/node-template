@@ -12,7 +12,7 @@
  *   - TOOL_RENDERER_IDEMPOTENT: safe to re-render (no side effects on mount)
  *   - THREAD_REPLAY_SAFE: shows completed state if result is present
  * Side-effects: none (P0); wallet signing in P1
- * Links: work/items/task.0260.node-creation-chat-orchestration.md
+ * Links: work/items/task.0261.node-creation-chat-orchestration.md
  */
 
 import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
