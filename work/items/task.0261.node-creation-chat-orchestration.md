@@ -2,7 +2,7 @@
 id: task.0261
 type: task
 title: "Node creation orchestration — chat-native guided flow"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 2
 estimate: 5
@@ -15,10 +15,10 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.node-formation-ui
-branch:
+branch: worktree-feat+new-node-skill
 pr:
 reviewer:
-revision: 1
+revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-04-01
