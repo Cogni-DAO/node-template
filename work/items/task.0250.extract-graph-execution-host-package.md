@@ -2,7 +2,7 @@
 id: task.0250
 type: task
 title: "Extract @cogni/graph-execution-host package"
-status: needs_closeout
+status: done
 priority: 1
 rank: 21
 estimate: 3
@@ -15,7 +15,7 @@ assignees: []
 credit:
 project: proj.unified-graph-launch
 branch: feat/task-0250-graph-execution-host
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/698
 reviewer:
 revision: 1
 blocked_by:
