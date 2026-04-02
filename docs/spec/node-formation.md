@@ -5,7 +5,7 @@ title: Node Formation Design
 status: draft
 spec_state: draft
 trust: draft
-summary: Node lifecycle from formation (governance identity) through payment activation (operator wallet + Split). Formation via web wizard; activation via child-node CLI.
+summary: Node lifecycle from formation (governance identity) through payment activation (operator wallet + Split). Formation moving from legacy web wizard to chat-native guided flow with HIL interrupts (task.0260). Activation via child-node CLI.
 read_when: Working on DAO formation, the setup wizard, aragon-osx package, or payment activation.
 implements:
 owner: derekg1729
@@ -30,7 +30,40 @@ Formation outputs a repo-spec fragment with `payments.status: pending_activation
 
 ## Goal
 
-Enable any founder to create a fully-verified Cogni DAO node via a 3-field web form and 2 wallet transactions, then activate payment rails via a single CLI command in their own fork.
+Enable any founder to create a fully-verified Cogni DAO node through a unified chat experience — the operator AI guides the human through intake, identity, DAO formation (inline wallet signing), autonomous scaffolding, and PR creation. No page navigation, no copy-paste.
+
+**Legacy goal (P0, achieved):** 3-field web form + 2 wallet transactions → repo-spec YAML.
+**Current goal (task.0260):** Chat-native guided flow with HIL interrupts → complete node with PR + DNS.
+
+## Chat-Native Node Creation (task.0260)
+
+The legacy `/setup/dao` wizard page is being superseded by a chat-native flow where DAO formation happens inline. The formation logic (reducer, tx builders, hooks, verification) is **pure and reusable** — it moves from a wizard page into a chat tool renderer component with zero changes to the underlying code.
+
+### Interrupt Kinds
+
+| Kind | What Renders | Human Action | Resume Data |
+|------|-------------|--------------|-------------|
+| `identity_proposal` | Editable card: name, icon, hue, mission, tokenName, tokenSymbol | Confirm or edit | `{ name, icon, hue, mission, tokenName, tokenSymbol, initialHolder }` |
+| `dao_formation` | Pre-filled formation card with inline wallet signing | Sign 2 transactions | `{ repoSpecYaml, addresses, chainId }` |
+| `pr_review` | PR summary with diff stats + link | Approve or request changes | `{ approved: boolean, feedback?: string }` |
+
+### Field Mutability
+
+In the identity proposal, **all fields become immutable after formation except:**
+
+- `tokenName` — can be updated via governance proposal (on-chain metadata)
+- `tokenSymbol` — can be updated via governance proposal (on-chain metadata)
+
+The node name, icon, hue, and mission are baked into code and branding at scaffolding time. The UI must clearly communicate this distinction so founders understand the commitment.
+
+### Governance Templates (v2)
+
+| Template | Token Supply | Allocation | Voting | Best For |
+|----------|-------------|------------|--------|----------|
+| Standard DAO | 1M | 100% founder | Simple majority, 1h min | Solo founders, MVPs |
+| Multi-Holder | 1M | 50% founder / 30% treasury / 20% contributors | Weighted, 3-day timelock | Teams, communities |
+
+Templates are data-driven config rendered by the IdentityProposalCard. See [task.0260](../../work/items/task.0260.node-creation-chat-orchestration.md) for full design.
 
 ## Non-Goals
 
@@ -407,7 +440,10 @@ OSx v1.4.0 deployments. Hardcoded addresses from [cogni-signal-evm-contracts](ht
 - [Cred Licensing Policy](./cred-licensing-policy.md)
 - [Operator Wallet Spec](./operator-wallet.md) — wallet lifecycle, custody, access control
 - [Web3 OpenRouter Payments Spec](./web3-openrouter-payments.md) — payment math, funding state machine
+- [Human-in-the-Loop Spec](./human-in-the-loop.md) — pause/resume contract for guided workflows
 - [Node Formation Project](../../work/projects/proj.node-formation-ui.md)
 - [Node Formation Guide](../guides/node-formation-guide.md)
 - [Operator Wallet Setup Guide](../guides/operator-wallet-setup.md)
+- [Chat-Native Node Creation (task.0260)](../../work/items/task.0260.node-creation-chat-orchestration.md) — unified chat flow replacing wizard
+- [Creating a New Node Guide](../guides/creating-a-new-node.md) — technical scaffolding steps
 - [ROADMAP](../../ROADMAP.md)
