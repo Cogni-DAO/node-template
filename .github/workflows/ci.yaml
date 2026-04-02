@@ -258,9 +258,10 @@ jobs:
       # Service role (BYPASSRLS) - matches DATABASE_SERVICE_URL user
       APP_DB_SERVICE_USER: user_service
       APP_DB_SERVICE_PASSWORD: service_password
-      # Database name
+      # Database name (COGNI_NODE_DBS overrides compose default which creates 3 node DBs)
       APP_DB_NAME: cogni_template_test
       POSTGRES_DB: cogni_template_test
+      COGNI_NODE_DBS: cogni_template_test
       # Image naming base (APP_IMAGE/MIGRATOR_IMAGE derived in step below)
       IMAGE_NAME: cogni-template-ci
       IMAGE_TAG: ${{ github.sha }}
