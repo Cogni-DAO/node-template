@@ -20,14 +20,14 @@ import type {
   PaymentAttempt,
   PaymentAttemptStatus,
   PaymentErrorCode,
-} from "@/core";
+} from "@cogni/node-core";
 
 // Re-export core types so adapters don't import from @/core directly
 export type {
   PaymentAttempt,
   PaymentAttemptStatus,
   PaymentErrorCode,
-} from "@/core";
+} from "@cogni/node-core";
 
 /**
  * Port-level error thrown when payment attempt is not found

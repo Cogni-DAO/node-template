@@ -12,14 +12,7 @@
  * @public
  */
 
-import {
-  createIntentAttempt,
-  createPaymentAttempt,
-  FakeClock,
-} from "@tests/_fakes";
-import { describe, expect, it } from "vitest";
-
-import type { PaymentAttemptStatus } from "@/core";
+import type { PaymentAttemptStatus } from "@cogni/node-core";
 import {
   isIntentExpired,
   isTerminalState,
@@ -31,7 +24,13 @@ import {
   PAYMENT_INTENT_TTL_MS,
   PENDING_UNVERIFIED_TTL_MS,
   toClientVisibleStatus,
-} from "@/core";
+} from "@cogni/node-core";
+import {
+  createIntentAttempt,
+  createPaymentAttempt,
+  FakeClock,
+} from "@tests/_fakes";
+import { describe, expect, it } from "vitest";
 
 describe("core/payments/rules", () => {
   describe("isValidTransition", () => {

@@ -11,14 +11,13 @@
  * Links: Tests @/core/accounts domain
  */
 
-import { describe, expect, it } from "vitest";
-
 import {
   type Account,
   ensureHasCredits,
   hasSufficientCredits,
   InsufficientCreditsError,
-} from "@/core";
+} from "@cogni/node-core";
+import { describe, expect, it } from "vitest";
 
 describe("Account Domain Model", () => {
   const mockAccount: Account = {

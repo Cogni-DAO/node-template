@@ -12,8 +12,8 @@
  * @public
  */
 
+import type { PaymentErrorCode, PaymentStatus } from "@cogni/node-core";
 import { z } from "zod";
-import type { PaymentErrorCode, PaymentStatus } from "@/types/payments";
 
 // Zod enum from canonical type
 const paymentStatusEnum: z.ZodType<PaymentStatus> = z.enum([

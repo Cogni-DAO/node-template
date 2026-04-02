@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { PaymentErrorCode, PaymentStatus } from "@/types/payments";
+import type { PaymentErrorCode, PaymentStatus } from "@cogni/node-core";
 
 export type UiPhase = "READY" | "PENDING" | "DONE";
 export type UiResult = "SUCCESS" | "ERROR" | null;

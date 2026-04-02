@@ -235,6 +235,7 @@
         "packages/temporal-workflows/vitest.config.ts",
         "packages/work-items/tsup.config.ts",
         "packages/work-items/vitest.config.ts",
+        "packages/node-core/tsup.config.ts",
         "services/scheduler-worker/tsup.config.ts",
         "services/scheduler-worker/vitest.config.ts",
         "vitest.workspace.ts",

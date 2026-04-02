@@ -13,7 +13,7 @@
  */
 
 import type { AiExecutionErrorCode } from "@cogni/ai-core";
-import type { Message } from "@/core";
+import type { Message } from "@cogni/node-core";
 
 // Re-export types used in port interfaces
 export type { AiExecutionErrorCode } from "@cogni/ai-core";
@@ -25,7 +25,7 @@ export {
   type LlmErrorKind,
   normalizeErrorToExecutionCode,
 } from "@cogni/ai-core";
-export type { Message } from "@/core";
+export type { Message } from "@cogni/node-core";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Tool Types (OpenAI-compatible format for LiteLLM)

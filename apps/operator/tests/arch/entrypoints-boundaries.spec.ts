@@ -143,15 +143,12 @@ describe("Entry point enforcement", () => {
       expect(stdout).toContain("no-internal-ports-imports");
     });
 
-    it("blocks internal core file imports", () => {
-      const { exitCode, stdout } = runDepCruise([
-        "src/app/__arch_probes__/fail_entrypoint_imports_core_internal.ts",
-      ]);
-      if (exitCode === 0) {
-        console.log("STDOUT:", stdout);
-      }
-      expect(exitCode).not.toBe(0);
-      expect(stdout).toContain("no-internal-core-imports");
+    // Skipped: shared core domain moved to @cogni/node-core package.
+    // Internal import boundary is now enforced by package.json exports field,
+    // not dep-cruiser filesystem rules. When nodes add their own core/ domain
+    // files, re-add a probe targeting those node-local files.
+    it.skip("blocks internal core file imports (enforced by package exports)", () => {
+      // Probe removed: src/app/__arch_probes__/fail_entrypoint_imports_core_internal.ts
     });
 
     it("blocks internal adapter file imports", () => {

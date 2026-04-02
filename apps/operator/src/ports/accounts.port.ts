@@ -17,7 +17,7 @@
  */
 
 import type { GraphId } from "@cogni/ai-core";
-import type { ChargeReason, SourceSystem } from "@/types/billing";
+import type { ChargeReason, SourceSystem } from "@cogni/node-core";
 
 /**
  * Port-level error thrown by adapters when billing account has insufficient credits

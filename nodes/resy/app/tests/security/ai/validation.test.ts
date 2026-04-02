@@ -14,6 +14,13 @@
  */
 
 import {
+  ChatErrorCode,
+  ChatValidationError,
+  filterSystemMessages,
+  type Message,
+  normalizeMessageRole,
+} from "@cogni/node-core";
+import {
   createLongMessage,
   createSystemMessage,
   createUserMessage,
@@ -22,15 +29,7 @@ import {
 } from "@tests/_fakes/ai/fakes";
 import errorCases from "@tests/_fixtures/ai/error-cases.json";
 import { describe, expect, it } from "vitest";
-
 import { chatCompletionsContract } from "@/contracts/ai.completions.v1.contract";
-import {
-  ChatErrorCode,
-  ChatValidationError,
-  filterSystemMessages,
-  type Message,
-  normalizeMessageRole,
-} from "@/core";
 import {
   type MessageDto,
   toCoreMessages,

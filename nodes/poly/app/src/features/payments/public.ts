@@ -12,8 +12,8 @@
  * @public
  */
 
-export { creditsToUsd, usdCentsToCredits } from "@/core";
-export type { PaymentFlowPhase, PaymentFlowState } from "@/types/payments";
+export type { PaymentFlowPhase, PaymentFlowState } from "@cogni/node-core";
+export { creditsToUsd, usdCentsToCredits } from "@cogni/node-core";
 export type { PaymentsFeatureError } from "./errors";
 export {
   AuthUserNotFoundError,

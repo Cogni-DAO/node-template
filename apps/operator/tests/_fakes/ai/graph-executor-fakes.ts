@@ -11,12 +11,12 @@
  * @public
  */
 
+import type { AiEvent } from "@cogni/node-core";
 import type {
   GraphExecutorPort,
   GraphRunRequest,
   GraphRunResult,
 } from "@/ports";
-import type { AiEvent } from "@/types/ai-events";
 
 /**
  * Create a fake graph executor that yields all events immediately.

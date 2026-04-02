@@ -12,7 +12,10 @@
  * @public
  */
 
-import { calculateRevenueShareBonus, usdCentsToCredits } from "@/core";
+import {
+  calculateRevenueShareBonus,
+  usdCentsToCredits,
+} from "@cogni/node-core";
 import type { AccountService, ServiceAccountService } from "@/ports";
 import {
   COGNI_SYSTEM_BILLING_ACCOUNT_ID,

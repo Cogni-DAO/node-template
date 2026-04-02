@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { Message } from "@/core";
+import type { Message } from "@cogni/node-core";
 import { TEST_MODEL_ID } from "./test-constants";
 
 /**

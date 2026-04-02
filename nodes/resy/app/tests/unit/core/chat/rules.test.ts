@@ -13,15 +13,6 @@
  */
 
 import {
-  createConversation,
-  createLongMessage,
-  createMixedRoleConversation,
-  createMultiByteMessage,
-  createUserMessage,
-} from "@tests/_fakes/ai/fakes";
-import { describe, expect, it } from "vitest";
-
-import {
   assertMessageLength,
   ChatErrorCode,
   ChatValidationError,
@@ -29,7 +20,15 @@ import {
   MAX_MESSAGE_CHARS,
   normalizeMessageRole,
   trimConversationHistory,
-} from "@/core";
+} from "@cogni/node-core";
+import {
+  createConversation,
+  createLongMessage,
+  createMixedRoleConversation,
+  createMultiByteMessage,
+  createUserMessage,
+} from "@tests/_fakes/ai/fakes";
+import { describe, expect, it } from "vitest";
 
 describe("core/chat/rules", () => {
   describe("assertMessageLength", () => {

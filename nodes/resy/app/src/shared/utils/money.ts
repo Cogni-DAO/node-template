@@ -12,7 +12,7 @@
  * @public
  */
 
-import { MAX_PAYMENT_CENTS, MIN_PAYMENT_CENTS } from "@/types/payments";
+import { MAX_PAYMENT_CENTS, MIN_PAYMENT_CENTS } from "@cogni/node-core";
 
 const MIN_AMOUNT_USD = MIN_PAYMENT_CENTS / 100;
 const MAX_AMOUNT_USD = MAX_PAYMENT_CENTS / 100;

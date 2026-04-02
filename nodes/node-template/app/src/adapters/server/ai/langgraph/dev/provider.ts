@@ -18,6 +18,7 @@
  */
 
 import { LANGGRAPH_CATALOG } from "@cogni/langgraph-graphs";
+import type { AiEvent } from "@cogni/node-core";
 // biome-ignore lint/style/noRestrictedImports: SDK allowed in langgraph dev adapter per OFFICIAL_SDK_ONLY invariant
 import type { Client } from "@langchain/langgraph-sdk";
 import type { Logger } from "pino";
@@ -30,7 +31,6 @@ import type {
   GraphRunResult,
 } from "@/ports";
 import { makeLogger } from "@/shared/observability";
-import type { AiEvent } from "@/types/ai-events";
 
 import {
   type SdkStreamChunk,

@@ -2,7 +2,7 @@
 id: task.0248
 type: task
 title: "Deduplicate node platform: capability extractions + thin app shell"
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 5
 estimate: 5
@@ -17,11 +17,10 @@ assignees: derekg1729
 credit:
 project: proj.operator-plane
 branch: feat/task-0248-node-platform-extraction
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/693
 reviewer:
 revision: 2
-blocked_by:
-  - task.0257
+blocked_by: []
 deploy_verified: false
 created: 2026-04-01
 updated: 2026-04-02
@@ -102,11 +101,13 @@ Results recorded in spec.node-app-shell.
 
 ### Phase 1: Pure capability extractions (no risk, immediate dedup)
 
-- [ ] Create `packages/node-contracts/` — move 55 Zod contract files
-- [ ] Create `packages/node-core/` — move 24 core + 7 type files
-- [ ] Create `packages/node-shared/` — move 81 pure shared utility files (minus hooks)
+- [x] Create `packages/node-core/` — move 16 core + 5 type files → DONE (PR: feat/task-0248-node-platform-extraction)
+  - All 4 apps rewired: `@/core` → `@cogni/node-core`, `@/types/*` → `@cogni/node-core`
+  - Original files deleted (no shims). -4,870 lines.
+  - `pnpm check` all 11 checks pass.
+- [ ] Create `packages/node-contracts/` — move ~45 Zod contract files
+- [ ] Create `packages/node-shared/` — move ~81 pure shared utility files (minus hooks)
 - [ ] Move `shared/hooks/useIsMobile.ts` to app-local
-- [ ] Rewire all 4 apps to import from new packages
 - [ ] `pnpm check` passes on all apps
 
 ### Phase 2: Graph execution extraction (task.0250, consumed by scheduler-worker)
@@ -138,6 +139,18 @@ Results recorded in spec.node-app-shell.
 - [ ] Audit 139 non-AI adapters: which existing capability packages should absorb them?
 - [ ] Move adapters to their capability homes (DB → db-client, payments → operator-wallet, etc.)
 - [ ] Remaining app-specific adapters stay in app
+
+## Review Notes
+
+### Node apps must preserve hexagonal architecture
+
+Extracting shared core to `@cogni/node-core` does NOT eliminate the `@/core` layer. Each node app retains `src/core/public.ts` as its local barrel, which re-exports from the package AND is the extension point for node-specific domain models (e.g., `core/reservations/` for resy).
+
+`@/core` remains a valid hexagonal layer. Arch probes and dep-cruiser rules that enforce the core barrel boundary still apply to node-local core files.
+
+### Arch probe `blocks internal core file imports` — needs update
+
+The probe at `app/__arch_probes__/fail_entrypoint_imports_core_internal.ts` imports `@/core/chat/model` which no longer exists locally (moved to package). This probe's boundary is now enforced by package exports instead of dep-cruiser. Fix: remove the probe and test case, add comment that package exports enforce this boundary. When nodes add their own core files, a new probe should be added targeting those.
 
 ## Validation
 

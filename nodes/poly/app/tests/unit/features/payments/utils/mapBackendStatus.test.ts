@@ -12,10 +12,9 @@
  * @public
  */
 
+import type { PaymentErrorCode, PaymentStatus } from "@cogni/node-core";
 import { describe, expect, it } from "vitest";
-
 import { mapBackendStatus } from "@/features/payments/utils/mapBackendStatus";
-import type { PaymentErrorCode, PaymentStatus } from "@/types/payments";
 
 describe("mapBackendStatus", () => {
   describe("PaymentStatus mapping", () => {

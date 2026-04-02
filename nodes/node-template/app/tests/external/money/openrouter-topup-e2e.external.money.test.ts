@@ -20,6 +20,7 @@ import { users } from "@cogni/db-schema";
 import { providerFundingAttempts } from "@cogni/db-schema/billing";
 import { ACCOUNT } from "@cogni/financial-ledger";
 import { createTigerBeetleAdapter } from "@cogni/financial-ledger/adapters";
+import { MIN_PAYMENT_CENTS } from "@cogni/node-core";
 import {
   type NextAuthSessionCookie,
   siweLogin,
@@ -35,7 +36,6 @@ import { privateKeyToAccount } from "viem/accounts";
 import { base } from "viem/chains";
 import { beforeAll, describe, expect, it } from "vitest";
 import { CHAIN_ID } from "@/shared/web3/chain";
-import { MIN_PAYMENT_CENTS } from "@/types/payments";
 
 // ── ABI ──────────────────────────────────────────────────────────────
 

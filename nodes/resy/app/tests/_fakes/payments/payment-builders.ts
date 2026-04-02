@@ -16,8 +16,11 @@ import type {
   PaymentAttempt,
   PaymentAttemptStatus,
   PaymentErrorCode,
-} from "@/core";
-import { PAYMENT_INTENT_TTL_MS, PENDING_UNVERIFIED_TTL_MS } from "@/core";
+} from "@cogni/node-core";
+import {
+  PAYMENT_INTENT_TTL_MS,
+  PENDING_UNVERIFIED_TTL_MS,
+} from "@cogni/node-core";
 import { CHAIN_ID, USDC_TOKEN_ADDRESS } from "@/shared/web3/chain";
 
 /**

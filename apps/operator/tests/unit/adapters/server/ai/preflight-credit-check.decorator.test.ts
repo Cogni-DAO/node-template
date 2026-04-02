@@ -14,6 +14,7 @@
  * @public
  */
 
+import type { AiEvent } from "@cogni/node-core";
 import { describe, expect, it, vi } from "vitest";
 import { PreflightCreditCheckDecorator } from "@/adapters/server/ai/preflight-credit-check.decorator";
 import type {
@@ -24,7 +25,6 @@ import type {
   PreflightCreditCheckFn,
 } from "@/ports";
 import { InsufficientCreditsPortError } from "@/ports";
-import type { AiEvent } from "@/types/ai-events";
 
 const TEST_BILLING_ACCOUNT_ID = "ba-1";
 

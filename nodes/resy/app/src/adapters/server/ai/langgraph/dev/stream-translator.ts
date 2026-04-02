@@ -16,7 +16,6 @@
  */
 
 import type { GraphId } from "@cogni/ai-core";
-import { makeLogger } from "@/shared/observability";
 import type {
   AiEvent,
   AssistantFinalEvent,
@@ -24,9 +23,10 @@ import type {
   TextDeltaEvent,
   ToolCallResultEvent,
   ToolCallStartEvent,
+  UsageFact,
   UsageReportEvent,
-} from "@/types/ai-events";
-import type { UsageFact } from "@/types/usage";
+} from "@cogni/node-core";
+import { makeLogger } from "@/shared/observability";
 
 const log = makeLogger({ component: "langgraph-server-stream-translator" });
 

@@ -17,6 +17,12 @@
  */
 
 import type { GraphId } from "@cogni/ai-core";
+import type {
+  AiEvent,
+  TextDeltaEvent,
+  UsageFact,
+  UsageReportEvent,
+} from "@cogni/node-core";
 import { trace } from "@opentelemetry/api";
 import type { Logger } from "pino";
 import { getExecutionScope } from "@/adapters/server/ai/execution-scope";
@@ -33,12 +39,6 @@ import {
 } from "@/ports";
 import type { RequestContext } from "@/shared/observability";
 import { makeLogger } from "@/shared/observability";
-import type {
-  AiEvent,
-  TextDeltaEvent,
-  UsageReportEvent,
-} from "@/types/ai-events";
-import type { UsageFact } from "@/types/usage";
 
 /**
  * Dependencies for InProcCompletionUnitAdapter.

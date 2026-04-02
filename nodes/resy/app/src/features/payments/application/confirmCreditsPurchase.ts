@@ -27,9 +27,9 @@ import {
   USDC_SCALE,
   uuidToBigInt,
 } from "@cogni/financial-ledger";
+import { calculateOpenRouterTopUp } from "@cogni/node-core";
 import type { Logger } from "pino";
 import { v5 as uuidv5 } from "uuid";
-import { calculateOpenRouterTopUp } from "@/core";
 import {
   type CreditsConfirmInput,
   confirmCreditsPayment,

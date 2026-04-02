@@ -12,7 +12,7 @@
  * @public
  */
 
-import type { Message } from "@/core";
+import type { Message } from "@cogni/node-core";
 import type { LlmCaller, LlmCompletionResult, LlmService } from "@/ports";
 
 export interface FakeLlmOptions {

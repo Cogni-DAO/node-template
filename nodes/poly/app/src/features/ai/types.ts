@@ -4,7 +4,7 @@
 /**
  * Module: `@features/ai/types`
  * Purpose: Internal type definitions for AI feature streaming and tool lifecycle.
- * Scope: Re-exports AiEvent types from @/types/ai-events, re-exports tool types from @cogni/ai-tools. Feature-internal, NOT in shared/.
+ * Scope: Re-exports AiEvent types from @cogni/node-core, re-exports tool types from @cogni/ai-tools. Feature-internal, NOT in shared/.
  * Invariants:
  *   - AiEvents are the ONLY output type from ai_runtime
  *   - toolCallId must be stable across start→result lifecycle
@@ -12,7 +12,7 @@
  *   - UsageReportEvent carries UsageFact for billing subscriber (never to UI)
  * Side-effects: none (types only)
  * Notes: Per AI_SETUP_SPEC.md P1 invariant AI_RUNTIME_EMITS_AIEVENTS, GRAPH_EXECUTION.md
- * Links: ai_runtime.ts, tool-runner.ts, AI_SETUP_SPEC.md, GRAPH_EXECUTION.md, @/types/ai-events.ts
+ * Links: ai_runtime.ts, tool-runner.ts, AI_SETUP_SPEC.md, GRAPH_EXECUTION.md, @cogni/node-core.ts
  * @internal
  */
 
@@ -32,7 +32,7 @@ export type {
   ToolCallResultEvent,
   ToolCallStartEvent,
   UsageReportEvent,
-} from "@/types/ai-events";
+} from "@cogni/node-core";
 
 // Import shared execution error code from ports layer
 import type { AiExecutionErrorCode } from "@/ports";

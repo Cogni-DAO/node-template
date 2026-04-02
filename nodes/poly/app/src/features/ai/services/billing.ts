@@ -18,6 +18,7 @@
  * @public
  */
 
+import type { RunContext, UsageFact } from "@cogni/node-core";
 import type { Logger } from "pino";
 import type { AccountService } from "@/ports";
 import { EVENT_NAMES } from "@/shared/observability";
@@ -26,8 +27,6 @@ import {
   billingInvariantViolationTotal,
   billingMissingCostDeferredTotal,
 } from "@/shared/observability/server/metrics";
-import type { RunContext } from "@/types/run-context";
-import type { UsageFact } from "@/types/usage";
 import { calculateDefaultLlmCharge } from "./llmPricingPolicy";
 
 // ============================================================================

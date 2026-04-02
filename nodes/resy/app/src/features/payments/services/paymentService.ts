@@ -16,7 +16,7 @@ import type {
   PaymentAttempt,
   PaymentAttemptStatus,
   PaymentErrorCode,
-} from "@/core";
+} from "@cogni/node-core";
 import {
   isIntentExpired,
   isValidPaymentAmount,
@@ -27,7 +27,7 @@ import {
   PAYMENT_INTENT_TTL_MS,
   toClientVisibleStatus,
   usdCentsToRawUsdc,
-} from "@/core";
+} from "@cogni/node-core";
 import type {
   AccountService,
   Clock,

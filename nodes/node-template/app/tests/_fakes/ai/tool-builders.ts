@@ -19,9 +19,8 @@ import type {
 } from "@cogni/ai-core";
 import { createStaticToolSourceFromRecord } from "@cogni/ai-core";
 import type { ToolCapabilities } from "@cogni/ai-tools";
+import type { Message, MessageToolCall } from "@cogni/node-core";
 import { z } from "zod";
-
-import type { Message, MessageToolCall } from "@/core";
 import type {
   AiEvent,
   BoundTool,
