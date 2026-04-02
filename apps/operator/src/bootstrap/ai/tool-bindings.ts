@@ -50,9 +50,17 @@ import {
   KNOWLEDGE_WRITE_NAME,
   MARKET_LIST_NAME,
   METRICS_QUERY_NAME,
+  PRESENT_NODE_SUMMARY_NAME,
+  PRESENT_PR_NAME,
+  PROPOSE_NODE_IDENTITY_NAME,
+  presentNodeSummaryImplementation,
+  presentPrImplementation,
+  proposeNodeIdentityImplementation,
   REPO_LIST_NAME,
   REPO_OPEN_NAME,
   REPO_SEARCH_NAME,
+  REQUEST_DAO_FORMATION_NAME,
+  requestDaoFormationImplementation,
   SCHEDULE_LIST_NAME,
   SCHEDULE_MANAGE_NAME,
   VCS_CREATE_BRANCH_NAME,
@@ -118,6 +126,14 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     [KNOWLEDGE_WRITE_NAME]: createKnowledgeWriteImplementation({
       knowledgeCapability: deps.knowledgeCapability,
     }) as AnyToolImplementation,
+    // Node creation display-only tools (task.0260) — pure, no capabilities
+    [PROPOSE_NODE_IDENTITY_NAME]:
+      proposeNodeIdentityImplementation as AnyToolImplementation,
+    [REQUEST_DAO_FORMATION_NAME]:
+      requestDaoFormationImplementation as AnyToolImplementation,
+    [PRESENT_PR_NAME]: presentPrImplementation as AnyToolImplementation,
+    [PRESENT_NODE_SUMMARY_NAME]:
+      presentNodeSummaryImplementation as AnyToolImplementation,
 
     // I/O tools (require capability injection)
     [MARKET_LIST_NAME]: createMarketListImplementation({
