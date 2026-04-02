@@ -226,7 +226,7 @@ See: `docs/spec/multi-node-tenancy.md`
 | Rename apps/web → apps/operator                   | Done            | task.0246 |
 | Node-template + poly + resy platform apps         | In Review       | PR #682   |
 | Per-node billing pipeline (DB+auth+routing)       | Needs Closeout  | task.0256 |
-| Fix node identity via repo-spec                   | Needs Implement | task.0257 |
+| Fix node identity via repo-spec                   | Done            | task.0257 |
 | Multi-node stack test infrastructure              | Needs Design    | task.0258 |
 | Multi-node CI/CD deployment                       | Needs Design    | task.0247 |
 | Extract shared platform package                   | Needs Design    | task.0248 |
