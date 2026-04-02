@@ -15,7 +15,7 @@ project: proj.agentic-project-management
 branch: worktree-floating-wondering-bear
 pr: "https://github.com/Cogni-DAO/node-template/pull/687"
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-04-01

@@ -41,10 +41,15 @@ export interface GitHubVcsAdapterConfig {
 
 export class GitHubVcsAdapter implements VcsCapability {
   private readonly config: GitHubVcsAdapterConfig;
+  private readonly appAuth: ReturnType<typeof createAppAuth>;
   private readonly installationCache = new Map<string, number>();
 
   constructor(config: GitHubVcsAdapterConfig) {
     this.config = config;
+    this.appAuth = createAppAuth({
+      appId: config.appId,
+      privateKey: config.privateKey,
+    });
   }
 
   async listPrs(params: {
@@ -95,20 +100,31 @@ export class GitHubVcsAdapter implements VcsCapability {
       }
     );
 
-    // Fetch check runs + combined status in parallel
-    const [checksResponse, statusResponse] = await Promise.all([
-      octokit.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", {
-        owner: params.owner,
-        repo: params.repo,
-        ref: pr.head.sha,
-        per_page: 100,
-      }),
-      octokit.request("GET /repos/{owner}/{repo}/commits/{ref}/status", {
-        owner: params.owner,
-        repo: params.repo,
-        ref: pr.head.sha,
-      }),
-    ]);
+    // Fetch check runs, combined status, and reviews in parallel
+    const [checksResponse, statusResponse, reviewsResponse] = await Promise.all(
+      [
+        octokit.request("GET /repos/{owner}/{repo}/commits/{ref}/check-runs", {
+          owner: params.owner,
+          repo: params.repo,
+          ref: pr.head.sha,
+          per_page: 100,
+        }),
+        octokit.request("GET /repos/{owner}/{repo}/commits/{ref}/status", {
+          owner: params.owner,
+          repo: params.repo,
+          ref: pr.head.sha,
+        }),
+        octokit.request(
+          "GET /repos/{owner}/{repo}/pulls/{pull_number}/reviews",
+          {
+            owner: params.owner,
+            repo: params.repo,
+            pull_number: params.prNumber,
+            per_page: 100,
+          }
+        ),
+      ]
+    );
 
     const checks: CheckInfo[] = [
       // Modern check runs
@@ -149,9 +165,24 @@ export class GitHubVcsAdapter implements VcsCapability {
       !pending &&
       checks.every((c) => c.conclusion === "success");
 
-    // Extract review decision from PR data
-    // GitHub REST API doesn't return reviewDecision directly — we use mergeable_state as a proxy
-    const reviewDecision: string | null = null; // Would need GraphQL for this
+    // Compute review decision from individual reviews.
+    // Take the latest review per reviewer; if any APPROVED and none CHANGES_REQUESTED → approved.
+    const latestByReviewer = new Map<string, string>();
+    for (const review of reviewsResponse.data as Array<{
+      user: { login: string } | null;
+      state: string;
+    }>) {
+      if (review.user && review.state !== "COMMENTED") {
+        latestByReviewer.set(review.user.login, review.state);
+      }
+    }
+    const reviewStates = [...latestByReviewer.values()];
+    let reviewDecision: string | null = null;
+    if (reviewStates.includes("CHANGES_REQUESTED")) {
+      reviewDecision = "CHANGES_REQUESTED";
+    } else if (reviewStates.includes("APPROVED")) {
+      reviewDecision = "APPROVED";
+    }
 
     return {
       prNumber: pr.number,
@@ -274,12 +305,7 @@ export class GitHubVcsAdapter implements VcsCapability {
     const cached = this.installationCache.get(cacheKey);
     if (cached) return cached;
 
-    const auth = createAppAuth({
-      appId: this.config.appId,
-      privateKey: this.config.privateKey,
-    });
-
-    const { token } = await auth({ type: "app" });
+    const { token } = await this.appAuth({ type: "app" });
     const response = await fetch(
       `https://api.github.com/repos/${owner}/${repo}/installation`,
       {
