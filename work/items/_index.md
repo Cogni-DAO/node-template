@@ -19,7 +19,7 @@
 | 0 | 1 | 5 | needs_closeout | task.0245 | Multi-node architecture — nodes/ directory, per-node graph packages, dep-cruiser boundaries | CI/CD & Services GitOps | proj.cicd-services-gitops |
 | 0 | 1 | 5 | needs_merge | task.0256 | Per-node billing pipeline: DB isolation + auth isolation + LiteLLM callback routing | Operator Plane | proj.operator-plane |
 | 0 | 1 | 3 | needs_merge | task.0257 | Fix node identity — wire node_id from repo-spec, not env var slug | Operator Plane | proj.operator-plane |
-| 0 | 2 | 3 | needs_design | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
+| 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 3 | 2 | needs_design | bug.0062 | OpenClaw gateway: single webchat message can trigger multi-call GOVERN loop (call storm) | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 0 | 3 | 3 | needs_merge | bug.0232 | LlmService port silently drops tools — Codex adapter ignores params.tools, MCP tools invisible to Codex agents | Agentic Interoperability | proj.agentic-interop |
 | 0 | 4 | 2 | needs_design | bug.0037 | Gateway proxy billing records $0 cost — x-litellm-response-cost header absent for streaming | Unified Graph Launch | proj.unified-graph-launch |

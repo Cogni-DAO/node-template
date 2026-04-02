@@ -2,7 +2,7 @@
 id: task.0258
 type: task
 title: "Multi-node stack test infrastructure — per-node billing + data isolation tests"
-status: needs_design
+status: needs_merge
 priority: 0
 rank: 2
 estimate: 3
@@ -14,7 +14,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.operator-plane
-branch:
+branch: feat/task-0258-multi-node-stack-tests
 pr:
 reviewer:
 revision: 0
@@ -22,7 +22,7 @@ blocked_by:
   - task.0257
 deploy_verified: false
 created: 2026-04-01
-updated: 2026-04-01
+updated: 2026-04-02
 labels: [testing, multi-node, stack-tests, billing]
 external_refs:
 ---
@@ -101,7 +101,9 @@ test helpers live in the shared package, nodes only add node-specific test cases
 
 ## Validation
 
-- [ ] `pnpm test:stack:multi` runs 7 tests against `dev:stack:full`
-- [ ] All 7 tests pass with live nodes on :3000, :3100, :3300
-- [ ] Cross-node isolation proven: poly receipt absent from resy DB
-- [ ] `pnpm check:fast` passes (no lint/type regressions)
+- [x] `pnpm test:stack:multi` runs 6 tests against `dev:stack:test:full`
+- [x] All 6 tests pass with live nodes on :3000, :3100, :3300
+- [x] Cross-node isolation proven: poly receipt absent from operator + resy DBs
+- [x] `pnpm check:fast` passes (no lint/type regressions)
+- [x] CI `COGNI_NODE_ENDPOINTS` uses UUID (matches task.0257 repo-spec identity)
+- [ ] Multi-node CI job: deferred to task.0247 (needs node Docker images)
