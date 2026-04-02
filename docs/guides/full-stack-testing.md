@@ -226,11 +226,11 @@ The LiteLLM callback didn't fire. Check:
 
 ### "Node not reachable at localhost:3100"
 
-Multi-node tests require `pnpm dev:stack:full` running. Check:
+Multi-node tests require `pnpm dev:stack:test:full` running. Check:
 
 1. All 3 node processes are running (check terminal output)
-2. Per-node databases exist: `pnpm db:setup:nodes`
-3. Per-node env vars are set in `.env.local` (DATABASE_URL_POLY, AUTH_SECRET_POLY, etc.)
+2. Per-node test databases exist: `pnpm dev:stack:test:full:setup`
+3. Per-node env vars are set in `.env.test` (DATABASE_URL_POLY, AUTH_SECRET_POLY, etc.)
 
 ### Tests pass individually but fail together
 
