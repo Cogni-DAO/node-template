@@ -98,12 +98,16 @@ GHCR_USERNAME="${GHCR_DEPLOY_USERNAME:-Cogni-1729}"
 log_step "Phase 2: Generate ephemeral secrets"
 
 TMPDIR=$(mktemp -d)
-trap 'rm -rf "$TMPDIR"' EXIT
+# Don't auto-delete TMPDIR — keys saved to .local/ immediately after generation
+mkdir -p "$REPO_ROOT/.local"
 
 # SSH keypair
 log_info "Generating ephemeral SSH keypair..."
 ssh-keygen -t ed25519 -f "$TMPDIR/deploy_key" -C "cogni-test-vm" -N "" -q
 cp "$TMPDIR/deploy_key.pub" "$PROVISION_DIR/keys/cogni_template_test_deploy.pub"
+# Save immediately so we don't lose the key if tofu fails
+cp "$TMPDIR/deploy_key" "$REPO_ROOT/.local/test-vm-key"
+chmod 600 "$REPO_ROOT/.local/test-vm-key"
 
 # SOPS age keypair
 log_info "Generating ephemeral SOPS age keypair..."
@@ -204,7 +208,7 @@ cat > "$TFVARS" << EOF
 environment          = "preview"
 vm_name_prefix       = "cogni-test"
 project_id           = "${CHERRY_PROJECT_ID}"
-plan                 = "B1-8-8gb-80s-shared"
+plan                 = "B1-6-6gb-100s-shared"
 region               = "LT-Siauliai"
 public_key_path      = "keys/cogni_template_test_deploy.pub"
 ghcr_deploy_username = "${GHCR_USERNAME}"
@@ -213,7 +217,9 @@ cogni_repo_ref       = "${COGNI_REPO_REF}"
 EOF
 log_info "Wrote $TFVARS"
 
-export TF_VAR_ssh_private_key="$(cat "$TMPDIR/deploy_key")"
+# Pass empty SSH key to skip tofu's built-in health check (count = ssh_key != "" ? 1 : 0).
+# Our Phase 4 loop handles the bootstrap wait more robustly (retries, SSH, progress).
+export TF_VAR_ssh_private_key=""
 export TF_VAR_ghcr_deploy_token="$GHCR_TOKEN"
 export TF_VAR_sops_age_private_key="$AGE_PRIVATE_KEY"
 
@@ -243,9 +249,7 @@ tofu apply tfplan
 VM_IP=$(tofu output -raw vm_host)
 log_info "VM provisioned at: $VM_IP"
 
-# Save connection info
-cp "$TMPDIR/deploy_key" "$REPO_ROOT/.local/test-vm-key"
-chmod 600 "$REPO_ROOT/.local/test-vm-key"
+# Save connection info (key already saved in phase 2)
 echo "$VM_IP" > "$REPO_ROOT/.local/test-vm-ip"
 echo "$AGE_PRIVATE_KEY" > "$REPO_ROOT/.local/test-vm-age-key"
 
@@ -328,7 +332,10 @@ POLY_DOMAIN=${POLY_DOMAIN}
 RESY_DOMAIN=${RESY_DOMAIN}
 ENVEOF"
 
+# All required vars must be in .env — Docker Compose validates ALL services at parse time,
+# even when only starting specific ones. Services we won't start get placeholder values.
 ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-runtime/.env << 'ENVEOF'
+# Infra services (actually used)
 APP_ENV=${APP_ENV}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
 POSTGRES_ROOT_USER=${POSTGRES_ROOT_USER}
@@ -345,6 +352,21 @@ APP_DB_SERVICE_USER=${APP_DB_SERVICE_USER}
 APP_DB_SERVICE_PASSWORD=${APP_DB_SERVICE_PASSWORD}
 COGNI_NODE_ENDPOINTS=${COGNI_NODE_ENDPOINTS}
 BILLING_INGEST_TOKEN=${BILLING_INGEST_TOKEN}
+# App service vars (placeholders — services not started, but compose validates all)
+AUTH_SECRET=${AUTH_SECRET}
+EVM_RPC_URL=${EVM_RPC_URL}
+DATABASE_URL=${DATABASE_URL}
+DATABASE_SERVICE_URL=${DATABASE_SERVICE_URL}
+POSTHOG_API_KEY=${POSTHOG_API_KEY}
+POSTHOG_HOST=${POSTHOG_HOST}
+OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
+OPENCLAW_GITHUB_RW_TOKEN=placeholder-not-started
+SCHEDULER_WORKER_IMAGE=placeholder:not-started
+MIGRATOR_IMAGE=placeholder:not-started
+APP_IMAGE=placeholder:not-started
+APP_BASE_URL=https://${DOMAIN}
+COGNI_REPO_URL=${COGNI_REPO_URL}
+COGNI_REPO_REF=${COGNI_REPO_REF}
 ENVEOF"
 
 # Start services
@@ -446,7 +468,7 @@ echo "════════════════════════�
 echo "  DEPLOYMENT STATUS REPORT"
 echo "═══════════════════════════════════════════════════════════════════"
 echo ""
-echo "  Environment: ${APP_ENV} | VM: ${VM_IP} | Plan: B1-8-8gb-80s-shared"
+echo "  Environment: ${APP_ENV} | VM: ${VM_IP} | Plan: B1-6-6gb-100s-shared"
 echo "  Timestamp: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 echo "  Branch: ${BRANCH}"
 echo ""
