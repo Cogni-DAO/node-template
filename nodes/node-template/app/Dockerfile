@@ -15,7 +15,7 @@ RUN apk add --no-cache g++ make python3
 # 1. Copy dependency manifests first (maximizes install layer caching)
 #    --parents preserves directory structure with wildcards (BuildKit feature)
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
-COPY --parents apps/operator/package.json ./
+COPY --parents nodes/node-template/app/package.json ./
 COPY --parents packages/*/package.json ./
 COPY --parents nodes/*/app/package.json ./
 COPY --parents nodes/*/packages/*/package.json ./
@@ -54,10 +54,11 @@ ARG AUTH_SECRET_BUILD="build-time-placeholder-min-32-chars-xxxxxxxxxxxxxxxx"
 ENV AUTH_SECRET=${AUTH_SECRET_BUILD}
 
 # Build the web app
-RUN --mount=type=cache,id=next-cache,target=/app/apps/operator/.next/cache,sharing=locked \
-    pnpm --filter operator build
+RUN --mount=type=cache,id=next-cache-node-template,target=/app/nodes/node-template/app/.next/cache,sharing=locked \
+    pnpm --filter @cogni/node-template-app build
 
 # Migrator – minimal image for database migrations via drizzle-kit
+# All nodes share one migration set from operator (single DB schema)
 FROM base AS migrator
 WORKDIR /app
 
@@ -65,8 +66,8 @@ WORKDIR /app
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/drizzle.config.ts ./
-COPY --from=builder /app/apps/operator/src/shared/db ./apps/operator/src/shared/db
-COPY --from=builder /app/apps/operator/src/adapters/server/db/migrations ./apps/operator/src/adapters/server/db/migrations
+COPY --from=builder /app/nodes/operator/app/src/shared/db ./nodes/operator/app/src/shared/db
+COPY --from=builder /app/nodes/operator/app/src/adapters/server/db/migrations ./nodes/operator/app/src/adapters/server/db/migrations
 
 # Run canonical migration script (drizzle-kit migrate)
 CMD ["pnpm", "db:migrate:container"]
@@ -81,17 +82,17 @@ RUN addgroup --system --gid 1001 nodejs \
   && apk add --no-cache curl ripgrep git
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3200
 ENV HOSTNAME=0.0.0.0
 ENV LOG_FORMAT=json
 
-LABEL org.opencontainers.image.title="cogni-template"
+LABEL org.opencontainers.image.title="cogni-node-template"
 
 # Copy standalone bundle (includes production dependencies)
-# outputFileTracingRoot=../../ means standalone output mirrors monorepo structure
-COPY --from=builder --chown=nextjs:nodejs /app/apps/operator/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/apps/operator/.next/static ./apps/operator/.next/static
-COPY --from=builder --chown=nextjs:nodejs /app/apps/operator/public ./apps/operator/public
+# outputFileTracingRoot=../../../ means standalone output mirrors monorepo structure
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/.next/static ./nodes/node-template/app/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/public ./nodes/node-template/app/public
 
 # Codex CLI for BYO-AI ChatGPT execution.
 # Standalone output tracing can't detect spawned binaries.
@@ -105,14 +106,14 @@ RUN corepack enable pnpm && pnpm add -g @openai/codex@0.116.0 @openai/codex-sdk@
 COPY --from=builder --chown=nextjs:nodejs /tmp/codex-native/@openai/ ./node_modules/@openai/
 
 # MCP server config — parseMcpConfigFromEnv reads config/mcp.servers.json relative to CWD.
-# Next.js standalone does process.chdir(__dirname) → CWD becomes /app/apps/operator at runtime.
-COPY --from=builder --chown=nextjs:nodejs /app/config/mcp.servers.json ./apps/operator/config/mcp.servers.json
+# Next.js standalone does process.chdir(__dirname) → CWD becomes /app/nodes/node-template/app at runtime.
+COPY --from=builder --chown=nextjs:nodejs /app/config/mcp.servers.json ./nodes/node-template/app/config/mcp.servers.json
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 3200
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
-  CMD curl -fsS http://localhost:3000/livez || exit 1
+  CMD curl -fsS http://localhost:3200/livez || exit 1
 
-CMD ["node", "apps/operator/server.js"]
+CMD ["node", "nodes/node-template/app/server.js"]
