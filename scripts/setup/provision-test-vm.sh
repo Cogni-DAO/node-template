@@ -511,8 +511,22 @@ ssh $SSH_OPTS root@"$VM_IP" "
   echo 'ApplicationSets applied — Argo syncing'
 "
 
-log_info "Waiting 120s for Argo to sync all apps..."
-sleep 120
+# Poll for apps to sync (up to 5 min)
+log_info "Waiting for Argo to sync apps..."
+for attempt in $(seq 1 30); do
+  HEALTHY=$(ssh $SSH_OPTS root@"$VM_IP" 'kubectl -n argocd get applications -o jsonpath="{range .items[*]}{.status.health.status}{\" \"}{end}"' 2>/dev/null)
+  HEALTHY_COUNT=$(echo "$HEALTHY" | tr ' ' '\n' | grep -c "Healthy" || true)
+  TOTAL=$(echo "$HEALTHY" | tr ' ' '\n' | grep -c '.' || true)
+  log_info "  Apps healthy: ${HEALTHY_COUNT}/${TOTAL} (${attempt}0s)"
+  if [[ "$HEALTHY_COUNT" -ge 3 ]]; then
+    log_info "Core apps healthy!"
+    break
+  fi
+  if [[ $attempt -eq 30 ]]; then
+    log_warn "Timeout waiting for apps — check scorecard for details"
+  fi
+  sleep 10
+done
 
 # ══════════════════════════════════════════════════════════════
 # Phase 8: Deployment Status Report
