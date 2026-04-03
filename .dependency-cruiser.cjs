@@ -253,8 +253,10 @@ module.exports = {
     },
 
     // nodes/ can import within itself (node-local)
+    // Exclude operator/app/src/ — operator has full layer enforcement via srcLayers rules above.
+    // Other nodes get blanket pass until they gain layer enforcement.
     {
-      from: { path: "^nodes/" },
+      from: { path: "^nodes/(?!operator/app/src/)" },
       to: { path: "^nodes/" },
     },
 
