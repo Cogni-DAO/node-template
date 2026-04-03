@@ -17,4 +17,4 @@ data:
   TEMPORAL_NAMESPACE: "cogni-preview"
   TEMPORAL_TASK_QUEUE: "scheduler-tasks"
   REDIS_URL: "redis://redis-external:6379"
-  COGNI_REPO_PATH: "/repo/current"
+  COGNI_REPO_PATH: ""
