@@ -2,7 +2,7 @@
 id: task.0248
 type: task
 title: "Deduplicate node platform: capability extractions + thin app shell"
-status: needs_merge
+status: done
 priority: 1
 rank: 5
 estimate: 5
@@ -152,24 +152,15 @@ Results recorded in spec.node-app-shell.
 - [x] `pnpm check:fast` + CI static/unit/component passes; `next build` passes
 - Layout extraction consciously deferred — sidebar/header depend on shadcn vendor primitives via `@/components`. NodeAppConfig extension points are established but not yet consumed; layout migration is the follow-up.
 
-### Phase 3b: Wire NodeAppConfig into sidebar (follow-up)
+### Phase 3b: Wire NodeAppConfig into sidebar → SUPERSEDED by task.0274
 
-- [ ] Sidebar reads navItems/externalLinks from `useNodeAppConfig()` instead of hardcoded constants
-- [ ] Remove duplicate NAV_ITEMS/EXTERNAL_LINKS from each AppSidebar.tsx
-- [ ] node-config.ts becomes the single source for node identity
+### Phase 4: Workspace restructure → SUPERSEDED by task.0273
 
-### Phase 4: Node workspace restructure
+Scope expanded: operator moves to `nodes/operator/app/` (unifying all nodes under one convention).
 
-- [ ] Rename `nodes/*/app/` → `nodes/*/apps/web/`
-- [ ] Rename `nodes/*/graphs/` → `nodes/*/packages/graphs/`
-- [ ] Update `pnpm-workspace.yaml` globs
-- [ ] `pnpm check` passes
+### Phase 5: Adapter audit (deferred)
 
-### Phase 5: Adapter audit (deferred, per-adapter decision)
-
-- [ ] Audit 139 non-AI adapters: which existing capability packages should absorb them?
-- [ ] Move adapters to their capability homes (DB → db-client, payments → operator-wallet, etc.)
-- [ ] Remaining app-specific adapters stay in app
+~86 adapter files per app remain duplicated. Diffs between apps are drift from parallel development, not intentional per-node differences. Low priority — adapters work correctly as-is, dedup is a maintenance concern.
 
 ## Review Notes
 
