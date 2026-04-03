@@ -147,6 +147,9 @@ services:
     networks:
       - internal
       - sandbox-internal
+    # Expose to host for k3s pods (EndpointSlice → 127.0.0.1:4000)
+    ports:
+      - "127.0.0.1:4000:4000"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY}
@@ -184,6 +187,9 @@ services:
       - "autoheal=true"
     networks:
       - internal
+    # Expose to host for k3s pods (EndpointSlice → 127.0.0.1:6379)
+    ports:
+      - "127.0.0.1:6379:6379"
     command:
       - "redis-server"
       - "--save"
@@ -206,6 +212,9 @@ services:
       - "autoheal=true"
     networks:
       - internal
+    # Expose to host for k3s pods (EndpointSlice → 127.0.0.1:5432)
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       POSTGRES_DB: postgres
       POSTGRES_USER: ${POSTGRES_ROOT_USER}

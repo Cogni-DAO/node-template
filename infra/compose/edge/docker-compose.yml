@@ -19,10 +19,13 @@ services:
     ports:
       - "80:80"
       - "443:443"
+    # Allow Caddy to reach k3s NodePorts on the host
     extra_hosts:
       - "host.docker.internal:host-gateway"
     environment:
       - DOMAIN=${DOMAIN}
+      - POLY_DOMAIN=${POLY_DOMAIN:-}
+      - RESY_DOMAIN=${RESY_DOMAIN:-}
     volumes:
       - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
