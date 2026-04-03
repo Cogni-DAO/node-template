@@ -146,7 +146,7 @@ services:
 
   litellm:
     build:
-      context: ../../litellm
+      context: ../../images/litellm
       dockerfile: Dockerfile
     image: cogni-litellm:dev
     container_name: litellm
