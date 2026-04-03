@@ -28,6 +28,7 @@ spec:
       containers:
         - name: migrate
           image: ghcr.io/cogni-dao/node-template-migrator:placeholder
+          command: ["pnpm", "db:migrate:direct"]
           env:
             - name: DATABASE_URL
               valueFrom:
