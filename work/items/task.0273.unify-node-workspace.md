@@ -15,7 +15,7 @@ assignees: derekg1729
 credit:
 project: proj.operator-plane
 branch: feat/node-workspace-unify
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/705
 reviewer:
 revision: 1
 blocked_by: []
