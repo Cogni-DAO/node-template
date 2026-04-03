@@ -1,100 +1,83 @@
 ---
 id: handoff.deploy-scorecard
-title: "Deploy scorecard — compose infra deployed, k8s sync blocked on 3 issues"
+title: "Deploy scorecard — operator boots to /livez, 2 blockers remain"
 branch: deploy/multi-node
 vm_ip: 84.32.109.222
 ssh: "ssh -i .claude/worktrees/deploy-scorecard/.local/test-vm-key root@84.32.109.222"
 created: 2026-04-03
+updated: 2026-04-03
 ---
 
-# Deploy Scorecard Handoff
+# Deploy Scorecard
 
-## Current State
+## Wins (resolved this session)
 
-**VM is live** at `84.32.109.222` with Docker + k3s + Argo CD bootstrapped.
-
-### What's working (green)
-
-| Component | Status | Details |
-|-----------|--------|---------|
-| Postgres | **UP** | Port 5432 on host, 3 node DBs + litellm provisioned |
-| Temporal | **UP** | Port 7233 on host, auto-setup complete |
-| LiteLLM | **UP** | Port 4000 on host, custom image built |
-| Redis | **UP** | Port 6379 on host |
-| Caddy | **UP** | Ports 80/443, multi-node Caddyfile deployed |
-| k3s | **UP** | Single node, Ready |
-| Argo CD | **UP** | 5 Applications generated from catalog |
-| k8s secrets | **UP** | All 5 secrets created directly on cluster |
-| DB provisioning | **UP** | cogni_operator, cogni_poly, cogni_resy, litellm |
-
-### What's blocked (3 issues)
-
-#### 1. EndpointSlice rejects 127.0.0.1 (CRITICAL)
-
-**Error:** `EndpointSlice "postgres-1" is invalid: endpoints[0].addresses[0]: Invalid value: "127.0.0.1": may not be in the loopback range`
-
-**Root cause:** k8s validates EndpointSlice addresses and rejects loopback IPs. The entire bridge design (`infra/k8s/base/node-app/external-services.yaml`) uses `127.0.0.1` as the base, with overlays patching it per-env.
-
-**Fix options:**
-- **Option A (quick):** Use the node's actual internal IP (e.g., `10.42.0.1` or the VM's public IP `84.32.109.222`). Patch overlays to use `$(hostname -I | awk '{print $1}')`. k3s pods can reach host ports via the node IP.
-- **Option B (proper):** Use `hostNetwork: true` on pods + regular k8s Services pointing to compose containers. Removes the EndpointSlice pattern entirely.
-- **Option C (simplest):** Use k8s `ExternalName` services instead of EndpointSlice. `ExternalName` can point to a hostname, not an IP. But Postgres/Temporal use TCP not HTTP, so DNS-based routing has caveats.
-
-**Recommended:** Option A. Get the node IP from `kubectl get node -o jsonpath='{.status.addresses[?(@.type=="InternalIP")].address}'` and patch all EndpointSlice overlays.
-
-#### 2. GHCR image pull 403 Forbidden
-
-**Error:** `failed to authorize: failed to fetch oauth token: 403 Forbidden`
-
-**Root cause:** The provision script passes `dummy-ghcr-token-for-test` as the GHCR deploy token. The k3s `registries.yaml` (written at bootstrap via cloud-init) has this dummy token. Real private images need a valid `read:packages` PAT.
-
-**Fix options:**
-- Provide a real GHCR PAT with `read:packages` scope via `GHCR_DEPLOY_TOKEN` env var
-- Or make the GHCR repo public for testing
-- Or build images locally and import via `k3s ctr images import`
-
-#### 3. Placeholder image tags
-
-The overlays use placeholder tags like `staging-placeholder-operator`. Even with valid GHCR auth, these images don't exist. Need either:
-- Real CI-built images promoted via `scripts/ci/promote-k8s-image.sh`
-- Or local builds imported to k3s containerd
-
-## Files Changed (on `deploy/multi-node`)
-
-| File | Change |
+| What | Detail |
 |------|--------|
-| `scripts/setup/provision-test-vm.sh` | Unified one-command: provision + compose deploy + k8s secrets + scorecard |
-| `infra/compose/runtime/docker-compose.yml` | Host port bindings for Postgres/LiteLLM/Redis |
-| `infra/compose/edge/docker-compose.yml` | `host.docker.internal` + POLY/RESY domain env |
-| `infra/compose/edge/configs/Caddyfile.tmpl` | Multi-node routing to k8s NodePorts |
+| Compose infra 7/7 healthy | postgres, temporal, litellm, redis, caddy, temporal-postgres, autoheal |
+| k3s + Argo CD | Single node Ready, 5 Applications generated, watching `deploy/multi-node` |
+| Scheduler-worker | **1/1 Running, Healthy** — first green k8s workload |
+| DB migrations (3 nodes) | All Completed — cogni_operator, cogni_poly, cogni_resy |
+| DNS live | test.cognidao.org, poly-test.cognidao.org, resy-test.cognidao.org → 84.32.109.222 |
+| EndpointSlice loopback fix | 127.0.0.1 → VM IP in all overlays + compose ports on 0.0.0.0 |
+| GHCR auth working | k3s registries.yaml has real PAT |
+| k8s secrets created | 5/5 with correct VM IP in DATABASE_URLs |
+| secretRef namePrefix | Overlay patches fix kustomize limitation |
+| APP_ENV validation | preview → test |
+| Operator /livez | Returns 200 `{"status":"alive"}` |
+| Provision script unified | One command: provision + compose + secrets + scorecard |
+
+## Blockers (RED — 2 remaining)
+
+### 1. GHCR repo name mismatch (poly/resy images)
+
+**Error:** `ghcr.io/cogni-dao/node-template:staging-placeholder-poly: not found`
+
+**Root cause:** User built and pushed to `ghcr.io/cogni-dao/cogni-template:staging-placeholder-poly` (old repo name). But k8s overlays reference `ghcr.io/cogni-dao/node-template` (new repo name after GitHub rename). The GitHub redirect works for `git clone` and `docker pull` from CLI, but k3s containerd doesn't follow the redirect.
+
+**Fix:** Rebuild and push to the correct repo name:
+```bash
+docker buildx build --platform linux/amd64 -f nodes/poly/app/Dockerfile --target runner \
+  -t ghcr.io/cogni-dao/node-template:staging-placeholder-poly --push .
+
+docker buildx build --platform linux/amd64 -f nodes/resy/app/Dockerfile --target runner \
+  -t ghcr.io/cogni-dao/node-template:staging-placeholder-resy --push .
+```
+
+### 2. git-sync sidecar missing from k8s Deployment
+
+**Error:** `COGNI_REPO_ROOT missing package.json and .git: /tmp`
+
+**Root cause:** The Compose stack has a `git-sync` service + `repo_data` volume that clones the repo to `/repo/current`. The k8s Deployment base doesn't have this — no initContainer, no sidecar, no volume. The app's env validation requires `COGNI_REPO_PATH` to point to a real git repo with `package.json` and `.git/`.
+
+**Fix options:**
+- **A) Add git-sync initContainer to k8s base** — same pattern as compose, needs `GIT_READ_TOKEN` secret. ~30 min.
+- **B) Make COGNI_REPO_PATH optional in app** — code change to server-env.ts validation. Would need rebuild of all images.
+- **C) Add emptyDir + initContainer that does `git clone --depth=1`** — lighter than git-sync, one-shot.
+
+**Decision needed:** Which approach? Option A is the proper port of compose behavior. Option B is cleaner long-term but requires app code change + image rebuild.
+
+## Stable Green
+
+| Component | Status |
+|-----------|--------|
+| Compose infra (7 svc) | ALL HEALTHY |
+| k3s node | Ready |
+| scheduler-worker | 1/1 Running |
+| DNS (3 records) | Resolving |
+| DB migrations (3) | Completed |
+| k8s secrets (5) | Created with VM IP |
+| Caddy routing | Configured (502 until app pods healthy) |
+| Operator /livez | 200 OK |
 
 ## Connection Info
 
 ```bash
-# SSH (key in worktree .local/)
 ssh -i .claude/worktrees/deploy-scorecard/.local/test-vm-key root@84.32.109.222
-
-# Secrets
-cat .claude/worktrees/deploy-scorecard/.local/test-vm-secrets.env
-
-# Cherry credentials
-cat .env.operator  # CHERRY_AUTH_TOKEN, CHERRY_PROJECT_ID, OPENROUTER_API_KEY
-
-# Destroy VM when done
-cd infra/provision/cherry/base
-source .env.operator && export CHERRY_AUTH_TOKEN
-export TF_VAR_ssh_private_key="" TF_VAR_ghcr_deploy_token="dummy" TF_VAR_sops_age_private_key="dummy"
-tofu workspace select test && tofu destroy -var-file=terraform.test.tfvars
+# Secrets: .claude/worktrees/deploy-scorecard/.local/test-vm-secrets.env
+# Creds: .env.operator
 ```
-
-## Next Steps (priority order)
-
-1. **Fix EndpointSlice IPs** — replace `127.0.0.1` with node internal IP in all overlays
-2. **Provide GHCR PAT** — or build/push real images to GHCR
-3. **Promote real images** — run `promote-k8s-image.sh` with actual digests
-4. **Verify Argo sync** — all 5 apps should go Synced/Healthy
-5. **Produce green scorecard** — the report template is in the provision script Phase 7
 
 ## Cost
 
-VM is running at ~€0.07/hr. **Destroy when done** to avoid charges.
+VM running at ~€0.07/hr since 2026-04-03T04:15Z. **Destroy when done.**
