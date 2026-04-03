@@ -144,19 +144,49 @@ scripts/ci/promote-k8s-image.sh \
 
 This updates the Kustomize overlay. Argo CD auto-syncs within 3 minutes.
 
-### 6. Health Verification
+### 6. Health Verification (Full Deployment Validation)
+
+Run ALL checks. /readyz 200 is necessary but NOT sufficient — apps can pass health probes while crashing for users.
 
 ```bash
-# Pod status
+# ── Tier 1: Infrastructure (must pass) ──────────────────────────
+# Pod status — all pods 1/1 Running, no CrashLoopBackOff
 ssh -i $SSH_KEY root@$VM_IP 'kubectl -n cogni-staging get pods'
 
-# App health (once Caddy is configured)
-curl -fsS https://test.cognidao.org/livez
-curl -fsS https://poly-test.cognidao.org/livez
-
-# Argo sync status
+# Argo sync — all apps Synced + Healthy
 ssh -i $SSH_KEY root@$VM_IP 'kubectl -n argocd get applications -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status'
+
+# ── Tier 2: Health probes ───────────────────────────────────────
+for url in https://test.cognidao.org https://poly-test.cognidao.org https://resy-test.cognidao.org; do
+  echo "$url/livez  → $(curl -sk -o /dev/null -w '%{http_code}' $url/livez)"
+  echo "$url/readyz → $(curl -sk -o /dev/null -w '%{http_code}' $url/readyz)"
+done
+
+# ── Tier 3: App actually works (catches client-side crashes) ────
+# Homepage returns HTML without error div
+for url in https://test.cognidao.org https://poly-test.cognidao.org https://resy-test.cognidao.org; do
+  BODY=$(curl -sk "$url" 2>/dev/null | head -100)
+  if echo "$BODY" | grep -q 'Application error'; then
+    echo "❌ $url — client-side crash detected"
+  else
+    echo "✅ $url — homepage renders"
+  fi
+done
+
+# ── Tier 4: Data flowing (observability) ────────────────────────
+# Check Grafana Loki for recent logs from k8s pods
+# TODO: Use Grafana MCP to query:
+#   {namespace="cogni-staging"} |= "level" | json | level="info" | last 5m
+
+# Check Temporal for system AI runs
+# TODO: ssh to VM, temporal workflow list --namespace cogni-preview
+
+# ── Tier 5: Agent connectivity (a2a) ───────────────────────────
+# TODO: POST to system agent endpoint, verify response
+# TODO: Verify billing callback pipeline (LiteLLM → node → charge_receipt)
 ```
+
+**Known issue (bug.0276):** Apps may pass livez/readyz but crash client-side due to missing COGNI_REPO_ROOT (no git-sync sidecar in k8s). The COGNI_REPO_PATH optional fix (#708) works for the OLD image but the NEW CI-built image may have stricter validation.
 
 ### 7. Rollback
 
