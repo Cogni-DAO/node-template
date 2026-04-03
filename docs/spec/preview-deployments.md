@@ -281,6 +281,16 @@ This is not blocking for MVP but must be designed before previews are available 
 7. Controller restart reconstructs state from Docker labels (no orphans, no leaked DBs)
 8. Migrator failure aborts preview (app never starts)
 
+## Node Sovereignty Model
+
+Nodes share the monorepo during development for velocity (shared platform packages, shared CI, shared infra). When a node "launches" via the `provisionNode` workflow (task.0202), it graduates to its **own GitHub repo** forked from the template — with its own repo-spec, DAO identity, git history, and Dolt knowledge store.
+
+**Why not git submodules:** Submodules create recursive clone headaches, stale SHA pins, and broken tooling. More importantly, submodules make the operator responsible for pinning every node's SHA, which is the opposite of node sovereignty. The fork model gives each node independent git+dolt+dao identity without coupling back to the operator.
+
+**The DNA strand (git + Dolt + DAO):** Each node's identity lives in its forked repo: `.cogni/repo-spec.yaml` (DAO contract, chain, wallet), Dolt-versioned knowledge store, and per-node billing account. These travel with the fork. The operator monorepo is the template factory, not the permanent home.
+
+**Preview environments** deploy from the monorepo (all nodes in one CI run). Production nodes deploy from their own repos (independent CI, independent Argo overlays).
+
 ## Dependencies
 
 - task.0247 (merged infra/ reorg + container-runtime package)

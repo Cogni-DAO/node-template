@@ -24,6 +24,8 @@ Full node lifecycle: DAO formation (done) -> zero-touch provisioning (this proje
 
 **North star:** Founder clicks "Launch Node" -> node is live. Shared cluster, namespace per node, Akash-forward.
 
+**Node sovereignty model:** Nodes share the operator monorepo during development (shared platform packages, shared CI). When a node launches via `provisionNode` (task.0202), it graduates to its own GitHub repo forked from the template — carrying its repo-spec (DAO identity), Dolt knowledge store, and billing account. No git submodules — the fork model gives sovereignty without coupling. Preview environments deploy from the monorepo; production nodes deploy from their own repos.
+
 > Research: [On-Chain Entity Formation (OtoCo)](../../docs/research/onchain-entity-formation-otoco.md) — OSS evaluation of OtoCo, KaliDAO, MIDAO for legal entity wrapping. Aragon remains the governance layer; OtoCo is complementary (legal identity only).
 
 ## Roadmap
