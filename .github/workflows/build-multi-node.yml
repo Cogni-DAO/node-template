@@ -206,42 +206,61 @@ jobs:
           echo "  scheduler-worker: $SW_DIGEST"
 
       - name: Update overlay digests
-        env:
-          GITHUB_SHA: ""
         run: |
+          # Map branch → overlay environment
+          case "${{ github.ref_name }}" in
+            canary)   OVERLAY_ENV=canary ;;
+            staging)  OVERLAY_ENV=preview ;;
+            main)     OVERLAY_ENV=production ;;
+            *)        echo "Unknown branch for overlay promotion"; exit 1 ;;
+          esac
+          echo "Promoting to overlay: $OVERLAY_ENV"
+
           scripts/ci/promote-k8s-image.sh \
+            --env "$OVERLAY_ENV" \
             --app operator \
             --digest "${{ steps.digests.outputs.operator }}" \
             --migrator-digest "${{ steps.digests.outputs.migrator }}"
 
           scripts/ci/promote-k8s-image.sh \
+            --env "$OVERLAY_ENV" \
             --app poly \
             --digest "${{ steps.digests.outputs.poly }}" \
             --migrator-digest "${{ steps.digests.outputs.migrator }}"
 
           scripts/ci/promote-k8s-image.sh \
+            --env "$OVERLAY_ENV" \
             --app resy \
             --digest "${{ steps.digests.outputs.resy }}" \
             --migrator-digest "${{ steps.digests.outputs.migrator }}"
 
           scripts/ci/promote-k8s-image.sh \
+            --env "$OVERLAY_ENV" \
             --app scheduler-worker \
             --digest "${{ steps.digests.outputs.scheduler_worker }}"
 
       - name: Commit and push overlay updates
         run: |
+          # Map branch → overlay environment (same as above)
+          case "${{ github.ref_name }}" in
+            canary)   OVERLAY_ENV=canary ;;
+            staging)  OVERLAY_ENV=preview ;;
+            main)     OVERLAY_ENV=production ;;
+            *)        OVERLAY_ENV=canary ;;
+          esac
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          git add infra/k8s/overlays/staging/
+          git add infra/k8s/overlays/${OVERLAY_ENV}/
 
           if git diff --cached --quiet; then
             echo "No overlay changes (digests unchanged)"
           else
             SHORT_SHA=$(echo "$GITHUB_SHA" | cut -c1-8)
-            git commit -m "chore(cd): promote staging overlays to ${SHORT_SHA} [skip ci]"
+            git commit -m "chore(cd): promote ${OVERLAY_ENV} overlays to ${SHORT_SHA} [skip ci]"
             git push origin "HEAD:${{ github.ref_name }}"
-            echo "✅ Overlay digests updated"
+            echo "✅ Overlay digests updated for ${OVERLAY_ENV}"
           fi
 
   # ── Verify deployment ──────────────────────────────────────────
