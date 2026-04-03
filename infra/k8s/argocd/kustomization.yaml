@@ -24,3 +24,5 @@ resources:
 patches:
   # Add ksops sidecar to repo-server for SOPS/age secret decryption
   - path: repo-server-patch.yaml
+  # 30s reconciliation for fast dev iteration (default is 180s)
+  - path: argocd-cm-patch.yaml
