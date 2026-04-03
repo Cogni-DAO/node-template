@@ -25,9 +25,10 @@ jobs:
     environment: integration
     env:
       VM_HOST: ${{ secrets.VM_HOST }}
-      OPERATOR_URL: https://test.cognidao.org
-      POLY_URL: https://poly-test.cognidao.org
-      RESY_URL: https://resy-test.cognidao.org
+      DOMAIN: ${{ vars.DOMAIN }}
+      OPERATOR_URL: https://${{ vars.DOMAIN }}
+      POLY_URL: https://poly-${{ vars.DOMAIN }}
+      RESY_URL: https://resy-${{ vars.DOMAIN }}
     steps:
       - uses: actions/checkout@v4
 
