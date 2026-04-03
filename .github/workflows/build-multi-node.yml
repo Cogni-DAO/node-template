@@ -35,7 +35,10 @@ jobs:
       - name: Set image metadata
         id: meta
         run: |
-          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          # Canonical GHCR package name. github.repository returns the redirect
+          # (node-template) but GHCR stores as cogni-template. docker push follows
+          # redirects but imagetools inspect does not.
+          IMAGE_NAME="ghcr.io/cogni-dao/cogni-template"
           IMAGE_TAG="preview-${GITHUB_SHA}"
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT
@@ -90,7 +93,10 @@ jobs:
       - name: Set image metadata
         id: meta
         run: |
-          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          # Canonical GHCR package name. github.repository returns the redirect
+          # (node-template) but GHCR stores as cogni-template. docker push follows
+          # redirects but imagetools inspect does not.
+          IMAGE_NAME="ghcr.io/cogni-dao/cogni-template"
           IMAGE_TAG="preview-${GITHUB_SHA}"
           echo "image_name=$IMAGE_NAME" >> $GITHUB_OUTPUT
           echo "image_tag=$IMAGE_TAG" >> $GITHUB_OUTPUT

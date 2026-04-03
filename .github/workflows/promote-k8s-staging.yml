@@ -45,7 +45,8 @@ jobs:
         env:
           SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
-          IMAGE_NAME=$(echo "ghcr.io/${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          # Canonical GHCR name (github.repository redirects node-template, GHCR stores cogni-template)
+          IMAGE_NAME="ghcr.io/cogni-dao/cogni-template"
           TAG="preview-${SHA}"
 
           resolve() {
