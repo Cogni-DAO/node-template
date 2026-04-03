@@ -2,7 +2,7 @@
 id: task.0279
 type: task
 title: "Node-aware execution routing — nodeId in workflow input + per-node API dispatch"
-status: needs_design
+status: needs_closeout
 priority: 1
 rank: 3
 estimate: 2
