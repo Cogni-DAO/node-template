@@ -139,6 +139,10 @@ pnpm --filter operator build
 pnpm check:docs
 ```
 
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0273.handoff.md)
+
 ## Notes
 
 - This subsumes task.0248 Phase 4 (workspace restructure). The original Phase 4 planned `nodes/*/app/` → `nodes/*/apps/web/` rename — that's deferred; current `app/` convention is fine for deploy.
