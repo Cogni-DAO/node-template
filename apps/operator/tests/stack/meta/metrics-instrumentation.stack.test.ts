@@ -86,7 +86,7 @@ function findSample(
     if (s.name !== name) return false;
     // Filter out default labels when comparing
     const sampleLabelKeys = Object.keys(s.labels).filter(
-      (k) => k !== "app" && k !== "env"
+      (k) => k !== "app" && k !== "env" && k !== "node_id"
     );
     const targetLabelKeys = Object.keys(labels);
     if (sampleLabelKeys.length !== targetLabelKeys.length) return false;
