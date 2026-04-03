@@ -213,10 +213,10 @@ export const serverSchema = z.object({
     .url()
     .default("http://scheduler-worker:9000"),
 
-  // Repo access (in-process ripgrep) — required, no default
-  // Must be explicitly set in every environment (.env.local, CI, compose)
-  // to prevent green-CI / broken-prod blind spots from silent cwd() fallback
-  COGNI_REPO_PATH: z.string().min(1),
+  // Repo access (in-process ripgrep) — optional.
+  // When set, must point to a valid repo root (package.json + .git).
+  // When unset, repo tools (search/read) are disabled gracefully.
+  COGNI_REPO_PATH: optionalString,
   // SHA override for mounts without .git (e.g., git-sync worktree)
   COGNI_REPO_SHA: optionalString,
 
@@ -256,8 +256,8 @@ export const serverSchema = z.object({
 });
 
 type ServerEnv = z.infer<typeof serverSchema> & {
-  /** Validated repo root path (resolved from COGNI_REPO_PATH) */
-  COGNI_REPO_ROOT: string;
+  /** Validated repo root path (resolved from COGNI_REPO_PATH). Undefined when repo access disabled. */
+  COGNI_REPO_ROOT: string | undefined;
   isDev: boolean;
   isTest: boolean;
   isProd: boolean;
@@ -315,20 +315,23 @@ export function serverEnv(): ServerEnv {
         }
       }
 
-      // Resolve COGNI_REPO_ROOT from required COGNI_REPO_PATH (no cwd fallback)
-      const COGNI_REPO_ROOT = parsed.COGNI_REPO_PATH;
-      // Boot validation: path must exist and look like a repo root
-      if (!existsSync(COGNI_REPO_ROOT)) {
-        throw new Error(`COGNI_REPO_ROOT does not exist: ${COGNI_REPO_ROOT}`);
-      }
-      if (
-        !existsSync(join(COGNI_REPO_ROOT, "package.json")) &&
-        !existsSync(join(COGNI_REPO_ROOT, ".cogni", "repo-spec.yaml")) &&
-        !existsSync(join(COGNI_REPO_ROOT, ".git"))
-      ) {
-        throw new Error(
-          `COGNI_REPO_ROOT missing package.json, .cogni/repo-spec.yaml, and .git: ${COGNI_REPO_ROOT}`
-        );
+      // Resolve COGNI_REPO_ROOT from optional COGNI_REPO_PATH.
+      // When unset, repo tools are disabled — no crash, no fallback.
+      let COGNI_REPO_ROOT: string | undefined;
+      if (parsed.COGNI_REPO_PATH) {
+        COGNI_REPO_ROOT = parsed.COGNI_REPO_PATH;
+        if (!existsSync(COGNI_REPO_ROOT)) {
+          throw new Error(`COGNI_REPO_ROOT does not exist: ${COGNI_REPO_ROOT}`);
+        }
+        if (
+          !existsSync(join(COGNI_REPO_ROOT, "package.json")) &&
+          !existsSync(join(COGNI_REPO_ROOT, ".cogni", "repo-spec.yaml")) &&
+          !existsSync(join(COGNI_REPO_ROOT, ".git"))
+        ) {
+          throw new Error(
+            `COGNI_REPO_ROOT missing package.json, .cogni/repo-spec.yaml, and .git: ${COGNI_REPO_ROOT}`
+          );
+        }
       }
 
       ENV = {
