@@ -5,16 +5,37 @@
  * Module: `@shared/observability/server/metrics`
  * Purpose: Prometheus metrics registry and metric definitions for observability.
  * Scope: Shared observability singleton. Provides metrics registry and recording helpers. Does not implement HTTP transport or scrape endpoints.
- * Invariants: Single registry per process via globalThis; labels always low-cardinality; survives HMR.
+ * Invariants: Single registry per process via globalThis; labels always low-cardinality; survives HMR; node_id from repo-spec (NODE_IDENTITY_IN_OBSERVABILITY).
  * Side-effects: global (module-scoped registry via globalThis)
  * Notes: Uses getOrCreate pattern to prevent duplicate registration errors during HMR/tests.
  * Links: Consumed by route handlers and features; exposed via /api/metrics endpoint.
  * @public
  */
 
+import fs from "node:fs";
+import path from "node:path";
+
 import type { AiExecutionErrorCode } from "@cogni/ai-core";
+import { extractNodeId, parseRepoSpec } from "@cogni/repo-spec";
 import type { Counter, Histogram, Registry } from "prom-client";
 import client from "prom-client";
+
+/**
+ * Read node_id from .cogni/repo-spec.yaml at module scope.
+ * Uses @cogni/repo-spec pure functions directly (no serverEnv() dependency).
+ * Falls back to "unknown" if repo-spec is missing (e.g., in unit tests).
+ */
+function readNodeIdForMetrics(): string {
+  try {
+    // biome-ignore lint/style/noProcessEnv: Module-level init runs before serverEnv() available
+    const repoRoot = process.env.COGNI_REPO_ROOT ?? process.cwd();
+    const specPath = path.join(repoRoot, ".cogni", "repo-spec.yaml");
+    const content = fs.readFileSync(specPath, "utf8");
+    return extractNodeId(parseRepoSpec(content));
+  } catch {
+    return "unknown";
+  }
+}
 
 // Singleton via globalThis to survive HMR/test reloads
 const globalForMetrics = globalThis as typeof globalThis & {
@@ -33,6 +54,7 @@ if (!globalForMetrics.metricsInitialized) {
     app: "cogni-template",
     // biome-ignore lint/style/noProcessEnv: Module-level init runs before serverEnv() available
     env: process.env.DEPLOY_ENVIRONMENT ?? "local",
+    node_id: readNodeIdForMetrics(),
   });
   client.collectDefaultMetrics({ register: metricsRegistry });
 }

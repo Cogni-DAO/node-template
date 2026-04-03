@@ -330,8 +330,9 @@ function getWebhookRegistrations(): ReadonlyMap<
 
 function createContainer(): Container {
   const env = serverEnv();
+  const nodeId = getNodeId();
   const db = getAppDb();
-  const log = makeLogger({ service: "cogni-template" });
+  const log = makeLogger({ service: "cogni-template", nodeId });
 
   // Startup log - confirm config in Loki (no URLs/secrets)
   log.info(
@@ -690,7 +691,7 @@ function createContainer(): Container {
     treasuryReadPort,
     aiTelemetry,
     langfuse,
-    nodeId: getNodeId(),
+    nodeId,
     scheduleControl,
     executionGrantPort,
     executionGrantWorkerPort,

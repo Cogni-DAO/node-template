@@ -2,7 +2,7 @@
 id: spike.0263
 type: spike
 title: "Spike: agent contributor protocol — communication mechanism + workflow design"
-status: needs_triage
+status: needs_research
 priority: 1
 rank: 99
 estimate: 3
@@ -11,7 +11,7 @@ outcome: "A protocol spec (docs/spec/agent-contributor-protocol.md) with: state 
 spec_refs: []
 assignees: derekg1729
 credit:
-project:
+project: proj.development-workflows
 branch:
 pr:
 reviewer:

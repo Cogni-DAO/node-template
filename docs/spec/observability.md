@@ -162,8 +162,8 @@ metricsRegistry          (node_id default label — every metric series inherits
 
 **Implementation status:**
 
-- [ ] `makeLogger()` receives `nodeId` from container bootstrap (resolves via `getNodeId()`)
-- [ ] `metricsRegistry.setDefaultLabels()` includes `node_id` from `getNodeId()`
+- [x] `makeLogger()` receives `nodeId` from container bootstrap (resolves via `getNodeId()`) — task.0272
+- [x] `metricsRegistry.setDefaultLabels()` includes `node_id` from `readNodeIdForMetrics()` — task.0272
 - [ ] Both `getNodeId()` and logger/metrics factory in `@cogni/node-shared` (task.0248)
 - [ ] Alloy allowlist updated for per-node service names (task.0247)
 - [ ] Python services emit JSON logs (bug.0261)
@@ -276,7 +276,7 @@ clientLogger.warn(EVENT_NAMES.CLIENT_CHAT_STREAM_ERROR, { messageId });
 
 **Not Yet Implemented:**
 
-- ❌ `nodeId` not yet in logger base bindings or metrics default labels (NODE_IDENTITY_IN_OBSERVABILITY — blocked on task.0248 `@cogni/node-shared` extraction)
+- ✅ `nodeId` in logger base bindings and metrics default labels (NODE_IDENTITY_IN_OBSERVABILITY — task.0272)
 - ❌ Client logs not collected (console-only, no shipping pipeline)
 - ❌ No Grafana dashboards
 - ❌ No OTel trace exporter (SDK initialized, no OTLP endpoint)

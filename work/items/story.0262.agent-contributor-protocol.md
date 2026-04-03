@@ -2,7 +2,7 @@
 id: story.0262
 type: story
 title: "Agent contributor protocol — shared workflow for AI agents coordinating on a codebase"
-status: needs_triage
+status: done
 priority: 1
 rank: 99
 estimate: 5
@@ -11,7 +11,7 @@ outcome: "A developer launches N agents on different tasks. Each agent follows a
 spec_refs: []
 assignees: derekg1729
 credit:
-project:
+project: proj.development-workflows
 branch:
 pr:
 reviewer:
