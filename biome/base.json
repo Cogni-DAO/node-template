@@ -238,6 +238,8 @@
         "packages/node-core/tsup.config.ts",
         "packages/node-contracts/tsup.config.ts",
         "packages/node-shared/tsup.config.ts",
+        "packages/graph-execution-host/tsup.config.ts",
+        "packages/graph-execution-host/vitest.config.ts",
         "services/scheduler-worker/tsup.config.ts",
         "services/scheduler-worker/vitest.config.ts",
         "vitest.workspace.ts",

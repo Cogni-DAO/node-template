@@ -89,6 +89,7 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 | --------------------------------------------------------------------------- | ----------- | --- | --------- |
 | **PR review webhook → Temporal parent workflow** with durable GitHub writes | In Review   | 5   | task.0191 |
 | **Spike: Worker-local execution** — evaluate eliminating internal API hop   | Not Started | 2   | task.0181 |
+| **Extract graph-execution-host package** — prereq for worker-local exec     | In Review   | 3   | task.0250 |
 
 ## Constraints
 

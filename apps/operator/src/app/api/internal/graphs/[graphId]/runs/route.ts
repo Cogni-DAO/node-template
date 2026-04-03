@@ -521,7 +521,7 @@ export const POST = wrapRouteHandlerWithLogging<RouteParams>(
             ingressRequestId: fact.runId,
           },
           accountService,
-          log
+          log as import("pino").Logger
         );
       },
       billing: {

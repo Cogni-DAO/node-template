@@ -27,6 +27,14 @@ import type {
   GraphRunRequest,
   GraphRunResult,
 } from "@cogni/graph-execution-core";
+import {
+  BillingEnrichmentGraphExecutorDecorator,
+  type CommitUsageFactFn,
+  NamespaceGraphRouter,
+  ObservabilityGraphExecutorDecorator,
+  PreflightCreditCheckDecorator,
+  UsageCommitDecorator,
+} from "@cogni/graph-execution-host";
 import type { UserId } from "@cogni/ids";
 import {
   LANGGRAPH_CATALOG,
@@ -34,17 +42,13 @@ import {
   McpToolSource,
   parseMcpConfigFromEnv,
 } from "@cogni/langgraph-graphs";
+import { trace } from "@opentelemetry/api";
 import {
-  BillingEnrichmentGraphExecutorDecorator,
   type CompletionStreamFn,
   createLangGraphDevClient,
   InProcCompletionUnitAdapter,
   LangGraphDevProvider,
   LangGraphInProcProvider,
-  NamespaceGraphRouter,
-  ObservabilityGraphExecutorDecorator,
-  PreflightCreditCheckDecorator,
-  UsageCommitDecorator,
 } from "@/adapters/server";
 import { runInScope } from "@/adapters/server/ai/execution-scope";
 import type {
@@ -110,7 +114,10 @@ export function createGraphExecutor(
   ]);
 
   // Create namespace router with all configured providers
-  const router = new NamespaceGraphRouter(providers);
+  const router = new NamespaceGraphRouter(
+    providers,
+    makeLogger({ component: "NamespaceGraphRouter" })
+  );
 
   return router;
 }
@@ -129,7 +136,7 @@ export function createScopedGraphExecutor(params: {
   readonly executor: GraphExecutorPort;
   readonly billing: BillingContext;
   readonly preflightCheckFn: PreflightCreditCheckFn;
-  readonly commitByoUsage: import("@/adapters/server/ai/usage-commit.decorator").CommitUsageFactFn;
+  readonly commitByoUsage: CommitUsageFactFn;
   readonly abortSignal?: AbortSignal;
   readonly broker?: ConnectionBrokerPort;
   readonly resolver: ModelProviderResolverPort;
@@ -152,7 +159,7 @@ export function createScopedGraphExecutor(params: {
   // Wrap with preflight credit check — uses provider resolver for billing policy
   const preflighted = new PreflightCreditCheckDecorator(
     billed,
-    params.preflightCheckFn,
+    params.preflightCheckFn as import("@cogni/graph-execution-host").PreflightCreditCheckFn,
     params.billing.billingAccountId,
     params.resolver,
     container.log
@@ -162,7 +169,12 @@ export function createScopedGraphExecutor(params: {
   const observed = new ObservabilityGraphExecutorDecorator(
     preflighted,
     container.langfuse,
-    { finalizationTimeoutMs: 15_000 },
+    {
+      finalizationTimeoutMs: 15_000,
+      getTraceId: () =>
+        trace.getActiveSpan()?.spanContext().traceId ??
+        "00000000000000000000000000000000",
+    },
     container.log,
     params.billing.billingAccountId
   );

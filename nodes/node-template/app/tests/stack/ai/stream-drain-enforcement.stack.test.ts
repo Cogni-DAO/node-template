@@ -9,7 +9,7 @@
  *   - CALLER_DRAIN_OBLIGATION: Every runGraph() consumer must drain the stream for billing to fire
  * Side-effects: IO (grep subprocess)
  * Notes: Decorator/router call sites are excluded (they wrap and re-yield, not consume). This complements the JSDoc on GraphExecutorPort.runGraph().
- * Links: src/ports/graph-executor.port.ts, billing-executor.decorator.ts, GRAPH_EXECUTION.md
+ * Links: src/ports/graph-executor.port.ts, usage-commit.decorator.ts, GRAPH_EXECUTION.md
  * @public
  */
 
@@ -31,7 +31,7 @@ describe("CALLER_DRAIN_OBLIGATION Invariant", () => {
     // Exclude infrastructure sites (decorators, routers, lazy providers) — these
     // wrap the stream and delegate to consumers, they don't consume themselves
     const infrastructurePatterns = [
-      "billing-executor.decorator.ts", // wraps stream with billing
+      "usage-commit.decorator.ts", // wraps stream with billing
       "observability-executor.decorator.ts", // wraps stream with telemetry
       "preflight-credit-check.decorator.ts", // wraps stream with credit gate
       "aggregating-executor.ts", // routes to provider
