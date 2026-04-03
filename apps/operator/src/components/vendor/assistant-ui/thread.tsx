@@ -21,16 +21,16 @@ import {
 import type { FC, ReactNode } from "react";
 import { ComposerAddAttachment } from "@/components/kit/chat/ComposerAddAttachment";
 import { ComposerVoiceInput } from "@/components/kit/chat/ComposerVoiceInput";
+import { DAOFormationCard } from "@/components/kit/chat/tools/DAOFormationCard";
+import { IdentityProposalCard } from "@/components/kit/chat/tools/IdentityProposalCard";
+import { NodeSummaryCard } from "@/components/kit/chat/tools/NodeSummaryCard";
+import { PRReviewCard } from "@/components/kit/chat/tools/PRReviewCard";
 import {
   ComposerAttachments,
   UserMessageAttachments,
 } from "@/components/vendor/assistant-ui/attachment";
 import { MarkdownText } from "@/components/vendor/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/vendor/assistant-ui/tool-fallback";
-import { DAOFormationCard } from "@/features/ai/components/tools/DAOFormationCard";
-import { IdentityProposalCard } from "@/features/ai/components/tools/IdentityProposalCard";
-import { NodeSummaryCard } from "@/features/ai/components/tools/NodeSummaryCard";
-import { PRReviewCard } from "@/features/ai/components/tools/PRReviewCard";
 
 /**
  * Node creation tool renderers (task.0261).
