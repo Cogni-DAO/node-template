@@ -1,3 +1,4 @@
+import type { ToolCallMessagePartComponent } from "@assistant-ui/react";
 import {
   ActionBarPrimitive,
   BranchPickerPrimitive,
@@ -20,12 +21,28 @@ import {
 import type { FC, ReactNode } from "react";
 import { ComposerAddAttachment } from "@/components/kit/chat/ComposerAddAttachment";
 import { ComposerVoiceInput } from "@/components/kit/chat/ComposerVoiceInput";
+import { DAOFormationCard } from "@/components/kit/chat/tools/DAOFormationCard";
+import { IdentityProposalCard } from "@/components/kit/chat/tools/IdentityProposalCard";
+import { NodeSummaryCard } from "@/components/kit/chat/tools/NodeSummaryCard";
+import { PRReviewCard } from "@/components/kit/chat/tools/PRReviewCard";
 import {
   ComposerAttachments,
   UserMessageAttachments,
 } from "@/components/vendor/assistant-ui/attachment";
 import { MarkdownText } from "@/components/vendor/assistant-ui/markdown-text";
 import { ToolFallback } from "@/components/vendor/assistant-ui/tool-fallback";
+
+/**
+ * Node creation tool renderers (task.0261).
+ * Maps tool name → custom card component. Unregistered tools use ToolFallback.
+ */
+const NODE_CREATION_TOOLS: Record<string, ToolCallMessagePartComponent> = {
+  core__propose_node_identity: IdentityProposalCard,
+  core__request_dao_formation: DAOFormationCard,
+  core__present_pr: PRReviewCard,
+  core__present_node_summary: NodeSummaryCard,
+};
+
 import { TooltipIconButton } from "@/components/vendor/assistant-ui/tooltip-icon-button";
 import { Button } from "@/components/vendor/shadcn/button";
 import { cn } from "@/shared/util/cn";
@@ -237,7 +254,7 @@ const AssistantMessage: FC = () => {
         <MessagePrimitive.Parts
           components={{
             Text: MarkdownText,
-            tools: { Fallback: ToolFallback },
+            tools: { ...NODE_CREATION_TOOLS, Fallback: ToolFallback },
           }}
         />
         <MessageError />

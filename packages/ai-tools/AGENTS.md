@@ -62,6 +62,10 @@ Pure tool definitions for AI agent execution. Defines `ToolContract`, `ToolImple
   - `workItemQueryBoundTool`, `WORK_ITEM_QUERY_NAME`, `createWorkItemQueryImplementation` - Work item query tool
   - `workItemTransitionBoundTool`, `WORK_ITEM_TRANSITION_NAME`, `createWorkItemTransitionImplementation` - Work item transition tool
   - `WorkItemCapability`, `WorkItemInfo`, `WorkItemQueryParams`, `WorkItemTransitionResult` - Work item capability types
+  - `proposeNodeIdentityBoundTool`, `PROPOSE_NODE_IDENTITY_NAME` - Node identity proposal (display-only)
+  - `requestDaoFormationBoundTool`, `REQUEST_DAO_FORMATION_NAME` - DAO formation trigger (display-only)
+  - `presentPrBoundTool`, `PRESENT_PR_NAME` - PR review card (display-only)
+  - `presentNodeSummaryBoundTool`, `PRESENT_NODE_SUMMARY_NAME` - Node summary card (display-only)
   - `TOOL_CATALOG` - Singleton catalog of all registered tools (Record<string, CatalogBoundTool>)
   - `createToolCatalog()`, `getToolById()`, `getToolIds()`, `hasToolId()` - Catalog accessors
   - `toBoundToolRuntime()`, `contractToRuntime()` - Runtime adapter converters (contractToRuntime for DI)

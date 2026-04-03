@@ -39,6 +39,7 @@ AI feature owns all LLM interaction endpoints, runtimes, and services. Provides 
   - `ModelPicker` (model selection dialog)
   - `ChatComposerExtras` (composer toolbar with model and graph selection)
   - `GraphPicker` (graph/agent selection dialog)
+  - Tool renderer cards (`IdentityProposalCard`, `DAOFormationCard`, `PRReviewCard`, `NodeSummaryCard`) live in `@/components/kit/chat/tools/` (kit layer, registered in thread.tsx)
   - `useModels` (React Query hook for models list)
   - `useThreads`, `useLoadThread`, `useDeleteThread` (React Query hooks for thread list/load/delete)
   - `getPreferredModelId`, `setPreferredModelId`, `validatePreferredModel` (localStorage preferences)

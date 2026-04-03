@@ -5,7 +5,7 @@ title: Node Formation Design
 status: draft
 spec_state: draft
 trust: draft
-summary: Node lifecycle from formation (governance identity) through payment activation (operator wallet + Split). Formation via web wizard; activation via child-node CLI.
+summary: Node lifecycle from formation (governance identity) through payment activation (operator wallet + Split). Formation moving from legacy web wizard to chat-native guided flow with HIL interrupts (task.0261). Activation via child-node CLI.
 read_when: Working on DAO formation, the setup wizard, aragon-osx package, or payment activation.
 implements:
 owner: derekg1729
@@ -30,7 +30,25 @@ Formation outputs a repo-spec fragment with `payments.status: pending_activation
 
 ## Goal
 
-Enable any founder to create a fully-verified Cogni DAO node via a 3-field web form and 2 wallet transactions, then activate payment rails via a single CLI command in their own fork.
+Enable any founder to create a fully-verified Cogni DAO node through a unified chat experience — the operator AI guides the human through intake, identity, DAO formation (inline wallet signing), autonomous scaffolding, and PR creation. No page navigation, no copy-paste.
+
+**Legacy goal (P0, achieved):** 3-field web form + 2 wallet transactions → repo-spec YAML.
+**Current goal (task.0261):** Chat-native guided flow with HIL interrupts → complete node with PR + DNS.
+
+## Chat-Native Node Creation (task.0261)
+
+The legacy `/setup/dao` wizard page is being superseded by a chat-native flow where DAO formation happens inline. The formation logic (reducer, tx builders, hooks, verification) is **pure and reusable** — it moves from a wizard page into a chat tool renderer component with zero changes to the underlying code. Mechanical operations (scaffolding, PR, DNS) are deterministic server-side workflows, not LLM-led.
+
+See [task.0261](../../work/items/task.0261.node-creation-chat-orchestration.md) for the full design: tool contracts, UI renderers, graph architecture, and phased delivery.
+
+### Field Mutability
+
+In the identity proposal, **all fields become immutable after formation except:**
+
+- `tokenName` — can be updated via governance proposal (on-chain metadata)
+- `tokenSymbol` — can be updated via governance proposal (on-chain metadata)
+
+The node name, icon, hue, and mission are baked into code and branding at scaffolding time. The UI must clearly communicate this distinction so founders understand the commitment.
 
 ## Non-Goals
 
@@ -407,7 +425,10 @@ OSx v1.4.0 deployments. Hardcoded addresses from [cogni-signal-evm-contracts](ht
 - [Cred Licensing Policy](./cred-licensing-policy.md)
 - [Operator Wallet Spec](./operator-wallet.md) — wallet lifecycle, custody, access control
 - [Web3 OpenRouter Payments Spec](./web3-openrouter-payments.md) — payment math, funding state machine
+- [Human-in-the-Loop Spec](./human-in-the-loop.md) — pause/resume contract for guided workflows
 - [Node Formation Project](../../work/projects/proj.node-formation-ui.md)
 - [Node Formation Guide](../guides/node-formation-guide.md)
 - [Operator Wallet Setup Guide](../guides/operator-wallet-setup.md)
+- [Chat-Native Node Creation (task.0261)](../../work/items/task.0261.node-creation-chat-orchestration.md) — unified chat flow replacing wizard
+- [Creating a New Node Guide](../guides/creating-a-new-node.md) — technical scaffolding steps
 - [ROADMAP](../../ROADMAP.md)
