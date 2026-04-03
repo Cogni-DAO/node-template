@@ -10,14 +10,17 @@
  * @internal
  */
 
-import { GitHubActionsClient } from "@/adapters/server/observability/github-actions-client";
-import { probeHealth } from "@/adapters/server/observability/health-probe";
-import { LokiQueryClient } from "@/adapters/server/observability/loki-query-client";
+import {
+  GitHubActionsClient,
+  type HealthProbeResult,
+  LokiQueryClient,
+  probeHealth,
+  type WorkflowRun,
+} from "@/adapters/server";
 import type { ServerEnv } from "@/shared/env";
 
-// Re-export types + health probe for consumption by app layer (which can't import adapters directly)
-export type { WorkflowRun } from "@/adapters/server/observability/github-actions-client";
-export type { HealthProbeResult } from "@/adapters/server/observability/health-probe";
+// Re-export types + health probe for consumption by app layer
+export type { HealthProbeResult, WorkflowRun };
 export { probeHealth };
 
 let ghClient: GitHubActionsClient | null | undefined;

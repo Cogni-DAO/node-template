@@ -99,6 +99,20 @@ export {
   TemplateQueryError,
   type TemplateQueryErrorCode,
 } from "./metrics/mimir.adapter";
+// Observability adapters — health probes, Loki queries, GitHub Actions CI status
+export {
+  GitHubActionsClient,
+  type WorkflowRun,
+} from "./observability/github-actions-client";
+export {
+  type HealthProbeResult,
+  probeHealth,
+} from "./observability/health-probe";
+export {
+  type LokiLogEntry,
+  LokiQueryClient,
+  type LokiQueryConfig,
+} from "./observability/loki-query-client";
 export { ViemEvmOnchainClient } from "./onchain/viem-evm-onchain-client.adapter";
 export { ViemTreasuryAdapter } from "./onchain/viem-treasury.adapter";
 export { UserDrizzlePaymentAttemptRepository } from "./payments/drizzle-payment-attempt.adapter";
