@@ -20,6 +20,10 @@ resources:
   - https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.4/manifests/install.yaml
   # ksops CMP plugin ConfigMap
   - ksops-cmp.yaml
+  # ApplicationSets — one per environment (canary, preview, production)
+  - canary-applicationset.yaml
+  - preview-applicationset.yaml
+  - production-applicationset.yaml
 
 patches:
   # Add ksops sidecar to repo-server for SOPS/age secret decryption

@@ -384,8 +384,9 @@ services:
       # Temporal gRPC endpoints
       - TEMPORAL_ADDRESS=temporal:7233
       - TEMPORAL_CLI_ADDRESS=temporal:7233
-      # Namespace auto-creation (must match app's TEMPORAL_NAMESPACE)
-      - DEFAULT_NAMESPACE=cogni-${APP_ENV}
+      # Namespace auto-creation — must match k8s overlay TEMPORAL_NAMESPACE.
+      # Set TEMPORAL_NAMESPACE in .env (e.g. cogni-canary, cogni-production).
+      - DEFAULT_NAMESPACE=${TEMPORAL_NAMESPACE:-cogni-${APP_ENV}}
     volumes:
       - ./configs/temporal-dynamicconfig.yaml:/etc/temporal/config/dynamicconfig/development-sql.yaml:ro
     depends_on:

@@ -3,7 +3,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: cogni-production
+namespace: cogni-canary
 
 resources:
   - ../../../base/node-app
@@ -13,10 +13,10 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    newTag: "prod-placeholder-poly"
+    digest: "sha256:0f161da092a667f58a333096d04cf40d020f67b725f126ac391d5df731020e46"
   - name: ghcr.io/cogni-dao/cogni-template-migrate
     newName: ghcr.io/cogni-dao/cogni-template
-    newTag: "prod-placeholder-poly"
+    digest: "sha256:de3c0c0f967addfeb25cf5de111ab56b14bf4b789ea2927e3d8d87b3f321d4f4"
 
 patches:
   # Node-specific ConfigMap values.
@@ -33,7 +33,7 @@ patches:
         value: "poly"
       - op: replace
         path: /data/TEMPORAL_NAMESPACE
-        value: "cogni-production"
+        value: "cogni-canary"
       - op: replace
         path: /data/LITELLM_BASE_URL
         value: "http://poly-litellm-external:4000"
@@ -94,7 +94,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-postgres-external"
@@ -104,7 +104,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-temporal-external"
@@ -114,7 +114,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-litellm-external"
@@ -124,7 +124,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-redis-external"
