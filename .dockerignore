@@ -80,3 +80,6 @@ scripts/bootstrap
 work
 docs
 *.md
+
+# Experiments (POCs, not deployed)
+experiments
