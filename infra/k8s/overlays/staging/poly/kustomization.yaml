@@ -87,7 +87,7 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/command
         value: ["sh", "-c", "echo 'poly: no dedicated migrate image yet (task.0260)' && exit 0"]
-  # EndpointSlice IPs — node InternalIP (provision script updates this per-VM)
+  # EndpointSlice IPs + service-name label fix (namePrefix doesn't update label values)
   - target:
       kind: EndpointSlice
       name: postgres-external-1
@@ -95,6 +95,9 @@ patches:
       - op: replace
         path: /endpoints/0/addresses
         value: ["84.32.109.222"]
+      - op: replace
+        path: /metadata/labels/kubernetes.io~1service-name
+        value: "poly-postgres-external"
   - target:
       kind: EndpointSlice
       name: temporal-external-1
@@ -102,6 +105,9 @@ patches:
       - op: replace
         path: /endpoints/0/addresses
         value: ["84.32.109.222"]
+      - op: replace
+        path: /metadata/labels/kubernetes.io~1service-name
+        value: "poly-temporal-external"
   - target:
       kind: EndpointSlice
       name: litellm-external-1
@@ -109,6 +115,9 @@ patches:
       - op: replace
         path: /endpoints/0/addresses
         value: ["84.32.109.222"]
+      - op: replace
+        path: /metadata/labels/kubernetes.io~1service-name
+        value: "poly-litellm-external"
   - target:
       kind: EndpointSlice
       name: redis-external-1
@@ -116,3 +125,6 @@ patches:
       - op: replace
         path: /endpoints/0/addresses
         value: ["84.32.109.222"]
+      - op: replace
+        path: /metadata/labels/kubernetes.io~1service-name
+        value: "poly-redis-external"
