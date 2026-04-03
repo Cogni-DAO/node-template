@@ -85,11 +85,11 @@ Unify all graph execution triggers (API immediate, Temporal scheduled, webhook) 
 
 **Goal:** Webhook-triggered graph runs via Temporal parent workflow pattern. Evaluate worker-local execution.
 
-| Deliverable                                                                 | Status             | Est | Work Item |
-| --------------------------------------------------------------------------- | ------------------ | --- | --------- |
-| **PR review webhook → Temporal parent workflow** with durable GitHub writes | In Review          | 5   | task.0191 |
-| **Spike: Worker-local execution** — evaluate eliminating internal API hop   | Not Started        | 2   | task.0181 |
-| **Extract graph-execution-host package** — prereq for worker-local exec     | Blocked (Phase 1b) | 3   | task.0250 |
+| Deliverable                                                                 | Status      | Est | Work Item |
+| --------------------------------------------------------------------------- | ----------- | --- | --------- |
+| **PR review webhook → Temporal parent workflow** with durable GitHub writes | In Review   | 5   | task.0191 |
+| **Spike: Worker-local execution** — evaluate eliminating internal API hop   | Not Started | 2   | task.0181 |
+| **Extract graph-execution-host package** — prereq for worker-local exec     | In Review   | 3   | task.0250 |
 
 ## Constraints
 
