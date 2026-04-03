@@ -293,7 +293,7 @@ export function DeploymentsView(): ReactElement {
               </TableHeader>
               <TableBody>
                 {rows.map((row) => (
-                  <TableRow key={row.branch}>
+                  <TableRow key={row.environment}>
                     <TableCell>
                       <span className="inline-flex items-center gap-1.5 font-mono text-sm">
                         <GitBranch className="size-3.5 text-muted-foreground" />
