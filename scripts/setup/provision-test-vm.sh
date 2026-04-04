@@ -191,11 +191,11 @@ if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key" ]]; then
   AGE_PRIVATE_KEY=$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key")
   log_info "Reusing existing SOPS age key"
 else
-  TMPDIR="${TMPDIR:-$(mktemp -d)}"
+  AGE_TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SOPS age keypair..."
-  age-keygen -o "$TMPDIR/age-key.txt" 2>"$TMPDIR/age-pub.txt"
-  AGE_PRIVATE_KEY=$(grep 'AGE-SECRET-KEY' "$TMPDIR/age-key.txt")
-  AGE_PUBLIC_KEY=$(grep 'age1' "$TMPDIR/age-pub.txt" || grep 'age1' "$TMPDIR/age-key.txt" | head -1)
+  age-keygen -o "$AGE_TMPDIR/age-key.txt" 2>"$AGE_TMPDIR/age-pub.txt"
+  AGE_PRIVATE_KEY=$(grep 'AGE-SECRET-KEY' "$AGE_TMPDIR/age-key.txt")
+  AGE_PUBLIC_KEY=$(grep 'age1' "$AGE_TMPDIR/age-pub.txt" || grep 'age1' "$AGE_TMPDIR/age-key.txt" | head -1)
   log_info "  Age public key: $AGE_PUBLIC_KEY"
 fi
 
