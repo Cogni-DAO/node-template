@@ -144,3 +144,9 @@ Only after Phase 3 is proven end-to-end.
 Phase 1 is done when the Phase 1 checklist passes on a freshly provisioned canary VM with zero SSH intervention after provisioning.
 
 Phase 4 is done when the full chain works and legacy workflows are deleted.
+
+## PR / Links
+
+- PR #738: modular pipeline refactor (→ canary)
+- PR #740: bootstrap workflow files on staging (merged)
+- Handoff: [handoff](../handoffs/task.0281.handoff.md)
