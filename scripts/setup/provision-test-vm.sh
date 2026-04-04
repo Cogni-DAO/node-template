@@ -480,7 +480,9 @@ ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-edge/.env << 'ENVEOF'
 DOMAIN=${DOMAIN}
 POLY_DOMAIN=${POLY_DOMAIN}
 RESY_DOMAIN=${RESY_DOMAIN}
-BACKEND_HOST=${VM_IP}
+OPERATOR_UPSTREAM=host.docker.internal:30000
+POLY_UPSTREAM=host.docker.internal:30100
+RESY_UPSTREAM=host.docker.internal:30300
 ENVEOF"
 
 # All required vars must be in .env — Docker Compose validates ALL services at parse time,

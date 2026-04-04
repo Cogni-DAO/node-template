@@ -182,8 +182,8 @@ services:
         ]
       interval: 10s
       timeout: 3s
-      retries: 3
-      start_period: 30s
+      retries: 8
+      start_period: 120s
 
   mock-llm:
     image: zerob13/mock-openai-api:latest
@@ -209,6 +209,8 @@ services:
       - "443:443"
     environment:
       - DOMAIN=${DOMAIN}
+      - POLY_DOMAIN=${POLY_DOMAIN:-poly.localhost}
+      - RESY_DOMAIN=${RESY_DOMAIN:-resy.localhost}
     volumes:
       - ../edge/configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
