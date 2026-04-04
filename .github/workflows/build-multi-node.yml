@@ -308,10 +308,18 @@ jobs:
             return 1
           }
 
+          # Poll all nodes in parallel
+          poll_health "operator" "$OPERATOR_URL" &
+          PID_OP=$!
+          poll_health "poly" "$POLY_URL" &
+          PID_POLY=$!
+          poll_health "resy" "$RESY_URL" &
+          PID_RESY=$!
+
           FAILED=0
-          poll_health "operator" "$OPERATOR_URL" || FAILED=1
-          poll_health "poly" "$POLY_URL" || FAILED=1
-          poll_health "resy" "$RESY_URL" || FAILED=1
+          wait $PID_OP || FAILED=1
+          wait $PID_POLY || FAILED=1
+          wait $PID_RESY || FAILED=1
 
           if [ $FAILED -ne 0 ]; then
             echo "❌ One or more nodes failed health checks"
