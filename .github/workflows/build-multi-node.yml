@@ -277,7 +277,7 @@ jobs:
       VM_HOST: ${{ secrets.VM_HOST }}
       DOMAIN: ${{ vars.DOMAIN }}
       DEPLOY_ENVIRONMENT: ${{ github.ref_name == 'canary' && 'canary' || github.ref_name == 'staging' && 'preview' || 'production' }}
-      APP_ENV: ${{ github.ref_name == 'main' && 'production' || 'production' }}
+      APP_ENV: production
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
       COGNI_REPO_REF: ${{ github.sha }}
       GIT_READ_USERNAME: Cogni-1729
