@@ -1057,13 +1057,14 @@ async function main() {
         }
       }
       for (const env of missingEnvs) {
-        // Reuse existing key from .local/ if available (matches what's on the VM)
-        const localKeyPath = `${execSync("git rev-parse --show-toplevel", { encoding: "utf-8" }).trim()}/.local/test-vm-key`;
+        // Reuse existing key from .local/{env}-vm-key if available (matches what's on that env's VM)
+        const repoRoot = execSync("git rev-parse --show-toplevel", { encoding: "utf-8" }).trim();
+        const localKeyPath = `${repoRoot}/.local/${env}-vm-key`;
         const { existsSync, readFileSync } = require("node:fs");
         let privKey: string;
         if (existsSync(localKeyPath)) {
           privKey = readFileSync(localKeyPath, "utf-8");
-          console.log(`  ${DIM}Using existing key from .local/test-vm-key${RESET}`);
+          console.log(`  ${DIM}Using existing key from .local/${env}-vm-key${RESET}`);
         } else {
           privKey = generateSSHKey(env);
         }

@@ -175,20 +175,20 @@ log_info "Loaded secrets from $ENV_FILE"
 
 # SSH keypair — per-VM, not in .env file (uploaded to Cherry, saved to .local/)
 # Reuse if VM exists, generate if fresh
-if [[ -f "$REPO_ROOT/.local/test-vm-key" ]]; then
-  log_info "Reusing existing SSH key from .local/test-vm-key"
+if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" ]]; then
+  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key"
 else
   TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SSH keypair..."
   ssh-keygen -t ed25519 -f "$TMPDIR/deploy_key" -C "cogni-${DEPLOY_ENV}-vm" -N "" -q
   cp "$TMPDIR/deploy_key.pub" "$PROVISION_DIR/keys/cogni_template_test_deploy.pub"
-  cp "$TMPDIR/deploy_key" "$REPO_ROOT/.local/test-vm-key"
-  chmod 600 "$REPO_ROOT/.local/test-vm-key"
+  cp "$TMPDIR/deploy_key" "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
+  chmod 600 "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
 fi
 
 # SOPS age keypair — per-VM, reuse if exists
-if [[ -f "$REPO_ROOT/.local/test-vm-age-key" ]]; then
-  AGE_PRIVATE_KEY=$(cat "$REPO_ROOT/.local/test-vm-age-key")
+if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key" ]]; then
+  AGE_PRIVATE_KEY=$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key")
   log_info "Reusing existing SOPS age key"
 else
   TMPDIR="${TMPDIR:-$(mktemp -d)}"
@@ -292,8 +292,8 @@ VM_IP=$(tofu output -raw vm_host)
 log_info "VM provisioned at: $VM_IP"
 
 # Save connection info (key already saved in phase 2)
-echo "$VM_IP" > "$REPO_ROOT/.local/test-vm-ip"
-echo "$AGE_PRIVATE_KEY" > "$REPO_ROOT/.local/test-vm-age-key"
+echo "$VM_IP" > "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-ip"
+echo "$AGE_PRIVATE_KEY" > "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key"
 
 # Fix DATABASE_URLs — replace placeholder with actual VM IP
 # (pods can't use 127.0.0.1 — that's the pod's own loopback, not the host)
@@ -303,7 +303,7 @@ log_info "DATABASE_URLs updated with VM IP: $VM_IP"
 
 cd "$REPO_ROOT"
 
-SSH_KEY="$REPO_ROOT/.local/test-vm-key"
+SSH_KEY="$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
 SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
 
 # ══════════════════════════════════════════════════════════════
@@ -327,7 +327,7 @@ for attempt in $(seq 1 60); do
   fi
   if [[ $attempt -eq 60 ]]; then
     log_error "Bootstrap did not complete after 10 minutes."
-    log_error "SSH in to debug: ssh -i .local/test-vm-key root@$VM_IP"
+    log_error "SSH in to debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
     exit 1
   fi
   # Show progress every 30s
@@ -674,13 +674,13 @@ echo ""
 
 echo "═══════════════════════════════════════════════════════════════════"
 echo ""
-echo "  SSH:     ssh -i .local/test-vm-key root@$VM_IP"
-echo "  Secrets: .local/test-vm-secrets.env"
+echo "  SSH:     ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
+echo "  Secrets: .env.${DEPLOY_ENV}"
 echo ""
 echo "  Next steps:"
 echo "    1. Push this branch so Argo CD can find catalog + overlay files"
 echo "    2. Argo CD will auto-sync within 3 minutes"
-echo "    3. Re-run scorecard: ssh -i .local/test-vm-key root@\$VM_IP 'kubectl -n argocd get applications'"
+echo "    3. Re-run scorecard: ssh -i .local/${DEPLOY_ENV}-vm-key root@\$VM_IP 'kubectl -n argocd get applications'"
 echo "    4. k8s secrets already created directly on cluster (no SOPS needed for test)"
 echo ""
 echo "  Destroy when done:"
@@ -719,6 +719,6 @@ if [[ "$READYZ_OK" == "true" ]]; then
   exit 0
 else
   log_error "═══ SOME NODES FAILED /readyz — CANARY IS RED ═══"
-  log_error "Debug: ssh -i .local/test-vm-key root@$VM_IP 'kubectl -n ${K8S_NAMESPACE} logs -l app.kubernetes.io/name=node-app --tail=20'"
+  log_error "Debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP 'kubectl -n ${K8S_NAMESPACE} logs -l app.kubernetes.io/name=node-app --tail=20'"
   exit 1
 fi
