@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     timeout-minutes: 10
-    environment: integration
+    environment: canary
     env:
       NEXT_TELEMETRY_DISABLED: 1
       TEST_BASE_URL: https://${{ vars.DOMAIN }}
