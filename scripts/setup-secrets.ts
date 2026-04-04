@@ -832,51 +832,13 @@ function buildDSNs(envs: readonly string[]): void {
 }
 
 // ── Display ──────────────────────────────────────────────────────────────────
-
-function printInventory(
-  previewSecrets: Set<string>,
-  prodSecrets: Set<string>,
-  repoSecrets: Set<string>
-): void {
-  console.log(`\n${BOLD}  Secret Inventory — ${REPO}${RESET}\n`);
-  console.log(
-    `  ${"SECRET".padEnd(42)} ${"LEVEL".padEnd(8)} ${"STATUS".padEnd(22)} ${"SOURCE"}`
-  );
-  console.log(
-    `  ${"─".repeat(42)} ${"─".repeat(8)} ${"─".repeat(22)} ${"─".repeat(8)}`
-  );
-
-  let lastCategory = "";
-  for (const s of SECRETS) {
-    if (s.category !== lastCategory) {
-      console.log(`\n  ${DIM}${s.category}${RESET}`);
-      lastCategory = s.category;
-    }
-    const req = s.required ? "" : `${DIM}(opt)${RESET} `;
-    const src =
-      s.source === "agent" ? `${DIM}auto${RESET}` : `${YELLOW}human${RESET}`;
-
-    if (s.repoLevel) {
-      const rStatus = envStatus(repoSecrets.has(s.name));
-      console.log(
-        `  ${req}${s.name.padEnd(s.required ? 42 : 37)} ${DIM}repo${RESET}     ${rStatus.padEnd(31)} ${src}`
-      );
-    } else {
-      const pStatus = envStatus(previewSecrets.has(s.name));
-      const dStatus = envStatus(prodSecrets.has(s.name));
-      console.log(
-        `  ${req}${s.name.padEnd(s.required ? 42 : 37)} ${DIM}env${RESET}      pre:${pStatus} prod:${dStatus}  ${src}`
-      );
-    }
-  }
-  console.log("");
-}
+// (printInventory removed — inventory now rendered inline in main() using targetEnvs)
 
 function printSecretHeader(
   secret: Secret,
-  previewSecrets: Set<string>,
-  prodSecrets: Set<string>,
-  repoSecrets: Set<string>
+  envSets: Record<string, Set<string>>,
+  repoSecrets: Set<string>,
+  envNames: readonly string[]
 ): void {
   const reqTag = secret.required
     ? `${BOLD}[REQUIRED]${RESET}`
@@ -885,7 +847,7 @@ function printSecretHeader(
   console.log("");
   const statusLine = secret.repoLevel
     ? `[repo: ${envStatus(repoSecrets.has(secret.name))}]`
-    : `[preview: ${envStatus(previewSecrets.has(secret.name))}, production: ${envStatus(prodSecrets.has(secret.name))}]`;
+    : `[${envNames.map((e) => `${e}: ${envStatus(envSets[e]?.has(secret.name) ?? false)}`).join(", ")}]`;
   console.log(`  ${reqTag} ${BOLD}${secret.name}${RESET}  ${statusLine}`);
   console.log(`  ${secret.description}`);
 
@@ -938,17 +900,50 @@ async function main() {
     console.log(`  ${CYAN}Targeting environment: ${envArg}${RESET}\n`);
   }
 
-  const previewSecrets = getSetSecrets("preview");
-  const prodSecrets = getSetSecrets("production");
-  const canarySecrets = getSetSecrets("canary");
+  // Fetch current secret status for target environments
+  const envSecretSets: Record<string, Set<string>> = {};
+  for (const env of targetEnvs) {
+    envSecretSets[env] = getSetSecrets(env);
+  }
   const repoSecrets = getRepoSecrets();
 
-  // Always print full inventory first
-  printInventory(previewSecrets, prodSecrets, repoSecrets);
+  // Print inventory for target environments only
+  console.log(
+    `\n${BOLD}  Secret Inventory — ${REPO} (${targetEnvs.join(", ")})${RESET}\n`
+  );
+  console.log(
+    `  ${"SECRET".padEnd(42)} ${"LEVEL".padEnd(8)} ${"STATUS".padEnd(22)} ${"SOURCE"}`
+  );
+  console.log(
+    `  ${"─".repeat(42)} ${"─".repeat(8)} ${"─".repeat(22)} ${"─".repeat(8)}`
+  );
+  let lastCat = "";
+  for (const s of SECRETS) {
+    if (s.category !== lastCat) {
+      console.log(`\n  ${DIM}${s.category}${RESET}`);
+      lastCat = s.category;
+    }
+    const req = s.required ? "" : `${DIM}(opt)${RESET} `;
+    const src =
+      s.source === "agent" ? `${DIM}auto${RESET}` : `${YELLOW}human${RESET}`;
+    if (s.repoLevel) {
+      const rStatus = envStatus(repoSecrets.has(s.name));
+      console.log(
+        `  ${req}${s.name.padEnd(s.required ? 42 : 37)} ${DIM}repo${RESET}     ${rStatus.padEnd(31)} ${src}`
+      );
+    } else {
+      const statuses = targetEnvs
+        .map((e) => `${e}:${envStatus(envSecretSets[e]?.has(s.name) ?? false)}`)
+        .join(" ");
+      console.log(
+        `  ${req}${s.name.padEnd(s.required ? 42 : 37)} ${DIM}env${RESET}      ${statuses}  ${src}`
+      );
+    }
+  }
+  console.log("");
 
   let filtered = SECRETS;
   if (onlyPatterns) {
-    // --only DISCORD matches DISCORD_OAUTH_CLIENT_ID, DISCORD_BOT_TOKEN, etc.
     filtered = filtered.filter((s) =>
       onlyPatterns.some((p) => s.name.includes(p))
     );
@@ -959,13 +954,16 @@ async function main() {
     if (!showAll) {
       filtered = filtered.filter((s) => {
         if (s.repoLevel) return !repoSecrets.has(s.name);
-        return !previewSecrets.has(s.name) || !prodSecrets.has(s.name);
+        // Show if missing in ANY target environment
+        return targetEnvs.some((e) => !envSecretSets[e]?.has(s.name));
       });
     }
   }
 
   if (filtered.length === 0) {
-    console.log(`  ${GREEN}All secrets are set in both environments.${RESET}`);
+    console.log(
+      `  ${GREEN}All secrets are set for ${targetEnvs.join(", ")}.${RESET}`
+    );
     console.log(`  Run with --all to walk through everything.\n`);
     return;
   }
@@ -992,13 +990,13 @@ async function main() {
       lastCategory = secret.category;
     }
 
-    printSecretHeader(secret, previewSecrets, prodSecrets, repoSecrets);
+    printSecretHeader(secret, envSecretSets, repoSecrets, targetEnvs);
 
     // SSH_DEPLOY_KEY is special — one key per environment
     if (secret.name === "SSH_DEPLOY_KEY") {
       const action = await prompt(
         rl,
-        `  Generate SSH keys for both environments? [Y/n] `
+        `  Generate SSH keys for ${targetEnvs.join(", ")}? [Y/n] `
       );
       if (action.toLowerCase() === "n") {
         skipped++;
@@ -1036,7 +1034,7 @@ async function main() {
     if (secret.source === "agent") {
       const action = await prompt(
         rl,
-        `  Generate and set for both envs? [Y/n] `
+        `  Generate and set for ${targetEnvs.join(", ")}? [Y/n] `
       );
       if (action.toLowerCase() === "n") {
         skipped++;
@@ -1055,13 +1053,7 @@ async function main() {
     } else if (secret.perEnv) {
       // Per-env human secrets (DOMAIN, VM_HOST) — ask for each env separately
       for (const env of targetEnvs) {
-        const envSecrets =
-          env === "preview"
-            ? previewSecrets
-            : env === "canary"
-              ? canarySecrets
-              : prodSecrets;
-        const already = envSecrets.has(secret.name);
+        const already = envSecretSets[env]?.has(secret.name) ?? false;
         if (already && !showAll) continue;
         const value = await prompt(
           rl,
@@ -1078,31 +1070,22 @@ async function main() {
       }
     } else {
       // Human secrets — ask per-environment
-      const pMissing = !previewSecrets.has(secret.name);
-      const dMissing = !prodSecrets.has(secret.name);
+      // Determine which target envs are missing this secret
+      const missingEnvs = targetEnvs.filter(
+        (e) => !envSecretSets[e]?.has(secret.name)
+      );
 
-      // Determine which envs to prompt for
-      let envsToSet: (typeof ENVIRONMENTS)[number][];
-      if (pMissing && dMissing) {
-        const envHint = `[${BOLD}B${RESET}]oth / [${BOLD}P${RESET}]review only / pro[${BOLD}D${RESET}] only / [${BOLD}S${RESET}]kip`;
-        const target = await prompt(rl, `  Set for: ${envHint}: `);
-        const t = target.toLowerCase().trim() || "b";
-        if (t === "s") {
-          skipped++;
-          continue;
-        }
-        envsToSet =
-          t === "p"
-            ? ["preview"]
-            : t === "d"
-              ? ["production"]
-              : [...ENVIRONMENTS];
-      } else {
-        envsToSet = pMissing ? ["preview"] : ["production"];
-        console.log(`  ${DIM}(only missing in ${envsToSet[0]})${RESET}`);
+      if (missingEnvs.length === 0 && !showAll) {
+        skipped++;
+        continue;
       }
 
-      // Prompt for each environment separately
+      const envsToSet = missingEnvs.length > 0 ? missingEnvs : targetEnvs;
+      if (missingEnvs.length > 0 && missingEnvs.length < targetEnvs.length) {
+        console.log(`  ${DIM}(missing in ${missingEnvs.join(", ")})${RESET}`);
+      }
+
+      // Prompt for each environment
       let didSet = false;
       for (const env of envsToSet) {
         const value = await prompt(
