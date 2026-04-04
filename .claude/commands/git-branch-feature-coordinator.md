@@ -75,19 +75,62 @@ When integration is complete and ready to merge into base:
 - **Refuse to use `--admin` flag** on `gh pr merge`. Request the user to manually do it on github
 - **Ask before destructive operations.** Confirm with the user before any reset, force-push, or branch deletion.
 
+## Canary Branch Model
+
+`canary` is the primary integration branch for multi-node deployment. All agent and dev work targets canary via sub-branch PRs.
+
+```
+canary (integration branch — Argo deploys to k3s)
+  ├─ feat/task-NNNN-<slug>  → PR → squash-merge into canary
+  ├─ fix/ci-<description>   → PR → squash-merge into canary
+  └─ ...
+  │
+  └─ PROMOTION: canary → staging (preview) → main (production)
+```
+
+**After merge to canary:**
+
+- CI builds all node images (~3 min)
+- Promotes digests to `infra/k8s/overlays/canary/`
+- deploy-infra.sh deploys Compose services (task.0281)
+- Argo syncs app pods (~30s)
+- Verify polls `/readyz` on all 3 nodes
+- E2E Playwright runs smoke tests
+
+**Monitor deployments:**
+
+- GH Actions: `gh run list --workflow build-multi-node.yml --branch canary`
+- Live domains: `curl -sk https://test.cognidao.org/readyz`
+- Grafana: pod logs via Alloy (PR #723 wiring this)
+- Deployment matrix: `/deployments` page (PR #714)
+
+## Related Resources
+
+| Resource                                          | Purpose                                                 |
+| ------------------------------------------------- | ------------------------------------------------------- |
+| `/contribute` skill                               | Agent dev lifecycle: find work → implement → PR → merge |
+| `/deploy-operator` skill                          | VM provisioning, k3s + Argo bootstrap, health checks    |
+| `work/handoffs/task.0281.handoff.md`              | Canary infra deploy parity (current priority)           |
+| `docs/spec/ci-cd.md`                              | Pipeline spec: canary → preview → production            |
+| `infra/k8s/overlays/{canary,preview,production}/` | Per-env k8s manifests                                   |
+| `scripts/setup/provision-test-vm.sh`              | Full VM provisioning script                             |
+
 ## Interaction Style
 
 - Show the integration branch state as an ASCII tree after each operation.
 - Be terse. State what you did, show the tree, ask what's next.
 - When the user says "merge" without context, they mean squash-merge the most recent open PR into integration.
+- After merging, check CI: `gh pr checks <number>` — report pass/fail.
+- After CI passes on canary, check live deployment: `curl -sk https://test.cognidao.org/readyz`
+- When multiple PRs are open, show dependency order (which must merge first).
 
 ## Example State Display
 
 ```
-feat/rls-integration  ← you are here (abc1234)
-  ├─ #301  ✅ feat(rls): prerequisite prep
-  ├─ #307  ✅ feat(rls): split ports by trust boundary
-  ├─ #308  ✅ refactor(rls): user-scoped AccountService
-  └─ #309  🟡 test(rls): integration test infra
-       → feat/rls-test-infra → feat/rls-integration
+canary  ← integration branch (abc1234)
+  ├─ #721  🟡 fix(ci): caddy upstream default (BLOCKS all stack-tests)
+  ├─ #719  ⏳ fix(ssr): indexedDB dynamic-load (rebase after #721)
+  ├─ #716  ⏳ feat(contributor): CLI + skill (rebase after #721)
+  ├─ #723  ⏳ feat(cd): infra deploy + pod log shipping
+  └─ #714  ⏳ feat(dashboard): deployment matrix
 ```
