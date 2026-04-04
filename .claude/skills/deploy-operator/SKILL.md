@@ -69,8 +69,8 @@ Saves SSH key + VM IP to `.local/` (gitignored). The bootstrap installs Docker +
 After provisioning, cloud-init runs the bootstrap script. Verify it completed:
 
 ```bash
-VM_IP=$(cat .local/test-vm-ip)
-SSH_KEY=".local/test-vm-key"
+VM_IP=$(cat .local/${ENV}-vm-ip)
+SSH_KEY=".local/${ENV}-vm-key"
 
 # Check bootstrap marker
 ssh -i $SSH_KEY root@$VM_IP 'cat /var/lib/cogni/bootstrap.ok'
@@ -90,7 +90,7 @@ Create A records for each node app pointing to the VM IP:
 
 ```bash
 source .env.operator && export CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID
-VM_IP=$(cat .local/test-vm-ip)
+VM_IP=$(cat .local/${ENV}-vm-ip)
 
 # Using dns-ops package:
 npx tsx packages/dns-ops/scripts/create-node.ts <slug>
@@ -234,8 +234,8 @@ exactly what's running, what's broken, and what it costs.
 ### How to gather the data
 
 ```bash
-VM_IP=$(cat .local/test-vm-ip 2>/dev/null || echo "unknown")
-SSH_KEY=".local/test-vm-key"
+VM_IP=$(cat .local/${ENV}-vm-ip 2>/dev/null || echo "unknown")
+SSH_KEY=".local/${ENV}-vm-key"
 CHERRY_TOKEN=$(grep '^CHERRY_AUTH_TOKEN=' .env.operator 2>/dev/null | cut -d= -f2-)
 
 # 1. Component status (SSH to VM)
