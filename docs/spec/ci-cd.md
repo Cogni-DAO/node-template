@@ -3,12 +3,12 @@ id: ci-cd-spec
 type: spec
 title: CI/CD Pipeline Flow
 status: active
-trust: draft
-summary: Automated staging→release→main workflow with fork-safe CI/CD and E2E-triggered promotions
+trust: verified
+summary: Modular canary→staging→release→main pipeline with build-once digest promotion and automated E2E-gated releases
 read_when: Understanding deployment pipelines, release workflow, or CI configuration
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-05
+verified: 2026-04-04
 tags: []
 ---
 
@@ -16,222 +16,199 @@ tags: []
 
 ## Overview
 
-Automated staging→release→main workflow with fork-safe CI/CD and E2E-triggered promotions.
-
-## Critical TODOs
-
-**P0 - Production Reliability**:
-
-- [ ] **Post-deploy verification and rollback**: Add automated smoke tests to `deploy-production.yml` after deploy completes; on failure, automatically redeploy last known-good `prod-<sha>` and mark bad release as blocked. Current state: green pipeline means "deploy finished", not "prod is healthy".
-- [ ] **Image scanning and signing**: Integrate container scanning into `build-prod.yml` (fail on high/critical CVEs) and sign images (cosign or equivalent); `deploy-production.yml` must refuse unsigned/unverified images.
-
-**P1 - Optimization and Maintainability**:
-
-- [ ] **Edge routing CI validation**: Add CI job that starts full stack and validates edge Caddyfile routes via smoke tests: `/health`, `/api/v1/public/*`. Prevents edge config drift from breaking local/CI.
-- [ ] **Config as code validation**: Enforce env schema validation in CI (type-check + required keys), block deploy if invalid, surface staging/prod config diffs during release promotion.
-- [ ] **Refactor `deploy.sh`**: Split 600+ line monolith into composable modules (edge, runtime, cleanup functions).
-- [ ] **Complete migrator fingerprinting**:
-  - [x] `compute_migrator_fingerprint.sh`: Generates stable 12-char content hash
-  - [x] `ci.yaml` (stack-test): Pull by fingerprint, build only if missing
-  - [x] `build-prod.yml`: Compute fingerprint, dual-tag and push migrator
-  - [ ] `staging-preview.yml`: Add fingerprint computation and dual tagging
-  - [ ] `deploy-production.yml`: Compute fingerprint, pass to deploy.sh
-  - [ ] `deploy.sh`: Pull `migrate-${FINGERPRINT}` instead of coupled tag
-  - [ ] Remove legacy coupled `-migrate` tags after all envs use fingerprints
-  - [ ] `build.sh`/`push.sh`: Optionally skip build/push if fingerprint exists remotely
-
-**Non-goals** (defer until needed):
-
-- Per-PR ephemeral environments for every feature branch (not mission-critical at current scale)
-- Full blue/green or traffic-split canaries (staging+release gating sufficient for now)
-
----
+Modular canary-first pipeline. Code builds once on canary, tested digests promote through staging to production. Each workflow has a single responsibility. E2E gates promotion between environments.
 
 ## Branch Model
 
-- **Feature branches** (`feat/`, `fix/`, `chore/`, etc.) → `staging` (via PR)
-- **staging** → `release/YYYYMMDD-<shortsha>` (automated after E2E success)
-- **release/\*** → `main` (via PR, manual approval)
-- **main** → production (manual deploy via workflow_dispatch)
+```
+feat/* → canary → staging → release/* → main
+```
 
-```
-feat/* → staging → release/* → main
-```
+- **Feature branches** (`feat/`, `fix/`, `chore/`, etc.) → `canary` (via PR, CI required)
+- **canary** → `staging` (automated after canary E2E success, same digests)
+- **staging** → `release/YYYYMMDD-<shortsha>` (automated after staging E2E success)
+- **release/\*** → `main` (via PR, manual approval)
 
 **Key invariant**: `main` receives code only via `release/*` branches, never direct commits or non-release PRs.
 
+**Key invariant**: Staging and production never rebuild images. They receive promoted digests from canary.
+
+## Pipeline Chain
+
+One push to canary triggers the full automated chain:
+
+```
+push to canary
+  ├── ci.yaml                         CI gate (parallel with build)
+  │   ├── static: typecheck + lint
+  │   ├── unit: format + arch + docs + unit/contract tests + coverage
+  │   ├── component: testcontainers integration tests
+  │   ├── sonar: code quality scan
+  │   └── stack-test: full Docker stack (postgres, temporal, litellm,
+  │       openclaw, tigerbeetle, caddy, scheduler-worker + app)
+  │
+  └── build-multi-node.yml            Build images (canary only)
+        ↓ workflow_run on success
+      promote-and-deploy.yml [canary]  Promote overlays → deploy infra → verify
+        ↓ workflow_run on success
+      e2e.yml [canary]                 Playwright smoke tests
+        ↓ canary E2E passes
+      promote-and-deploy.yml [staging] Same digests, no rebuild (via workflow_dispatch)
+        ↓ workflow_run on success
+      e2e.yml [staging]                Playwright smoke tests
+        ↓ staging E2E passes
+      e2e.yml promote-release job      Creates release/* branch + PR to main
+```
+
+Release PR merge to main triggers `build-prod.yml` → `deploy-production.yml` (legacy, will migrate to same pattern).
+
+## Workflow Inventory
+
+### Active CD workflows (canary pipeline)
+
+| File                     | Concern                                  | Trigger                                             | Branches                                     |
+| ------------------------ | ---------------------------------------- | --------------------------------------------------- | -------------------------------------------- |
+| `build-multi-node.yml`   | Build images                             | push                                                | canary                                       |
+| `promote-and-deploy.yml` | Promote overlays + deploy infra + verify | workflow_run on Build Multi-Node; workflow_dispatch | canary (auto), staging/production (dispatch) |
+| `e2e.yml`                | E2E smoke + release promotion            | workflow_run on Promote and Deploy                  | canary, staging                              |
+
+### Active CI workflows
+
+| File           | Concern                                       | Trigger            | Branches              |
+| -------------- | --------------------------------------------- | ------------------ | --------------------- |
+| `ci.yaml`      | Typecheck, lint, unit, component, stack tests | pull_request; push | canary, staging, main |
+| `pr-lint.yaml` | PR title lint                                 | pull_request       | all                   |
+
+### Active utility workflows
+
+| File                                     | Concern                        | Trigger              |
+| ---------------------------------------- | ------------------------------ | -------------------- |
+| `archive-feature-history.yml`            | Tag merged feature branches    | merged feat/fix PRs  |
+| `auto-merge-release-prs.yml`             | Auto-merge release PRs         | PR events + schedule |
+| `require-pinned-release-prs-to-main.yml` | Only release/\* can PR to main | PR to main           |
+
+### Legacy (production, pending migration)
+
+| File                    | Concern                  | Trigger                    |
+| ----------------------- | ------------------------ | -------------------------- |
+| `build-prod.yml`        | Build production images  | push to main               |
+| `deploy-production.yml` | SSH deploy to production | workflow_run on build-prod |
+
+These will be retired when production migrates to k8s/Argo and uses the same promote-and-deploy.yml chain.
+
 ## Workflow Details
 
-### 1. Feature Development
+### 1. Build (`build-multi-node.yml`)
 
-```
-feat/xyz → staging (PR with full CI checks)
-fix/abc → staging (PR with full CI checks)
-```
+- **Trigger**: push to canary only
+- **Jobs**: `build-nodes` (matrix: operator, poly, resy) + `build-services` (migrator, scheduler-worker)
+- **Output**: Images pushed to GHCR as `preview-${SHA}`, `preview-${SHA}-poly`, etc.
+- **Concern**: Build and push. Nothing else. No promotion, no deploy, no verify.
+- **Concurrency**: cancel-in-progress per branch (safe for canary)
 
-- Triggers: `ci.yaml` (contains `pnpm check`, `docker-compose.dev build`, `test:stack:docker`)
-- Branch types: `feat/`, `fix/`, `chore/`, `docs/`, `refactor/`
-- Merge requires: approval + green CI
+### 2. Promote and Deploy (`promote-and-deploy.yml`)
 
-### 2. Staging Preview Pipeline
+- **Trigger**: workflow_run on Build Multi-Node success; workflow_dispatch with environment + optional source_sha
+- **Jobs**: `promote-k8s` → `deploy-infra` → `verify`
+- **Promote**: Resolves digests from GHCR, updates k8s overlay, one atomic commit with `[skip ci]`
+- **Deploy**: SSH to VM, runs `scripts/ci/deploy-infra.sh` (Compose infra only — Argo handles app pods)
+- **Verify**: Polls `/readyz` on all 3 nodes, smoke tests `/livez`, SSH diagnostics on failure
+- **Cross-env promotion**: `source_sha` input allows deploying canary's images to staging without rebuild
+- **Concurrency**: cancel-in-progress: false (never cancel a deploy mid-flight)
 
-```
-push to staging → staging-preview.yml
-```
+### 3. E2E and Release (`e2e.yml`)
 
-**Jobs:** `build → test-image → push → deploy → e2e → promote`
+- **Trigger**: workflow_run on Promote and Deploy success
+- **Jobs**: `e2e` → `promote-to-staging` (canary only) → `promote-release` (staging only)
+- **E2E**: Playwright smoke tests against the deployed environment
+- **promote-to-staging**: Dispatches promote-and-deploy.yml for staging with canary's source_sha
+- **promote-release**: Creates `release/YYYYMMDD-<shortsha>` branch + PR to main
 
-- Builds Docker image
-- Tests liveness (/livez gate with minimal env, pre-push validation)
-- Pushes validated image to GHCR
-- Deploys to preview environment (readiness hard-gate on /readyz)
-- Runs full Playwright E2E tests
-- **If E2E passes:** auto-creates release branch + PR to main
+### 4. CI Gate (`ci.yaml`)
 
-### 3. Release Promotion
+- **Trigger**: pull_request (all branches) + push to canary, staging, main
+- **Jobs**: static → unit + component + stack-test (parallel after static)
+- **Stack test**: Full Docker Compose stack with postgres, temporal, litellm, openclaw, tigerbeetle, caddy, scheduler-worker, app. Runs `pnpm test:stack:docker`.
+- **Gate behavior**: CI gates PR merge (required status check). CI also runs on canary/staging/main push as a safety net — build/deploy do not wait for CI.
 
-```
-release/YYYYMMDD-<shortsha> → main (PR)
-```
+## Environments (k8s via Argo CD)
 
-- Triggers: `ci.yaml` (fast sanity checks)
-- **Enforced:** Only `release/*` branches can PR to main
-- Merge requires: approval + green CI
+| Environment | Branch    | GH Environment | Namespace          | Argo ApplicationSet | Purpose           |
+| ----------- | --------- | -------------- | ------------------ | ------------------- | ----------------- |
+| canary      | `canary`  | `canary`       | `cogni-canary`     | `cogni-canary`      | Automated testing |
+| preview     | `staging` | `preview`      | `cogni-preview`    | `cogni-preview`     | Human acceptance  |
+| production  | `main`    | `production`   | `cogni-production` | `cogni-production`  | Production        |
 
-### 4. Production Deploy
+Each GH environment provides its own `VM_HOST`, `SSH_DEPLOY_KEY`, `DOMAIN`, and all infra/app secrets. promote-and-deploy.yml selects the environment based on the triggering branch or the `environment` input.
 
-```
-push to main → build-prod.yml (build → test → push) → deploy-production.yml (triggers on success only)
-```
+## Image Tagging Strategy
 
-- Auto-builds immutable `prod-<sha>` image
-- Tests container health before push (hardcoded test environment)
-- Deploy workflow triggers only on build success
-- Rolling deployment (no downtime)
+**App images**: `preview-${SHA}` (canary/staging share the same images via digest promotion)
 
-### 5. Multi-Node Pipeline (canary → preview → production)
+**Migrator images**: `preview-${SHA}-migrate`
 
-```
-push to canary → build-multi-node.yml
-```
+**Service images**: `preview-${SHA}-scheduler-worker`
 
-**Jobs:** `build-nodes (operator, poly, resy) + build-services (scheduler-worker) → promote-k8s → verify → e2e-canary.yml`
+**Production images** (legacy): `prod-${SHA}` (from build-prod.yml, will converge when production joins the chain)
 
-Parallel builds for all nodes. After build:
-
-- Resolves image digests from GHCR
-- Maps branch → overlay: `canary` → `overlays/canary/`, `staging` → `overlays/preview/`, `main` → `overlays/production/`
-- Commits digest updates to overlay kustomization.yaml files `[skip ci]`
-- Argo CD auto-syncs (30s reconciliation, ApplicationSet per environment)
-- Verify job polls `/readyz` on all 3 nodes
-- E2E Canary (separate workflow) runs Playwright smoke tests against deployed apps
-
-**Environments (k8s via Argo CD):**
-
-| Environment | Branch    | Namespace          | Argo ApplicationSet | Purpose                     |
-| ----------- | --------- | ------------------ | ------------------- | --------------------------- |
-| canary      | `canary`  | `cogni-canary`     | `cogni-canary`      | AI e2e testing (Playwright) |
-| preview     | `staging` | `cogni-preview`    | `cogni-preview`     | Human e2e testing           |
-| production  | `main`    | `cogni-production` | `cogni-production`  | Production                  |
-
-**Note:** This pipeline coexists with the single-node staging-preview pipeline (section 2). The staging-preview pipeline handles the `staging` branch for operator-only deploys with E2E gating and release branch promotion. The multi-node pipeline handles `canary` branch with all 3 nodes. These will be unified when multi-node replaces single-node as the primary deployment path.
-
-**Note:** These are long-lived Argo-managed environments — NOT ephemeral per-PR previews. Ephemeral previews are a separate P2 initiative (see `docs/spec/preview-deployments.md`).
+**Deployment uses digests, not tags.** Overlays reference `image@sha256:...`. Tags are for GHCR organization only.
 
 ## Key Features
 
-- **Fork-safe:** No secrets in PR CI checks
-- **SHA-pinned:** Release branches locked to tested commits via `${GITHUB_SHA}`
-- **SHA-enforced:** CI prevents modification of release branches after promotion
-- **Automated:** E2E success triggers promotion
-- **Enforced:** Workflow prevents bypass of staging gate
-- **Rollback-ready:** Any prod image can be redeployed
-- **History preservation:** Feature branches auto-archived as tags after merge
+- **Build once, promote digest**: Canary builds images. Staging and production deploy the exact same images.
+- **Fork-safe**: CI runs without secrets; CD is gated and skippable on forks.
+- **SHA-pinned**: Release branches locked to tested commits. Promote-and-deploy checks out the exact build SHA.
+- **Automated**: E2E success triggers promotion through environments.
+- **Enforced**: Only `release/*` branches can PR to main.
+- **Rollback-ready**: Revert an overlay commit → Argo syncs previous image.
+
+## Critical TODOs
+
+**P0 - Complete the chain**:
+
+- [ ] Production migration: add `main` to promote-and-deploy.yml triggers, retire build-prod.yml + deploy-production.yml
+- [ ] Gate canary→staging promotion on CI success (currently promotes even if CI fails in parallel)
+
+**P1 - Optimization**:
+
+- [ ] Affected-only builds: Turborepo `--affected` to skip unchanged node images (task.0260)
+- [ ] Migrator fingerprinting: content-addressed `migrate-${FINGERPRINT}` tags for CI cache
+- [ ] Image scanning and signing (cosign)
+- [ ] Edge routing CI validation (Caddyfile smoke tests)
 
 ## TypeScript Package Build Strategy
 
 **Rule**: If a step imports `@cogni/*` packages, run `pnpm packages:build` first.
 
-**Applies to**:
-
-- CI jobs running typecheck/tests
-- Dockerfile before `next build`
-
-**Canonical command**: `pnpm packages:build` runs tsup (JS), tsc -b (declarations), and validation atomically. Same command in local dev, CI, and Docker.
-
-**Current**: Each context builds independently (~1-2s overhead). Future: Turborepo remote caching when scale justifies complexity.
-
-## Image Tagging Strategy
-
-**App images**: Commit-based
-
-- `prod-${GITHUB_SHA}` or `preview-${GITHUB_SHA}`
-
-**Migrator images**: Dual-tagged for backward compatibility during transition
-
-- `prod-${GITHUB_SHA}-migrate` (deploy consumption, legacy)
-- `migrate-${FINGERPRINT}` (content-addressed, CI caching - partial implementation)
-
-**Service images** (see [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md)):
-
-- `prod-${GITHUB_SHA}-${SERVICE}` (e.g., `prod-abc123-scheduler-worker`)
-- Future: Content fingerprinting like migrator
-
-## Branch Management
-
-### Auto-cleanup
-
-- **Setting:** "Automatically delete head branches" enabled in repo settings
-- **Result:** Feature branches deleted after PR merge to prevent accumulation
-
-### History archival
-
-- **Trigger:** `archive-feature-history.yml` runs on merged `feat/*` and `fix/*` PRs
-- **Archive format:** `archive/pr-{number}-{safe-branch-name}` tags
-- **Purpose:** Preserve full incremental commit history for AI training and debugging
-- **Expandable:** Can be extended to include `chore/*`, `docs/*`, etc. as needed
+**Canonical command**: `pnpm packages:build` runs tsup (JS), tsc -b (declarations), and validation atomically.
 
 ## Branch Configuration Settings
 
-### Repository-wide Settings
-
-**Settings → General → Pull Requests:**
-
-- Enable: "Allow squash merging"
-- Enable: "Allow merge commits"
-- Enable: "Automatically delete head branches"
-- Disable: "Allow rebase merging"
-
-### Branch Protection: staging
-
-**Settings → Branches → staging:**
+### Branch Protection: canary
 
 - Require pull request before merging
 - Require status checks to pass: `ci`
 - Require linear history (enforces squash merge)
-- Optional: Restrict pushes to admins only
+
+### Branch Protection: staging
+
+- Require pull request before merging (optional — may receive automated promotions)
+- Require status checks to pass: `ci`
 
 ### Branch Protection: main
 
-**Settings → Branches → main:**
-
 - Require pull request before merging
-- Require status checks to pass:
-  - `ci`
-  - `require-pinned-release-branch` (prevents modified release branches)
+- Require status checks to pass: `ci`, `require-pinned-release-branch`
 - DO NOT require linear history (allows merge commits from release/\*)
-- DO NOT require branches to be up to date (release/\* branches are clean snapshots)
-- Optional: Restrict pushes to admins only
+- DO NOT require branches to be up to date
 
 ### Workflow Enforcement
 
 - `require-pinned-release-prs-to-main.yml` ensures only `release/*` branches can target main AND that release branches match their tested SHA suffix
 
----
-
 ## Related Documentation
 
-- [Application Architecture](architecture.md) - Hexagonal design and code organization
-- [Deployment Architecture](../docs/runbooks/DEPLOYMENT_ARCHITECTURE.md) - Infrastructure and deployment details
-- [CI/CD Services Roadmap](CICD_SERVICES_ROADMAP.md) - Service build/deploy integration plan (GitOps migration)
-- [CI/CD Conflict Recovery](../docs/runbooks/CICD_CONFLICT_RECOVERY.md) - How to resolve release→main conflicts without polluting history
+- [Node CI/CD Contract](node-ci-cd-contract.md) — CI/CD sovereignty invariants, file ownership
+- [Application Architecture](architecture.md) — Hexagonal design and code organization
+- [Deployment Architecture](../runbooks/DEPLOYMENT_ARCHITECTURE.md) — Infrastructure details
+- [CI/CD Conflict Recovery](../runbooks/CICD_CONFLICT_RECOVERY.md) — Release→main conflict resolution
