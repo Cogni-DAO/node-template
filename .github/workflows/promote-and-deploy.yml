@@ -200,6 +200,9 @@ jobs:
           DEPLOY_BRANCH: ${{ steps.env.outputs.deploy_branch }}
         working-directory: deploy-branch
         run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
           SHORT_SHA=$(echo "$HEAD_SHA" | cut -c1-8)
           BRANCH_NAME="promote/${OVERLAY_ENV}-${SHORT_SHA}-$(date +%s)"
 
