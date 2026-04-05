@@ -518,6 +518,11 @@ done
 log_info "Running database provisioning..."
 ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml run --rm db-provision'
 
+# Temporal namespace bootstrap (idempotent — same script used by deploy-infra.sh)
+log_info "Ensuring Temporal namespace exists..."
+scp $SSH_OPTS "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" root@"$VM_IP":/tmp/ensure-temporal-namespace.sh
+ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CONTAINER=cogni-runtime-temporal-1 TEMPORAL_TIMEOUT=60 bash /tmp/ensure-temporal-namespace.sh"
+
 # ══════════════════════════════════════════════════════════════
 # Phase 6: Create k8s secrets directly on cluster
 # ══════════════════════════════════════════════════════════════
