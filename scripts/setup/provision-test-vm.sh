@@ -389,6 +389,7 @@ log_info "Cloning $DEPLOY_BRANCH..."
 git clone --depth=1 --branch "$DEPLOY_BRANCH" "$REPO_URL" "$DEPLOY_TMP" 2>/dev/null
 
 # Sed-replace any IP in EndpointSlice address arrays across all overlays
+# Note: sed -i '' is macOS syntax — this script runs locally only (not in CI)
 for overlay in "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}"/*/kustomization.yaml; do
   if [[ -f "$overlay" ]]; then
     sed -i '' -E "s/value: \[\"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\"\]/value: [\"${VM_IP}\"]/g" "$overlay"

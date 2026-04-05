@@ -156,6 +156,8 @@ jobs:
           # Base templates and catalog may change on the app branch.
           # Overlays are NOT synced — they contain env-specific state (IPs)
           # that provision wrote directly to the deploy branch.
+          # NOTE: New node overlay directories must be added to the deploy branch
+          # manually when a node is added (see docs/guides/node-formation-guide.md).
           rsync -a --delete app-src/infra/k8s/base/ deploy-branch/infra/k8s/base/
           rsync -a --delete app-src/infra/catalog/ deploy-branch/infra/catalog/
 
