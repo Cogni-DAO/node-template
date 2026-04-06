@@ -99,6 +99,7 @@
 | 1 | 5 | 3 | needs_merge | task.0209 | Multi-provider LLM rearchitecture — ModelCatalogPort + ModelRef | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 1 | 5 | 2 | needs_triage | bug.0231 | Token usage has three disagreeing sources — app logs, LiteLLM spend_logs, and billing callback |  |  |
 | 1 | 5 | 3 | needs_merge | task.0273 | Unify workspace: move operator to nodes/operator/app | Operator Plane | proj.operator-plane |
+| 1 | 5 | 2 | needs_closeout | task.0299 | Contributor quickstart — 'update a node graph and see it on canary' |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -148,7 +149,9 @@
 | 1 | 99 | 1 | needs_triage | bug.0166 | Stale Split contract holds $10 USDC — deployed with test wallet, cannot distribute | AI Operator Wallet | proj.ai-operator-wallet |
 | 1 | 99 | 2 | needs_triage | story.0193 | Lobster Racing: competitive OpenClaw agents funded by web3 wallets |  |  |
 | 1 | 99 | 2 | needs_triage | spike.0194 | Spike: Lobster Racing infrastructure and provisioning research |  |  |
-| 1 | 99 | 3 | needs_research | spike.0263 | Spike: agent contributor protocol — communication mechanism + workflow design | Development Workflows | proj.development-workflows |
+| 1 | 99 | 3 | needs_triage | task.0264 | Implement GitHub Actions governance dispatch workflow for multi-agent coordination | Development Workflows | proj.development-workflows |
+| 1 | 99 | 1 | needs_triage | task.0265 | Define and document structured agent review comment format with parseable metadata | Development Workflows | proj.development-workflows |
+| 1 | 99 | 1 | needs_triage | spike.0266 | Research: Agent invocation patterns — Claude Code remote trigger, Codex API, unattended execution | Development Workflows | proj.development-workflows |
 | 2 | 0 | 2 | needs_triage | task.0109 | Expand GitHub adapter — PR comments, review comments, issue creation | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 2 | 3 | needs_design | task.0238 | Agent avatars — Rive/Lottie animated characters on run cards and chat | Premium Frontend UX | proj.premium-frontend-ux |
 | 2 | 3 | 1 | needs_triage | bug.0012 | pre-commit check:docs validates all files, not just staged — blocks unrelated commits |  |  |
@@ -316,6 +319,7 @@
 | 1 | task.0248 | Deduplicate node platform: capability extractions + thin app shell | Operator Plane | proj.operator-plane |
 | 1 | task.0250 | Extract @cogni/graph-execution-host package | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | story.0262 | Agent contributor protocol — shared workflow for AI agents coordinating on a codebase | Development Workflows | proj.development-workflows |
+| 1 | spike.0263 | Spike: agent contributor protocol — communication mechanism + workflow design | Development Workflows | proj.development-workflows |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |
