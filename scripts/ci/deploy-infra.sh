@@ -810,8 +810,15 @@ fi
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 8.5: OpenClaw readiness gate (fail deploy if crash-looping)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Waiting for OpenClaw readiness..."
-bash /tmp/healthcheck-openclaw.sh "$RUNTIME_COMPOSE --profile sandbox-openclaw"
+# OpenClaw readiness gate — skip if gateway container doesn't exist or never started.
+# Not all environments run OpenClaw (e.g. preview may not have the image).
+OPENCLAW_CID=$($RUNTIME_COMPOSE --profile sandbox-openclaw ps -q openclaw-gateway 2>/dev/null || true)
+if [[ -n "$OPENCLAW_CID" ]] && docker inspect -f '{{.State.Status}}' "$OPENCLAW_CID" 2>/dev/null | grep -q "running"; then
+  log_info "Waiting for OpenClaw readiness..."
+  bash /tmp/healthcheck-openclaw.sh "$RUNTIME_COMPOSE --profile sandbox-openclaw"
+else
+  log_warn "OpenClaw gateway not running — skipping readiness gate"
+fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 9: Verify deployment
