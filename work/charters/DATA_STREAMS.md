@@ -83,6 +83,20 @@ Target agents:
 | `StreamCard` + event content kit     | ✅ Built       | HealthEvent, CiStatus, Deploy, ProcessHealth renderers    |
 | Temporal → Redis publish step        | ❌ Not wired   | Activities write to Postgres but NOT to Redis streams yet |
 | `IngestionSummaryEvent` type         | ❌ Not defined | Needed for Temporal activities to publish summaries       |
+| Doltgres (Knowledge Data Plane)      | ✅ Canary      | Versioned knowledge store. PR #772: compose + k8s + CI/CD |
+
+### Knowledge Store (Doltgres)
+
+Per [knowledge-data-plane spec](../../docs/spec/knowledge-data-plane.md): versioned knowledge store with git-like history (commit, log, diff). Postgres-compatible wire protocol, same driver.
+
+| Layer                  | Canary         | Preview | Production | Notes                                           |
+| ---------------------- | -------------- | ------- | ---------- | ----------------------------------------------- |
+| Compose service        | ✅ PR #772     | ❌      | ❌         | `dolthub/doltgresql:latest`, port 5435          |
+| Provisioning (CI/CD)   | ✅ PR #772     | ❌      | ❌         | `derive_secret()` — zero new GitHub secrets     |
+| k8s bridge             | ✅ PR #772     | ❌      | ❌         | EndpointSlice → host:5435                       |
+| App integration        | ✅ Optional    | ✅      | ✅         | `DOLTGRES_URL` in Zod schema, graceful absence  |
+| Knowledge API endpoint | ❌ Not built   | —       | —          | Internal only via AI agent tool bindings         |
+| Per-node databases     | 3 (op/poly/re) | —       | —          | `knowledge_{node}` with reader/writer roles     |
 
 ## What's Blocking Progress
 
