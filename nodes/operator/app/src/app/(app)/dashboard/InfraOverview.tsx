@@ -19,6 +19,7 @@ import {
   TableRow,
 } from "@/components";
 import { Progress } from "@/components/kit/feedback/Progress";
+import type { StreamEvent } from "@/features/node-stream";
 import { useNodeStream } from "@/features/node-stream";
 import { cn } from "@/shared/util/cn";
 
@@ -61,28 +62,37 @@ interface StreamSource {
   hasRedis: boolean;
   hasSSE: boolean;
   hasUI: boolean;
+  hasAgentRead: boolean;
+  hasAgentMonitor: boolean;
+  hasTriggers: boolean;
 }
 
 const STREAM_SOURCES: StreamSource[] = [
   {
     name: "GitHub (poll)",
     domain: "vcs",
-    maturity: 30,
+    maturity: 20,
     hasAdapter: true,
     hasTemporal: true,
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "GitHub (webhook)",
     domain: "vcs",
-    maturity: 30,
+    maturity: 50,
     hasAdapter: true,
     hasTemporal: false,
-    hasRedis: false,
-    hasSSE: false,
-    hasUI: false,
+    hasRedis: true,
+    hasSSE: true,
+    hasUI: true,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Alchemy",
@@ -93,6 +103,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Polymarket",
@@ -103,6 +116,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Kalshi",
@@ -113,6 +129,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Grafana/Mimir",
@@ -123,6 +142,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Cross-node health",
@@ -133,6 +155,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Discord",
@@ -143,6 +168,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "PostHog",
@@ -153,6 +181,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
 ];
 
@@ -282,7 +313,16 @@ function DrillDown({ data }: { data: DrillDownData }): ReactElement {
   );
 }
 
-const PIPELINE_STAGES = ["Adapter", "Temporal", "Redis", "SSE", "UI"] as const;
+const PIPELINE_STAGES = [
+  "Adapter",
+  "Temporal",
+  "Redis",
+  "SSE",
+  "UI",
+  "Agent Read",
+  "Monitor",
+  "Triggers",
+] as const;
 
 function DataStreamScorecard(): ReactElement {
   return (
@@ -311,6 +351,9 @@ function DataStreamScorecard(): ReactElement {
               src.hasRedis,
               src.hasSSE,
               src.hasUI,
+              src.hasAgentRead,
+              src.hasAgentMonitor,
+              src.hasTriggers,
             ];
             return (
               <TableRow key={src.name}>
@@ -355,8 +398,149 @@ function DataStreamScorecard(): ReactElement {
   );
 }
 
+/** Map VcsActivityEvent fields to a human-readable activity label. */
+function vcsActivityLabel(eventType: string, action: string): string {
+  switch (eventType) {
+    case "pull_request":
+      if (action === "merged") return "PR merged";
+      if (action === "opened") return "PR opened";
+      if (action === "closed") return "PR closed";
+      return `PR ${action}`;
+    case "push":
+      return "Push";
+    case "pull_request_review":
+      return "Review";
+    case "issues":
+      if (action === "opened") return "Issue opened";
+      if (action === "closed") return "Issue closed";
+      return `Issue ${action}`;
+    case "issue_comment":
+      return "Comment";
+    default:
+      return eventType;
+  }
+}
+
+/** Map action to a Badge intent for state display. */
+function vcsStateBadgeIntent(
+  action: string
+): "default" | "secondary" | "destructive" | "outline" {
+  switch (action) {
+    case "merged":
+    case "submitted":
+    case "approved":
+      return "default";
+    case "opened":
+      return "secondary";
+    case "closed":
+      return "destructive";
+    default:
+      return "outline";
+  }
+}
+
+/** Format an ISO timestamp as a relative time string (e.g. "2m ago"). */
+function relativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  if (diffMs < 0) return "just now";
+  const seconds = Math.floor(diffMs / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+/** Derive a short ref string for a VCS event (PR number, branch, or title). */
+function vcsRef(event: StreamEvent): string {
+  const prNumber = event.prNumber as number | null;
+  if (prNumber) return `#${prNumber}`;
+  const title = event.title as string | undefined;
+  if (title) return title.length > 30 ? `${title.slice(0, 27)}...` : title;
+  return "\u2014";
+}
+
+function GitActivityFeed({
+  events,
+}: {
+  events: readonly StreamEvent[];
+}): ReactElement {
+  const vcsEvents = events
+    .filter((e) => e.type === "vcs_activity")
+    .slice(-8)
+    .reverse();
+
+  if (vcsEvents.length === 0) {
+    return (
+      <div className="space-y-2">
+        <h3 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+          Git Activity
+        </h3>
+        <p className="py-3 text-center text-muted-foreground/60 text-xs">
+          No git activity yet
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <h3 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+        Git Activity
+      </h3>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-28">Activity</TableHead>
+            <TableHead className="w-28">Ref</TableHead>
+            <TableHead className="w-24">Actor</TableHead>
+            <TableHead className="w-20">State</TableHead>
+            <TableHead className="w-16 text-right">Time</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {vcsEvents.map((ev, i) => {
+            const eventType = String(ev.eventType ?? "");
+            const action = String(ev.action ?? "");
+            const actor = String(ev.actor ?? "\u2014");
+            return (
+              <TableRow key={`${ev.timestamp}-${i}`}>
+                <TableCell className="py-1.5 text-xs">
+                  {vcsActivityLabel(eventType, action)}
+                </TableCell>
+                <TableCell className="py-1.5 font-mono text-xs">
+                  {vcsRef(ev)}
+                </TableCell>
+                <TableCell className="py-1.5 text-muted-foreground text-xs">
+                  {actor}
+                </TableCell>
+                <TableCell className="py-1.5">
+                  {eventType !== "push" ? (
+                    <Badge intent={vcsStateBadgeIntent(action)} size="sm">
+                      {action}
+                    </Badge>
+                  ) : (
+                    <span className="text-muted-foreground/50 text-xs">
+                      {"\u2014"}
+                    </span>
+                  )}
+                </TableCell>
+                <TableCell className="py-1.5 text-right text-muted-foreground text-xs tabular-nums">
+                  {relativeTime(ev.timestamp)}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 export function InfraOverview(): ReactElement {
-  const { latest, status: connectionStatus } = useNodeStream();
+  const { latest, events, status: connectionStatus } = useNodeStream();
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const ph = latest.get("process_health");
@@ -492,6 +676,8 @@ export function InfraOverview(): ReactElement {
             <DrillDown data={operatorDrill} />
           </div>
         )}
+
+        <GitActivityFeed events={events} />
 
         <DataStreamScorecard />
       </CardContent>
