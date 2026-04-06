@@ -2,20 +2,10 @@
   "$schema": "https://turbo.build/schema.json",
   "tasks": {
     "typecheck": {
-      "inputs": [
-        "src/**",
-        "tests/**",
-        "tsconfig*.json",
-        "package.json"
-      ]
+      "inputs": ["src/**", "tests/**", "tsconfig*.json", "package.json"]
     },
     "lint": {
-      "inputs": [
-        "src/**",
-        "tests/**",
-        "*.config.*",
-        "package.json"
-      ]
+      "inputs": ["src/**", "tests/**", "*.config.*", "package.json"]
     },
     "test": {
       "inputs": [

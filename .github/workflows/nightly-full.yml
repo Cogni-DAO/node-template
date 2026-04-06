@@ -6,7 +6,7 @@ name: Nightly Full Validation
 
 on:
   schedule:
-    - cron: '0 6 * * *' # 6 AM UTC daily
+    - cron: "0 6 * * *" # 6 AM UTC daily
   workflow_dispatch:
 
 permissions:
