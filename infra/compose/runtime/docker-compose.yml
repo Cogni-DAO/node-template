@@ -576,6 +576,33 @@ services:
         condition: service_completed_successfully
 
   # =============================================================================
+  # Sandbox Aider (profile: sandbox-aider)
+  # Headless coding agent POC using aider + socat LLM bridge
+  # =============================================================================
+
+  sandbox-aider:
+    image: ${SANDBOX_AIDER_IMAGE:-cogni-sandbox-aider:latest}
+    build:
+      context: ../../../services/sandbox-aider
+      dockerfile: Dockerfile
+    profiles: [sandbox-aider]
+    networks:
+      - sandbox-internal
+    environment:
+      - AIDER_MODEL=${AIDER_MODEL:-openrouter/moonshotai/kimi-k2.5}
+      - LITELLM_API_KEY=${LITELLM_MASTER_KEY}
+      - OPENAI_API_BASE=http://localhost:8080/v1
+    volumes:
+      - aider_workspace:/workspace
+    mem_limit: 512m
+    memswap_limit: 768m
+    pids_limit: 256
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+
+  # =============================================================================
   # TigerBeetle (Financial Ledger)
   # Per financial-ledger-spec: double-entry ledger engine
   # Self-initializing: formats data file on first boot, then starts.
@@ -647,3 +674,5 @@ volumes:
     name: tigerbeetle_data
   cogni_workspace:
     name: cogni_workspace
+  aider_workspace:
+    name: aider_workspace
