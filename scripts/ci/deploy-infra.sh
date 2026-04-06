@@ -427,6 +427,19 @@ append_env_if_set() {
     if [[ -n "$val" ]]; then printf '%s=%s\n' "$key" "$val" >> "$file"; fi
 }
 
+# Derive a deterministic secret from POSTGRES_ROOT_PASSWORD + salt.
+# Avoids adding new GitHub Environment secrets for internal service credentials.
+# Same input → same output across deploys. Rotates when POSTGRES_ROOT_PASSWORD rotates.
+derive_secret() {
+  local salt="$1"
+  echo -n "${salt}:${POSTGRES_ROOT_PASSWORD}" | openssl dgst -sha256 2>/dev/null | awk '{print $NF}' | head -c 48
+}
+
+# Doltgres passwords — derived, not stored in GitHub Environment
+DOLTGRES_PASSWORD=$(derive_secret "doltgres-root")
+DOLTGRES_READER_PASSWORD=$(derive_secret "doltgres-reader")
+DOLTGRES_WRITER_PASSWORD=$(derive_secret "doltgres-writer")
+
 log_info "Setting up infrastructure deployment on VM..."
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -541,6 +554,10 @@ LITELLM_NODE_ENDPOINTS="4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://host.docker.
 printf '%s=%s\n' COGNI_NODE_ENDPOINTS "$LITELLM_NODE_ENDPOINTS" >> "$RUNTIME_ENV"
 # Multi-node DB provisioning
 append_env_if_set "$RUNTIME_ENV" COGNI_NODE_DBS "${COGNI_NODE_DBS-}"
+# Doltgres (Knowledge Data Plane) — passwords derived from POSTGRES_ROOT_PASSWORD
+printf '%s=%s\n' DOLTGRES_PASSWORD "$DOLTGRES_PASSWORD" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DOLTGRES_READER_PASSWORD "$DOLTGRES_READER_PASSWORD" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DOLTGRES_WRITER_PASSWORD "$DOLTGRES_WRITER_PASSWORD" >> "$RUNTIME_ENV"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 2: Start edge stack (idempotent - only starts if not running)
@@ -616,24 +633,24 @@ source /tmp/seed-pnpm-store.sh
 # Step 4: Assert profile services exist (guard against silent compose drift)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 RESOLVED_SERVICES=$($RUNTIME_COMPOSE --profile bootstrap --profile sandbox-openclaw config --services)
-for svc in openclaw-gateway llm-proxy-openclaw; do
+for svc in openclaw-gateway llm-proxy-openclaw doltgres-provision; do
   if ! echo "$RESOLVED_SERVICES" | grep -q "^${svc}$"; then
     log_error "Profile guardrail: service '$svc' not found in compose config."
     exit 1
   fi
 done
-log_info "Profile guardrail passed: openclaw-gateway, llm-proxy-openclaw resolved"
+log_info "Profile guardrail passed: openclaw-gateway, llm-proxy-openclaw, doltgres-provision resolved"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 5: Start/update postgres (must be healthy before provisioning)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Bringing up postgres..."
-if ! output="$($RUNTIME_COMPOSE up -d postgres 2>&1)"; then
+log_info "Bringing up postgres + doltgres..."
+if ! output="$($RUNTIME_COMPOSE up -d postgres doltgres 2>&1)"; then
   printf '%s\n' "$output" >&2
   if grep -qiE 'has active endpoints|error while removing network' <<<"$output"; then
     log_warn "Incremental reconcile failed due to network recreation; forcing full runtime teardown..."
     $RUNTIME_COMPOSE --profile sandbox-openclaw down --remove-orphans --timeout 30
-    $RUNTIME_COMPOSE up -d postgres
+    $RUNTIME_COMPOSE up -d postgres doltgres
   else
     exit 1
   fi
@@ -650,6 +667,12 @@ emit_deployment_event "infra_deployment.db_provision_started" "in_progress" "Pro
 $RUNTIME_COMPOSE --profile bootstrap run --rm db-provision
 log_info "[$(date -u +%H:%M:%S)] DB provisioning complete"
 emit_deployment_event "infra_deployment.db_provision_complete" "success" "Database provisioned successfully"
+
+log_info "[$(date -u +%H:%M:%S)] Running Doltgres provisioning..."
+emit_deployment_event "infra_deployment.doltgres_provision_started" "in_progress" "Provisioning Doltgres knowledge databases"
+$RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-provision
+log_info "[$(date -u +%H:%M:%S)] Doltgres provisioning complete"
+emit_deployment_event "infra_deployment.doltgres_provision_complete" "success" "Doltgres knowledge databases provisioned"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6.5: Create/update k8s secrets + rolling restart (bridge — task.0284 replaces)
@@ -703,6 +726,12 @@ LANGFUSE_SECRET_KEY=${LANGFUSE_SECRET_KEY:-}
 LANGFUSE_BASE_URL=${LANGFUSE_BASE_URL:-}
 COGNI_NODE_ENDPOINTS=${COGNI_NODE_ENDPOINTS:-}
 SECEOF
+    # Doltgres URL — poly uses DOLTGRES_URL_POLY, others use DOLTGRES_URL
+    if [ "$node" = "poly" ]; then
+      printf '%s=%s\n' DOLTGRES_URL_POLY "postgresql://knowledge_writer:${DOLTGRES_WRITER_PASSWORD}@${HOST_IP}:5435/knowledge_poly?sslmode=disable" >> "$SECRET_FILE"
+    else
+      printf '%s=%s\n' DOLTGRES_URL "postgresql://knowledge_writer:${DOLTGRES_WRITER_PASSWORD}@${HOST_IP}:5435/knowledge_${node}?sslmode=disable" >> "$SECRET_FILE"
+    fi
     kubectl -n "${K8S_NS}" create secret generic "${node}-node-app-secrets" \
       --from-env-file="$SECRET_FILE" --dry-run=client -o yaml | kubectl apply -f -
     rm -f "$SECRET_FILE"
@@ -765,7 +794,7 @@ emit_deployment_event "infra_deployment.stack_up_started" "in_progress" "Startin
 $RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
 
 # Infra services only — excludes app, scheduler-worker, db-migrate
-INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
+INFRA_SERVICES="postgres doltgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
 $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
 
 # Sandbox-openclaw services (separate profile)
