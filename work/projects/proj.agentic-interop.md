@@ -65,7 +65,16 @@ We have: hexagonal architecture (57 boundary tests), tool catalog with 6 tools, 
 | `tools/list_changed` notification when catalog changes                                 | Not Started | 1   | —         |
 | Documentation: MCP server setup and tool catalog                                       | Not Started | 1   | —         |
 
-**Auth (P0.1):**
+**API Key Auth (P0.0) — Programmatic Access for Agents + CLI:**
+
+| Deliverable                                                                         | Status | Est | Work Item |
+| ----------------------------------------------------------------------------------- | ------ | --- | --------- |
+| `api_keys` table — actor-scoped keys (argon2id hash, prefix, scopes, rate limits)   | Design | 1   | task.0300 |
+| Dual-mode auth on `POST /api/v1/chat/completions` (session OR Bearer key)           | Design | 1   | task.0300 |
+| API key CRUD endpoints (`/api/v1/auth/api-keys` — create, list, revoke)             | Design | 0.5 | task.0300 |
+| Agent self-provisioning — agents create sub-keys with equal or narrower scopes      | Design | 0.5 | task.0300 |
+
+**OAuth 2.1 Auth (P0.1) — MCP Resource Access:**
 
 | Deliverable                                                                     | Status      | Est | Work Item |
 | ------------------------------------------------------------------------------- | ----------- | --- | --------- |
