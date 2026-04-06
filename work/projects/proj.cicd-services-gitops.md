@@ -24,22 +24,42 @@ Get the canary-first pipeline fully green: build once on canary, promote proven 
 
 ```
 build → promote → deploy-infra → verify  → e2e   → preview → release → production
-GREEN    GREEN      GREEN          RED       BLOCKED  BLOCKED   BLOCKED   LEGACY
+GREEN    GREEN      GREEN          AMBER     BLOCKED  BLOCKED   BLOCKED   LEGACY
 ```
+
+Verify is AMBER: all nodes healthy via NodePort, blocked only by Let's Encrypt TLS rate limit (resets 01:39 UTC 2026-04-06). Not a code bug.
 
 ## Active Blockers
 
-| #   | Issue                                                                                                   | Status         | Owner     | Impact                                                                   |
-| --- | ------------------------------------------------------------------------------------------------------- | -------------- | --------- | ------------------------------------------------------------------------ |
-| 1   | **Canary provision succeeded, verify RED on poly DNS** — operator healthy, poly/resy DNS not resolving  | 🔧 IN PROGRESS | Other dev | Blocks verify → E2E → everything downstream                              |
-| 2   | **Preview provision triggered** — waiting for VM + bootstrap completion                                 | 🔧 IN PROGRESS | Other dev | Preview env not yet available                                            |
-| 3   | **Deploy branches use PRs instead of direct commits** — unnecessary noise for machine-written state     | ❌ RED         | —         | task.0292                                                                |
-| 4   | **Production rebuilds instead of promoting** — `build-prod.yml` builds fresh `prod-${SHA}` on main push | ❌ RED         | —         | Production gets different images than validated in canary/preview        |
-| 5   | **CI doesn't gate canary→preview** — `e2e.yml` dispatches without checking `ci.yaml` status             | ❌ RED         | —         | task.0293                                                                |
-| 6   | **Release PR conveyor belt** — auto-creates release PR on every preview E2E success                     | ❌ RED         | —         | task.0294                                                                |
-| 7   | **No production promotion in pipeline** — promote-and-deploy supports it but nothing triggers it        | ❌ RED         | —         | Only legacy build-prod→deploy-production exists                          |
-| 8   | **Rename staging→preview in workflows** — `staging` branch name + refs are historical artifacts         | ❌ RED         | —         | Naming confusion; `e2e.yml` lines 10, 113, 128 + `ci.yaml` push triggers |
-| 9   | **SHA-pin OpenClaw images** — gateway uses `:latest`, violates IMAGE_IMMUTABILITY                       | ❌ RED         | —         | Mutable tags in production                                               |
+| #   | Issue                                                                                                    | Status      | Owner | Impact                                                                    |
+| --- | -------------------------------------------------------------------------------------------------------- | ----------- | ----- | ------------------------------------------------------------------------- |
+| 1   | **TLS cert rate limit** — Let's Encrypt 5-per-identifier-per-hour limit hit after domain expiry recovery | ⏳ WAITING  | —     | Resets 01:39 UTC 2026-04-06. Re-trigger verify then.                      |
+| 2   | **provision Phase 7 clones wrong branch** — `${BRANCH}` (staging) lacks `infra/k8s/argocd/` files        | ❌ BUG      | —     | Preview ApplicationSets must be applied manually. Fix: SCP from local.    |
+| 3   | **Caddyfile www redirect** — `www.{$DOMAIN}` block creates certs for nonexistent `www.test.*` domains    | ✅ FIXED    | —     | Removed www block. Only needed for production (with DNS record).          |
+| 4   | **Deploy branches use PRs instead of direct commits**                                                    | ✅ DONE     | —     | task.0292: direct push for all envs                                       |
+| 5   | **Production rebuilds instead of promoting** — `build-prod.yml` builds fresh `prod-${SHA}` on main push  | ❌ RED      | —     | Production gets different images than validated in canary/preview         |
+| 6   | **CI doesn't gate canary→preview**                                                                       | ✅ DONE     | —     | task.0293: promote-to-preview.sh checks CI before dispatch                |
+| 7   | **Release PR conveyor belt**                                                                             | ✅ DONE     | —     | task.0294: policy-gated via release.yml workflow_dispatch                 |
+| 8   | **No production promotion in pipeline** — promote-and-deploy supports it but nothing triggers it         | ❌ RED      | —     | Only legacy build-prod→deploy-production exists                           |
+| 9   | **Rename staging→preview in workflows**                                                                  | ✅ DONE     | —     | deploy/preview branch created, all refs updated                           |
+| 10  | **SHA-pin OpenClaw images** — gateway uses `:latest`, violates IMAGE_IMMUTABILITY                        | ❌ RED      | —     | Mutable tags in production                                                |
+| 11  | **Argo EndpointSlice OutOfSync** — k8s adds metadata fields not in Git manifests                         | ⚠️ COSMETIC | —     | Fix: add `ignoreDifferences` for EndpointSlice metadata in ApplicationSet |
+| 12  | **Canary missing Prometheus metrics** — Alloy running but preview has no Alloy deployed                  | ⚠️ GAP      | —     | Preview has no metrics scraping; canary Loki flowing                      |
+
+## Environment Status (2026-04-06)
+
+| Check                     | Canary (84.32.109.160) | Preview (84.32.110.92) |
+| ------------------------- | ---------------------- | ---------------------- |
+| VM + k3s + Argo CD        | ✅                     | ✅                     |
+| All node pods Running 1/1 | ✅                     | ✅                     |
+| Migrations completed      | ✅                     | ✅                     |
+| NodePort /readyz 200      | ✅ (all 3)             | ✅ (all 3)             |
+| Compose infra healthy     | ✅                     | ✅                     |
+| TLS certs (HTTPS)         | ❌ rate limited        | ❌ rate limited        |
+| Loki logs flowing         | ✅                     | TBD                    |
+| Prometheus metrics        | ⚠️ canary only         | ❌ no Alloy            |
+| GitHub secrets set        | ✅                     | ✅                     |
+| DNS A records correct     | ✅                     | ✅                     |
 
 ## Roadmap
 
@@ -105,7 +125,7 @@ GREEN    GREEN      GREEN          RED       BLOCKED  BLOCKED   BLOCKED   LEGACY
 
 ## Dependencies
 
-- [ ] EndpointSlice IPs on deploy branches + Temporal namespace bootstrap (blocks verify → everything downstream) — other dev actively working: extracting env-endpoints.yaml, wiring ensure-temporal-namespace.sh, adding migration job wait gates
+- [x] EndpointSlice IPs on deploy branches + Temporal namespace bootstrap — fixed in #774. Provision writes IPs, promote writes digests. One writer per deploy fact.
 - [ ] turbo.json pipeline config (blocks affected-only CI)
 
 ## Relocated Sections

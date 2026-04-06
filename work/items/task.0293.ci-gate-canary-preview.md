@@ -2,7 +2,7 @@
 id: task.0293
 type: task
 title: "Gate canary→preview promotion on CI success"
-status: needs_implement
+status: needs_merge
 priority: 0
 rank: 2
 estimate: 1
@@ -15,7 +15,7 @@ project: proj.cicd-services-gitops
 branch:
 pr_url:
 created: 2026-04-05
-updated: 2026-04-05
+updated: 2026-04-06
 labels: [ci-cd, deploy]
 ---
 
