@@ -20,13 +20,13 @@ import { LANGGRAPH_CATALOG, LANGGRAPH_GRAPH_IDS } from "../../../src/catalog";
 import { createOperatorGraph } from "../../../src/graphs/operator/graph";
 
 describe("operator catalog entries", () => {
-  it("ceo-operator entry exists with systemPrompt and graphFactory", () => {
-    const entry = LANGGRAPH_CATALOG["ceo-operator"];
+  it("operating-review entry exists with systemPrompt and graphFactory", () => {
+    const entry = LANGGRAPH_CATALOG["operating-review"];
     expect(entry).toBeDefined();
-    expect(entry.displayName).toBe("CEO Operator");
+    expect(entry.displayName).toBe("Operating Review");
     expect(entry.systemPrompt).toBeDefined();
     expect(typeof entry.systemPrompt).toBe("string");
-    expect(entry.systemPrompt!.length).toBeGreaterThan(100);
+    expect((entry.systemPrompt ?? "").length).toBeGreaterThan(100);
     expect(entry.toolIds.length).toBeGreaterThan(0);
     expect(entry.graphFactory).toBe(createOperatorGraph);
   });
@@ -37,18 +37,20 @@ describe("operator catalog entries", () => {
     expect(entry.displayName).toBe("Git Reviewer");
     expect(entry.systemPrompt).toBeDefined();
     expect(typeof entry.systemPrompt).toBe("string");
-    expect(entry.systemPrompt!.length).toBeGreaterThan(100);
+    expect((entry.systemPrompt ?? "").length).toBeGreaterThan(100);
     expect(entry.graphFactory).toBe(createOperatorGraph);
   });
 
   it("graph IDs include operator roles", () => {
-    expect(LANGGRAPH_GRAPH_IDS["ceo-operator"]).toBe("langgraph:ceo-operator");
+    expect(LANGGRAPH_GRAPH_IDS["operating-review"]).toBe(
+      "langgraph:operating-review"
+    );
     expect(LANGGRAPH_GRAPH_IDS["git-reviewer"]).toBe("langgraph:git-reviewer");
   });
 
   it("existing graph entries are unchanged", () => {
     // Verify original entries still exist and don't have systemPrompt
-    const poet = LANGGRAPH_CATALOG["poet"];
+    const poet = LANGGRAPH_CATALOG.poet;
     expect(poet).toBeDefined();
     expect(poet.displayName).toBe("Poet");
     expect(poet.systemPrompt).toBeUndefined();

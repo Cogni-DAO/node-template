@@ -14,6 +14,15 @@
  * @public
  */
 
+// Knowledge capability (per knowledge-data-plane spec)
+export type {
+  KnowledgeCapability,
+  KnowledgeEntry,
+  KnowledgeListParams,
+  KnowledgeSearchParams,
+  KnowledgeWriteParams,
+} from "./knowledge";
+export { CONFIDENCE } from "./knowledge";
 // Metrics capability (per GOVERNED_METRICS invariant)
 export type {
   MetricDataPoint,
@@ -49,6 +58,15 @@ export type {
   ClockCapability,
   ToolCapabilities,
 } from "./types";
+// VCS capability (per VCS_WRITE_CAPABLE)
+export type {
+  CheckInfo,
+  CiStatusResult,
+  CreateBranchResult,
+  MergeResult,
+  PrSummary,
+  VcsCapability,
+} from "./vcs";
 // Web search capability
 export type {
   WebSearchCapability,
@@ -57,6 +75,14 @@ export type {
   WebSearchResultItem,
   WebSearchTopic,
 } from "./web-search";
+// Work item capability
+export type {
+  WorkItemAssignee,
+  WorkItemCapability,
+  WorkItemInfo,
+  WorkItemQueryParams,
+  WorkItemTransitionResult,
+} from "./work-item";
 
 import type { AuthCapability, ClockCapability } from "./types";
 
