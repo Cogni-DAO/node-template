@@ -132,7 +132,10 @@ class CogniNodeRouter(CustomLogger):
             if self.billing_token:
                 headers["Authorization"] = f"Bearer {self.billing_token}"
 
-            ingest_url = endpoint.rstrip("/") + "/api/internal/billing/ingest"
+            # COGNI_NODE_ENDPOINTS may contain full paths (deploy-infra.sh) or
+            # base URLs (CI/dev). Append ingest path only if not already present.
+            base = endpoint.rstrip("/")
+            ingest_url = base if "/api/internal/billing/ingest" in base else base + "/api/internal/billing/ingest"
             response = await self._client.post(
                 ingest_url,
                 content=json.dumps([payload]),
