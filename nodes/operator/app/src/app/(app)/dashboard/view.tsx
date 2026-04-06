@@ -282,9 +282,6 @@ export function DashboardView(): ReactElement {
         </ToggleGroup>
       </div>
 
-      {/* Infrastructure overview from live stream */}
-      <InfraOverview />
-
       {/* Two-column top section: Agents + Work */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Left — Agents */}
@@ -419,6 +416,9 @@ export function DashboardView(): ReactElement {
           </CardContent>
         </Card>
       </div>
+
+      {/* Infrastructure overview */}
+      <InfraOverview />
 
       {/* Activity Section */}
       <div className="flex flex-col gap-4">

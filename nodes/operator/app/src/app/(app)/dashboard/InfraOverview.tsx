@@ -282,72 +282,77 @@ function DrillDown({ data }: { data: DrillDownData }): ReactElement {
   );
 }
 
+const PIPELINE_STAGES = ["Adapter", "Temporal", "Redis", "SSE", "UI"] as const;
+
 function DataStreamScorecard(): ReactElement {
   return (
     <div className="space-y-2">
       <h3 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
         Data Streams Pipeline
       </h3>
-      <div className="space-y-1">
-        {STREAM_SOURCES.map((src) => (
-          <div key={src.name} className="flex items-center gap-2 text-xs">
-            <span
-              className={cn(
-                "h-1.5 w-1.5 shrink-0 rounded-full",
-                maturityColor(src.maturity)
-              )}
-            />
-            <span className="w-36 shrink-0 truncate text-foreground">
-              {src.name}
-            </span>
-            <span className="w-14 shrink-0 text-muted-foreground">
-              {src.domain}
-            </span>
-            <div className="flex flex-1 items-center gap-1">
-              <PipelineStep done={src.hasAdapter} label="Adapter" />
-              <PipelineArrow />
-              <PipelineStep done={src.hasTemporal} label="Temporal" />
-              <PipelineArrow />
-              <PipelineStep done={src.hasRedis} label="Redis" />
-              <PipelineArrow />
-              <PipelineStep done={src.hasSSE} label="SSE" />
-              <PipelineArrow />
-              <PipelineStep done={src.hasUI} label="UI" />
-            </div>
-            <span className="w-10 shrink-0 text-right font-mono text-muted-foreground tabular-nums">
-              {src.maturity}%
-            </span>
-          </div>
-        ))}
-      </div>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-36">Source</TableHead>
+            <TableHead className="w-20">Domain</TableHead>
+            {PIPELINE_STAGES.map((stage) => (
+              <TableHead key={stage} className="w-16 text-center">
+                {stage}
+              </TableHead>
+            ))}
+            <TableHead className="w-12 text-right">Ready</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {STREAM_SOURCES.map((src) => {
+            const stages = [
+              src.hasAdapter,
+              src.hasTemporal,
+              src.hasRedis,
+              src.hasSSE,
+              src.hasUI,
+            ];
+            return (
+              <TableRow key={src.name}>
+                <TableCell className="py-1.5">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={cn(
+                        "h-2 w-2 shrink-0 rounded-full",
+                        maturityColor(src.maturity)
+                      )}
+                    />
+                    <span className="truncate text-xs">{src.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell className="py-1.5 text-muted-foreground text-xs">
+                  {src.domain}
+                </TableCell>
+                {stages.map((done, i) => (
+                  <TableCell
+                    key={PIPELINE_STAGES[i]}
+                    className="py-1.5 text-center"
+                  >
+                    <span
+                      className={cn(
+                        "text-xs",
+                        done ? "text-success" : "text-muted-foreground/30"
+                      )}
+                    >
+                      {done ? "\u2713" : "\u2715"}
+                    </span>
+                  </TableCell>
+                ))}
+                <TableCell className="py-1.5 text-right font-mono text-muted-foreground text-xs tabular-nums">
+                  {src.maturity}%
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
     </div>
   );
-}
-
-function PipelineStep({
-  done,
-  label,
-}: {
-  done: boolean;
-  label: string;
-}): ReactElement {
-  return (
-    <span
-      className={cn(
-        "rounded px-1 py-0.5 text-xs",
-        done
-          ? "bg-success/15 text-success"
-          : "bg-muted text-muted-foreground/40"
-      )}
-      title={label}
-    >
-      {done ? label : "\u2014"}
-    </span>
-  );
-}
-
-function PipelineArrow(): ReactElement {
-  return <span className="text-muted-foreground/30 text-xs">&rarr;</span>;
 }
 
 export function InfraOverview(): ReactElement {
