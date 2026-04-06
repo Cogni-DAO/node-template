@@ -23,46 +23,76 @@ Get the canary-first pipeline fully green: build once on canary, promote proven 
 ## Pipeline Health
 
 ```
-build → promote → deploy-infra → verify → e2e → preview → release → production
-GREEN    GREEN      GREEN          AMBER    TBD    TBD       NEW       LEGACY
+build → promote → deploy-infra → verify → e2e → promote-to-preview
+GREEN    GREEN      AMBER          GREEN    GREEN   GREEN
 ```
 
-Verify is AMBER: TLS rate limit (resets hourly). Build Multi-Node + CI running on latest push. E2E, preview promotion (new `promote-to-preview.sh`), and release (`release.yml`) are untested in production — first real run pending.
+Canary full chain GREEN. Production deployed and healthy. deploy-infra AMBER: OpenClaw healthcheck skip works but Alloy/git-sync/repo-init health gate too strict.
+
+## Branch Model (updated 2026-04-06)
+
+```
+feat/* → canary → release/* → main (default)
+deploy/canary, deploy/preview, deploy/production  (deploy state)
+```
+
+- **`main`** is the default branch (changed from `staging` on 2026-04-06)
+- **`staging`** is DEPRECATED — kept temporarily for workflow_run compatibility, will be deleted
+- `workflow_run` reads from `main` now
+- No more cherry-pick tax between branches
 
 ## Active Blockers
 
-| #   | Issue                                                                                                    | Status      | Owner | Impact                                                                     |
-| --- | -------------------------------------------------------------------------------------------------------- | ----------- | ----- | -------------------------------------------------------------------------- |
-| 1   | **TLS cert rate limit** — Let's Encrypt 5-per-identifier-per-hour limit hit after domain expiry recovery | ⏳ WAITING  | —     | Resets 01:39 UTC 2026-04-06. Re-trigger verify then.                       |
-| 2   | **provision Phase 7 clones wrong branch** — `${BRANCH}` (staging) lacks `infra/k8s/argocd/` files        | ✅ FIXED    | —     | SCP from local checkout using per-env `APPSET_FILE`. No branch dependency. |
-| 3   | **Caddyfile www redirect** — `www.{$DOMAIN}` block creates certs for nonexistent `www.test.*` domains    | ✅ FIXED    | —     | Removed www block. Only needed for production (with DNS record).           |
-| 4   | **Deploy branches use PRs instead of direct commits**                                                    | ✅ DONE     | —     | task.0292: direct push for all envs                                        |
-| 5   | **Production rebuilds instead of promoting** — `build-prod.yml` builds fresh `prod-${SHA}` on main push  | ❌ RED      | —     | Production gets different images than validated in canary/preview          |
-| 6   | **CI doesn't gate canary→preview**                                                                       | ✅ DONE     | —     | task.0293: promote-to-preview.sh checks CI before dispatch                 |
-| 7   | **Release PR conveyor belt**                                                                             | ✅ DONE     | —     | task.0294: policy-gated via release.yml workflow_dispatch                  |
-| 8   | **No production promotion in pipeline** — promote-and-deploy supports it but nothing triggers it         | ❌ RED      | —     | Only legacy build-prod→deploy-production exists                            |
-| 9   | **Rename staging→preview in workflows**                                                                  | ✅ DONE     | —     | deploy/preview branch created, all refs updated                            |
-| 10  | **SHA-pin OpenClaw images** — gateway uses `:latest`, violates IMAGE_IMMUTABILITY                        | ❌ RED      | —     | Mutable tags in production                                                 |
-| 11  | **Argo EndpointSlice OutOfSync** — k8s adds metadata fields not in Git manifests                         | ⚠️ COSMETIC | —     | Fix: add `ignoreDifferences` for EndpointSlice metadata in ApplicationSet  |
-| 12  | **Canary missing Prometheus metrics** — Alloy running but preview has no Alloy deployed                  | ⚠️ GAP      | —     | Preview has no metrics scraping; canary Loki flowing                       |
-| 13  | **VM IPs in public repo** — env-endpoints.yaml on deploy branches exposes bare VM IPs                    | ⚠️ SECURITY | —     | bug.0295: need floating IPs or DNS-only EndpointSlices                     |
-| 14  | **Affected-only builds** — CI rebuilds/retests everything on every PR, no scope detection                | ❌ RED      | —     | task.0260: Turborepo --affected, mandatory for fast monorepo iteration     |
-| 15  | **Stack tests + E2E not running on canary pipeline** — legacy staging-preview had full test coverage     | ❌ RED      | —     | Canary pipeline must reach parity: stack-test in CI, E2E after deploy      |
+| #   | Issue                                                                            | Status      | Owner | Impact                                                             |
+| --- | -------------------------------------------------------------------------------- | ----------- | ----- | ------------------------------------------------------------------ |
+| 1   | **Provision creates incomplete k8s secrets** — missing OAuth, Privy, connections | ❌ RED      | —     | bug.0296. Production patched manually. Provision not reproducible. |
+| 2   | **LiteLLM billing callback DNS** — 0 charge_receipts everywhere                  | ❌ RED      | —     | #781 merged but needs deploy-infra success to take effect          |
+| 3   | **deploy-infra health gate too strict** — Alloy/git-sync/repo-init block on exit | ❌ RED      | —     | OpenClaw skip in place, but other services still fail              |
+| 4   | **SHA-pin OpenClaw images** — gateway uses `:latest`                             | ❌ RED      | —     | Violates IMAGE_IMMUTABILITY                                        |
+| 5   | **160 stale branches** — 16 release/_, 19 claude/_, 7 codex/_, old feat/_        | ❌ RED      | —     | Repo hygiene. Need auto-tag+delete workflow.                       |
+| 6   | **preview.cognidao.org TLS** — last cert pending                                 | ⚠️ WAITING  | —     | Self-resolves (Caddy auto-retry)                                   |
+| 7   | **Argo EndpointSlice OutOfSync** — k8s metadata drift                            | ⚠️ COSMETIC | —     | `ignoreDifferences` fix needed                                     |
+| 8   | **Prometheus metrics gap** — Alloy on canary only                                | ⚠️ GAP      | —     | Preview/production have no metrics scraping                        |
+| 9   | **VM IPs in public repo** — EndpointSlices expose bare IPs                       | ⚠️ SECURITY | —     | bug.0295                                                           |
+| 10  | **Affected-only builds** — CI rebuilds everything on every PR                    | ❌ RED      | —     | task.0260: Turborepo --affected                                    |
+| 11  | **Deprecate staging branch** — no longer needed, main is default                 | ⚠️ CLEANUP  | —     | Delete after confirming no remaining references                    |
 
-## Environment Status (2026-04-06)
+## Resolved (2026-04-06 deploy session)
 
-| Check                     | Canary (84.32.109.160) | Preview (84.32.110.92) |
-| ------------------------- | ---------------------- | ---------------------- |
-| VM + k3s + Argo CD        | ✅                     | ✅                     |
-| All node pods Running 1/1 | ✅                     | ✅                     |
-| Migrations completed      | ✅                     | ✅                     |
-| NodePort /readyz 200      | ✅ (all 3)             | ✅ (all 3)             |
-| Compose infra healthy     | ✅                     | ✅                     |
-| TLS certs (HTTPS)         | ❌ rate limited        | ❌ rate limited        |
-| Loki logs flowing         | ✅                     | TBD                    |
-| Prometheus metrics        | ⚠️ canary only         | ❌ no Alloy            |
-| GitHub secrets set        | ✅                     | ✅                     |
-| DNS A records correct     | ✅                     | ✅                     |
+| Issue                                         | Resolution                                    |
+| --------------------------------------------- | --------------------------------------------- |
+| Canary + preview + production VMs provisioned | 3 fresh VMs, all healthy                      |
+| Pipeline never completed E2E                  | Full chain GREEN                              |
+| provision Phase 7 branch bug                  | SCP from local (dev fix)                      |
+| Caddyfile www redirect blocking TLS           | Removed www block                             |
+| deploy-infra OpenClaw healthcheck             | Skip when not running                         |
+| Scheduler-worker port mismatch                | :3100/:3300 → :3000                           |
+| Legacy build-prod.yml                         | Deleted from staging+main                     |
+| staging/canary workflow drift                 | Full merge via #784, #785                     |
+| CI doesn't gate canary→preview                | task.0293 done                                |
+| Release PR conveyor belt                      | task.0294 done                                |
+| E2E as separate workflow (chaining bug)       | Collapsed into promote-and-deploy             |
+| Canary reset to main                          | Force-pushed, branches aligned                |
+| Default branch → main                         | Changed from staging                          |
+| Production OAuth secrets missing              | Manually patched k8s secrets (bug.0296 filed) |
+
+## Environment Status (2026-04-06 06:00 UTC)
+
+| Check                     | Canary (84.32.109.160) | Preview (84.32.110.92) | Production (84.32.110.202) |
+| ------------------------- | ---------------------- | ---------------------- | -------------------------- |
+| VM + k3s + Argo CD        | ✅                     | ✅                     | ✅                         |
+| All node pods Running 1/1 | ✅                     | ✅                     | ✅                         |
+| Migrations completed      | ✅                     | ✅                     | ✅                         |
+| NodePort /readyz 200      | ✅ (all 3)             | ✅ (all 3)             | ✅ (all 3)                 |
+| Compose infra healthy     | ✅                     | ✅                     | ✅                         |
+| TLS certs (HTTPS)         | ✅ (3/3)               | ⚠️ (2/3)               | ✅ (3/3)                   |
+| Loki logs flowing         | ✅                     | TBD                    | TBD                        |
+| Prometheus metrics        | ⚠️ canary only         | ❌ no Alloy            | ❌ no Alloy                |
+| GitHub secrets set        | ✅                     | ✅                     | ✅                         |
+| DNS A records correct     | ✅                     | ✅                     | ✅                         |
+| Chat working              | ✅                     | ✅                     | TBD                        |
+| OAuth sign-in             | TBD                    | TBD                    | ✅ (manual patch)          |
+| Billing pipeline          | TBD                    | ❌ 0 receipts          | TBD                        |
 
 ## Roadmap
 
