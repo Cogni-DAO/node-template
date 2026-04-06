@@ -59,11 +59,11 @@ Track every data source from planned → fully observable. Each source progresse
 
 ### Core Data Streams (node AI activity aggregation)
 
-| Source                    | Domain   | Adapter                    | DB Storage          | API              | UI Card              | Monitoring Agent | Maturity | Blockers                           |
-| ------------------------- | -------- | -------------------------- | ------------------- | ---------------- | -------------------- | ---------------- | -------- | ---------------------------------- |
-| **LiteLLM billing**       | ai-usage | ❌ cogni_callbacks.py DEAD | ✅ charge_receipts  | ✅ /api/v1/activity | ✅ ActivityChart   | ❌ none          | **10%**  | **bug.0297**: double-pathed URL, callback crashes everywhere |
-| **Codex BYO-AI**          | ai-usage | ✅ CodexLlmAdapter         | ✅ charge_receipts  | ✅ /api/v1/activity | ✅ ActivityChart   | ❌ none          | **40%**  | No cost tracking (by design — BYO), no token breakdown, no latency |
-| **Sandbox (OpenClaw)**    | ai-usage | ✅ ProxyBillingEntry       | ✅ charge_receipts  | ✅ /api/v1/activity | ✅ ActivityChart   | ❌ none          | **30%**  | Only works in dev stack, not deployed |
+| Source                 | Domain   | Adapter                    | DB Storage         | API                 | UI Card          | Monitoring Agent | Maturity | Blockers                                                           |
+| ---------------------- | -------- | -------------------------- | ------------------ | ------------------- | ---------------- | ---------------- | -------- | ------------------------------------------------------------------ |
+| **LiteLLM billing**    | ai-usage | ❌ cogni_callbacks.py DEAD | ✅ charge_receipts | ✅ /api/v1/activity | ✅ ActivityChart | ❌ none          | **10%**  | **bug.0297**: double-pathed URL, callback crashes everywhere       |
+| **Codex BYO-AI**       | ai-usage | ✅ CodexLlmAdapter         | ✅ charge_receipts | ✅ /api/v1/activity | ✅ ActivityChart | ❌ none          | **40%**  | No cost tracking (by design — BYO), no token breakdown, no latency |
+| **Sandbox (OpenClaw)** | ai-usage | ✅ ProxyBillingEntry       | ✅ charge_receipts | ✅ /api/v1/activity | ✅ ActivityChart | ❌ none          | **30%**  | Only works in dev stack, not deployed                              |
 
 ### Node-Local (process metrics — bootstrap exception)
 
