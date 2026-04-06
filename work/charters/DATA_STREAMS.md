@@ -5,7 +5,7 @@ title: "Data Streams Scorecard"
 state: Active
 summary: Living tracker of data source maturity across the Cogni node network.
 created: 2026-04-05
-updated: 2026-04-05
+updated: 2026-04-06
 ---
 
 # Data Streams Scorecard
@@ -25,43 +25,47 @@ Track every data source from planned → fully observable. Each source progresse
 
 ## Constraints
 
-- Temporal activities write to Postgres but NOT to Redis streams yet (blocks all sources at 30%)
+- Temporal activities write to Postgres but NOT to Redis streams yet (blocks poll-based sources at 20%)
 - No `IngestionSummaryEvent` type (blocks SSE visibility for ingested data)
 - Market providers (Polymarket/Kalshi) have adapters but no Temporal workflow to schedule them
+- No `core__node_stream_read` AI tool yet (task.0297) — blocks agent access to all streams
+- No agent actively monitors any stream — max maturity is 50% until agent read tool + monitoring wired
 
 ## Maturity Levels
 
-| Level | Meaning                                                         |
-| ----- | --------------------------------------------------------------- |
-| 0%    | Planned — no code                                               |
-| 10%   | Adapter exists but not registered or tested                     |
-| 30%   | Adapter registered, Temporal activity collects data to Postgres |
-| 50%   | Data flows to Redis live plane (`streams:{domain}:{source}`)    |
-| 70%   | Summary published to `node:{nodeId}:events`, visible on SSE     |
-| 90%   | Frontend card renders on dashboard, AI agent can read it        |
-| 100%  | Trigger evaluation + selective Postgres persistence active      |
+| Level | Meaning                                                             |
+| ----- | ------------------------------------------------------------------- |
+| 0%    | Planned — no code                                                   |
+| 10%   | Adapter exists but not registered or tested                         |
+| 20%   | Adapter registered, Temporal activity collects data to Postgres     |
+| 30%   | Data flows to Redis live plane (`streams:{domain}:{source}`)        |
+| 40%   | Summary published to `node:{nodeId}:events`, visible on SSE         |
+| 50%   | Frontend card renders on dashboard                                  |
+| 60%   | AI agent has read tool access (`core__node_stream_read`)            |
+| 80%   | Agent actively monitors the stream (LangGraph agent watches events) |
+| 100%  | Auto-triggers fire on threshold conditions (like Grafana alerts)    |
 
 ## Scorecard
 
 ### Ingestion Sources (external data → canonical pipeline)
 
-| Source                | Domain            | Adapter               | Temporal                | Redis Stream | SSE Summary | UI Card | Triggers | Monitoring Agent | Maturity |
-| --------------------- | ----------------- | --------------------- | ----------------------- | ------------ | ----------- | ------- | -------- | ---------------- | -------- |
-| **GitHub (poll)**     | vcs               | ✅ PollAdapter        | ✅ CollectEpochWorkflow | ❌           | ❌          | ❌      | ❌       | ❌ none          | **30%**  |
-| **GitHub (webhook)**  | vcs               | ✅ WebhookNormalizer  | n/a (real-time)         | ❌           | ❌          | ❌      | ❌       | ❌ none          | **30%**  |
-| **Alchemy (webhook)** | on-chain          | ✅ WebhookNormalizer  | n/a                     | ❌           | ❌          | ❌      | ❌       | ❌ none          | **10%**  |
-| **Polymarket**        | prediction-market | ✅ MarketProviderPort | ❌ no workflow          | ❌           | ❌          | ❌      | ❌       | ❌ none          | **10%**  |
-| **Kalshi**            | prediction-market | ✅ MarketProviderPort | ❌ no workflow          | ❌           | ❌          | ❌      | ❌       | ❌ none          | **10%**  |
-| **Grafana/Mimir**     | observability     | ✅ MetricsQueryPort   | ❌                      | ❌           | ❌          | ❌      | ❌       | ❌ none          | **10%**  |
-| **Cross-node health** | operations        | ❌                    | ❌                      | ❌           | ❌          | ❌      | ❌       | ❌ none          | **0%**   |
-| **Discord**           | community         | ❌                    | ❌                      | ❌           | ❌          | ❌      | ❌       | ❌ none          | **0%**   |
-| **PostHog**           | analytics         | ❌                    | ❌                      | ❌           | ❌          | ❌      | ❌       | ❌ none          | **0%**   |
+| Source                | Domain            | Adapter               | Temporal                | Redis Stream | SSE Summary | UI Card | Agent Read | Agent Monitor | Auto-Triggers | Maturity |
+| --------------------- | ----------------- | --------------------- | ----------------------- | ------------ | ----------- | ------- | ---------- | ------------- | ------------- | -------- |
+| **GitHub (poll)**     | vcs               | ✅ PollAdapter        | ✅ CollectEpochWorkflow | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **20%**  |
+| **GitHub (webhook)**  | vcs               | ✅ WebhookNormalizer  | n/a (real-time)         | ✅           | ✅          | ✅      | ❌         | ❌ none       | ❌            | **50%**  |
+| **Alchemy (webhook)** | on-chain          | ✅ WebhookNormalizer  | n/a                     | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **10%**  |
+| **Polymarket**        | prediction-market | ✅ MarketProviderPort | ❌ no workflow          | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **10%**  |
+| **Kalshi**            | prediction-market | ✅ MarketProviderPort | ❌ no workflow          | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **10%**  |
+| **Grafana/Mimir**     | observability     | ✅ MetricsQueryPort   | ❌                      | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **10%**  |
+| **Cross-node health** | operations        | ❌                    | ❌                      | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **0%**   |
+| **Discord**           | community         | ❌                    | ❌                      | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **0%**   |
+| **PostHog**           | analytics         | ❌                    | ❌                      | ❌           | ❌          | ❌      | ❌         | ❌ none       | ❌            | **0%**   |
 
 ### Node-Local (process metrics — bootstrap exception)
 
-| Source                           | Adapter        | Redis Stream              | SSE | UI Card              | Monitoring Agent | Top Triggers                   | Maturity |
-| -------------------------------- | -------------- | ------------------------- | --- | -------------------- | ---------------- | ------------------------------ | -------- |
-| **Process health** (heap/RSS/EL) | ✅ setInterval | ✅ `node:{nodeId}:events` | ✅  | ✅ ProcessHealthCard | ❌ none          | heap >80%, EL >100ms, RSS >1GB | **30%**  |
+| Source                           | Adapter        | Redis Stream              | SSE | UI Card              | Agent Read | Agent Monitor | Auto-Triggers                     | Maturity |
+| -------------------------------- | -------------- | ------------------------- | --- | -------------------- | ---------- | ------------- | --------------------------------- | -------- |
+| **Process health** (heap/RSS/EL) | ✅ setInterval | ✅ `node:{nodeId}:events` | ✅  | ✅ ProcessHealthCard | ❌         | ❌ none       | ❌ heap >80%, EL >100ms (planned) | **50%**  |
 
 ### Monitoring Agent Coverage
 
@@ -86,21 +90,20 @@ Target agents:
 
 ## What's Blocking Progress
 
-The biggest gap across all external sources is the same: **Temporal activities write to `ingestion_receipts` (Postgres) but do NOT write to Redis streams.** The `STREAM_THEN_EVALUATE` invariant from the spec says every poll writes to Redis first — this isn't implemented yet.
+Two bottlenecks gate all sources:
 
-Once that step is added to the existing `collectFromSource` activity, every source that already has an adapter (GitHub, Polymarket, Kalshi, Alchemy) immediately jumps from 30% → 50%.
+1. **Poll-based sources stuck at 20%** — Temporal activities write to `ingestion_receipts` (Postgres) but NOT to Redis streams. The `STREAM_THEN_EVALUATE` invariant says every poll writes to Redis first — not implemented yet. Fixing `collectFromSource` unblocks GitHub (poll), Polymarket, Kalshi, and Grafana simultaneously.
 
-Adding the summary publish to `node:{nodeId}:events` after that takes them from 50% → 70%.
-
-The frontend card for each source takes them from 70% → 90%.
+2. **All sources capped at 50%** — No AI agent can read streams yet. `core__node_stream_read` (task.0297) is the read tool that gives agents access. Without it, no agent monitoring or auto-triggers are possible.
 
 ## Next Steps (Priority Order)
 
-1. **Wire Redis publish into `collectFromSource` activity** — affects all sources at once
-2. **Add `IngestionSummaryEvent` type** — defines the summary shape for `node:{nodeId}:events`
-3. **Create `MarketStreamWorkflow`** — Temporal workflow for Polymarket/Kalshi polling (currently only usable via AI tool, not scheduled)
-4. **Add Grafana health polling adapter** — cross-node health probes via MetricsQueryPort
-5. **Frontend cards per source** — `GitHubEventContent`, `MarketEventContent`, etc.
+1. **Build `core__node_stream_read` tool** (task.0297) — gives AI agents stream access, unblocks 60%+
+2. **Wire Redis publish into `collectFromSource` activity** — unblocks poll-based sources to 30%+
+3. **Add `IngestionSummaryEvent` type** — summary shape for `node:{nodeId}:events`
+4. **Wire git-manager to monitor VCS stream** — first agent actively monitoring a stream (→ 80%)
+5. **Create `MarketStreamWorkflow`** — Temporal workflow for Polymarket/Kalshi polling
+6. **Add auto-trigger evaluation** — threshold-based alerts (heap >80%, CI failure, etc.) → 100%
 
 ## Guide
 

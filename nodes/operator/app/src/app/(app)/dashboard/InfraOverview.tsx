@@ -62,28 +62,37 @@ interface StreamSource {
   hasRedis: boolean;
   hasSSE: boolean;
   hasUI: boolean;
+  hasAgentRead: boolean;
+  hasAgentMonitor: boolean;
+  hasTriggers: boolean;
 }
 
 const STREAM_SOURCES: StreamSource[] = [
   {
     name: "GitHub (poll)",
     domain: "vcs",
-    maturity: 30,
+    maturity: 20,
     hasAdapter: true,
     hasTemporal: true,
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "GitHub (webhook)",
     domain: "vcs",
-    maturity: 90,
+    maturity: 50,
     hasAdapter: true,
     hasTemporal: false,
     hasRedis: true,
     hasSSE: true,
     hasUI: true,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Alchemy",
@@ -94,6 +103,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Polymarket",
@@ -104,6 +116,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Kalshi",
@@ -114,6 +129,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Grafana/Mimir",
@@ -124,6 +142,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Cross-node health",
@@ -134,6 +155,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "Discord",
@@ -144,6 +168,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
   {
     name: "PostHog",
@@ -154,6 +181,9 @@ const STREAM_SOURCES: StreamSource[] = [
     hasRedis: false,
     hasSSE: false,
     hasUI: false,
+    hasAgentRead: false,
+    hasAgentMonitor: false,
+    hasTriggers: false,
   },
 ];
 
@@ -283,7 +313,16 @@ function DrillDown({ data }: { data: DrillDownData }): ReactElement {
   );
 }
 
-const PIPELINE_STAGES = ["Adapter", "Temporal", "Redis", "SSE", "UI"] as const;
+const PIPELINE_STAGES = [
+  "Adapter",
+  "Temporal",
+  "Redis",
+  "SSE",
+  "UI",
+  "Agent Read",
+  "Monitor",
+  "Triggers",
+] as const;
 
 function DataStreamScorecard(): ReactElement {
   return (
@@ -312,6 +351,9 @@ function DataStreamScorecard(): ReactElement {
               src.hasRedis,
               src.hasSSE,
               src.hasUI,
+              src.hasAgentRead,
+              src.hasAgentMonitor,
+              src.hasTriggers,
             ];
             return (
               <TableRow key={src.name}>
