@@ -31,23 +31,23 @@ Verify is AMBER: TLS rate limit (resets hourly). Build Multi-Node + CI running o
 
 ## Active Blockers
 
-| #   | Issue                                                                                                    | Status      | Owner | Impact                                                                    |
-| --- | -------------------------------------------------------------------------------------------------------- | ----------- | ----- | ------------------------------------------------------------------------- |
-| 1   | **TLS cert rate limit** — Let's Encrypt 5-per-identifier-per-hour limit hit after domain expiry recovery | ⏳ WAITING  | —     | Resets 01:39 UTC 2026-04-06. Re-trigger verify then.                      |
-| 2   | **provision Phase 7 clones wrong branch** — `${BRANCH}` (staging) lacks `infra/k8s/argocd/` files        | ❌ BUG      | —     | Preview ApplicationSets must be applied manually. Fix: SCP from local.    |
-| 3   | **Caddyfile www redirect** — `www.{$DOMAIN}` block creates certs for nonexistent `www.test.*` domains    | ✅ FIXED    | —     | Removed www block. Only needed for production (with DNS record).          |
-| 4   | **Deploy branches use PRs instead of direct commits**                                                    | ✅ DONE     | —     | task.0292: direct push for all envs                                       |
-| 5   | **Production rebuilds instead of promoting** — `build-prod.yml` builds fresh `prod-${SHA}` on main push  | ❌ RED      | —     | Production gets different images than validated in canary/preview         |
-| 6   | **CI doesn't gate canary→preview**                                                                       | ✅ DONE     | —     | task.0293: promote-to-preview.sh checks CI before dispatch                |
-| 7   | **Release PR conveyor belt**                                                                             | ✅ DONE     | —     | task.0294: policy-gated via release.yml workflow_dispatch                 |
-| 8   | **No production promotion in pipeline** — promote-and-deploy supports it but nothing triggers it         | ❌ RED      | —     | Only legacy build-prod→deploy-production exists                           |
-| 9   | **Rename staging→preview in workflows**                                                                  | ✅ DONE     | —     | deploy/preview branch created, all refs updated                           |
-| 10  | **SHA-pin OpenClaw images** — gateway uses `:latest`, violates IMAGE_IMMUTABILITY                        | ❌ RED      | —     | Mutable tags in production                                                |
-| 11  | **Argo EndpointSlice OutOfSync** — k8s adds metadata fields not in Git manifests                         | ⚠️ COSMETIC | —     | Fix: add `ignoreDifferences` for EndpointSlice metadata in ApplicationSet |
-| 12  | **Canary missing Prometheus metrics** — Alloy running but preview has no Alloy deployed                  | ⚠️ GAP      | —     | Preview has no metrics scraping; canary Loki flowing                      |
-| 13  | **VM IPs in public repo** — env-endpoints.yaml on deploy branches exposes bare VM IPs                    | ⚠️ SECURITY | —     | bug.0295: need floating IPs or DNS-only EndpointSlices                    |
-| 14  | **Affected-only builds** — CI rebuilds/retests everything on every PR, no scope detection                | ❌ RED      | —     | task.0260: Turborepo --affected, mandatory for fast monorepo iteration    |
-| 15  | **Stack tests + E2E not running on canary pipeline** — legacy staging-preview had full test coverage     | ❌ RED      | —     | Canary pipeline must reach parity: stack-test in CI, E2E after deploy     |
+| #   | Issue                                                                                                    | Status      | Owner | Impact                                                                     |
+| --- | -------------------------------------------------------------------------------------------------------- | ----------- | ----- | -------------------------------------------------------------------------- |
+| 1   | **TLS cert rate limit** — Let's Encrypt 5-per-identifier-per-hour limit hit after domain expiry recovery | ⏳ WAITING  | —     | Resets 01:39 UTC 2026-04-06. Re-trigger verify then.                       |
+| 2   | **provision Phase 7 clones wrong branch** — `${BRANCH}` (staging) lacks `infra/k8s/argocd/` files        | ✅ FIXED    | —     | SCP from local checkout using per-env `APPSET_FILE`. No branch dependency. |
+| 3   | **Caddyfile www redirect** — `www.{$DOMAIN}` block creates certs for nonexistent `www.test.*` domains    | ✅ FIXED    | —     | Removed www block. Only needed for production (with DNS record).           |
+| 4   | **Deploy branches use PRs instead of direct commits**                                                    | ✅ DONE     | —     | task.0292: direct push for all envs                                        |
+| 5   | **Production rebuilds instead of promoting** — `build-prod.yml` builds fresh `prod-${SHA}` on main push  | ❌ RED      | —     | Production gets different images than validated in canary/preview          |
+| 6   | **CI doesn't gate canary→preview**                                                                       | ✅ DONE     | —     | task.0293: promote-to-preview.sh checks CI before dispatch                 |
+| 7   | **Release PR conveyor belt**                                                                             | ✅ DONE     | —     | task.0294: policy-gated via release.yml workflow_dispatch                  |
+| 8   | **No production promotion in pipeline** — promote-and-deploy supports it but nothing triggers it         | ❌ RED      | —     | Only legacy build-prod→deploy-production exists                            |
+| 9   | **Rename staging→preview in workflows**                                                                  | ✅ DONE     | —     | deploy/preview branch created, all refs updated                            |
+| 10  | **SHA-pin OpenClaw images** — gateway uses `:latest`, violates IMAGE_IMMUTABILITY                        | ❌ RED      | —     | Mutable tags in production                                                 |
+| 11  | **Argo EndpointSlice OutOfSync** — k8s adds metadata fields not in Git manifests                         | ⚠️ COSMETIC | —     | Fix: add `ignoreDifferences` for EndpointSlice metadata in ApplicationSet  |
+| 12  | **Canary missing Prometheus metrics** — Alloy running but preview has no Alloy deployed                  | ⚠️ GAP      | —     | Preview has no metrics scraping; canary Loki flowing                       |
+| 13  | **VM IPs in public repo** — env-endpoints.yaml on deploy branches exposes bare VM IPs                    | ⚠️ SECURITY | —     | bug.0295: need floating IPs or DNS-only EndpointSlices                     |
+| 14  | **Affected-only builds** — CI rebuilds/retests everything on every PR, no scope detection                | ❌ RED      | —     | task.0260: Turborepo --affected, mandatory for fast monorepo iteration     |
+| 15  | **Stack tests + E2E not running on canary pipeline** — legacy staging-preview had full test coverage     | ❌ RED      | —     | Canary pipeline must reach parity: stack-test in CI, E2E after deploy      |
 
 ## Environment Status (2026-04-06)
 

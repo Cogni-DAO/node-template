@@ -623,37 +623,26 @@ ssh $SSH_OPTS root@"$VM_IP" "
   echo 'All prerequisite secrets verified'
 "
 
-# Clone repo on VM, apply ONLY the ApplicationSet files (not the full Argo CD install).
+# Apply the ApplicationSet for this environment via SCP from the local repo checkout.
 # Bootstrap cloud-init already installed Argo CD. Re-applying the full install conflicts.
-# ApplicationSets in the repo point to deploy/* branches (deploy/canary, deploy/staging,
-# deploy/production) — Argo watches those orphan branches for overlay digest changes,
-# NOT the app branches directly. See docs/spec/cd-pipeline-e2e.md.
 #
-# BUG: ${BRANCH} may not have infra/k8s/argocd/ (e.g. staging lags canary).
-# Fix: SCP the files from the local working directory instead of cloning a branch.
-# See work/handoffs/ for details.
-#
-# IMPORTANT: Always clone from 'canary' for ApplicationSet files. These files live on
-# the development branch (canary), not on staging/main which may lag behind.
+# Why SCP instead of git clone? The ApplicationSet files live in infra/k8s/argocd/ which
+# may not exist on the target branch yet (e.g. staging/main lag behind canary). The
+# operator's local checkout is the source of truth — it has the files they intend to deploy.
+# This also avoids the chicken-and-egg: you can provision preview before the files are
+# promoted to staging.
+APPSET_LOCAL="$REPO_ROOT/infra/k8s/argocd/${APPSET_FILE}"
+if [ ! -f "$APPSET_LOCAL" ]; then
+  log_error "ApplicationSet file not found locally: $APPSET_LOCAL"
+  log_error "Run this script from the repo root on a branch that has infra/k8s/argocd/"
+  exit 1
+fi
+
+scp $SSH_OPTS "$APPSET_LOCAL" root@"$VM_IP":/tmp/appset.yaml
 ssh $SSH_OPTS root@"$VM_IP" "
-  AUTHED_URL=\$(echo '${COGNI_REPO_URL}' | sed 's|https://|https://${GHCR_USERNAME}:${GHCR_TOKEN}@|')
-  rm -rf /tmp/cogni-appsets
-  git clone --depth=1 --branch canary \"\$AUTHED_URL\" /tmp/cogni-appsets 2>/dev/null
-
-  # Apply each ApplicationSet file directly (not via kustomize)
-  APPLIED=0
-  for appset in /tmp/cogni-appsets/infra/k8s/argocd/*-applicationset.yaml; do
-    [ -f \"\$appset\" ] || continue
-    kubectl apply -f \"\$appset\" -n argocd
-    APPLIED=\$((APPLIED + 1))
-  done
-  rm -rf /tmp/cogni-appsets
-
-  if [ \"\$APPLIED\" -eq 0 ]; then
-    echo 'FATAL: No ApplicationSet files found on canary branch'
-    exit 1
-  fi
-  echo \"ApplicationSets applied (\$APPLIED) — Argo syncing from deploy/* branches\"
+  kubectl apply -f /tmp/appset.yaml -n argocd
+  rm -f /tmp/appset.yaml
+  echo 'ApplicationSet applied: ${APPSET_FILE} — Argo syncing from deploy/* branches'
 "
 
 # Poll for apps to sync (up to 5 min)
