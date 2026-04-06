@@ -5,7 +5,7 @@
 # Coding agent using OpenCode (Go binary) with COGNI_MODEL passthrough.
 # Per SANDBOXED_AGENTS.md: ephemeral per task, LLM access via socat bridge.
 
-FROM golang:1.23-bookworm AS builder
+FROM golang:1.24-bookworm AS builder
 RUN go install github.com/opencode-ai/opencode@latest
 
 FROM debian:bookworm-slim

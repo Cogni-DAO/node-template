@@ -4,21 +4,52 @@
 #
 # OpenCode Coding Agent Runner
 # Reads COGNI_MODEL from graph executor, runs OpenCode against LiteLLM proxy.
-# Output: JSON summary of files changed and commit SHA.
+# Output: SandboxProgramContract JSON envelope on stdout.
 
 set -euo pipefail
+
+START_MS=$(($(date +%s%N) / 1000000))
+
+# Helper: emit SandboxProgramContract envelope and exit
+emit() {
+    local text="${1:-}"
+    local error_code="${2:-}"
+    local error_msg="${3:-}"
+    local end_ms=$(($(date +%s%N) / 1000000))
+    local duration_ms=$((end_ms - START_MS))
+
+    if [[ -n "$error_code" ]]; then
+        printf '{"payloads":[{"text":"%s"}],"meta":{"durationMs":%d,"error":{"code":"%s","message":"%s"}}}' \
+            "$(echo "$text" | jq -Rs '.' | sed 's/^"//;s/"$//')" \
+            "$duration_ms" \
+            "$error_code" \
+            "$(echo "$error_msg" | jq -Rs '.' | sed 's/^"//;s/"$//')"
+    else
+        printf '{"payloads":[{"text":"%s"}],"meta":{"durationMs":%d,"error":null}}' \
+            "$(echo "$text" | jq -Rs '.' | sed 's/^"//;s/"$//')" \
+            "$duration_ms"
+    fi
+    [[ -n "$error_code" ]] && exit 1 || exit 0
+}
 
 MODEL="${COGNI_MODEL:?COGNI_MODEL env var required}"
 API_BASE="${OPENAI_API_BASE:-http://localhost:8080}"
 
-# Task input
-if [[ -f /workspace/task.md ]]; then
-    TASK_MSG="$(cat /workspace/task.md)"
+# ── Read task context (C7: standard protocol path) ──────────────────────────
+if [[ -f /workspace/.cogni/context.json ]]; then
+    # Structured context (work item resolved by host)
+    TASK_MSG="$(jq -r '.task // .messages[-1].content // empty' /workspace/.cogni/context.json)"
+elif [[ -f /workspace/.cogni/messages.json ]]; then
+    # Standard sandbox protocol — extract last user message
+    TASK_MSG="$(jq -r '[.[] | select(.role=="user")] | last | .content // empty' /workspace/.cogni/messages.json)"
 elif [[ -n "${TASK:-}" ]]; then
     TASK_MSG="$TASK"
 else
-    echo '{"error":"No task. Provide /workspace/task.md or TASK env var"}' >&2
-    exit 1
+    emit "" "input_error" "No task input. Provide /workspace/.cogni/context.json, messages.json, or TASK env var"
+fi
+
+if [[ -z "$TASK_MSG" ]]; then
+    emit "" "input_error" "Task message resolved to empty string"
 fi
 
 # Git identity
@@ -35,26 +66,51 @@ fi
 
 BEFORE_SHA="$(git -C /workspace rev-parse HEAD 2>/dev/null || echo 'none')"
 
-# OpenCode config: model and API endpoint via environment
-# OpenCode reads OPENAI_API_KEY and uses --provider/--model flags
-export OPENAI_API_KEY="${LITELLM_API_KEY:-sk-cogni}"
-export OPENAI_BASE_URL="$API_BASE/v1"
+# B2: OpenCode model config via LOCAL_ENDPOINT + opencode.json
+# OpenCode reads LOCAL_ENDPOINT to discover an OpenAI-compatible API.
+# The opencode.json sets the model for the coder agent since -m flag
+# doesn't work with -p mode.
+export LOCAL_ENDPOINT="$API_BASE"
+# sk-not-a-real-key: LiteLLM proxy strips this — real auth is injected by nginx sidecar
+export OPENAI_API_KEY="${LITELLM_API_KEY:-sk-not-a-real-key}"
 
-# Run OpenCode non-interactively with the task prompt
-# -p flag runs single prompt then exits; -f json for structured output
-opencode -p "$TASK_MSG" -m "$MODEL" 2>/dev/null || true
+# Generate opencode.json dynamically (config doesn't support env var substitution)
+# Use local. prefix since LOCAL_ENDPOINT models are registered as local.<model_id>
+cat > /workspace/opencode.json <<OCFG
+{
+  "agents": {
+    "coder": { "model": "local.${MODEL}" },
+    "summarizer": { "model": "local.${MODEL}" },
+    "task": { "model": "local.${MODEL}" },
+    "title": { "model": "local.${MODEL}" }
+  }
+}
+OCFG
+
+# C5: Capture stderr instead of swallowing it
+OPENCODE_STDERR="$(mktemp)"
+opencode -p "$TASK_MSG" 2>"$OPENCODE_STDERR" || {
+    OC_ERR="$(cat "$OPENCODE_STDERR")"
+    rm -f "$OPENCODE_STDERR"
+    emit "" "agent_error" "OpenCode failed: $OC_ERR"
+}
+rm -f "$OPENCODE_STDERR"
 
 AFTER_SHA="$(git -C /workspace rev-parse HEAD 2>/dev/null || echo 'none')"
 
-# Emit result summary
+# Build result summary text
 if [[ "$BEFORE_SHA" == "$AFTER_SHA" ]]; then
-    FILES="[]"
-    STAT=""
+    SUMMARY="No files changed."
 else
-    FILES="$(git -C /workspace diff --name-only "$BEFORE_SHA".."$AFTER_SHA" | jq -R -s -c 'split("\n") | map(select(length > 0))')"
+    FILES="$(git -C /workspace diff --name-only "$BEFORE_SHA".."$AFTER_SHA" | head -50)"
     STAT="$(git -C /workspace diff --stat "$BEFORE_SHA".."$AFTER_SHA" | head -20)"
+    SUMMARY="commit: ${AFTER_SHA}
+files changed:
+${FILES}
+
+diff stat:
+${STAT}"
 fi
 
-cat <<RESULT
-{"files_changed":${FILES:-[]},"commit_sha":"${AFTER_SHA}","diff_stat":"$(echo "$STAT" | tr '\n' '|')"}
-RESULT
+# B1: Emit SandboxProgramContract envelope
+emit "$SUMMARY"

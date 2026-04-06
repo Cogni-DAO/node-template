@@ -10,7 +10,7 @@ FROM paulgauthier/aider:latest
 USER root
 
 # Install socat for LLM proxy socket bridge (same pattern as sandbox-runtime)
-RUN apt-get update && apt-get install -y --no-install-recommends socat && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends socat jq && rm -rf /var/lib/apt/lists/*
 
 # Non-root user for security
 RUN addgroup --system --gid 1001 sandbox && \

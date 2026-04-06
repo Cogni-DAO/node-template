@@ -17,18 +17,20 @@ Aider coding agent container for sandboxed code generation tasks. Uses `COGNI_MO
 GraphRunRequest.modelRef.modelId
   → SandboxGraphProvider sets COGNI_MODEL env var
   → entrypoint.sh starts socat bridge (localhost:8080 → unix socket → LiteLLM)
-  → run.sh passes COGNI_MODEL to aider --model flag
+  → run.sh reads task from /workspace/.cogni/context.json or messages.json
+  → run.sh passes COGNI_MODEL as openai/$MODEL to aider via env vars
   → Aider calls LiteLLM proxy at OPENAI_API_BASE
   → LiteLLM routes to provider (OpenRouter, Anthropic, etc.)
+  → run.sh emits SandboxProgramContract JSON envelope on stdout
 ```
 
 ## Key Files
 
-| File            | Purpose                                                         |
-| --------------- | --------------------------------------------------------------- |
-| `Dockerfile`    | Based on `paulgauthier/aider:latest`, adds socat + sandbox user |
-| `entrypoint.sh` | Socat bridge — identical to `sandbox-runtime/entrypoint.sh`     |
-| `run.sh`        | Reads `COGNI_MODEL`, runs Aider, emits JSON result summary      |
+| File            | Purpose                                                                      |
+| --------------- | ---------------------------------------------------------------------------- |
+| `Dockerfile`    | Based on `paulgauthier/aider:latest`, adds socat + sandbox user              |
+| `entrypoint.sh` | Socat bridge — identical to `sandbox-runtime/entrypoint.sh`                  |
+| `run.sh`        | Reads task from `.cogni/` protocol, runs Aider, emits SandboxProgramContract |
 
 ## Pointers
 
@@ -48,7 +50,8 @@ GraphRunRequest.modelRef.modelId
 ## Public Surface
 
 - **Exports:** Docker image `cogni-sandbox-aider:latest`
-- **Env/Config keys:** `COGNI_MODEL` (required), `OPENAI_API_BASE`, `LITELLM_API_KEY`, `TASK`
+- **Env/Config keys:** `COGNI_MODEL` (required), `OPENAI_API_BASE`, `LITELLM_API_KEY`
+- **Input protocol:** `/workspace/.cogni/context.json` → `messages.json` → `TASK` env var (fallback chain)
 
 ## Responsibilities
 
@@ -60,4 +63,4 @@ GraphRunRequest.modelRef.modelId
 
 - Aider requires a git repo; `run.sh` auto-initializes one if missing
 - The entrypoint.sh must stay in sync with `services/sandbox-runtime/entrypoint.sh`
-- Output format: JSON with `files_changed`, `commit_sha`, `diff_stat`
+- Output format: SandboxProgramContract envelope (`{ payloads: [{ text }], meta: { durationMs, error } }`)

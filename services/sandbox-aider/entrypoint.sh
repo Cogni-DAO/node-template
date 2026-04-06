@@ -2,6 +2,9 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
+# NOTE: This file is identical to services/sandbox-runtime/entrypoint.sh.
+# If you change it, update all sandbox entrypoints. See C1 in PR #793 review.
+#
 # Sandbox Entrypoint Script
 # Per SANDBOXED_AGENTS.md P0.5: Starts socat bridge for LLM access, then runs command.
 #

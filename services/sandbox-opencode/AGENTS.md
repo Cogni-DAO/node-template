@@ -17,18 +17,20 @@ OpenCode coding agent container for sandboxed code generation tasks. Uses `COGNI
 GraphRunRequest.modelRef.modelId
   → SandboxGraphProvider sets COGNI_MODEL env var
   → entrypoint.sh starts socat bridge (localhost:8080 → unix socket → LiteLLM)
-  → run.sh passes COGNI_MODEL to opencode -m flag
-  → OpenCode calls LiteLLM proxy at OPENAI_BASE_URL
+  → run.sh reads task from /workspace/.cogni/context.json or messages.json
+  → run.sh generates opencode.json with local.$MODEL for all agents
+  → OpenCode calls LiteLLM proxy via LOCAL_ENDPOINT env var
   → LiteLLM routes to provider (OpenRouter, Anthropic, etc.)
+  → run.sh emits SandboxProgramContract JSON envelope on stdout
 ```
 
 ## Key Files
 
-| File            | Purpose                                                                              |
-| --------------- | ------------------------------------------------------------------------------------ |
-| `Dockerfile`    | Multi-stage: Go build from `golang:1.23-bookworm`, runtime on `debian:bookworm-slim` |
-| `entrypoint.sh` | Socat bridge — identical to `sandbox-runtime/entrypoint.sh`                          |
-| `run.sh`        | Reads `COGNI_MODEL`, runs OpenCode, emits JSON result summary                        |
+| File            | Purpose                                                                                           |
+| --------------- | ------------------------------------------------------------------------------------------------- |
+| `Dockerfile`    | Multi-stage: Go build from `golang:1.24-bookworm`, runtime on `debian:bookworm-slim`              |
+| `entrypoint.sh` | Socat bridge — identical to `sandbox-runtime/entrypoint.sh`                                       |
+| `run.sh`        | Reads task from `.cogni/` protocol, generates config, runs OpenCode, emits SandboxProgramContract |
 
 ## Pointers
 
@@ -48,7 +50,8 @@ GraphRunRequest.modelRef.modelId
 ## Public Surface
 
 - **Exports:** Docker image `cogni-sandbox-opencode:latest`
-- **Env/Config keys:** `COGNI_MODEL` (required), `OPENAI_API_BASE`, `LITELLM_API_KEY`, `TASK`
+- **Env/Config keys:** `COGNI_MODEL` (required), `OPENAI_API_BASE`, `LITELLM_API_KEY`
+- **Input protocol:** `/workspace/.cogni/context.json` → `messages.json` → `TASK` env var (fallback chain)
 
 ## Responsibilities
 
@@ -60,4 +63,5 @@ GraphRunRequest.modelRef.modelId
 
 - OpenCode is a Go binary from github.com/opencode-ai/opencode
 - The entrypoint.sh must stay in sync with `services/sandbox-runtime/entrypoint.sh`
-- Output format: JSON with `files_changed`, `commit_sha`, `diff_stat`
+- Output format: SandboxProgramContract envelope (`{ payloads: [{ text }], meta: { durationMs, error } }`)
+- Model config: `opencode.json` generated at runtime with `local.$COGNI_MODEL` (LOCAL_ENDPOINT discovery)

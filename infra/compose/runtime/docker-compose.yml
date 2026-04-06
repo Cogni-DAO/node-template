@@ -588,8 +588,9 @@ services:
       dockerfile: Dockerfile
     image: cogni-sandbox-aider:latest
     profiles: [sandbox-coding]
-    networks:
-      - sandbox-internal
+    # network_mode: none — matches SandboxRunnerAdapter (NetworkMode: 'none').
+    # Compose profiles exist only for image building; containers are created programmatically.
+    network_mode: "none"
     cap_drop:
       - ALL
     security_opt:
@@ -605,8 +606,9 @@ services:
       dockerfile: Dockerfile
     image: cogni-sandbox-opencode:latest
     profiles: [sandbox-coding]
-    networks:
-      - sandbox-internal
+    # network_mode: none — matches SandboxRunnerAdapter (NetworkMode: 'none').
+    # Compose profiles exist only for image building; containers are created programmatically.
+    network_mode: "none"
     cap_drop:
       - ALL
     security_opt:
