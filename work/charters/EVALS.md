@@ -29,6 +29,7 @@ Before writing an eval, review 50+ real outputs. Categorize failures. Write eval
 If a failure can be verified with code, always use a code-based eval. LLM-as-judge is the last resort for subjective dimensions only.
 
 **Eval type priority:**
+
 1. **Deterministic** — format, tool calls, latency, required fields, exact matches
 2. **Heuristic** — semantic similarity, keyword presence, length bounds
 3. **LLM-as-judge** — subjective quality (tone, reasoning, synthesis) — binary pass/fail only
@@ -64,23 +65,23 @@ Every node that serves AI graphs must maintain eval coverage. `node-template` de
 
 ### node-template (baseline — all nodes inherit)
 
-| Graph | Tier | Code Evals | LLM Judge | Human Calibrated | Cases | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| brain | Core | — | — | — | 0 | Not Started |
-| poet | Core | — | — | — | 0 | Not Started |
-| ponderer | Core | — | — | — | 0 | Not Started |
-| research | Core | — | — | — | 0 | Not Started |
-| pr-review | Core | — | — | — | 0 | Not Started |
-| browser | Extended | — | — | — | 0 | Not Started |
-| frontend-tester | Extended | — | — | — | 0 | Not Started |
+| Graph           | Tier     | Code Evals | LLM Judge | Human Calibrated | Cases | Status      |
+| --------------- | -------- | ---------- | --------- | ---------------- | ----- | ----------- |
+| brain           | Core     | —          | —         | —                | 0     | Not Started |
+| poet            | Core     | —          | —         | —                | 0     | Not Started |
+| ponderer        | Core     | —          | —         | —                | 0     | Not Started |
+| research        | Core     | —          | —         | —                | 0     | Not Started |
+| pr-review       | Core     | —          | —         | —                | 0     | Not Started |
+| browser         | Extended | —          | —         | —                | 0     | Not Started |
+| frontend-tester | Extended | —          | —         | —                | 0     | Not Started |
 
 ### operator
 
-| Graph | Tier | Code Evals | LLM Judge | Human Calibrated | Cases | Status |
-| --- | --- | --- | --- | --- | --- | --- |
-| operating-review | Operator | — | — | — | 0 | Not Started |
-| pr-manager | Operator | — | — | — | 0 | Not Started |
-| git-reviewer | Operator | — | — | — | 0 | Not Started |
+| Graph            | Tier     | Code Evals | LLM Judge | Human Calibrated | Cases | Status      |
+| ---------------- | -------- | ---------- | --------- | ---------------- | ----- | ----------- |
+| operating-review | Operator | —          | —         | —                | 0     | Not Started |
+| pr-manager       | Operator | —          | —         | —                | 0     | Not Started |
+| git-reviewer     | Operator | —          | —         | —                | 0     | Not Started |
 
 ### resy
 
@@ -92,11 +93,11 @@ _Inherits node-template matrix. Add node-specific graphs here as they ship._
 
 ### Coverage targets
 
-| Phase | Code Evals | LLM Judge | Cases/Graph | User Feedback |
-| --- | --- | --- | --- | --- |
-| P0 (Crawl) | 2+ per core graph | 1 per core graph | 20-30 | — |
-| P1 (Walk) | 5+ per graph | 2 per graph | 50-100 | Thumbs up/down wired |
-| P2 (Run) | 10+ per graph | 3+ per graph | 200+ | Downvotes → eval cases |
+| Phase      | Code Evals        | LLM Judge        | Cases/Graph | User Feedback          |
+| ---------- | ----------------- | ---------------- | ----------- | ---------------------- |
+| P0 (Crawl) | 2+ per core graph | 1 per core graph | 20-30       | —                      |
+| P1 (Walk)  | 5+ per graph      | 2 per graph      | 50-100      | Thumbs up/down wired   |
+| P2 (Run)   | 10+ per graph     | 3+ per graph     | 200+        | Downvotes → eval cases |
 
 ## Feedback Loop (v-next)
 
@@ -136,6 +137,7 @@ One domain expert reviews every output. Spend ~30 seconds each. Write freeform n
 ### Step 3: Categorize (Day 2)
 
 Group notes into 5-6 failure buckets (axial coding). Examples:
+
 - Tool selection errors (called wrong tool or no tool)
 - Hallucination (stated facts not in context)
 - Format violations (wrong structure, missing fields)
@@ -154,18 +156,18 @@ Pivot table: which failure modes are most common? Write evals for the top 3-4 mo
 
 ## Key References
 
-| Type | Path | Purpose |
-| --- | --- | --- |
-| Spec | [AI Evals Spec](../../docs/spec/ai-evals.md) | Invariants, directory conventions, golden format |
-| Spec | [AI Setup](../../docs/spec/ai-setup.md) | Correlation IDs, reproducibility keys |
-| Spec | [Observability](../../docs/spec/observability.md) | Langfuse integration, trace structure |
-| Project | [AI Evals Pipeline](../projects/proj.ai-evals-pipeline.md) | Roadmap and scorecard |
-| Catalog | [Graph Catalog](../../packages/langgraph-graphs/src/catalog.ts) | Source of truth for graph definitions |
+| Type    | Path                                                            | Purpose                                          |
+| ------- | --------------------------------------------------------------- | ------------------------------------------------ |
+| Spec    | [AI Evals Spec](../../docs/spec/ai-evals.md)                    | Invariants, directory conventions, golden format |
+| Spec    | [AI Setup](../../docs/spec/ai-setup.md)                         | Correlation IDs, reproducibility keys            |
+| Spec    | [Observability](../../docs/spec/observability.md)               | Langfuse integration, trace structure            |
+| Project | [AI Evals Pipeline](../projects/proj.ai-evals-pipeline.md)      | Roadmap and scorecard                            |
+| Catalog | [Graph Catalog](../../packages/langgraph-graphs/src/catalog.ts) | Source of truth for graph definitions            |
 
 ## Projects
 
-| Project | Why now | Status |
-| --- | --- | --- |
+| Project                  | Why now                                | Status |
+| ------------------------ | -------------------------------------- | ------ |
 | `proj.ai-evals-pipeline` | First evals — prove the pipeline works | Active |
 
 ## Constraints
