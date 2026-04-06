@@ -77,25 +77,30 @@ Reduces 20 config files (5 per node) to 20 one-liners. Operator's multi-node exc
 Every commit leaves CI green. No big bang.
 
 ### Phase 0: Preparation
+
 1. Verify byte-identity across all 4 nodes with `diff`. Fix discrepancies first (separate PR).
 2. Categorize files: **portable** (only `@cogni/*` imports) vs **node-coupled** (`@/` imports).
 
 ### Phase 1: Create package (additive only)
+
 3. Create `packages/node-test-utils/` with `package.json` (`private: true`).
 4. Move portable files first (helpers, pure fakes, data fixtures).
 5. Move `setup.ts` — extract OTel init into callback parameter.
 
 ### Phase 2: Config factory
+
 6. Add `createNodeVitestConfig` to the package.
 7. Migrate node-template first. Verify CI.
 8. Migrate remaining nodes one at a time.
 
 ### Phase 3: Deduplicate test execution
+
 9. Add smoke suite to each sovereign node (3-5 tests, <5s).
 10. Update CI to run shared tests only in node-template.
 11. Add nightly full-suite workflow.
 
 ### Phase 4: Cleanup
+
 12. Delete duplicate portable files from operator/poly/resy.
 13. Update imports from `@tests/_fakes/*` to `@cogni/node-test-utils/*`.
 
@@ -104,6 +109,7 @@ Every commit leaves CI green. No big bang.
 Each sovereign node's smoke suite tests two things:
 
 **A. Container boot** (~1s):
+
 ```typescript
 it("getContainer() returns a valid container", async () => {
   const { getContainer } = await import("@/bootstrap/container");
@@ -121,13 +127,13 @@ it("getContainer() returns a valid container", async () => {
 
 ## 6. Risk Matrix
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| Container wiring bug missed | Medium | High | Per-node smoke suite |
-| Shared package `@/` imports break on divergence | Low | High | Strategy C: no `@/` in shared package |
-| Migration introduces test failures | Medium | Medium | Phase-by-phase, CI green each commit |
-| Config factory produces subtly different behavior | Low | High | Snapshot/diff resolved config before switching |
-| Nightly discovers failures too late | Medium | Medium | Supplement with per-node smoke; alert on nightly |
+| Risk                                              | Likelihood | Impact | Mitigation                                       |
+| ------------------------------------------------- | ---------- | ------ | ------------------------------------------------ |
+| Container wiring bug missed                       | Medium     | High   | Per-node smoke suite                             |
+| Shared package `@/` imports break on divergence   | Low        | High   | Strategy C: no `@/` in shared package            |
+| Migration introduces test failures                | Medium     | Medium | Phase-by-phase, CI green each commit             |
+| Config factory produces subtly different behavior | Low        | High   | Snapshot/diff resolved config before switching   |
+| Nightly discovers failures too late               | Medium     | Medium | Supplement with per-node smoke; alert on nightly |
 
 ## 7. Open Questions
 
