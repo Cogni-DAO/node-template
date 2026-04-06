@@ -51,7 +51,7 @@ GraphRunRequest.modelRef.modelId
 
 - **Exports:** Docker image `cogni-sandbox-opencode:latest`
 - **Env/Config keys:** `COGNI_MODEL` (required), `OPENAI_API_BASE`, `LITELLM_API_KEY`
-- **Input protocol:** `/workspace/.cogni/context.json` → `messages.json` → `TASK` env var (fallback chain)
+- **Input protocol:** `/workspace/.cogni/context.json` → `messages.json` (host must write one)
 
 ## Responsibilities
 

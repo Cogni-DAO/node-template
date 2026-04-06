@@ -85,14 +85,16 @@ cat > /workspace/opencode.json <<OCFG
 }
 OCFG
 
-# C5: Capture stderr instead of swallowing it
+# Capture stdout (opencode writes its own output) and stderr separately
+# Only the SandboxProgramContract envelope should reach stdout
+OPENCODE_OUT="$(mktemp)"
 OPENCODE_STDERR="$(mktemp)"
-opencode -p "$TASK_MSG" 2>"$OPENCODE_STDERR" || {
+opencode -p "$TASK_MSG" >"$OPENCODE_OUT" 2>"$OPENCODE_STDERR" || {
     OC_ERR="$(cat "$OPENCODE_STDERR")"
-    rm -f "$OPENCODE_STDERR"
+    rm -f "$OPENCODE_OUT" "$OPENCODE_STDERR"
     emit "" "agent_error" "OpenCode failed: $OC_ERR"
 }
-rm -f "$OPENCODE_STDERR"
+rm -f "$OPENCODE_OUT" "$OPENCODE_STDERR"
 
 AFTER_SHA="$(git -C /workspace rev-parse HEAD 2>/dev/null || echo 'none')"
 
