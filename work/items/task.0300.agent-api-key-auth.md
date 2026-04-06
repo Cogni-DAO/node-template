@@ -1,12 +1,12 @@
 ---
 id: task.0300
 type: task
-title: "API Key Auth — Dual-Mode Bearer + Session on Completions"
+title: "API Key Auth — Credential Resolver for Completions"
 status: needs_implement
 priority: 1
 rank: 1
 estimate: 2
-summary: "Add app_api_keys table and dual-mode auth (session OR Bearer key) on /api/v1/chat/completions. Keys bind to user_id → billing_account_id. Enables agents, CLI tools, and external callers to use completions without browser sessions."
+summary: "Add app_api_keys table and a resolveRequestIdentity() credential resolver that tries Bearer key then session cookie. Wire into completions route via existing getSessionUser callback slot. Zero wrapper changes."
 outcome: "curl -H 'Authorization: Bearer sk_live_...' POST /api/v1/chat/completions works. Keys created via session-authenticated endpoint. Charges attributed to key owner's billing account."
 initiative: proj.agentic-interop
 assignees: [derekg1729]
@@ -18,203 +18,180 @@ created: 2026-04-06
 updated: 2026-04-06
 ---
 
-# API Key Auth — Dual-Mode Bearer + Session on Completions
+# API Key Auth — Credential Resolver for Completions
 
 > Project: [proj.agentic-interop](../../work/projects/proj.agentic-interop.md) P0.0
 > Accelerates: [proj.accounts-api-keys](../../work/projects/proj.accounts-api-keys.md) P3
-> Identity model: [docs/spec/identity-model.md](../../docs/spec/identity-model.md)
 > Accounts spec: [docs/spec/accounts-design.md](../../docs/spec/accounts-design.md)
 
 ## Problem
 
-All `/api/v1/` routes require `getSessionUser()` — a NextAuth server-side session cookie. External agents, CLI tools, cron jobs, and other nodes cannot call the completions endpoint.
+All `/api/v1/` routes require `getSessionUser()` — a NextAuth server-side session cookie. External agents, CLI tools, and other nodes cannot call the completions endpoint.
 
 ## Design
 
 ### Outcome
 
-External callers (agents, CLI tools, curl) can call `POST /api/v1/chat/completions` with `Authorization: Bearer <key>` and get the same behavior as a browser session user — same billing, same graphs, same rate limits.
+External callers can `POST /api/v1/chat/completions` with `Authorization: Bearer sk_live_...` and get the same behavior as a browser session — same billing, same graphs, same execution pipeline.
 
 ### Approach
 
-**Solution**: Add `app_api_keys` table (as planned in proj.accounts-api-keys P3), add dual-mode auth resolution to the completions route. Keys bind to `user_id` → resolved to `billing_account_id` via existing `getOrCreateBillingAccountForUser()`. No new billing pipeline, no new identity primitives.
+**Solution**: Credential resolver pattern (GitHub/Vercel standard). A `resolveRequestIdentity(request)` function checks Bearer key first, falls back to session cookie, returns `SessionUser | null`. Passed to the completions route via the existing `getSessionUser` callback slot. **Zero changes to `wrapRouteHandlerWithLogging`.**
 
 **Reuses**:
-- `extractBearerToken()` + `safeCompare()` from `api/internal/graphs/[graphId]/runs/route.ts` (lines 72-96) — extract to shared utility
-- `getOrCreateBillingAccountForUser()` from AccountService — already resolves user → billing account
-- `wrapRouteHandlerWithLogging` auth modes pattern — add `"dual"` mode
-- `SessionUser` interface from `packages/node-shared` — API key resolution returns same shape
-- `virtual_keys` table already exists with `billingAccountId` FK — no new billing plumbing
+- `extractBearerToken()` + `safeCompare()` from internal graphs route → extract to `packages/node-shared/src/auth/bearer.ts`
+- `getOrCreateBillingAccountForUser()` — existing user → billing account resolution (unchanged)
+- `wrapRouteHandlerWithLogging` `mode: "required"` — unchanged, just swap `getSessionUser` for `resolveRequestIdentity`
+- `SessionUser` interface — API key resolution returns same shape
 
 **Rejected**:
-- ~~actor_id FK~~ — actors table doesn't exist. Over-designs for future identity model. Bind to `user_id` (what exists), upgrade to `actor_id` when that table lands.
-- ~~argon2id hashing~~ — adds a native dependency. SHA-256 is sufficient for API key verification (keys are high-entropy random tokens, not passwords). LiteLLM and OpenRouter both use SHA-256 for key hashing.
-- ~~New rate limit system~~ — OpenRouter already rate-limits free models globally. Per-key RPM is premature. Use billing account credit check as the existing throttle.
-- ~~Agent self-provisioning / scope delegation~~ — P3+ concern per proj.accounts-api-keys. P0 = user creates keys via session-authenticated endpoint.
-- ~~Separate api_keys package~~ — single table + one adapter function. Shared package boundary not warranted until AccountService port absorbs key management.
+- ~~`mode: "dual"` wrapper change~~ — bespoke Cogni-ism. Top-tier pattern is a credential resolver passed as the existing `getSessionUser` callback. Zero wrapper changes needed.
+- ~~actor_id FK~~ — actors table doesn't exist. Bind to `user_id` (what exists).
+- ~~argon2id~~ — native dep for no gain. SHA-256 sufficient for high-entropy tokens.
+- ~~Per-key rate limits~~ — OpenRouter rate-limits free models globally. Billing credit check is the existing throttle.
+- ~~Agent self-provisioning / scope delegation~~ — future concern, tracked in project P1.
 
 ### Schema: `app_api_keys` table
-
-Per proj.accounts-api-keys P3 plan (lines 190-193), adapted for immediate use:
 
 ```sql
 CREATE TABLE app_api_keys (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id       TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   key_hash      TEXT NOT NULL,           -- SHA-256 hex digest
-  key_prefix    TEXT NOT NULL,           -- first 8 chars for identification
+  key_prefix    TEXT NOT NULL,           -- first 8 chars (e.g. "sk_live_a")
   label         TEXT NOT NULL DEFAULT 'Default',
   active        BOOLEAN NOT NULL DEFAULT true,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   revoked_at    TIMESTAMPTZ
 );
 
--- RLS: user can only see/manage own keys
--- Index on key_hash for fast lookup
-CREATE INDEX idx_app_api_keys_hash ON app_api_keys(key_hash) WHERE active = true AND revoked_at IS NULL;
+CREATE INDEX idx_app_api_keys_hash ON app_api_keys(key_hash)
+  WHERE active = true AND revoked_at IS NULL;
 ```
 
-**Key format**: `sk_live_<32 random hex chars>` (64 chars total)
-- `sk_live_` prefix identifies it as a Cogni app key in logs/debugging
-- 32 hex chars = 128 bits of entropy (sufficient for API key)
+**Key format**: `sk_live_<32 random hex chars>` (40 chars total)
 
-**No billing_account_id column** — resolved at auth time via `getOrCreateBillingAccountForUser(userId)`, same as session auth. Keeps one source of truth for user→billing mapping.
+**No billing_account_id column** — resolved at runtime via `getOrCreateBillingAccountForUser(userId)`, same path as session auth.
 
-### Auth Resolution: Dual-Mode
-
-```
-POST /api/v1/chat/completions
-  Authorization: Bearer sk_live_abc123...
-  │
-  ├─ 1. Check Authorization header
-  │    extractBearerToken(header)  ← reuse from internal route
-  │    if token starts with "sk_live_":
-  │      hash = sha256(token)
-  │      row = SELECT user_id FROM app_api_keys WHERE key_hash = hash AND active AND revoked_at IS NULL
-  │      if row → return SessionUser { id: row.user_id, walletAddress: null, displayName: null, avatarColor: null }
-  │
-  ├─ 2. Fallback: existing getSessionUser()
-  │    if session → return SessionUser (unchanged)
-  │
-  └─ 3. Neither → 401
-```
-
-The completion facade receives the same `SessionUser` type regardless of auth method. **Zero changes to facade, billing, or graph execution.**
-
-### Integration Point: `wrapRouteHandlerWithLogging`
-
-Add a new auth mode `"dual"` that tries Bearer key first, falls back to session:
+### Auth Pattern: Credential Resolver
 
 ```typescript
-// New option:
-auth: {
-  mode: "dual",
-  getSessionUser,           // existing session resolver
-  resolveApiKey,            // new: (token: string) => Promise<SessionUser | null>
+// src/app/_lib/auth/resolve-request-identity.ts
+// Lives next to session.ts — same layer, same concern.
+
+export async function resolveRequestIdentity(
+  request: NextRequest
+): Promise<SessionUser | null> {
+  // 1. Bearer key (programmatic callers)
+  const token = extractBearerToken(request.headers.get("authorization"));
+  if (token?.startsWith("sk_live_")) {
+    const hash = sha256(token);
+    const row = await lookupActiveKey(hash); // DB: app_api_keys
+    if (row) return { id: row.userId, walletAddress: null, displayName: null, avatarColor: null };
+  }
+
+  // 2. Session cookie (browser callers) — with origin check for CSRF
+  if (hasCookieAuth(request)) {
+    // Verify Origin header matches app domain (CSRF protection for cookie path)
+    if (!isValidOrigin(request)) return null;
+    return getSessionUser();
+  }
+
+  return null;
 }
 ```
 
-Only the completions route uses `"dual"` initially. All other routes stay `"required"` (session-only) unchanged.
+**Route wiring** — one-line change, zero wrapper changes:
 
-### API Endpoints
+```typescript
+// BEFORE:
+auth: { mode: "required", getSessionUser }
 
-**Create key** (session-authenticated):
-```
-POST /api/v1/auth/api-keys
-  Cookie: next-auth session
-  Body: { label?: string }
-  Response: { id: UUID, key: "sk_live_...", keyPrefix: "sk_live_a", label: string, createdAt: string }
-  ⚠️ key returned ONCE — plaintext not stored
+// AFTER:
+auth: { mode: "required", getSessionUser: resolveRequestIdentity }
 ```
 
-**List keys** (session-authenticated):
+The wrapper calls `getSessionUser()` as before. It doesn't know or care that the implementation now checks Bearer first. **This is how GitHub and Vercel do it.**
+
+### Key CRUD Endpoints
+
+Session-authenticated (browser only — you create keys from the dashboard):
+
 ```
-GET /api/v1/auth/api-keys
-  Cookie: next-auth session
-  Response: { keys: [{ id, keyPrefix, label, active, createdAt, revokedAt }] }
+POST   /api/v1/auth/api-keys     → { id, key: "sk_live_...", keyPrefix, label, createdAt }
+GET    /api/v1/auth/api-keys     → { keys: [{ id, keyPrefix, label, active, createdAt }] }
+DELETE /api/v1/auth/api-keys/:id → { ok: true }
 ```
 
-**Revoke key** (session-authenticated):
-```
-DELETE /api/v1/auth/api-keys/:id
-  Cookie: next-auth session
-  Response: { ok: true }
-  Sets revoked_at = NOW(), active = false
-```
+- Plaintext returned ONCE at creation
+- Max 25 active keys per user (guard against compromised session)
+- Revoke sets `revoked_at = NOW()`, `active = false`
 
 ### Invariants
 
-<!-- CODE REVIEW CRITERIA -->
-
-- [ ] NO_PLAINTEXT_SECRETS: key_hash stored, plaintext returned once at creation (spec: accounts-design)
-- [ ] NO_CLIENT_LITELLM_KEYS: app keys never reach browser storage or logs (spec: accounts-design)
-- [ ] ONE_USER_ONE_BILLING_ACCOUNT: key → user_id → billing_account via existing resolution (spec: accounts-design)
-- [ ] CUSTOMER_DATA_UNDER_CUSTOMER_ACCOUNT: RLS on app_api_keys by user_id (spec: accounts-design)
-- [ ] ZERO_FACADE_CHANGES: completion facade, billing pipeline, graph execution unchanged
-- [ ] SESSION_AUTH_UNBROKEN: existing session auth on all routes works identically
-- [ ] CONSTANT_TIME_COMPARISON: key hash comparison uses timingSafeEqual (reuse safeCompare)
+- [ ] NO_WRAPPER_CHANGES: `wrapRouteHandlerWithLogging` is not modified
+- [ ] NO_FACADE_CHANGES: completion facade, billing, graph execution unchanged
+- [ ] NO_PLAINTEXT_SECRETS: key_hash stored, plaintext returned once (spec: accounts-design)
+- [ ] SESSION_AUTH_UNBROKEN: existing session auth works identically on all routes
+- [ ] CSRF_ON_COOKIE_PATH: Origin/Referer verified when falling through to cookie auth
+- [ ] KEY_COUNT_LIMIT: max 25 active keys per user
+- [ ] CONSTANT_TIME_HASH_COMPARISON: uses `timingSafeEqual` on hash buffers
 
 ### Files
 
 **Create:**
+- `nodes/node-template/app/src/app/_lib/auth/resolve-request-identity.ts` — credential resolver (Bearer → session fallback, CSRF check on cookie path)
 - `packages/db-schema/src/api-keys.ts` — Drizzle schema for `app_api_keys`
 - `packages/db-schema/drizzle/migrations/XXXX_app_api_keys.sql` — migration
-- `nodes/node-template/app/src/bootstrap/http/resolve-api-key.ts` — Bearer → SessionUser resolver (uses extractBearerToken + DB lookup)
-- `nodes/node-template/app/src/app/api/v1/auth/api-keys/route.ts` — CRUD endpoints (POST, GET)
+- `nodes/node-template/app/src/app/api/v1/auth/api-keys/route.ts` — POST + GET
 - `nodes/node-template/app/src/app/api/v1/auth/api-keys/[id]/route.ts` — DELETE (revoke)
+- `packages/node-shared/src/auth/bearer.ts` — `extractBearerToken()` + `safeCompare()` (extracted from internal route)
 
 **Modify:**
-- `nodes/node-template/app/src/bootstrap/http/wrapRouteHandlerWithLogging.ts` — add `"dual"` auth mode
-- `nodes/node-template/app/src/app/api/v1/chat/completions/route.ts` — switch from `auth: "required"` to `auth: "dual"`
+- `nodes/node-template/app/src/app/api/v1/chat/completions/route.ts` — swap `getSessionUser` → `resolveRequestIdentity` (one import change)
+- `nodes/node-template/app/src/app/api/internal/graphs/[graphId]/runs/route.ts` — import `extractBearerToken`/`safeCompare` from shared instead of inline
 - `packages/db-schema/src/index.ts` — export new schema
-
-**Extract (from internal route → shared):**
-- `extractBearerToken()` and `safeCompare()` from `api/internal/graphs/[graphId]/runs/route.ts` → `packages/node-shared/src/auth/bearer.ts`
+- `packages/node-shared/src/auth/index.ts` — export bearer utilities
 
 **Test:**
-- `nodes/operator/app/tests/contract/auth.api-keys.v1.contract.test.ts` — CRUD + key verification
-- `nodes/operator/app/tests/stack/ai/completions-api-key.stack.test.ts` — full round-trip: create key → Bearer auth → completion → charge_receipt
+- `tests/contract/auth.api-keys.v1.contract.test.ts` — CRUD + hash verification
+- `tests/stack/ai/completions-api-key.stack.test.ts` — create key → Bearer completion → charge_receipt attributed correctly
 
 ### Upgrade Path
 
-When `actors` table lands (identity-model.md):
-- Add `actor_id` column to `app_api_keys` (nullable FK)
-- Key creation resolves `user_id → actor_id` (kind=user)
-- Agent actors (kind=agent) get keys via parent user's session
-- No schema break — `user_id` stays as the stable FK
+When `actors` table lands: add nullable `actor_id` FK to `app_api_keys`. Key creation resolves `user_id → actor_id`. No schema break — `user_id` stays.
 
 ## Dependencies
 
-- **users + billing_accounts tables** — exist on canary ✅
-- **virtual_keys table** — exists, used for billing attribution ✅
-- **wrapRouteHandlerWithLogging** — exists, needs dual mode addition
-- **extractBearerToken / safeCompare** — exist in internal route, need extraction
+- users + billing_accounts tables — exist ✅
+- `getOrCreateBillingAccountForUser()` — exists ✅
+- `extractBearerToken()` + `safeCompare()` — exist in internal route, need extraction ✅
 
 ## Test Plan
 
-1. **Contract:** Create key → verify hash stored, plaintext NOT stored
-2. **Contract:** List keys → returns prefix only, not hash or plaintext
+1. **Contract:** Create key → hash stored, plaintext NOT stored
+2. **Contract:** List keys → prefix only, no hash or plaintext
 3. **Contract:** Revoke key → sets revoked_at, active=false
-4. **Contract:** Bearer auth with valid key → resolves to correct user_id
-5. **Contract:** Bearer auth with revoked key → 401
-6. **Contract:** Bearer auth with invalid key → 401
-7. **Contract:** Session auth still works on completions (no regression)
-8. **Stack:** Create key via session → use key for Bearer completion → verify charge_receipt.billingAccountId matches user's account
+4. **Contract:** Bearer with valid key → resolves correct user_id
+5. **Contract:** Bearer with revoked/invalid key → null (401 from wrapper)
+6. **Contract:** Session auth still works (no regression)
+7. **Contract:** Key count limit enforced (26th key rejected)
+8. **Stack:** Create key → Bearer completion → charge_receipt.billingAccountId matches user's account
 
 ## Security
 
-- SHA-256 for key hashing (high-entropy tokens, not passwords — argon2id unnecessary)
-- Constant-time hash comparison via `timingSafeEqual`
-- Plaintext shown once at creation, never stored or logged
-- `key_prefix` (first 8 chars) stored for identification in UI/logs
-- RLS enforces user can only see/manage own keys
-- Max auth header length: 512 bytes (reuse from internal route)
-- Max token length: 256 bytes (reuse from internal route)
+- SHA-256 hashing (high-entropy tokens, not passwords)
+- `timingSafeEqual` on hash comparison (constant-time)
+- Plaintext shown once, never stored or logged
+- `key_prefix` (first 8 chars) for UI/log identification
+- Max 25 active keys per user
+- CSRF: Origin header verified on cookie-authenticated requests
+- Max auth header: 512 bytes, max token: 256 bytes (from internal route)
 
 ## Validation
 
 - [ ] `pnpm check:fast` passes
 - [ ] Contract tests for key CRUD + Bearer auth resolution
-- [ ] Stack test: create key → Bearer completion → charge_receipt attributed to correct billing account
-- [ ] Session auth on completions works identically (no regression)
+- [ ] Stack test: create key → Bearer completion → charge_receipt
+- [ ] Session auth on completions unchanged (no regression)
 - [ ] Revoked/invalid keys return 401

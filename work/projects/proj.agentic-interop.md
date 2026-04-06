@@ -65,13 +65,19 @@ We have: hexagonal architecture (57 boundary tests), tool catalog with 6 tools, 
 | `tools/list_changed` notification when catalog changes                                 | Not Started | 1   | —         |
 | Documentation: MCP server setup and tool catalog                                       | Not Started | 1   | —         |
 
-**API Key Auth (P0.0) — Programmatic Access for Agents + CLI:**
+**API Key Auth (P0.0) — Credential Resolver + App Keys:**
 
-Accelerates proj.accounts-api-keys P3. Keys bind to `user_id` → `billing_account_id` (existing primitives).
+Credential resolver pattern (GitHub/Vercel standard). `resolveRequestIdentity()` checks Bearer key first, falls back to session cookie. Keys bind to `user_id` → `billing_account_id`. Accelerates proj.accounts-api-keys P3.
 
-| Deliverable                                                                         | Status           | Est | Work Item |
-| ----------------------------------------------------------------------------------- | ---------------- | --- | --------- |
-| `app_api_keys` table + dual-mode auth on completions (session OR Bearer key)        | needs_implement  | 2   | task.0300 |
+| Deliverable                                                                               | Status           | Est | Work Item |
+| ----------------------------------------------------------------------------------------- | ---------------- | --- | --------- |
+| `app_api_keys` table + credential resolver + wire into completions route                  | needs_implement  | 2   | task.0300 |
+
+**Pruned from v0 (tracked for P1+):**
+- Agent/service principal identity (scoped machine identities separate from user PATs) — requires actors table
+- Agent self-provisioning of API keys — requires actor_id + delegation model
+- Per-key rate limiting — premature while OpenRouter handles free-tier limits globally
+- Async-first run model (create-run → run-id → stream → fetch) — already Temporal-backed, needs API surface
 
 **OAuth 2.1 Auth (P0.1) — MCP Resource Access:**
 
@@ -186,6 +192,22 @@ See [mcp-control-plane.md](../../docs/spec/mcp-control-plane.md) for full spec.
 - [identity-model.md](../../docs/spec/identity-model.md) — five identity primitives
 
 ## Design Notes
+
+### Architectural Decisions (from design review, 2026-04-06)
+
+**Decision 1: One canonical machine surface, not bespoke agent endpoints.**
+Agents hit the same `/api/v1/chat/completions` as browser users. No `/api/v1/agent/*` namespace. The product surface is the API; the UI is one client of it.
+
+**Decision 2: MCP for tools/context, A2A only for remote federation.**
+MCP is the tool/context standard (Anthropic, OpenAI, Google). A2A is for when Cogni must behave as a remote specialist agent called by other agents. MCP first (P0), A2A only at P2 when federation is real.
+
+**Decision 3: Credential resolver, not wrapper modes.**
+Auth resolution uses a `resolveRequestIdentity()` function passed as the `getSessionUser` callback — the standard GitHub/Vercel pattern. The wrapper never knows about API keys. This is how top 0.1% teams do it.
+
+**Decision 4: Identity split — user keys now, machine principals later.**
+Start with user-bound app keys (user_id FK). Long-lived autonomous agents graduate to scoped machine identities (actor_id) when the actors table lands — same way GitHub recommends Apps over user PATs for automation.
+
+### Prior Notes
 
 **Why a separate project (not just accelerating `proj.tool-use-evolution` P2)?**
 
