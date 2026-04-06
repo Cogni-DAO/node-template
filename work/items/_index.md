@@ -90,6 +90,7 @@
 | 1 | 3 | 3 | needs_design | task.0278 | Git manager skill + GitHub App permissions for AI branch operations | Agentic Dev Setup | proj.agentic-dev-setup |
 | 1 | 3 | 2 | needs_closeout | task.0279 | Node-aware execution routing — nodeId in workflow input + per-node API dispatch | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | 3 | 5 | needs_design | task.0284 | Secrets single source of truth — External Secrets Operator + secret store |  |  |
+| 1 | 3 | 2 | needs_design | task.0299 | Doltgres graph registry — graph_registry table + catalog sync + eval:registry CLI |  |  |
 | 1 | 4 | 1 | needs_design | bug.0009 | Mock-LLM SSE streaming incompatible with OpenClaw pi-ai parser — gateway returns empty payloads | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 4 | 2 | needs_merge | bug.0197 | Scheduled runs accumulate messages in a single shared thread per schedule |  |  |
 | 1 | 4 | 5 | needs_design | task.0234 | Design: node repo creation + CI/CD onboarding pipeline | Node Formation & Launch | proj.node-formation-ui |
