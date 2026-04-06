@@ -94,24 +94,38 @@ Codex-backed graph executions have access to the same core__ tools as Cogni exec
 
 ```
 Codex Executor (fixed):
-  Codex subprocess
-    → config.toml: [mcp_servers.cogni_tools] url = "http://localhost:3000/api/internal/mcp"
-    → MCP tool_call("core__vcs_list_prs", {state: "open"})
-    → Next.js API route /api/internal/mcp
-    → reconstruct ExecutionScope from signed request context (runId, userId, graphId)
-    → createToolRunner(toolSource, emit, {policy, ctx})
+  CodexLlmAdapter (pre-spawn):
+    → generate ephemeral bearer token (crypto.randomUUID())
+    → store scope in server-side Map: token → {runId, userId, graphId, toolIds, expiresAt}
+    → write config.toml: [mcp_servers.cogni_tools]
+        url = "http://localhost:3000/api/internal/mcp"
+        bearer_token_env_var = "COGNI_MCP_TOKEN"
+    → pass COGNI_MCP_TOKEN=<token> in scoped env
+
+  Codex subprocess:
+    → MCP tools/list (bearer token in Authorization header)
+    → MCP server resolves token → scope → filters TOOL_CATALOG to scope.toolIds
+    → returns only graph-relevant tools (not full catalog)
+
+    → MCP tools/call("core__vcs_list_prs", {state: "open"})
+    → MCP server resolves token → scope
+    → createToolRunner(toolSource, emit, {policy: graphScopedPolicy, ctx: {runId}})
     → toolRunner.exec("core__vcs_list_prs", args)
     → same validation → policy → execution → redaction pipeline
     → MCP tool_result back to Codex
+
+  Run ends:
+    → CodexLlmAdapter deletes token from server-side Map (finally block)
 ```
 
-**Context boundary**: Codex subprocess cannot share ALS with the host process. The MCP endpoint reconstructs ExecutionScope from request headers:
-- `X-Cogni-Run-Id` — graph run correlation
-- `X-Cogni-User-Id` — for policy/capability resolution
-- `X-Cogni-Graph-Id` — for tool allowlist scoping
-- Auth: internal-only endpoint, same trust boundary (localhost)
+**Context boundary — ephemeral per-run bearer token**: Codex subprocess cannot share ALS with the host process. Instead of trusting raw headers, `CodexLlmAdapter` generates a short-lived bearer token before spawning Codex and stores the full execution scope (`runId`, `userId`, `graphId`, `toolIds`) in a server-side `Map<string, RunScope>` with TTL = run duration. The MCP endpoint resolves scope from the token via a single Map lookup. Token is deleted in the adapter's `finally` block.
 
-**Tool auto-discovery**: MCP `tools/list` reads `TOOL_CATALOG` at request time. New tools added to the catalog are automatically exposed. Zero per-tool MCP wiring.
+- Bearer token passed via `bearer_token_env_var` in config.toml (Codex SDK's native auth mechanism)
+- `COGNI_MCP_TOKEN` added to `buildScopedEnv()` whitelist
+- No raw context headers — token is the sole authentication/authorization mechanism
+- Localhost-only endpoint, same trust boundary
+
+**Graph-scoped tools/list**: MCP `tools/list` does NOT expose the full `TOOL_CATALOG`. The bearer token carries `toolIds` (from the graph's tool manifest, e.g. `GIT_MANAGER_TOOL_IDS`). The server filters `TOOL_CATALOG` to only those IDs. `toolRunner` still enforces `DENY_BY_DEFAULT` as a second gate on `tools/call`.
 
 ### Invariants
 
@@ -122,7 +136,9 @@ Codex Executor (fixed):
 - [ ] DENY_BY_DEFAULT: MCP handler creates toolRunner with graph-scoped policy from request context
 - [ ] NO_SRC_IMPORTS: No new packages — implementation lives in nodes/*/app/src/mcp/ (runtime wiring)
 - [ ] PURE_LIBRARY: @cogni/ai-tools stays protocol-agnostic, no MCP dependency
-- [ ] CODEX_ENV_SCOPED: MCP server URL added to config.toml env whitelist, not leaked to Codex subprocess
+- [ ] CODEX_ENV_SCOPED: COGNI_MCP_TOKEN added to buildScopedEnv() whitelist; token is opaque, not a server secret
+- [ ] GRAPH_SCOPED_TOOLS: tools/list returns only toolIds from the run's graph manifest, not full TOOL_CATALOG
+- [ ] EPHEMERAL_TOKEN: bearer token created per-run, deleted in finally block, TTL = run duration
 - [ ] SIMPLE_SOLUTION: Implements existing server.stub.ts, reuses existing SDK/toolRunner/catalog
 - [ ] ARCHITECTURE_ALIGNMENT: Follows hexagonal layers — MCP route is delivery, delegates to features via ports
 
@@ -138,10 +154,15 @@ Codex Executor (fixed):
 
 **Modify**:
 - `nodes/*/app/src/adapters/server/ai/codex/codex-mcp-config.ts` — add `cogni_tools` server entry pointing to `http://localhost:${PORT}/api/internal/mcp`
-- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts` — remove INVARIANT_DEVIATION warning (tools now available via MCP), add info log
+- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts` — downgrade INVARIANT_DEVIATION to info when MCP bridge is configured; keep warning when bridge absent (operator fault)
+
+**Create**:
+- `nodes/*/app/src/mcp/run-scope-store.ts` — `Map<string, RunScope>` with TTL, generateToken(), resolveToken(), deleteToken()
 
 **Test**:
-- `nodes/*/app/tests/unit/mcp/server.test.ts` — tool listing, tool execution, policy enforcement, error handling
+- `nodes/*/app/tests/unit/mcp/server.test.ts` — tool listing (graph-scoped), tool execution, policy enforcement, error handling
+- `nodes/*/app/tests/unit/mcp/run-scope-store.test.ts` — token lifecycle, TTL expiry, scope resolution
+- `nodes/*/app/tests/component/mcp/mcp-roundtrip.test.ts` — black-box Streamable HTTP MCP integration test (full pipeline: token → tools/list → tools/call → toolRunner → result)
 - `nodes/*/app/tests/unit/adapters/server/ai/codex/codex-mcp-config.test.ts` — update for new cogni_tools entry
 
 ### What this does NOT change
@@ -158,7 +179,8 @@ Codex Executor (fixed):
 - `nodes/*/app/src/mcp/server.ts` (implement stub)
 - `nodes/*/app/src/app/api/internal/mcp/route.ts` (new route)
 - `nodes/*/app/src/adapters/server/ai/codex/codex-mcp-config.ts` (add cogni_tools entry)
-- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts` (remove tool-strip warning)
+- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts` (conditional warning, token generation)
+- `nodes/*/app/src/mcp/run-scope-store.ts` (new: ephemeral token store)
 - `nodes/*/app/tests/unit/mcp/` (new tests)
 - `nodes/*/app/tests/unit/adapters/server/ai/codex/` (update tests)
 
