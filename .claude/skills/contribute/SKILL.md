@@ -7,6 +7,20 @@ description: "Contribute to a Cogni node repo as an AI agent. Use this skill whe
 
 You are an AI agent contributing code to a Cogni node repository. This skill guides you through the full lifecycle: find work → understand it → implement → validate locally → push once → handle feedback.
 
+## Quickstart: Ship a Graph Update in 30 Minutes
+
+> See [docs/guides/contributor-quickstart.md](../../../docs/guides/contributor-quickstart.md) for the full walkthrough with a concrete example (add a tool to poly's brain graph).
+
+```bash
+git checkout -b feat/my-change origin/canary     # 1. branch
+# edit nodes/<node>/graphs/ or packages/langgraph-graphs/
+pnpm packages:build                              # 2. rebuild declarations
+pnpm check:fast                                  # 3. iterate
+pnpm check                                       # 4. full gate (once)
+git push -u origin feat/my-change                # 5. push (hooks enforce)
+gh pr create --base canary                       # 6. PR → CI → canary
+```
+
 ## Prerequisites
 
 Before starting, verify:
@@ -56,6 +70,8 @@ Follow the work item's Plan section. Key principles:
 
 Run `pnpm check:fast` often during iteration. It auto-fixes lint and format.
 
+**The packages:build gotcha**: If you change anything in `packages/` or `nodes/*/graphs/`, run `pnpm packages:build` before `pnpm check:fast`. Stale `dist/*.d.ts` declarations cause phantom typecheck errors.
+
 ### Phase 4: Validate Locally — This Is the Gate
 
 ```bash
@@ -74,14 +90,14 @@ Common fixes:
 
 ### Phase 5: Push and PR
 
-One push. Make it count. Each push to canary triggers a full image build + Argo rollout.
+One push. Make it count.
 
 ```bash
 git push -u origin feat/task.0264-<slug>
-gh pr create --base canary --title "feat(task.0264): description" --body "Work Item: task.0264"
+gh pr create --base canary --title "feat(task.0264): description" --body "Work: task.0264"
 ```
 
-**Target: `canary`.** Not staging, not main. Canary is the AI testing gate. Staging is human preview. Main is production.
+**Target: `canary`.** Not main. Canary is the integration branch. Preview is human review. Main is production.
 
 Commit message format: `type(scope): lowercase description` under 100 chars. commitlint rejects sentence-case.
 
@@ -93,52 +109,35 @@ gh pr checks <pr-number>                # detailed check status
 gh run view <run-id> --log-failed       # CI failure logs
 ```
 
-CI stages: static (~3 min) → unit (~3 min) → component (~3 min) → stack-test (~15 min).
-
-If CI fails: read the logs, fix locally, run `pnpm check:fast`, push. CI re-runs automatically.
+If CI fails: read the logs, fix locally, run `pnpm check`, push. CI re-runs automatically.
 
 If review requests changes: read the PR comments, fix, push. After 3 rejections, the task auto-blocks for human escalation — that means your approach has a fundamental issue, not a fixup.
 
 ### Phase 7: After Merge
 
-The CD pipeline handles everything:
-
-1. **PR merges to `canary`** → CI builds images → Argo deploys to canary environment
-2. **Human promotes to `staging`** → preview for approval
-3. **Human merges to `main`** → production
-
-You're done after merge to canary.
-
-## How Canary Deployment Works
+The CD pipeline handles everything automatically:
 
 ```
-feature branch → PR to canary
-  → CI on PR: typecheck + lint + unit + component           ~6 min
-  → review + approval → merge
-    → Build Multi-Node: build all node images in parallel    ~3 min
-      → promote-k8s: resolve digests, update overlays        ~1 min
-        → deploy-infra: Compose services (postgres, etc.)    ~1 min
-          → verify: poll /readyz on all nodes in parallel     ~1-7 min
-            → E2E Canary: Playwright smoke tests              ~2 min
+PR merges to canary
+  → Build Multi-Node: Docker images for all nodes         ~3 min
+    → Promote: resolve digests, update k8s overlays        ~1 min
+      → Deploy Infra: Compose services on VM               ~1 min
+        → Verify: poll /readyz on all 3 nodes              ~1 min
+          → E2E: Playwright smoke tests                    ~2 min
+            → Promote to preview (CI-gated)                ~1 min
 ```
 
-**Three environments, three branches, three namespaces:**
+Your change is live at `https://test.cognidao.org` after verify passes. You're done after merge to canary.
 
-| Environment | Branch    | Namespace          | Domain               | Purpose          |
-| ----------- | --------- | ------------------ | -------------------- | ---------------- |
-| canary      | `canary`  | `cogni-canary`     | test.cognidao.org    | AI e2e (PR here) |
-| preview     | `staging` | `cogni-preview`    | preview.cognidao.org | Human e2e        |
-| production  | `main`    | `cogni-production` | cognidao.org         | Production       |
+**Three environments:**
 
-**App pods** (operator, poly, resy, scheduler-worker): deployed by Argo CD via k8s overlays in `infra/k8s/overlays/{env}/`. Image digests promoted by CI.
+| Environment | Branch   | Domain               | Purpose      |
+| ----------- | -------- | -------------------- | ------------ |
+| canary      | `canary` | test.cognidao.org    | AI e2e       |
+| preview     | —        | preview.cognidao.org | Human review |
+| production  | `main`   | cognidao.org         | Production   |
 
-**Infra services** (postgres, temporal, litellm, redis, caddy): deployed by `deploy-infra.sh` via SSH + Docker Compose. NOT managed by Argo.
-
-Never manually patch k8s resources — Argo overwrites them on next sync.
-
-Test with the browser (Playwright), not curl. `/livez` returning 200 doesn't mean the app works — client-side hydration crashes are invisible to health checks.
-
-Monitor with Grafana MCP for logs and metrics, not SSH.
+Promotion is automated: canary → preview (CI-gated), preview → production (human-initiated via `release.yml`).
 
 ## Architecture Quick Reference
 
@@ -146,44 +145,35 @@ Monitor with Grafana MCP for logs and metrics, not SSH.
 nodes/operator/app/     # Operator node (Next.js)
 nodes/poly/app/         # Poly node (Next.js)
 nodes/resy/app/         # Resy node (Next.js)
+nodes/*/graphs/         # Per-node LangGraph graphs
 packages/               # Shared pure TS libraries (@cogni/*)
 services/               # Deployable workers (scheduler-worker)
 work/items/             # Work items (YAML frontmatter markdown)
 docs/spec/              # Specs (as-built contracts, invariants)
 infra/k8s/              # Kubernetes manifests (Argo CD syncs these)
-infra/catalog/          # One YAML per deployed component
 ```
 
-**Hex layers**: `core` → `ports` → `features` → `app`. Adapters implement ports from outside. Dependencies always point inward.
+**Hex layers**: `core` → `ports` → `features` → `app`. Adapters implement ports from outside.
 
-**Contracts are truth**: API shapes in `src/contracts/*.contract.ts` (Zod). Everything derives from them.
+**Contracts are truth**: API shapes in `src/contracts/*.contract.ts` (Zod).
 
 **Packages are pure**: No env, no lifecycle, no framework deps. Never import `src/` from `packages/`.
 
-**Images are per-node**: poly builds poly, resy builds resy. Don't assume all nodes share one image.
-
-## Good Contributions
-
-Small, atomic features with a clear validation checklist. Every PR should:
-
-1. **Do one thing** — if you can't describe it in one commit message, it's too big
-2. **Include an e2e validation plan** — what should a human click on the staging preview to verify this works? Write it in the PR description
-3. **Strengthen the system** — add tests, tighten contracts, improve error messages. Leave the codebase more reliable than you found it
-4. **Build locally, validate locally, push once** — `pnpm check:fast` during iteration, `pnpm check` before push, one clean push that triggers one deploy
+**Graphs are pure factories**: `@langchain/*` only in `packages/langgraph-graphs/` and `nodes/*/graphs/`. No env reads, no side effects.
 
 ## What Will Get Your PR Rejected
 
 **Process violations:**
 
-- Using `--no-verify` to bypass hooks — ever, for any reason. Fix the code instead
-- Skipping `pnpm check` before push — every CI failure you cause wastes 20 minutes
-- Multiple fixup pushes instead of squashing — each push = full image build + deploy cycle
+- Using `--no-verify` to bypass hooks
+- Skipping `pnpm check` before push
+- Blind fixup pushes without running `pnpm check` first (review feedback pushes are expected — just validate locally each time)
 
 **Quality regressions:**
 
-- PRs that loosen requirements: weakening arch checks, switching `/readyz` to `/livez`, removing test assertions, widening type signatures from specific to `any`
+- Weakening arch checks, removing test assertions, widening types to `any`
 - Deleting or disabling tests to make CI pass
-- Adding `biome-ignore` or `eslint-disable` without a linked issue explaining why
+- Adding `biome-ignore` or `eslint-disable` without a linked issue
 
 **Scope violations:**
 
@@ -193,6 +183,6 @@ Small, atomic features with a clear validation checklist. Every PR should:
 
 **Infra violations:**
 
-- Manual k8s patches (Argo overwrites them on next sync)
-- Sentence-case commit messages (`Description` instead of `description`)
-- PRing to `staging` or `main` (agents PR to `canary`)
+- Manual k8s patches (Argo overwrites them)
+- Sentence-case commit messages
+- PRing to `main` (agents PR to `canary`)
