@@ -34,13 +34,26 @@ This is a hard invariant from the CI/CD spec: "canary→preview promotion MUST g
 
 ## Changes
 
-In `e2e.yml`, before the promote-to-staging dispatch step:
+Extract promotion logic from `e2e.yml` into `scripts/ci/promote-to-preview.sh`. The script:
 
-1. Query ci.yaml run status for the same HEAD SHA: `gh run list --workflow=ci.yaml --head-sha=<sha> --status=completed --json conclusion -q '.[0].conclusion'`
-2. If conclusion != "success", skip promotion with clear message
-3. If no ci.yaml run found yet (still running), wait with bounded timeout then recheck
+1. Single `gh run list` call to check CI status — no polling loops
+   - CI not finished → exit 0, do nothing (next canary push retries naturally)
+   - CI failed → exit 0, do nothing (failed SHAs are never eligible)
+   - CI passed → proceed to preview state check
+2. Read `review-state` from `deploy/preview:.promote-state/` via `git show`
+   - If `reviewing` → write `candidate-sha` only, skip deploy
+   - If `unlocked` → write `current-sha`, set `review-state=reviewing`, dispatch promote-and-deploy
+
+In `e2e.yml`:
+
+- Rename `promote-to-staging` → `promote-to-preview`
+- Replace inline dispatch with call to `scripts/ci/promote-to-preview.sh`
+
+Combined with task.0294 (same PR touches same files).
 
 ## Validation
 
-1. Push to canary with a typecheck error → build succeeds, CI fails → canary E2E runs → promote-to-staging is SKIPPED
-2. Push to canary with clean code → build succeeds, CI succeeds → promote-to-staging fires normally
+1. Push to canary, CI passes, preview unlocked → preview deploys, state = `reviewing`
+2. Push to canary, CI fails → nothing written, no deploy
+3. Push to canary, CI not finished → nothing written, no deploy
+4. Push to canary, CI passes, preview reviewing → `candidate-sha` updated, no deploy

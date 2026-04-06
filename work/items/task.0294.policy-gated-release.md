@@ -31,18 +31,39 @@ The CI/CD spec says: "Preview success does NOT auto-create release PRs. Release 
 
 ## Changes
 
-1. **Remove auto-trigger**: In `e2e.yml`, remove the `promote-release` job (or gate it behind `if: false`)
-2. **Record candidate SHA**: After preview E2E passes, write the successful SHA to a known location (GitHub Actions output, deploy branch marker file, or environment variable in GH environment)
-3. **Add workflow_dispatch release workflow**: New workflow (or new dispatch input on e2e.yml) that:
-   - Reads the latest successful preview SHA
-   - Creates `release/YYYYMMDD-<sha>` branch from that SHA
-   - Opens PR to main (or updates existing release PR)
-   - Closes any stale release PRs
-4. **Singleton enforcement**: Before creating a new release PR, close any existing open release/\* PRs to main
+### Preview state model (`.promote-state/` on deploy/preview branch)
+
+Three marker files:
+
+- `current-sha` — SHA currently deployed to preview (under human review)
+- `candidate-sha` — newest eligible (CI-passed) replacement from canary
+- `review-state` — `unlocked` or `reviewing`
+
+### Delete promote-release from e2e.yml
+
+Remove the entire `promote-release` job. Preview E2E success no longer auto-creates release PRs.
+
+### New `scripts/ci/create-release.sh`
+
+- Reads `current-sha` from deploy/preview `.promote-state/`
+- If existing release/\* PR to main → close with "Superseded by re-dispatch" comment
+- Creates `release/YYYYMMDD-<sha>` branch from that SHA
+- Opens singleton PR to main
+
+### New `.github/workflows/release.yml`
+
+- `workflow_dispatch` trigger only (human-initiated)
+- Checkout deploy/preview to read marker
+- Call `scripts/ci/create-release.sh`
+
+### Unlock on merge: `auto-merge-release-prs.yml`
+
+After merging release PR, add step that writes `review-state=unlocked` to deploy/preview. This closes the lifecycle loop — next eligible canary SHA auto-deploys to preview.
 
 ## Validation
 
 1. Preview E2E passes → no release PR auto-created
-2. Manual dispatch → singleton release PR created from latest successful preview SHA
-3. Second dispatch → previous release PR closed, new one opened
-4. `auto-merge-release-prs.yml` still works on the singleton PR after approval
+2. Manual `release.yml` dispatch → singleton release PR from `current-sha`
+3. Second dispatch → old PR closed with "Superseded", new one opened
+4. `auto-merge-release-prs.yml` merges → sets `review-state=unlocked`
+5. Next canary CI-pass after unlock → auto-deploys to preview
