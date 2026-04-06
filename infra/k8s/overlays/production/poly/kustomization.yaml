@@ -100,7 +100,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.110.202"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-postgres-external"
@@ -110,7 +110,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.110.202"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-temporal-external"
@@ -120,7 +120,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.110.202"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-litellm-external"
@@ -130,7 +130,7 @@ patches:
     patch: |
       - op: replace
         path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
+        value: ["84.32.110.202"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-redis-external"
