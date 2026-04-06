@@ -8,10 +8,11 @@
 # Links: https://docs.litellm.ai/docs/providers/openrouter
 
 model_list:
-  # ===== FREE MODEL =====
-  # gpt-4o-mini designated as the default free model for cost control
-  # Note: 4o-mini is NOT actually free... we are making it available, so free tier users can use it.
-  # All other models are paid and require explicit selection
+  # ===== FREE MODELS =====
+  # Validated for tool support via OpenRouter API (2026-04-06)
+  # Global free-tier rate limits: 50 req/day (no credits) or 1000 req/day (>=1¢ credits)
+
+  # GPT-4o Mini — not actually :free on OpenRouter, but offered as our baseline free-tier model
   - model_name: gpt-4o-mini
     litellm_params:
       model: openrouter/openai/gpt-4o-mini-2024-07-18
@@ -20,6 +21,16 @@ model_list:
       display_name: "GPT-4o Mini"
       is_free: true
       provider_key: "openai"
+
+  # Qwen 3.6 Plus — 1M context, tool support, reasoning, structured outputs
+  - model_name: qwen3.6-plus
+    litellm_params:
+      model: openrouter/qwen/qwen3.6-plus:free
+      api_key: "os.environ/OPENROUTER_API_KEY"
+    model_info:
+      display_name: "Qwen 3.6 Plus"
+      is_free: true
+      provider_key: "qwen"
       metadata:
         cogni:
           default_free: true
