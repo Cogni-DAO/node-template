@@ -25,6 +25,7 @@ The development pipeline involves multiple environments (canary → preview → 
 ## Goal
 
 A single git-manager agent on the production operator node that:
+
 - Monitors the full pipeline (all environments, all branches, all CI)
 - Takes scoped actions (create branches, merge to integration branches, dispatch other agents)
 - Has authority enforced by the adapter, not by hoping the LLM follows instructions
@@ -52,18 +53,20 @@ vNext: Installed on multiple fork repos — git manager as shared infrastructure
 
 Each environment has its own GitHub App installation for webhook isolation. All environments CAN share the same App ID + private key for API access (read PRs, merge, etc.), but separate apps give cleaner webhook routing.
 
-| Environment | GitHub App | Webhook Target | API Access |
-|---|---|---|---|
-| Production | `cogni-node-template` | `cognidao.org/api/internal/webhooks/github` | Full VCS capability |
-| Canary | `cogni-git-attribution-preview` | `test.cognidao.org/api/internal/webhooks/github` | Full VCS capability |
-| Preview | (future) | `preview.cognidao.org/...` | Full VCS capability |
+| Environment | GitHub App                      | Webhook Target                                   | API Access          |
+| ----------- | ------------------------------- | ------------------------------------------------ | ------------------- |
+| Production  | `cogni-node-template`           | `cognidao.org/api/internal/webhooks/github`      | Full VCS capability |
+| Canary      | `cogni-git-attribution-preview` | `test.cognidao.org/api/internal/webhooks/github` | Full VCS capability |
+| Preview     | (future)                        | `preview.cognidao.org/...`                       | Full VCS capability |
 
 **Credentials per environment:**
+
 - `GH_REVIEW_APP_ID` — GitHub App numeric ID
 - `GH_REVIEW_APP_PRIVATE_KEY_BASE64` — base64-encoded PEM private key
 - `GH_WEBHOOK_SECRET` — webhook signature verification secret
 
 **App permissions (minimum required):**
+
 - `contents: write` — create branches, read code
 - `pull_requests: write` — list/merge/create PRs
 - `checks: read` — read CI check run status
@@ -71,6 +74,7 @@ Each environment has its own GitHub App installation for webhook isolation. All 
 - `metadata: read` — required baseline
 
 **Webhook events to subscribe:**
+
 - `pull_request` — PR opened, closed, merged, reopened, labeled
 - `pull_request_review` — review submitted
 - `check_run` — CI check completed (for future CiStatusEvent publishing)
@@ -87,25 +91,36 @@ This spec requires the adapter to enforce a branch allowlist:
 ```typescript
 // In GitHubVcsAdapter.mergePr():
 const MERGE_ALLOWED_PATTERNS = [
-  /^feat\/.+-integration$/,   // integration branches
-  /^feat\//,                   // feature branches
+  /^feat\/.+-integration$/, // integration branches
+  /^feat\//, // feature branches
 ];
 const MERGE_BLOCKED_BRANCHES = new Set([
-  "main", "canary", "staging",
-  "deploy/canary", "deploy/preview", "deploy/production",
+  "main",
+  "canary",
+  "staging",
+  "deploy/canary",
+  "deploy/preview",
+  "deploy/production",
 ]);
 
 // Before calling GitHub API:
 const pr = await this.getPr(owner, repo, prNumber);
 if (MERGE_BLOCKED_BRANCHES.has(pr.base.ref)) {
-  return { merged: false, message: `Merge to ${pr.base.ref} is blocked by policy` };
+  return {
+    merged: false,
+    message: `Merge to ${pr.base.ref} is blocked by policy`,
+  };
 }
-if (!MERGE_ALLOWED_PATTERNS.some(p => p.test(pr.base.ref))) {
-  return { merged: false, message: `Target branch ${pr.base.ref} not in allowlist` };
+if (!MERGE_ALLOWED_PATTERNS.some((p) => p.test(pr.base.ref))) {
+  return {
+    merged: false,
+    message: `Target branch ${pr.base.ref} not in allowlist`,
+  };
 }
 ```
 
 **Why adapter, not prompt:**
+
 - Prompts are suggestions. Adapters are contracts.
 - An LLM can misinterpret or ignore a prompt rule. An adapter throws or returns `merged: false`.
 - GitHub's 405 protection is a fallback, not a primary defense.
@@ -161,14 +176,14 @@ The git-manager consumes data from three layers:
 
 ### Action Scope
 
-| Action | Mechanism | Guardrail |
-|---|---|---|
-| List open PRs | `core__vcs_list_prs` | Read-only, no restriction |
-| Check CI status | `core__vcs_get_ci_status` | Read-only, no restriction |
-| Create branch | `core__vcs_create_branch` | Adapter: prefix validation (must start with `feat/`) |
-| Merge PR | `core__vcs_merge_pr` | Adapter: MERGE_BLOCKED_BRANCHES + allowlist pattern |
-| Schedule agent | `core__schedule_manage` | Temporal: task queue isolation |
-| Manage work items | `core__work_item_transition` | Port: status machine validation |
+| Action            | Mechanism                    | Guardrail                                            |
+| ----------------- | ---------------------------- | ---------------------------------------------------- |
+| List open PRs     | `core__vcs_list_prs`         | Read-only, no restriction                            |
+| Check CI status   | `core__vcs_get_ci_status`    | Read-only, no restriction                            |
+| Create branch     | `core__vcs_create_branch`    | Adapter: prefix validation (must start with `feat/`) |
+| Merge PR          | `core__vcs_merge_pr`         | Adapter: MERGE_BLOCKED_BRANCHES + allowlist pattern  |
+| Schedule agent    | `core__schedule_manage`      | Temporal: task queue isolation                       |
+| Manage work items | `core__work_item_transition` | Port: status machine validation                      |
 
 ### KPIs
 
@@ -194,49 +209,53 @@ The git-manager runs on a Temporal schedule (configurable cron). Default: every 
 
 - Committing code, pushing files, or editing source (agent manages branches/PRs, doesn't write code)
 - Managing deploy branches (`deploy/canary`, `deploy/preview`, `deploy/production`) — CI bot only
-- Replacing human approval for release/* → main merges
+- Replacing human approval for release/\* → main merges
 - Multi-repo management in v0 (single repo: `Cogni-DAO/node-template`)
 - Running on canary or preview — production operator only
 
 ## Invariants
 
-| Rule | Constraint |
-|---|---|
-| ADAPTER_ENFORCED | Merge authority enforced in VcsCapability adapter, not prompt. Blocked branches return `merged: false` without calling GitHub API. |
-| PRODUCTION_OVERSEER | Git-manager runs on production operator only. Canary/preview do not run their own. |
-| SINGLE_REPO_V0 | v0 manages one repo (`Cogni-DAO/node-template`). vNext supports multiple fork repos. |
-| WEBHOOK_PER_ENV | Each environment has its own GitHub App for webhook isolation. API credentials may be shared. |
-| MERGE_INTEGRATION_ONLY | Agent merges to `feat/*-integration` and `feat/*` branches only. canary, main, staging, deploy/* are hard-blocked in the adapter. |
-| NEVER_PUSH_CODE | Git-manager creates branches and merges PRs. It does not commit code, push files, or modify source. |
-| DATA_LAYER_SEPARATION | Real-time events from webhooks (Layer 1), on-demand queries via tools (Layer 2), durable records via Temporal (Layer 3). Agent consumes all three. |
+| Rule                   | Constraint                                                                                                                                         |
+| ---------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ADAPTER_ENFORCED       | Merge authority enforced in VcsCapability adapter, not prompt. Blocked branches return `merged: false` without calling GitHub API.                 |
+| PRODUCTION_OVERSEER    | Git-manager runs on production operator only. Canary/preview do not run their own.                                                                 |
+| SINGLE_REPO_V0         | v0 manages one repo (`Cogni-DAO/node-template`). vNext supports multiple fork repos.                                                               |
+| WEBHOOK_PER_ENV        | Each environment has its own GitHub App for webhook isolation. API credentials may be shared.                                                      |
+| MERGE_INTEGRATION_ONLY | Agent merges to `feat/*-integration` and `feat/*` branches only. canary, main, staging, deploy/\* are hard-blocked in the adapter.                 |
+| NEVER_PUSH_CODE        | Git-manager creates branches and merges PRs. It does not commit code, push files, or modify source.                                                |
+| DATA_LAYER_SEPARATION  | Real-time events from webhooks (Layer 1), on-demand queries via tools (Layer 2), durable records via Temporal (Layer 3). Agent consumes all three. |
 
 ## Relationship to Existing Specs
 
-| Spec | Relationship |
-|---|---|
-| `data-streams.md` | Git-manager consumes VcsActivityEvent from the SSE transport layer. Webhook → Redis → SSE → agent. |
-| `ci-cd.md` | Branch model (canary → release → main) and deploy branches are the context the agent operates in. |
+| Spec                               | Relationship                                                                                                               |
+| ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `data-streams.md`                  | Git-manager consumes VcsActivityEvent from the SSE transport layer. Webhook → Redis → SSE → agent.                         |
+| `ci-cd.md`                         | Branch model (canary → release → main) and deploy branches are the context the agent operates in.                          |
 | `attribution-pipeline-overview.md` | GitHub PollAdapter in the ingestion pipeline feeds Layer 3 (durable records). Separate from the agent's real-time Layer 1. |
 
 ## Implementation Phases
 
 ### Phase 0 (current): Agent + tools, prompt-only guardrails
+
 - Git-manager graph exists (packages/langgraph-graphs/src/graphs/git-manager/)
 - VCS tools exist (listPrs, getCiStatus, mergePr, createBranch)
 - No adapter-level branch protection
 - No real-time stream consumption
 
 ### Phase 1: Adapter-enforced authority
+
 - Add MERGE_BLOCKED_BRANCHES + allowlist to `GitHubVcsAdapter.mergePr()`
 - Add branch prefix validation to `createBranch()`
 - No prompt changes needed — adapter rejects silently
 
 ### Phase 2: Real-time stream consumption
+
 - `core__node_stream_read` tool (task.0297) gives agent access to recent VcsActivityEvents
 - Agent reads stream at start of run for situational awareness
 - Replaces or augments initial `core__vcs_list_prs` queries
 
 ### Phase 3 (vNext): Multi-repo, multi-node
+
 - Git-manager installed on multiple fork repos
 - Each fork has its own GitHub App installation
 - Operator aggregates VCS events from all managed repos
