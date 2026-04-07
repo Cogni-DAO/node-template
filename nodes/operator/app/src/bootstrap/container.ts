@@ -19,6 +19,7 @@ import type {
   RepoCapability,
   WebSearchCapability,
 } from "@cogni/ai-tools";
+import { TOOL_CATALOG } from "@cogni/ai-tools";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import type { FinancialLedgerPort } from "@cogni/financial-ledger";
