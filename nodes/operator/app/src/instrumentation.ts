@@ -131,16 +131,6 @@ export async function register(): Promise<void> {
       }
     })().catch(() => {});
   }
-
-  // Per bug.0300: Start internal MCP tool bridge for Codex executor.
-  // Deps (toolSource) wired lazily via setMcpDeps() from bootstrap/container.ts.
-  // biome-ignore lint/style/noProcessEnv: startup config before env framework
-  const mcpPort = Number(process.env.MCP_TOOL_BRIDGE_PORT) || 3001;
-  // biome-ignore lint/style/noProcessEnv: skip in test mode
-  if (process.env.APP_ENV !== "test") {
-    const { startMcpHttpServer } = await import("@/mcp/server");
-    startMcpHttpServer(mcpPort);
-  }
 }
 
 /**

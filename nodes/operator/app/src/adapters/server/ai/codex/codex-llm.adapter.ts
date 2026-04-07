@@ -29,8 +29,11 @@ import { join } from "node:path";
 import type { Message } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import { CODEX_MODEL_LABELS } from "@/adapters/server/ai/providers/codex.provider";
-import { deleteRunToken, generateRunToken } from "@/mcp/run-scope-store";
-import { isMcpBridgeReady } from "@/mcp/server";
+import {
+  deleteRunToken,
+  generateRunToken,
+} from "@/adapters/server/mcp/run-scope-store";
+import { isMcpBridgeReady } from "@/adapters/server/mcp/tool-bridge";
 import type {
   ChatDeltaEvent,
   CompletionStreamParams,

@@ -2,15 +2,15 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@mcp/server`
- * Purpose: Internal MCP Streamable HTTP server exposing core__ tools to Codex executor.
- * Scope: Real MCP protocol endpoint on a separate port. Delegates tool execution to toolRunner.
+ * Module: `@adapters/server/mcp/tool-bridge`
+ * Purpose: MCP Streamable HTTP transport adapter — exposes core__ tools to Codex executor.
+ * Scope: Server transport adapter. Does NOT define tools or import @cogni/ai-tools.
  * Invariants:
- *   - TOOLS_VIA_TOOLRUNNER: delegates to toolRunner.exec(), never calls implementations directly
- *   - NO_DEFAULT_EXECUTABLE_CATALOG: uses ToolSourcePort from container, not raw TOOL_CATALOG
- *   - DENY_BY_DEFAULT: creates toolRunner with graph-scoped policy from run scope
- *   - GRAPH_SCOPED_TOOLS: tools/list returns only toolIds from the run's graph manifest
- *   - EPHEMERAL_TOKEN: auth via per-run bearer token from run-scope-store
+ *   - TOOLS_VIA_TOOLRUNNER: delegates to toolRunner.exec()
+ *   - NO_DEFAULT_EXECUTABLE_CATALOG: uses ToolSourcePort, not raw TOOL_CATALOG
+ *   - DENY_BY_DEFAULT: graph-scoped policy from run scope
+ *   - GRAPH_SCOPED_TOOLS: tools/list filtered to run's toolIds
+ *   - EPHEMERAL_TOKEN: bearer token auth via run-scope-store
  *   - AUTH_MODEL_SEPARATION: bearer token for scope, MCP session ID for protocol
  *   - NO_SHARED_MUTABLE_CONTEXT: auth propagated per-request via req.auth
  * Side-effects: IO (HTTP server, tool execution)
@@ -24,7 +24,6 @@ import {
   type ServerResponse,
 } from "node:http";
 import { createToolRunner, type ToolSourcePort } from "@cogni/ai-core";
-import { TOOL_CATALOG } from "@cogni/ai-tools";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import type { RequestHandlerExtra } from "@modelcontextprotocol/sdk/shared/protocol.js";
@@ -35,54 +34,59 @@ import type {
 
 import { type RunScope, resolveRunToken } from "./run-scope-store";
 
-// biome-ignore lint/suspicious/noConsole: MCP server starts before Pino is available
+// biome-ignore lint/suspicious/noConsole: bridge starts before Pino is available
 const logInfo = (msg: string) => console.log(`[mcp-tool-bridge] ${msg}`);
-// biome-ignore lint/suspicious/noConsole: MCP server starts before Pino is available
+// biome-ignore lint/suspicious/noConsole: bridge starts before Pino is available
 const logError = (msg: string) => console.error(`[mcp-tool-bridge] ${msg}`);
-// biome-ignore lint/suspicious/noConsole: MCP server starts before Pino is available
+// biome-ignore lint/suspicious/noConsole: bridge starts before Pino is available
 const logWarn = (msg: string) => console.warn(`[mcp-tool-bridge] ${msg}`);
 
-// ── Lazy deps (set after container init) ────────────────────────────────────
+/**
+ * Dependencies for the MCP tool bridge.
+ * Provided by bootstrap at container init time.
+ */
+export interface McpToolBridgeDeps {
+  /** Runtime-bound tool source (from container, per NO_DEFAULT_EXECUTABLE_CATALOG) */
+  readonly toolSource: ToolSourcePort;
+  /**
+   * Zod schemas for MCP SDK tool registration (keyed by tool ID).
+   * MCP SDK requires Zod for input validation — these are extracted from
+   * TOOL_CATALOG in bootstrap and passed here. The bridge never imports
+   * @cogni/ai-tools directly.
+   */
+  readonly zodSchemas: ReadonlyMap<string, Record<string, unknown>>;
+}
 
-let toolSource: ToolSourcePort | undefined;
+// ── Module state ────────────────────────────────────────────────────────────
+
+let deps: McpToolBridgeDeps | undefined;
 let httpServer: ReturnType<typeof createServer> | undefined;
 
 /**
- * Set dependencies from bootstrap container (lazy wiring).
- * Called from bootstrap/container.ts after container is built.
- * Bridges dep-cruiser gap: instrumentation starts HTTP server, bootstrap provides deps.
- */
-export function setMcpDeps(deps: { toolSource: ToolSourcePort }): void {
-  toolSource = deps.toolSource;
-  logInfo(
-    `deps wired — ${deps.toolSource.listToolSpecs().length} tools available`
-  );
-}
-
-/**
  * Check if the MCP bridge is ready to handle tool calls.
- * Used by CodexLlmAdapter for fail-closed check before spawning Codex.
+ * Used by CodexLlmAdapter for fail-closed check.
  */
 export function isMcpBridgeReady(): boolean {
-  return httpServer !== undefined && toolSource !== undefined;
+  return httpServer !== undefined && deps !== undefined;
 }
 
 /**
- * Start the MCP Streamable HTTP server on the given port.
- * Called from instrumentation.ts register() — once per process.
+ * Start the MCP Streamable HTTP tool bridge.
+ * Called from bootstrap/container.ts after container is built.
  *
- * The server binds to 127.0.0.1 (localhost only, same trust boundary).
- * Tools are not registered until setMcpDeps() is called from bootstrap.
- *
- * @param port - Port to listen on (default: 3001, via MCP_TOOL_BRIDGE_PORT env)
+ * @param bridgeDeps - Tool source + Zod schemas from composition root
+ * @param port - Port to listen on (default: 3001)
  */
-export function startMcpHttpServer(port = 3001): void {
-  // Per-session transport map (MCP sessions are long-lived per Codex run)
+export function startMcpToolBridge(
+  bridgeDeps: McpToolBridgeDeps,
+  port = 3001
+): void {
+  deps = bridgeDeps;
+
   const sessions = new Map<string, StreamableHTTPServerTransport>();
 
   httpServer = createServer(
     async (req: IncomingMessage, res: ServerResponse) => {
-      // Only handle /mcp path
       const url = new URL(req.url ?? "/", `http://localhost:${port}`);
       if (url.pathname !== "/mcp") {
         res.writeHead(404);
@@ -90,7 +94,7 @@ export function startMcpHttpServer(port = 3001): void {
         return;
       }
 
-      // Extract bearer token from Authorization header
+      // Extract + validate bearer token
       const authHeader = req.headers.authorization;
       const token = authHeader?.startsWith("Bearer ")
         ? authHeader.slice(7)
@@ -104,7 +108,6 @@ export function startMcpHttpServer(port = 3001): void {
         return;
       }
 
-      // Resolve scope from token
       const scope = resolveRunToken(token);
       if (!scope) {
         res.writeHead(401, { "Content-Type": "application/json" });
@@ -113,7 +116,6 @@ export function startMcpHttpServer(port = 3001): void {
       }
 
       // Set req.auth for StreamableHTTPServerTransport (per SDK API)
-      // The transport reads req.auth and propagates it as extra.authInfo to handlers
       (req as IncomingMessage & { auth?: unknown }).auth = {
         token,
         clientId: "codex",
@@ -121,11 +123,10 @@ export function startMcpHttpServer(port = 3001): void {
         extra: { runScope: scope },
       };
 
-      // Check for existing session
+      // Session management
       const sessionId = req.headers["mcp-session-id"] as string | undefined;
 
       if (req.method === "DELETE" && sessionId) {
-        // Session teardown
         const transport = sessions.get(sessionId);
         if (transport) {
           await transport.close();
@@ -136,13 +137,10 @@ export function startMcpHttpServer(port = 3001): void {
         return;
       }
 
-      // For POST/GET: reuse existing session transport or create new one
       let transport: StreamableHTTPServerTransport;
       if (sessionId && sessions.has(sessionId)) {
         transport = sessions.get(sessionId)!;
       } else {
-        // Create new session — new McpServer + transport per session
-        // This avoids the "connect() called multiple times on singleton" problem
         const mcpServer = createMcpServerForScope(scope);
         transport = new StreamableHTTPServerTransport({
           sessionIdGenerator: () => crypto.randomUUID(),
@@ -150,8 +148,6 @@ export function startMcpHttpServer(port = 3001): void {
             sessions.set(sid, transport);
           },
         });
-        // Cast: StreamableHTTPServerTransport satisfies Transport but exactOptionalPropertyTypes
-        // causes TS2379 on the onclose property. Runtime-safe cast.
         await mcpServer.server.connect(
           transport as Parameters<typeof mcpServer.server.connect>[0]
         );
@@ -162,7 +158,9 @@ export function startMcpHttpServer(port = 3001): void {
   );
 
   httpServer.listen(port, "127.0.0.1", () => {
-    logInfo(`listening on 127.0.0.1:${port}/mcp`);
+    logInfo(
+      `listening on 127.0.0.1:${port}/mcp (${bridgeDeps.toolSource.listToolSpecs().length} tools)`
+    );
   });
 
   httpServer.on("error", (err) => {
@@ -173,8 +171,7 @@ export function startMcpHttpServer(port = 3001): void {
 
 /**
  * Create an McpServer scoped to a specific run.
- * Tools are registered from ToolSourcePort (not raw TOOL_CATALOG).
- * Each tool callback resolves scope from extra.authInfo.
+ * Tools registered from ToolSourcePort + Zod schemas.
  */
 function createMcpServerForScope(initialScope: RunScope): McpServer {
   const server = new McpServer({
@@ -182,39 +179,27 @@ function createMcpServerForScope(initialScope: RunScope): McpServer {
     version: "1.0.0",
   });
 
-  if (!toolSource) {
-    logWarn("createMcpServer called before deps wired — no tools registered");
+  if (!deps) {
+    logWarn("createMcpServer called before deps wired");
     return server;
   }
 
-  const specs = toolSource.listToolSpecs();
-  // Only register tools that are in the initial scope's allowed set
+  const specs = deps.toolSource.listToolSpecs();
   const scopedSpecs = specs.filter((s) =>
     initialScope.toolIds.includes(s.name)
   );
 
   for (const spec of scopedSpecs) {
-    // Get Zod shape from TOOL_CATALOG (for MCP SDK registration).
-    // TOOL_CATALOG is read-only here — execution goes through ToolSourcePort.
-    // MCP SDK's tool() expects ZodRawShapeCompat (Record<string, ZodType>), which is
-    // the .shape of a ZodObject, not the ZodType itself.
-    const catalogEntry = TOOL_CATALOG[spec.name];
-    const zodType = catalogEntry?.contract.inputSchema;
-    const zodShape =
-      zodType && "shape" in zodType
-        ? (zodType as { shape: Record<string, unknown> }).shape
-        : undefined;
+    const zodShape = deps.zodSchemas.get(spec.name);
 
-    // Use tool() with Zod schema — MCP SDK converts to JSON Schema internally
     const cb = async (
       args: Record<string, unknown>,
       extra: RequestHandlerExtra<ServerRequest, ServerNotification>
     ) => {
-      // Resolve scope from bearer token via extra.authInfo (set by HTTP handler on req.auth)
       const authInfo = extra.authInfo;
       const scope = authInfo?.extra?.runScope as RunScope | undefined;
 
-      if (!scope) {
+      if (!scope || !deps) {
         return {
           content: [
             { type: "text" as const, text: "Error: missing run scope" },
@@ -235,17 +220,7 @@ function createMcpServerForScope(initialScope: RunScope): McpServer {
         };
       }
 
-      if (!toolSource) {
-        return {
-          content: [
-            { type: "text" as const, text: "Error: tool source not available" },
-          ],
-          isError: true,
-        };
-      }
-
-      // Create a scoped toolRunner per call — no shared state
-      const toolRunner = createToolRunner(toolSource, () => {}, {
+      const toolRunner = createToolRunner(deps.toolSource, () => {}, {
         policy: {
           allowedTools: [...scope.toolIds],
           decide: (_ctx, name) =>
@@ -267,14 +242,10 @@ function createMcpServerForScope(initialScope: RunScope): McpServer {
       };
     };
 
-    // Register with Zod schema — all TOOL_CATALOG entries have inputSchema
     if (zodShape) {
       server.tool(spec.name, spec.description, zodShape, cb);
     } else {
-      // Fallback: no schema, register as zero-arg tool (shouldn't happen for catalog tools)
-      logWarn(
-        `No Zod schema for tool ${spec.name} — registering without input validation`
-      );
+      logWarn(`No Zod schema for ${spec.name}`);
       server.tool(spec.name, spec.description, (_extra) => cb({}, _extra));
     }
   }
@@ -283,9 +254,9 @@ function createMcpServerForScope(initialScope: RunScope): McpServer {
 }
 
 /**
- * Stop the MCP HTTP server (for graceful shutdown).
+ * Stop the MCP HTTP server (graceful shutdown).
  */
-export function stopMcpHttpServer(): void {
+export function stopMcpToolBridge(): void {
   if (httpServer) {
     httpServer.close();
     httpServer = undefined;
