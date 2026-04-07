@@ -54,6 +54,11 @@ jobs:
     runs-on: ubuntu-latest
     env:
       NODE_ENV: test
+      APP_ENV: test
+      # Fake-but-valid DSNs: unit/contract tests don't connect to a real DB,
+      # but serverEnv() validates format at import time. Stack tests override these.
+      DATABASE_URL: postgresql://user:password@localhost:5432/cogni_test
+      DATABASE_SERVICE_URL: postgresql://user_service:password@localhost:5432/cogni_test
       LITELLM_MASTER_KEY: build-key
       AUTH_SECRET: tNf5lFM9yMhdgwS5yeQB8Y2kmigblBqobkvI2XN2brg=
       SCHEDULER_API_TOKEN: test-scheduler-api-token-for-ci-min32chars
@@ -68,13 +73,9 @@ jobs:
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
-          # PRs: turbo --affected needs git history for diff
-          # Pushes: shallow is fine (full suite, no --affected)
-          fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}
-
-      - name: Fetch base branch for turbo --affected
-        if: github.event_name == 'pull_request'
-        run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+          # fetch-depth: 0 makes refs/remotes/origin/<base> available so turbo
+          # --affected can diff against GITHUB_BASE_REF without any extra git plumbing.
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
 
@@ -94,9 +95,6 @@ jobs:
       - name: Typecheck + Lint (affected)
         if: github.event_name == 'pull_request'
         run: pnpm turbo run typecheck lint --affected
-        env:
-          TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
-          TURBO_SCM_HEAD: ${{ github.sha }}
 
       - name: Typecheck + Lint (full)
         if: github.event_name != 'pull_request'
@@ -106,9 +104,6 @@ jobs:
       - name: App tests (affected)
         if: github.event_name == 'pull_request'
         run: pnpm turbo run test --affected --concurrency=1
-        env:
-          TURBO_SCM_BASE: ${{ github.event.pull_request.base.sha }}
-          TURBO_SCM_HEAD: ${{ github.sha }}
 
       - name: App tests (full)
         if: github.event_name != 'pull_request'
@@ -182,10 +177,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-
-      - name: Fetch base branch for turbo --affected
-        if: github.event_name == 'pull_request'
-        run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
 
@@ -334,10 +327,8 @@ jobs:
           docker system df
 
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-
-      - name: Fetch base branch for turbo --affected
-        if: github.event_name == 'pull_request'
-        run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
 
