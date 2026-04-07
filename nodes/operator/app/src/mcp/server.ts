@@ -3,130 +3,234 @@
 
 /**
  * Module: `@mcp/server`
- * Purpose: Internal MCP server exposing core__ tools to Codex executor.
- * Scope: Handles MCP tools/list and tools/call requests. Delegates execution to toolRunner.
+ * Purpose: Internal MCP Streamable HTTP server exposing core__ tools to Codex executor.
+ * Scope: Real MCP protocol endpoint on a separate port. Delegates tool execution to toolRunner.
  * Invariants:
- *   - TOOL_CATALOG_IS_CANONICAL: reads from TOOL_CATALOG, never defines own tools
- *   - GRAPHS_USE_TOOLRUNNER_ONLY: delegates to toolRunner.exec(), never calls implementations directly
+ *   - TOOLS_VIA_TOOLRUNNER: delegates to toolRunner.exec(), never calls implementations directly
+ *   - NO_DEFAULT_EXECUTABLE_CATALOG: uses ToolSourcePort from container, not raw TOOL_CATALOG
  *   - DENY_BY_DEFAULT: creates toolRunner with graph-scoped policy from run scope
  *   - GRAPH_SCOPED_TOOLS: tools/list returns only toolIds from the run's graph manifest
  *   - EPHEMERAL_TOKEN: auth via per-run bearer token from run-scope-store
- * Side-effects: IO (handles HTTP requests)
- * Links: bug.0300, @modelcontextprotocol/sdk
+ *   - AUTH_MODEL_SEPARATION: bearer token for scope, MCP session ID for protocol
+ *   - NO_SHARED_MUTABLE_CONTEXT: auth propagated per-request via req.auth
+ * Side-effects: IO (HTTP server, tool execution)
+ * Links: bug.0300, spec.tool-use #1
  * @internal
  */
 
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { createToolRunner, type ToolSourcePort } from "@cogni/ai-core";
-import { TOOL_CATALOG, toToolSpec } from "@cogni/ai-tools";
-import type { JSONSchema7 } from "json-schema";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 
-import { makeLogger } from "@/shared/observability";
-import { resolveRunToken, type RunScope } from "./run-scope-store";
+import { type RunScope, resolveRunToken } from "./run-scope-store";
 
-const log = makeLogger({ component: "mcp-tool-server" });
+// biome-ignore lint/suspicious/noConsole: MCP server starts before Pino is available
+const logInfo = (msg: string) => console.log(`[mcp-tool-bridge] ${msg}`);
+// biome-ignore lint/suspicious/noConsole: MCP server starts before Pino is available
+const logError = (msg: string) => console.error(`[mcp-tool-bridge] ${msg}`);
+// biome-ignore lint/suspicious/noConsole: MCP server starts before Pino is available
+const logWarn = (msg: string) => console.warn(`[mcp-tool-bridge] ${msg}`);
+
+// ── Lazy deps (set after container init) ────────────────────────────────────
+
+let toolSource: ToolSourcePort | undefined;
+let httpServer: ReturnType<typeof createServer> | undefined;
 
 /**
- * Dependencies injected from bootstrap container.
+ * Set dependencies from bootstrap container (lazy wiring).
+ * Called from bootstrap/container.ts after container is built.
+ * Bridges dep-cruiser gap: instrumentation starts HTTP server, bootstrap provides deps.
  */
-export interface McpServerDeps {
-  /** Tool source with real implementations (from container.toolSource) */
-  readonly toolSource: ToolSourcePort;
+export function setMcpDeps(deps: { toolSource: ToolSourcePort }): void {
+  toolSource = deps.toolSource;
+  logInfo(
+    `deps wired — ${deps.toolSource.listToolSpecs().length} tools available`
+  );
 }
 
 /**
- * Create an MCP server instance for core__ tool access.
- *
- * The server is stateless — each request resolves scope from the bearer token.
- * Tool list is scoped to the run's graph manifest (not full catalog).
- * Tool execution goes through the standard toolRunner pipeline.
- *
- * @param deps - Injected dependencies from bootstrap container
- * @returns Configured McpServer instance
+ * Check if the MCP bridge is ready to handle tool calls.
+ * Used by CodexLlmAdapter for fail-closed check before spawning Codex.
  */
-export function createCogniMcpServer(deps: McpServerDeps): McpServer {
+export function isMcpBridgeReady(): boolean {
+  return httpServer !== undefined && toolSource !== undefined;
+}
+
+/**
+ * Start the MCP Streamable HTTP server on the given port.
+ * Called from instrumentation.ts register() — once per process.
+ *
+ * The server binds to 127.0.0.1 (localhost only, same trust boundary).
+ * Tools are not registered until setMcpDeps() is called from bootstrap.
+ *
+ * @param port - Port to listen on (default: 3001, via MCP_TOOL_BRIDGE_PORT env)
+ */
+export function startMcpHttpServer(port = 3001): void {
+  // Per-session transport map (MCP sessions are long-lived per Codex run)
+  const sessions = new Map<string, StreamableHTTPServerTransport>();
+
+  httpServer = createServer(
+    async (req: IncomingMessage, res: ServerResponse) => {
+      // Only handle /mcp path
+      const url = new URL(req.url ?? "/", `http://localhost:${port}`);
+      if (url.pathname !== "/mcp") {
+        res.writeHead(404);
+        res.end("Not found");
+        return;
+      }
+
+      // Extract bearer token from Authorization header
+      const authHeader = req.headers.authorization;
+      const token = authHeader?.startsWith("Bearer ")
+        ? authHeader.slice(7)
+        : undefined;
+
+      if (!token) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(
+          JSON.stringify({ error: "Missing Authorization: Bearer <token>" })
+        );
+        return;
+      }
+
+      // Resolve scope from token
+      const scope = resolveRunToken(token);
+      if (!scope) {
+        res.writeHead(401, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Invalid or expired run token" }));
+        return;
+      }
+
+      // Set req.auth for StreamableHTTPServerTransport (per SDK API)
+      // The transport reads req.auth and propagates it as extra.authInfo to handlers
+      (req as IncomingMessage & { auth?: unknown }).auth = {
+        token,
+        clientId: "codex",
+        scopes: [],
+        extra: { runScope: scope },
+      };
+
+      // Check for existing session
+      const sessionId = req.headers["mcp-session-id"] as string | undefined;
+
+      if (req.method === "DELETE" && sessionId) {
+        // Session teardown
+        const transport = sessions.get(sessionId);
+        if (transport) {
+          await transport.close();
+          sessions.delete(sessionId);
+        }
+        res.writeHead(200);
+        res.end();
+        return;
+      }
+
+      // For POST/GET: reuse existing session transport or create new one
+      let transport: StreamableHTTPServerTransport;
+      if (sessionId && sessions.has(sessionId)) {
+        transport = sessions.get(sessionId)!;
+      } else {
+        // Create new session — new McpServer + transport per session
+        // This avoids the "connect() called multiple times on singleton" problem
+        const mcpServer = createMcpServerForScope(scope);
+        transport = new StreamableHTTPServerTransport({
+          sessionIdGenerator: () => crypto.randomUUID(),
+          onsessioninitialized: (sid) => {
+            sessions.set(sid, transport);
+          },
+        });
+        await mcpServer.server.connect(transport);
+      }
+
+      await transport.handleRequest(req, res);
+    }
+  );
+
+  httpServer.listen(port, "127.0.0.1", () => {
+    logInfo(`listening on 127.0.0.1:${port}/mcp`);
+  });
+
+  httpServer.on("error", (err) => {
+    logError(`failed to start: ${err.message}`);
+    httpServer = undefined;
+  });
+}
+
+/**
+ * Create an McpServer scoped to a specific run.
+ * Tools are registered from ToolSourcePort (not raw TOOL_CATALOG).
+ * Each tool callback resolves scope from extra.authInfo.
+ */
+function createMcpServerForScope(initialScope: RunScope): McpServer {
   const server = new McpServer({
     name: "cogni-tools",
     version: "1.0.0",
   });
 
-  // Register all catalog tools as MCP tools.
-  // Each tool validates the bearer token and scopes execution to the run.
-  for (const [toolId, boundTool] of Object.entries(TOOL_CATALOG)) {
-    const { spec } = toToolSpec(boundTool.contract);
-    const inputSchema = spec.inputSchema as JSONSchema7;
+  if (!toolSource) {
+    logWarn("createMcpServer called before deps wired — no tools registered");
+    return server;
+  }
 
-    // MCP SDK expects the properties/required shape from JSON Schema
-    const properties =
-      (inputSchema.properties as Record<string, JSONSchema7>) ?? {};
-    const required = (inputSchema.required as string[]) ?? [];
+  const specs = toolSource.listToolSpecs();
+  // Only register tools that are in the initial scope's allowed set
+  const scopedSpecs = specs.filter((s) =>
+    initialScope.toolIds.includes(s.name)
+  );
 
-    // Build shape record for MCP SDK's tool() registration
-    const shape: Record<
-      string,
+  for (const spec of scopedSpecs) {
+    // Use registerTool (non-deprecated API) with JSON Schema inputSchema
+    server.registerTool(
+      spec.name,
       {
-        type: string;
-        description?: string;
-        required?: boolean;
-      }
-    > = {};
+        description: spec.description,
+        inputSchema: spec.inputSchema as Record<string, unknown>,
+      },
+      async (args: Record<string, unknown>, extra) => {
+        // Resolve scope from bearer token via extra.authInfo (set by HTTP handler on req.auth)
+        const authInfo = extra.authInfo;
+        const scope = authInfo?.extra?.runScope as RunScope | undefined;
 
-    for (const [propName, propSchema] of Object.entries(properties)) {
-      const ps = propSchema as JSONSchema7;
-      shape[propName] = {
-        type: (ps.type as string) ?? "string",
-        description: ps.description,
-        required: required.includes(propName),
-      };
-    }
-
-    server.tool(
-      toolId,
-      boundTool.contract.description,
-      shape,
-      async (args, extra) => {
-        // Resolve scope from bearer token in the session context
-        const scope = resolveRunScopeFromExtra(extra);
         if (!scope) {
-          log.warn({ toolId }, "MCP tool call with invalid/expired token");
+          return {
+            content: [
+              { type: "text" as const, text: "Error: missing run scope" },
+            ],
+            isError: true,
+          };
+        }
+
+        if (!scope.toolIds.includes(spec.name)) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: JSON.stringify({
-                  ok: false,
-                  errorCode: "auth",
-                  safeMessage: "Invalid or expired run token",
-                }),
+                text: `Tool '${spec.name}' not in graph manifest`,
               },
             ],
             isError: true,
           };
         }
 
-        // Check if this tool is in the run's allowed set
-        if (!scope.toolIds.includes(toolId)) {
-          log.warn(
-            { toolId, graphId: scope.graphId },
-            "MCP tool call for tool not in graph manifest"
-          );
+        if (!toolSource) {
           return {
             content: [
               {
                 type: "text" as const,
-                text: JSON.stringify({
-                  ok: false,
-                  errorCode: "policy_denied",
-                  safeMessage: `Tool '${toolId}' is not available for this graph`,
-                }),
+                text: "Error: tool source not available",
               },
             ],
             isError: true,
           };
         }
 
-        // Create a scoped toolRunner for this execution
-        const toolRunner = createToolRunner(deps.toolSource, () => {}, {
+        // Create a scoped toolRunner per call — no shared state
+        const toolRunner = createToolRunner(toolSource, () => {}, {
           policy: {
             decide: (_ctx, name) =>
               scope.toolIds.includes(name) ? "allow" : "deny",
@@ -134,8 +238,7 @@ export function createCogniMcpServer(deps: McpServerDeps): McpServer {
           ctx: { runId: scope.runId },
         });
 
-        // Execute through standard pipeline
-        const result = await toolRunner.exec(toolId, args);
+        const result = await toolRunner.exec(spec.name, args);
 
         return {
           content: [
@@ -154,20 +257,12 @@ export function createCogniMcpServer(deps: McpServerDeps): McpServer {
 }
 
 /**
- * Extract run scope from MCP extra context.
- *
- * The bearer token is passed by Codex via the Authorization header,
- * which the MCP SDK makes available in the session/transport context.
- * For the Streamable HTTP transport, we extract it from the session metadata.
+ * Stop the MCP HTTP server (for graceful shutdown).
  */
-function resolveRunScopeFromExtra(extra: unknown): RunScope | undefined {
-  // The MCP SDK passes session info in the extra parameter.
-  // For Streamable HTTP, the bearer token arrives as Authorization: Bearer <token>
-  // We store it in the session metadata during transport setup.
-  const meta = extra as Record<string, unknown> | undefined;
-  const sessionId = meta?.sessionId as string | undefined;
-  if (sessionId) {
-    return resolveRunToken(sessionId);
+export function stopMcpHttpServer(): void {
+  if (httpServer) {
+    httpServer.close();
+    httpServer = undefined;
+    logInfo("stopped");
   }
-  return undefined;
 }

@@ -29,6 +29,8 @@ import { join } from "node:path";
 import type { Message } from "@cogni/ai-core";
 import type { Logger } from "pino";
 import { CODEX_MODEL_LABELS } from "@/adapters/server/ai/providers/codex.provider";
+import { deleteRunToken, generateRunToken } from "@/mcp/run-scope-store";
+import { isMcpBridgeReady } from "@/mcp/server";
 import type {
   ChatDeltaEvent,
   CompletionStreamParams,
@@ -43,10 +45,6 @@ import {
   generateConfigToml,
   withInternalToolBridge,
 } from "./codex-mcp-config";
-import {
-  generateRunToken,
-  deleteRunToken,
-} from "@/mcp/run-scope-store";
 
 const log = makeLogger({ component: "CodexLlmAdapter" });
 
@@ -99,33 +97,28 @@ export class CodexLlmAdapter implements LlmService {
     const connection = this.connection;
     const callLog = log.child({ model: params.model });
 
-    // Per bug.0300: tools are now available via internal MCP bridge (cogni_tools in config.toml).
-    // Downgrade to info when bridge is configured; keep warning when bridge absent (operator fault).
-    const hasMcpBridge =
-      this.mcpConfig && "cogni_tools" in this.mcpConfig;
-    if (params.tools && params.tools.length > 0) {
-      if (hasMcpBridge) {
-        callLog.info(
-          {
-            toolCount: params.tools.length,
-            mcpBridge: true,
-          },
-          "Tools available via internal MCP bridge (cogni_tools). " +
-            "OpenAI function-calling format not used; Codex accesses tools via config.toml MCP."
-        );
-      } else {
-        callLog.warn(
-          {
-            toolCount: params.tools.length,
-            mcpServerCount: this.mcpConfig
-              ? Object.keys(this.mcpConfig).length
-              : 0,
-          },
-          "INVARIANT_DEVIATION: TOOLS_VIA_TOOLRUNNER — Codex adapter received tools via params.tools " +
-            "but no internal MCP bridge configured. Tools will NOT be available to Codex. " +
-            "Ensure cogni_tools MCP server is configured via withInternalToolBridge()."
-        );
-      }
+    // Per bug.0300: Fail-closed — if tools are needed but MCP bridge is not available,
+    // error immediately rather than silently dropping tools (lobotomizing the agent).
+    const hasTools = params.tools && params.tools.length > 0;
+    const bridgeReady = this.runContext && isMcpBridgeReady();
+
+    if (hasTools && bridgeReady) {
+      callLog.info(
+        { toolCount: params.tools!.length, mcpBridge: true },
+        "Tools available via internal MCP bridge (cogni_tools)"
+      );
+    } else if (hasTools && this.runContext && !isMcpBridgeReady()) {
+      // FAIL CLOSED: bridge not ready but tools are needed
+      throw new Error(
+        `MCP tool bridge not available — Codex executor cannot access ${params.tools!.length} core__ tools. ` +
+          "Ensure MCP_TOOL_BRIDGE_PORT is set and the bridge started in instrumentation.ts."
+      );
+    } else if (hasTools && !this.runContext) {
+      callLog.warn(
+        { toolCount: params.tools!.length },
+        "INVARIANT_DEVIATION: Codex adapter received tools but no runContext provided. " +
+          "Tools will NOT be available. Ensure CodexLlmAdapter is constructed with runContext."
+      );
     }
 
     type Deferred<T> = {

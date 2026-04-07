@@ -270,6 +270,13 @@ let _workflowClientPromise: Promise<{
 export function getContainer(): Container {
   if (!_container) {
     _container = createContainer();
+    // Per bug.0300: wire MCP tool bridge deps after container init.
+    // Lazy import avoids dep-cruiser violation (bootstrap must not import from mcp at module scope).
+    import("@/mcp/server")
+      .then(({ setMcpDeps }) =>
+        setMcpDeps({ toolSource: _container!.toolSource })
+      )
+      .catch(() => {}); // Non-fatal: MCP bridge is optional for non-Codex paths
   }
   return _container;
 }

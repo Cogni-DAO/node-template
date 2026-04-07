@@ -6,25 +6,25 @@ status: needs_implement
 priority: 0
 rank: 1
 estimate: 5
-summary: "CodexLlmAdapter strips all LangGraph tools (line 92-104) because Codex SDK only supports MCP for external tools. Graphs like git-manager ship with 11 core__ tools but Codex users get zero. Fix: implement existing mcp/server.stub.ts as internal MCP endpoint delegating to toolRunner.exec()."
+summary: "CodexLlmAdapter strips all LangGraph tools because Codex SDK only supports MCP for external tools. Fix: internal MCP Streamable HTTP server on separate port, started via instrumentation.ts, exposing ToolSourcePort tools to Codex via bearer-token-scoped bridge."
 outcome: "Any graph running on any executor (Cogni or Codex) has access to the same core__ tools. Codex reaches them via MCP; Cogni reaches them via toolRunner.exec(). One tool plane, multiple transports."
-spec_refs: [architecture-spec, packages-architecture-spec]
+spec_refs: [spec.tool-use]
 assignees: []
 credit: []
 project: proj.cicd-services-gitops
 branch: bug/0300-codex-core-tool-bridge
 pr: 805
 reviewer:
-revision: 1
+revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-04-06
-updated: 2026-04-06
+updated: 2026-04-07
 labels: [ai, infra, p0, architecture]
 external_refs:
 ---
 
-# Codex executor silently drops all core__ tools
+# Codex executor silently drops all core\_\_ tools
 
 ## Observed
 
@@ -42,128 +42,156 @@ When a user selects ChatGPT/Codex as their AI backend and runs the `git-manager`
 ### Evidence
 
 - Canary logs 2026-04-06 ~21:07 UTC: `langgraph:git-manager` graph executed (12.2s), zero `core__vcs` tool calls
-- Agent chat response: "For this session, I only have local terminal tooling, not the GitHub App core__* APIs"
+- Agent chat response: "For this session, I only have local terminal tooling, not the GitHub App core\_\_\* APIs"
 - Same graph on 4o-mini (Cogni executor) has full tool access
 
 ### Impact
 
-- **All BYO-AI (Codex) users** lose access to core__ tools on every graph
+- **All BYO-AI (Codex) users** lose access to core\_\_ tools on every graph
 - git-manager, pr-review, brain — any graph with tools is degraded on Codex
 - Users see a working chat interface but the agent is lobotomized
 
 ## Root Cause
 
-`CodexLlmAdapter` (`nodes/operator/app/src/adapters/server/ai/codex/codex-llm.adapter.ts`) implements `LlmService` by spawning a Codex subprocess. Codex SDK's only external tool integration is MCP servers declared in `config.toml`. The adapter correctly identifies this mismatch (line 92-104) but has no bridge to expose core__ tools over MCP.
-
-### Architecture Gap
-
-```
-Cogni Executor (works):
-  graph.ts → TOOL_CATALOG → toolRunner.exec() via ALS → tool result
-
-Codex Executor (broken):
-  graph.ts → TOOL_CATALOG → params.tools → CodexLlmAdapter → STRIPPED
-  config.toml → external MCP only (grafana, playwright) → no core__ tools
-```
+`CodexLlmAdapter` implements `LlmService` by spawning a Codex subprocess. Codex SDK's only external tool integration is MCP servers declared in `config.toml`. The adapter correctly identifies this mismatch but has no bridge to expose core\_\_ tools over MCP.
 
 ## Design
 
 ### Outcome
 
-Codex-backed graph executions have access to the same core__ tools as Cogni executor. Users on ChatGPT backend can use git-manager, pr-review, brain, and any graph with tools — no degradation vs 4o-mini.
+Codex-backed graph executions have access to the same core\_\_ tools as Cogni executor via an internal MCP Streamable HTTP bridge. Fail-closed if bridge unavailable.
 
 ### Approach
 
-**Solution**: Implement the existing `mcp/server.stub.ts` as a Streamable HTTP MCP endpoint using `@modelcontextprotocol/sdk` (already a dependency). The MCP server reads tools from `TOOL_CATALOG`, delegates execution to `toolRunner.exec()`, and runs as an in-process Next.js API route. Codex `config.toml` points to this localhost endpoint.
+**Solution**: Real MCP Streamable HTTP server on a separate port (`MCP_TOOL_BRIDGE_PORT`, default 3001) using `@modelcontextprotocol/sdk` StreamableHTTPServerTransport with raw `http.createServer()`. Started via `instrumentation.ts` (once per process). Container deps wired lazily from bootstrap (dep-cruiser forbids instrumentation→bootstrap imports). Bearer token auth per-run, graph-scoped tool listing, tool execution via `toolRunner.exec()`.
 
 **Reuses**:
-- `TOOL_CATALOG` from `@cogni/ai-tools` — canonical tool registry, zero duplication
-- `ToolSourcePort` / `BoundToolRuntime` — existing tool execution abstractions
-- `createToolRunner()` from `@cogni/ai-core` — existing execution pipeline with policy, validation, redaction, spans
-- `@modelcontextprotocol/sdk` — already in lockfile (v1.28.0)
-- `mcp/server.stub.ts` — existing placeholder in every node app, ready to implement
-- `codex-mcp-config.ts` — existing config.toml generator, just needs one more entry
+
+- `ToolSourcePort` from container — runtime-bound tool source (per NO_DEFAULT_EXECUTABLE_CATALOG)
+- `createToolRunner()` from `@cogni/ai-core` — existing execution pipeline
+- `@modelcontextprotocol/sdk` v1.28.0 — already in lockfile
+- `codex-mcp-config.ts` — existing config.toml generator
+- `run-scope-store.ts` — already implemented (ephemeral token store)
 
 **Rejected**:
-- **New `packages/mcp-server` package**: Violates PURE_LIBRARY invariant — MCP server needs process lifecycle (HTTP listener), env vars (port, auth tokens), and DI container access (ToolRunner, policy, capabilities). Per packages-architecture spec, this is runtime wiring, not a pure library. Belongs in `nodes/*/app/src/mcp/`.
-- **Sidecar process**: Adds IPC complexity for zero benefit. Same-deployment HTTP is simpler and has full access to ALS context.
-- **Standalone k8s service**: Premature. Auth/context forwarding becomes the hard problem. Keep it local.
-- **"MCP everything" internally**: MCP is an edge transport, not an internal abstraction. `ai-tools` stays protocol-agnostic.
+
+- **Next.js API route**: SDK's `StreamableHTTPServerTransport.handleRequest()` needs `IncomingMessage`/`ServerResponse`. App Router provides Web API `Request`/`Response`. Incompatible.
+- **Hand-rolled JSON-RPC**: Protocol non-compliant. Partial MCP imitation that would break on batching, SSE, session management.
+- **New `packages/mcp-server`**: Violates PURE_LIBRARY — needs process lifecycle, env vars, DI container.
+- **Sidecar/standalone service**: Unnecessary complexity for same-process, same-trust-boundary bridge.
 
 ### Architecture
 
 ```
-Codex Executor (fixed):
-  CodexLlmAdapter (pre-spawn):
-    → generate ephemeral bearer token (crypto.randomUUID())
-    → store scope in server-side Map: token → {runId, userId, graphId, toolIds, expiresAt}
-    → write config.toml: [mcp_servers.cogni_tools]
-        url = "http://localhost:3000/api/internal/mcp"
-        bearer_token_env_var = "COGNI_MCP_TOKEN"
-    → pass COGNI_MCP_TOKEN=<token> in scoped env
+Process boot (instrumentation.ts register()):
+  startMcpHttpServer(3001)
+  → http.createServer on 127.0.0.1:3001
+  → StreamableHTTPServerTransport bound to POST/GET/DELETE /mcp
+  → McpServer created (tools not yet registered — deps lazy)
 
-  Codex subprocess:
-    → MCP tools/list (bearer token in Authorization header)
-    → MCP server resolves token → scope → filters TOOL_CATALOG to scope.toolIds
-    → returns only graph-relevant tools (not full catalog)
+Bootstrap (container.ts, after container built):
+  setMcpDeps({ toolSource: container.toolSource })
+  → Registers tools from ToolSourcePort.listToolSpecs()
+  → MCP server can now handle tool calls
 
-    → MCP tools/call("core__vcs_list_prs", {state: "open"})
-    → MCP server resolves token → scope
-    → createToolRunner(toolSource, emit, {policy: graphScopedPolicy, ctx: {runId}})
-    → toolRunner.exec("core__vcs_list_prs", args)
-    → same validation → policy → execution → redaction pipeline
-    → MCP tool_result back to Codex
+Per Codex run (CodexLlmAdapter.completionStream()):
+  1. isMcpBridgeReady() → if false + tools needed → ERROR (fail-closed)
+  2. generateRunToken({runId, userId, graphId, toolIds}) → bearer token
+  3. withInternalToolBridge(mcpConfig, 3001) → adds cogni_tools to config.toml
+  4. COGNI_MCP_TOKEN=<token> in scoped env via bearerTokenEnvVar
+  5. Codex subprocess spawns
 
-  Run ends:
-    → CodexLlmAdapter deletes token from server-side Map (finally block)
+MCP request flow (per-request, no shared mutable state):
+  1. HTTP handler receives (req: IncomingMessage, res: ServerResponse)
+  2. Extract bearer token from req.headers.authorization
+  3. resolveRunToken(token) → RunScope {runId, userId, graphId, toolIds}
+  4. Set req.auth = { token, clientId: "codex", scopes: [], extra: { runScope } }
+     (StreamableHTTPServerTransport reads req.auth per SDK API)
+  5. transport.handleRequest(req, res)
+  6. Transport propagates req.auth → extra.authInfo in tool callbacks
+  7. Tool callback reads extra.authInfo.extra.runScope → RunScope
+
+  tools/list:
+    → ToolSourcePort.listToolSpecs() filtered to scope.toolIds
+    → Graph-scoped, not full catalog
+
+  tools/call:
+    → Verify toolName in scope.toolIds
+    → createToolRunner(toolSource, emit, {policy, ctx: {runId}})
+    → toolRunner.exec(toolName, args)
+    → validation → policy → execution → redaction
+    → MCP tool_result
+
+Run cleanup (finally block):
+  deleteRunToken(token)
 ```
 
-**Context boundary — ephemeral per-run bearer token**: Codex subprocess cannot share ALS with the host process. Instead of trusting raw headers, `CodexLlmAdapter` generates a short-lived bearer token before spawning Codex and stores the full execution scope (`runId`, `userId`, `graphId`, `toolIds`) in a server-side `Map<string, RunScope>` with TTL = run duration. The MCP endpoint resolves scope from the token via a single Map lookup. Token is deleted in the adapter's `finally` block.
+### Auth Model
 
-- Bearer token passed via `bearer_token_env_var` in config.toml (Codex SDK's native auth mechanism)
-- `COGNI_MCP_TOKEN` added to `buildScopedEnv()` whitelist
-- No raw context headers — token is the sole authentication/authorization mechanism
-- Localhost-only endpoint, same trust boundary
+- **Bearer token** (`Authorization` header) → resolves `RunScope`. Ephemeral per-run, crypto-random UUID, in-memory Map with TTL. Auth/scope mechanism.
+- **MCP Session ID** (`Mcp-Session-Id` header) → managed by `StreamableHTTPServerTransport`. Separate protocol concern. Do not conflate with bearer token.
+- Binding: `127.0.0.1` only, same trust boundary. Origin validation via transport config.
 
-**Graph-scoped tools/list**: MCP `tools/list` does NOT expose the full `TOOL_CATALOG`. The bearer token carries `toolIds` (from the graph's tool manifest, e.g. `GIT_MANAGER_TOOL_IDS`). The server filters `TOOL_CATALOG` to only those IDs. `toolRunner` still enforces `DENY_BY_DEFAULT` as a second gate on `tools/call`.
+### Fail-Closed Policy
+
+If bridge unavailable (not started, deps not wired) and Codex run has tools:
+
+- **Error**, not warn — run MUST fail with clear message
+- `isMcpBridgeReady()` checked before Codex subprocess spawn
+- Log: `error` when bridge absent + tools needed; `info` when bridge active
+
+### Concurrency
+
+- `run-scope-store` Map: safe in single-threaded Node.js event loop
+- Per-tool-call `toolRunner` instance: no shared state between requests
+- Per-run bearer token: concurrent Codex sessions use different tokens
+- Auth context on `req` object: per-request, not module-global
+- `StreamableHTTPServerTransport` manages its own session state per MCP protocol
+
+### Lifecycle
+
+| Phase            | Hook                                 | Action                                            |
+| ---------------- | ------------------------------------ | ------------------------------------------------- |
+| Process boot     | `instrumentation.ts register()`      | `startMcpHttpServer(port)`                        |
+| Container init   | `bootstrap/container.ts`             | `setMcpDeps({toolSource})` — lazy wiring          |
+| Per-run          | `CodexLlmAdapter.completionStream()` | `generateRunToken()` + `withInternalToolBridge()` |
+| Run end          | `runCodexExec()` finally block       | `deleteRunToken()`                                |
+| Process shutdown | SIGTERM handler                      | Close HTTP server                                 |
 
 ### Invariants
 
 <!-- CODE REVIEW CRITERIA -->
 
-- [ ] TOOL_CATALOG_IS_CANONICAL: MCP server reads from TOOL_CATALOG, never defines its own tools
-- [ ] GRAPHS_USE_TOOLRUNNER_ONLY: MCP handler delegates to toolRunner.exec(), never calls tool implementations directly
-- [ ] DENY_BY_DEFAULT: MCP handler creates toolRunner with graph-scoped policy from request context
-- [ ] NO_SRC_IMPORTS: No new packages — implementation lives in nodes/*/app/src/mcp/ (runtime wiring)
-- [ ] PURE_LIBRARY: @cogni/ai-tools stays protocol-agnostic, no MCP dependency
-- [ ] CODEX_ENV_SCOPED: COGNI_MCP_TOKEN added to buildScopedEnv() whitelist; token is opaque, not a server secret
-- [ ] GRAPH_SCOPED_TOOLS: tools/list returns only toolIds from the run's graph manifest, not full TOOL_CATALOG
-- [ ] EPHEMERAL_TOKEN: bearer token created per-run, deleted in finally block, TTL = run duration
-- [ ] SIMPLE_SOLUTION: Implements existing server.stub.ts, reuses existing SDK/toolRunner/catalog
-- [ ] ARCHITECTURE_ALIGNMENT: Follows hexagonal layers — MCP route is delivery, delegates to features via ports
+- [ ] TOOLS_VIA_TOOLRUNNER: all tool calls route through toolRunner.exec() (spec.tool-use #1)
+- [ ] NO_DEFAULT_EXECUTABLE_CATALOG: bridge uses ToolSourcePort from container, not raw TOOL_CATALOG (#33)
+- [ ] DENY_BY_DEFAULT: graph-scoped policy from scope.toolIds (#20)
+- [ ] GRAPH_SCOPED_TOOLS: tools/list filtered to run's toolIds
+- [ ] EPHEMERAL_TOKEN: per-run UUID, TTL, deleted in finally
+- [ ] FAIL_CLOSED: error when bridge absent + tools needed
+- [ ] AUTH_MODEL_SEPARATION: bearer token for scope, MCP session ID for protocol
+- [ ] CODEX_ENV_SCOPED: only COGNI_MCP_TOKEN in env whitelist
+- [ ] NO_SHARED_MUTABLE_CONTEXT: auth propagated per-request via req.auth, not module globals
 
 ### Files
 
-**Implement** (replaces stub):
-- `nodes/*/app/src/mcp/server.ts` — MCP server using `@modelcontextprotocol/sdk` StreamableHTTPServerTransport
-  - `tools/list` → reads TOOL_CATALOG, returns MCP tool schemas
-  - `tools/call` → reconstructs scope, creates toolRunner, executes, returns result
+**Rewrite**:
 
-**Create**:
-- `nodes/*/app/src/app/api/internal/mcp/route.ts` — Next.js API route, delegates to mcp/server.ts
+- `nodes/*/app/src/mcp/server.ts` — McpServer + http.createServer + StreamableHTTPServerTransport + lazy deps
+
+**Keep**:
+
+- `nodes/*/app/src/mcp/run-scope-store.ts` — already correct
+
+**Delete**:
+
+- `nodes/*/app/src/app/api/internal/mcp/route.ts` — replaced by raw HTTP server
 
 **Modify**:
-- `nodes/*/app/src/adapters/server/ai/codex/codex-mcp-config.ts` — add `cogni_tools` server entry pointing to `http://localhost:${PORT}/api/internal/mcp`
-- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts` — downgrade INVARIANT_DEVIATION to info when MCP bridge is configured; keep warning when bridge absent (operator fault)
 
-**Create**:
-- `nodes/*/app/src/mcp/run-scope-store.ts` — `Map<string, RunScope>` with TTL, generateToken(), resolveToken(), deleteToken()
-
-**Test**:
-- `nodes/*/app/tests/unit/mcp/server.test.ts` — tool listing (graph-scoped), tool execution, policy enforcement, error handling
-- `nodes/*/app/tests/unit/mcp/run-scope-store.test.ts` — token lifecycle, TTL expiry, scope resolution
-- `nodes/*/app/tests/component/mcp/mcp-roundtrip.test.ts` — black-box Streamable HTTP MCP integration test (full pipeline: token → tools/list → tools/call → toolRunner → result)
-- `nodes/*/app/tests/unit/adapters/server/ai/codex/codex-mcp-config.test.ts` — update for new cogni_tools entry
+- `nodes/*/app/src/instrumentation.ts` — add `startMcpHttpServer()` call
+- `nodes/*/app/src/bootstrap/container.ts` — add `setMcpDeps()` call
+- `nodes/*/app/src/adapters/server/ai/codex/codex-mcp-config.ts` — port 3001, `withInternalToolBridge()`
+- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts` — fail-closed + hasMcpBridge fix
 
 ### What this does NOT change
 
@@ -176,35 +204,22 @@ Codex Executor (fixed):
 
 ## Allowed Changes
 
-- `nodes/*/app/src/mcp/server.ts` (implement stub)
-- `nodes/*/app/src/app/api/internal/mcp/route.ts` (new route)
-- `nodes/*/app/src/adapters/server/ai/codex/codex-mcp-config.ts` (add cogni_tools entry)
-- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts` (conditional warning, token generation)
-- `nodes/*/app/src/mcp/run-scope-store.ts` (new: ephemeral token store)
-- `nodes/*/app/tests/unit/mcp/` (new tests)
-- `nodes/*/app/tests/unit/adapters/server/ai/codex/` (update tests)
+- `nodes/*/app/src/mcp/server.ts`
+- `nodes/*/app/src/instrumentation.ts`
+- `nodes/*/app/src/bootstrap/container.ts`
+- `nodes/*/app/src/adapters/server/ai/codex/codex-mcp-config.ts`
+- `nodes/*/app/src/adapters/server/ai/codex/codex-llm.adapter.ts`
+- `nodes/*/app/src/app/api/internal/mcp/` (delete)
 
 ## Validation
 
-```bash
-# After fix: run git-manager graph via Codex backend
-# 1. Select ChatGPT in model picker
-# 2. Ask: "list open PRs on canary"
-# 3. Agent should call core__vcs_list_prs and return real PR data
-# 4. Check logs: tool call routed via MCP → toolRunner.exec()
-```
-
-## Review Checklist
-
-- [ ] **Work Item:** `bug.0300` linked in PR body
-- [ ] **Spec:** Architecture preserves single tool plane
-- [ ] **Tests:** MCP server unit tests + integration test with Codex mock
-- [ ] **Reviewer:** assigned and approved
+1. `pnpm check:fast` passes
+2. Local E2E: `pnpm dev:stack` → MCP server on 3001 → Codex chat with git-manager → tools work
+3. Fail-closed: stop bridge → Codex run with tools → clear error
 
 ## PR / Links
 
 - PR #805: https://github.com/Cogni-DAO/node-template/pull/805
-- Production manually tested 2026-04-06: Codex OAuth works, but agent has no tools
 - Canary logs 2026-04-06 ~21:07 UTC: git-manager graph executed with zero tool calls via Codex
 
 ## Attribution
