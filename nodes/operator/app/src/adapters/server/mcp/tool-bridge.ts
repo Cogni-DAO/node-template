@@ -87,6 +87,12 @@ export function startMcpToolBridge(
 
   httpServer = createServer(
     async (req: IncomingMessage, res: ServerResponse) => {
+      const mcpSessionHeader = req.headers["mcp-session-id"] as
+        | string
+        | undefined;
+      logInfo(
+        `REQUEST: ${req.method} ${req.url} auth=${!!req.headers.authorization} session=${mcpSessionHeader ?? "none"}`
+      );
       const url = new URL(req.url ?? "/", `http://localhost:${port}`);
       if (url.pathname !== "/mcp") {
         res.writeHead(404);
@@ -128,6 +134,9 @@ export function startMcpToolBridge(
 
       if (req.method === "DELETE" && sessionId) {
         const transport = sessions.get(sessionId);
+        logInfo(
+          `DELETE session=${sessionId} found=${!!transport} activeSessions=${sessions.size}`
+        );
         if (transport) {
           await transport.close();
           sessions.delete(sessionId);

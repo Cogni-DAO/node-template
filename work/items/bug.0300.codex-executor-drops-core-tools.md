@@ -221,6 +221,7 @@ If bridge unavailable (not started, deps not wired) and Codex run has tools:
 
 - PR #805: https://github.com/Cogni-DAO/node-template/pull/805
 - Canary logs 2026-04-06 ~21:07 UTC: git-manager graph executed with zero tool calls via Codex
+- Handoff: [handoff](../handoffs/bug.0300.handoff.md)
 
 ## Attribution
 
