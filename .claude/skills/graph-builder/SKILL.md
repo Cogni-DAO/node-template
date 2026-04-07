@@ -27,32 +27,33 @@ Ask the user **three questions** (adapt based on context — skip if already ans
    - **Structured output** — no tools, schema-driven response (like `pr-review`)
 3. **What tools does it need?** Present the available tool catalog:
 
-   | Tool ID | What it does |
-   |---------|-------------|
-   | `core__get_current_time` | Current timestamp |
-   | `core__repo_list` | List files by glob pattern |
-   | `core__repo_search` | Search file contents (ripgrep) |
-   | `core__repo_open` | Read a specific file |
-   | `core__knowledge_search` | Search curated knowledge store |
-   | `core__knowledge_read` | Read knowledge entry by ID |
-   | `core__knowledge_write` | Save new knowledge entry |
-   | `core__web_search` | Web search via Tavily |
-   | `core__schedule_list` | List scheduled executions |
-   | `core__schedule_manage` | Create/update/delete schedules |
-   | `core__work_item_query` | Query work items |
-   | `core__work_item_transition` | Transition work item status |
-   | `core__vcs_list_prs` | List pull requests |
-   | `core__vcs_create_branch` | Create a git branch |
-   | `core__vcs_get_ci_status` | Check CI status |
-   | `core__vcs_merge_pr` | Merge a pull request |
-   | `core__metrics_query` | Query system metrics |
-   | `core__market_list` | List prediction markets |
+   | Tool ID                      | What it does                   |
+   | ---------------------------- | ------------------------------ |
+   | `core__get_current_time`     | Current timestamp              |
+   | `core__repo_list`            | List files by glob pattern     |
+   | `core__repo_search`          | Search file contents (ripgrep) |
+   | `core__repo_open`            | Read a specific file           |
+   | `core__knowledge_search`     | Search curated knowledge store |
+   | `core__knowledge_read`       | Read knowledge entry by ID     |
+   | `core__knowledge_write`      | Save new knowledge entry       |
+   | `core__web_search`           | Web search via Tavily          |
+   | `core__schedule_list`        | List scheduled executions      |
+   | `core__schedule_manage`      | Create/update/delete schedules |
+   | `core__work_item_query`      | Query work items               |
+   | `core__work_item_transition` | Transition work item status    |
+   | `core__vcs_list_prs`         | List pull requests             |
+   | `core__vcs_create_branch`    | Create a git branch            |
+   | `core__vcs_get_ci_status`    | Check CI status                |
+   | `core__vcs_merge_pr`         | Merge a pull request           |
+   | `core__metrics_query`        | Query system metrics           |
+   | `core__market_list`          | List prediction markets        |
 
 ## Step 2: Name the Graph
 
 Ask for a **kebab-case** name (e.g., `haiku-reviewer`, `docs-scanner`, `market-analyst`).
 
 Validate:
+
 - Must be kebab-case (`/^[a-z][a-z0-9]*(-[a-z0-9]+)*$/`)
 - Must not collide with existing names in `LANGGRAPH_CATALOG`
 - Derive the constant name: `HAIKU_REVIEWER_GRAPH_NAME`, function name: `createHaikuReviewerGraph`
@@ -60,6 +61,7 @@ Validate:
 ## Step 3: Design the System Prompt
 
 Help the user craft a system prompt. Guidelines:
+
 - Start with role identity ("You are...")
 - List available tools and when to use each
 - Define output format expectations
@@ -144,6 +146,7 @@ export const <camelName>Graph = makeCogniGraph({
 ### 4e. Header comment convention
 
 Every file must include:
+
 ```typescript
 /**
  * Module: `@cogni/langgraph-graphs/graphs/<name>/<file>`
@@ -174,6 +177,7 @@ Update `packages/langgraph-graphs/src/catalog.ts`:
 ```
 
 4. Add to `LANGGRAPH_GRAPH_IDS`:
+
 ```typescript
 "<kebab-name>": `${LANGGRAPH_PROVIDER_ID}:${<NAME>_GRAPH_NAME}`,
 ```
@@ -188,14 +192,42 @@ Add to `packages/langgraph-graphs/src/graphs/index.ts`:
 export { create<PascalName>Graph, <NAME>_GRAPH_NAME } from "./<name>/graph";
 ```
 
-## Step 7: Validate
+## Step 7: Choose Target Node
+
+Ask the user which node this agent should be added to. Default is **operator**.
+
+Available nodes (check `nodes/` directory for current list):
+
+- **operator** (default) — the main Cogni operator node. Graph goes in `packages/langgraph-graphs/src/graphs/` and `LANGGRAPH_CATALOG`.
+- **node-specific** (e.g., poly, resy) — graph goes in `nodes/<slug>/graphs/src/graphs/` and that node's local catalog (e.g., `POLY_LANGGRAPH_CATALOG`).
+
+**For operator (default):**
+
+- Files: `packages/langgraph-graphs/src/graphs/<name>/`
+- Catalog: `packages/langgraph-graphs/src/catalog.ts` → `LANGGRAPH_CATALOG`
+- Barrel: `packages/langgraph-graphs/src/graphs/index.ts`
+- UI wiring: Add entry to `AVAILABLE_GRAPHS` in **both**:
+  - `nodes/operator/app/src/features/ai/components/ChatComposerExtras.tsx`
+  - `nodes/node-template/app/src/features/ai/components/ChatComposerExtras.tsx`
+
+**For a specific node (e.g., poly):**
+
+- Files: `nodes/<slug>/graphs/src/graphs/<name>/`
+- Catalog: `nodes/<slug>/graphs/src/index.ts` → node-local catalog (e.g., `POLY_LANGGRAPH_CATALOG`)
+- UI wiring: Add entry to `AVAILABLE_GRAPHS` in `nodes/<slug>/app/src/features/ai/components/ChatComposerExtras.tsx`
+
+> **vNext**: This step will be replaced by agent-registry auto-registration — merge to canary auto-registers the graph as a callable agent.
+
+## Step 8: Validate
 
 Run:
+
 ```bash
 pnpm packages:build
 ```
 
 If it compiles, the graph is ready. The user can test it by:
+
 1. `pnpm dev` (starts the operator)
 2. Open the chat UI and select the new graph from the model dropdown
 3. Or call `/api/v1/chat/completions` with `"model": "<kebab-name>"`

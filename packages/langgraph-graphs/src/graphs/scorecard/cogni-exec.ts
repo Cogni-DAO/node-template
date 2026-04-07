@@ -14,7 +14,7 @@
  */
 
 import { makeCogniGraph } from "../../runtime/cogni/make-cogni-graph";
-import { SCORECARD_GRAPH_NAME, createScorecardGraph } from "./graph";
+import { createScorecardGraph, SCORECARD_GRAPH_NAME } from "./graph";
 import { SCORECARD_TOOL_IDS } from "./tools";
 
 export const scorecardGraph = makeCogniGraph({
