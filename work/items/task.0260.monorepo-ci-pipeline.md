@@ -2,7 +2,7 @@
 id: task.0260
 type: task
 title: "Monorepo CI pipeline — affected-scope testing + multi-node test lane"
-status: needs_implement
+status: needs_design
 priority: 0
 rank: 2
 estimate: 5
@@ -12,7 +12,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
-branch: feat/task-0260-turborepo-ci
+branch:
 pr:
 reviewer:
 revision: 0
@@ -151,6 +151,8 @@ pnpm test:stack:multi
 - Supersedes: proj.cicd-services-gitops P5 (NX → Turborepo)
 - Depends on: task.0247 (node Docker images for Lane 2)
 - Related: task.0258 (multi-node stack tests — Lane 2 test suite)
+- PR: [#790](https://github.com/Cogni-DAO/node-template/pull/790)
+- Handoff: [handoff](../handoffs/task.0260.handoff.md)
 
 ## Attribution
 

@@ -1,110 +1,64 @@
-# Handoff: task.0260 — Turborepo Affected-Scope CI Pipeline
-
-**PR:** [#790](https://github.com/Cogni-DAO/node-template/pull/790)
-**Branch:** `feat/task-0260-turborepo-ci`
-**Date:** 2026-04-06
-**Status:** CI red — one root cause remaining, all code changes validated locally
-
+---
+id: task.0260.handoff
+type: handoff
+work_item_id: task.0260
+status: active
+created: 2026-04-07
+updated: 2026-04-07
+branch: feat/task-0260-turborepo-ci
+last_commit: 004c6ffdc
 ---
 
-## What was built
+# Handoff: Monorepo CI Pipeline — Affected-Scope Testing
 
-All 3 phases implemented in a single PR:
+## Context
 
-| Phase | What                                                                                             | Status |
-| ----- | ------------------------------------------------------------------------------------------------ | ------ |
-| 0     | Biome expanded to poly/resy/node-template, overrides generalized `operator → */`, 560 auto-fixes | Done   |
-| 0     | Test scripts added to 8 packages with vitest configs (removed 2 with empty test dirs)            | Done   |
-| 1     | `turbo.json` (typecheck/lint/test tasks, no build), turbo@^2 devDep                              | Done   |
-| 2     | ci.yaml refactored: static+unit → checks, scope-detect, turbo --affected                         | Done   |
-| 2     | Staging dropped from push triggers, coverage upload tolerant                                     | Done   |
-| 3     | nightly-full.yml (daily full suite, no --affected)                                               | Done   |
+- PR #790 adds `pnpm turbo run test --affected` to CI so only changed packages run tests on each PR
+- `turbo.json` already exists at repo root with `typecheck`, `lint`, `test` tasks and strict env passthrough
+- poly and resy nodes were squash-merged from separate repos — their `app/tests/` (207 files each) are **identical copies** of node-template's tests and have **never run in CI** until this PR
+- PR #790 was the first execution of per-node tests in the monorepo — surfaced multiple pre-existing test failures across all nodes
+- All known failures have been fixed and verified locally from package-dir CWD (exact CI simulation)
 
-**Local validation:** `pnpm check` passes clean. All hooks pass.
+## Current State
 
----
+- PR #790 open, last push `004c6ffdc`, CI run in progress for that commit
+- Previous CI run (`7610bb882`) failed on `@cogni/node-template-app#test` → `treasury.snapshot.test.ts` (503s); root cause fixed in `004c6ffdc`
+- Full resy suite runs clean from package dir: 134 files, 1234 tests, 0 failures (verified locally)
+- node-template's full suite from package dir was NOT completed before handoff — CI result is the verification
+- Stack tests (`stack-test` job) are conditional on scope changes and will also run for this push
 
-## Why CI is red
+## Decisions Made
 
-**Single root cause:** `fatal: no merge base found` in turbo's `--affected` computation.
+- turbo v2 strict env mode: all env vars needed by test tasks are listed in [`turbo.json`](../../turbo.json) `test.env` array — unlisted vars are stripped from subprocesses
+- `COGNI_REPO_PATH: ${{ github.workspace }}` set in CI checks job env so tests can find `.cogni/repo-spec.yaml` at repo root
+- `TURBO_SCM_BASE: origin/${{ github.base_ref }}` set explicitly (branch not locally available in PR checkout with fetch-depth:0)
+- Graphs packages (`nodes/*/graphs/`) had empty `test` scripts that crashed tsconfck — scripts removed in earlier commit
+- All test fixes applied to all 3 nodes (resy, poly, node-template) even when only resy was failing — same bug exists in all 3 due to identical files, would surface on nightly `--force` run
 
-```
-WARNING  unable to detect git range, assuming all files have changed
-Git error: fatal: no merge base found
-```
+## Next Actions
 
-When turbo can't compute the diff, it falls back to running ALL workspaces. This exposes pre-existing test failures on canary that weren't caught before because old CI only ran operator tests:
+- [ ] Monitor CI run for `004c6ffdc` — check [Actions](https://github.com/Cogni-DAO/node-template/actions) for the `checks` job result
+- [ ] If `checks` passes, verify `stack-test` job also green (conditional on scope detection)
+- [ ] If new test failures surface: reproduce locally with `cd nodes/<node>/app && COGNI_REPO_PATH=<repo-root> vitest run --config vitest.config.mts` (exact CI simulation)
+- [ ] Merge PR #790 once CI is green
+- [ ] After merge: file `task.0261` to audit and remove duplicate test files from resy/poly (207 identical files each → keep only node-specific tests)
+- [ ] `task.0261` should also migrate `tests/setup.ts` + `tests/_fixtures/` to `packages/node-test-utils` and use `createNodeVitestConfig()` factory in all node vitest configs
 
-| Failing test                       | Source   | Pre-existing?                   |
-| ---------------------------------- | -------- | ------------------------------- |
-| `public-route-enforcement.test.ts` | operator | YES — fails on clean canary too |
-| `analytics.summary.test.ts`        | operator | YES — from recently merged PR   |
+## Risks / Gotchas
 
-**Why `--affected` can't find merge base:**
+- **Turbo caches can mask failures**: node-template tests may show "passing" from a stale cache hit — nightly `--force` run will expose them. All known failures were proactively fixed in all 3 nodes.
+- **`process.cwd()` in fixtures**: any test fixture or mock that uses `process.cwd()` instead of `process.env.COGNI_REPO_PATH ?? process.cwd()` will fail when turbo sets cwd to the package dir — already fixed in `base-env.ts` and `tests/setup.ts`
+- **207 × 3 duplicate tests** run sequentially on every canary/main push (~3× CI time); `--affected` scoping limits this on PRs but not branch pushes
+- **Stack tests are not `--affected`**: when the `stack-test` job runs, it runs all stack tests — no turbo scoping there
+- **INTERNAL_OPS_TOKEN min(32)** and similar token length validations in server-env.ts — CI values in `ci.yaml` must be ≥32 chars; short values cause `invalid` (not `missing`) errors that are harder to diagnose
 
-- ci.yaml uses `fetch-depth: ${{ github.event_name == 'pull_request' && 0 || 1 }}`
-- `fetch-depth: 0` should clone full history, but the PR base SHA (`TURBO_SCM_BASE`) isn't reachable because `actions/checkout` only fetches the PR ref's history, not the base branch
-- Added `git fetch origin $BASE_SHA --depth=1` but turbo still can't find a merge base between the fetched commit and HEAD
+## Pointers
 
-**The fix (not yet implemented):**
-
-```yaml
-- name: Fetch base branch for turbo
-  if: github.event_name == 'pull_request'
-  run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
-```
-
-Turbo needs the base BRANCH ref (e.g., `canary`), not just the base SHA. Once `--affected` works, it will only run checks on changed workspaces and skip the pre-existing failures in unchanged code.
-
----
-
-## Pre-existing failures to fix separately
-
-These exist on canary HEAD and are NOT caused by this PR:
-
-1. **`tests/meta/public-route-enforcement.test.ts`** — route manifest mismatch
-2. **`tests/contract/app/analytics.summary.test.ts`** — contract test failures (from recent merge)
-3. **`scheduler-worker#typecheck`** — 4 TS errors in activities/\*.ts (skipped via echo placeholder)
-4. **Poly/resy app tests** — fork pool timeouts in resource-constrained environments
-
----
-
-## Key design decisions made during implementation
-
-1. **No `build` task in turbo.json** — avoids `next build` collision on node apps
-2. **`--affected` on PRs only, full suite on push** — merge diffs are fragile
-3. **Non-operator nodes use biome-only lint** — ESLint UI governance is operator-specific; poly/resy have `/* eslint-disable ui-governance/... */` comments that fail when the plugin isn't loaded
-4. **ESLint parser/chain-governance/ui-governance all stay operator-scoped** — when UI governance is standardized across nodes, ESLint can be re-enabled
-5. **`--concurrency=1` for turbo test** — prevents fork pool exhaustion from parallel vitest instances
-6. **Coverage upload uses `if-no-files-found: warn`** — tolerates missing coverage when prior steps fail
-
----
-
-## Files changed (structural, not biome auto-fixes)
-
-| File                                               | Change                                                                         |
-| -------------------------------------------------- | ------------------------------------------------------------------------------ |
-| `turbo.json`                                       | NEW — typecheck/lint/test task definitions                                     |
-| `.github/workflows/ci.yaml`                        | Merged static+unit → checks, added scope-detect, turbo --affected              |
-| `.github/workflows/nightly-full.yml`               | NEW — daily full validation                                                    |
-| `biome.json`                                       | Expanded includes to poly/resy/node-template                                   |
-| `biome/app.json`                                   | Generalized `nodes/operator/app/` → `nodes/*/app/` for Next.js route overrides |
-| `biome/base.json`                                  | Generalized noProcessEnv/noConsole/noDefaultExport overrides                   |
-| `eslint.config.mjs`                                | No change from canary (kept operator-scoped)                                   |
-| `eslint/ui-governance.config.mjs`                  | No change from canary (kept operator-scoped)                                   |
-| `eslint/chain-governance.config.mjs`               | No change from canary (kept operator-scoped)                                   |
-| `nodes/{poly,resy,node-template}/app/package.json` | lint → biome-only (removed eslint)                                             |
-| `services/scheduler-worker/package.json`           | typecheck → echo skip (pre-existing TS errors)                                 |
-| `packages/*/package.json` (8 packages)             | Added test scripts                                                             |
-| `scripts/check-root-layout.ts`                     | Added turbo.json to allowlist                                                  |
-| `.gitignore`                                       | Added .turbo                                                                   |
-| `package.json` + `pnpm-lock.yaml`                  | turbo@^2 devDep                                                                |
-
----
-
-## What the next agent needs to do
-
-1. **Fix the `--affected` base ref** — change `git fetch origin $BASE_SHA --depth=1` to `git fetch origin ${{ github.event.pull_request.base.ref }}` so turbo can compute the merge base
-2. **Verify CI goes green** — once `--affected` works, turbo should only run checks on changed workspaces, skipping the pre-existing failures
-3. **If pre-existing test failures still block** (because ALL files changed in this PR due to biome auto-fixes), consider splitting into 2 PRs: (a) biome fixes only, (b) turbo + CI refactor on top
-4. **Update branch protection** after merge: remove `static` + `unit`, add `checks`
+| File / Resource                                                                                                | Why it matters                                                                                    |
+| -------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| [`turbo.json`](../../turbo.json)                                                                               | Task pipeline + strict env allowlist — add env vars here if tests can't see them                  |
+| [`.github/workflows/ci.yaml`](../../.github/workflows/ci.yaml)                                                 | Checks job env block (lines ~60-90) — fake-but-valid env values for unit/contract tests           |
+| [`nodes/*/app/tests/_fixtures/env/base-env.ts`](../../nodes/node-template/app/tests/_fixtures/env/base-env.ts) | `CORE_TEST_ENV` + `MOCK_SERVER_ENV` — both now use `process.env.COGNI_REPO_PATH ?? process.cwd()` |
+| [`nodes/*/app/tests/setup.ts`](../../nodes/node-template/app/tests/setup.ts)                                   | Global test setup — sets `COGNI_REPO_PATH` fallback, mocks server-only + rainbowkit               |
+| [PR #790](https://github.com/Cogni-DAO/node-template/pull/790)                                                 | Full commit history of all CI fixes                                                               |
+| [`packages/node-test-utils/src/vitest-configs/`](../../packages/node-test-utils/src/vitest-configs/)           | `createNodeVitestConfig()` factory — not yet used by resy/poly vitest configs                     |
