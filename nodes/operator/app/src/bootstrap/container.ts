@@ -277,7 +277,7 @@ export function getContainer(): Container {
     // biome-ignore lint/style/noProcessEnv: startup config before env framework
     if (process.env.APP_ENV !== "test") {
       // biome-ignore lint/style/noProcessEnv: port config
-      const mcpPort = Number(process.env.MCP_TOOL_BRIDGE_PORT) || 3001;
+      const mcpPort = Number(process.env.MCP_TOOL_BRIDGE_PORT) || 1729;
       startMcpToolBridgeForContainer(_container, mcpPort);
     }
   }

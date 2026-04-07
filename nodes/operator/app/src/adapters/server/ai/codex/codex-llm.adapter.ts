@@ -227,8 +227,8 @@ async function* runCodexExec(params: {
       await writeFile(join(codexDir, "config.toml"), configToml, {
         mode: 0o600,
       });
-      callLog.debug(
-        { mcpServerCount: Object.keys(mcpConfig).length },
+      callLog.info(
+        { mcpServerCount: Object.keys(mcpConfig).length, configToml },
         "Wrote Codex config.toml with MCP servers"
       );
     }
@@ -276,6 +276,8 @@ async function* runCodexExec(params: {
     let usage: { promptTokens: number; completionTokens: number } | undefined;
 
     for await (const event of events) {
+      // DEBUG bug.0300: log all Codex events to diagnose MCP connection
+      callLog.info({ eventType: event.type, eventKeys: Object.keys(event) }, `codex event: ${event.type}`);
       switch (event.type) {
         case "item.started": {
           if (event.item.type === "agent_message") {

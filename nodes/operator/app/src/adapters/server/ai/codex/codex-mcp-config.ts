@@ -169,12 +169,12 @@ export function mcpServersToCodexConfig(
  * via a same-process MCP Streamable HTTP server. Auth via ephemeral bearer token.
  *
  * @param existing - Existing CodexMcpConfig (may be undefined)
- * @param port - MCP bridge port (default: 3001, via MCP_TOOL_BRIDGE_PORT env)
+ * @param port - MCP bridge port (default: 1729, via MCP_TOOL_BRIDGE_PORT env)
  * @returns Updated config with cogni_tools entry
  */
 export function withInternalToolBridge(
   existing: CodexMcpConfig | undefined,
-  port = 3001
+  port = 1729
 ): CodexMcpConfig {
   return {
     ...(existing ?? {}),

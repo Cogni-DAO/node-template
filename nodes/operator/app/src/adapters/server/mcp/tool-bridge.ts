@@ -75,11 +75,11 @@ export function isMcpBridgeReady(): boolean {
  * Called from bootstrap/container.ts after container is built.
  *
  * @param bridgeDeps - Tool source + Zod schemas from composition root
- * @param port - Port to listen on (default: 3001)
+ * @param port - Port to listen on (default: 1729, via MCP_TOOL_BRIDGE_PORT env)
  */
 export function startMcpToolBridge(
   bridgeDeps: McpToolBridgeDeps,
-  port = 3001
+  port = 1729
 ): void {
   deps = bridgeDeps;
 
