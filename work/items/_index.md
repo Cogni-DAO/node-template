@@ -29,7 +29,7 @@
 | 0 | 1 | 5 | needs_implement | task.0301 | Test infrastructure cleanup — deduplicate node tests + fix CI failures | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 5 | needs_implement | task.0305 | Test infrastructure cleanup — deduplicate node tests + fix CI failures | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
-| 0 | 2 | 5 | needs_implement | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 1 | needs_merge | task.0293 | Gate canary→preview promotion on CI success | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 3 | 2 | needs_design | bug.0062 | OpenClaw gateway: single webchat message can trigger multi-call GOVERN loop (call storm) | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
