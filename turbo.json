@@ -17,6 +17,9 @@
       ],
       "env": [
         "NODE_ENV",
+        "APP_ENV",
+        "DATABASE_URL",
+        "DATABASE_SERVICE_URL",
         "LITELLM_MASTER_KEY",
         "AUTH_SECRET",
         "SCHEDULER_API_TOKEN",
