@@ -15,21 +15,17 @@ const TREE_COUNT = 5;
 const BACKGROUND_PARTICLES = 100;
 const BOUNDS_X = 11;
 
-// Ground network (codebases)
-const NET_NODE_COUNT = 60;
-const NET_BOUNDS = { x: 14, z: 5 };
-const NET_Y = -4.0; // same as tree root base
-const NET_CONNECT_DIST = 3.5;
-const NET_MAX_EDGES = 120;
-
-// Neon palette — each tree is a distinct organism
+// Neon palette — emerald at index 2 (center)
 const TREE_COLORS: { r: number; g: number; b: number }[] = [
   { r: 1.0, g: 0.78, b: 0.15 }, // amber
-  { r: 0.15, g: 0.92, b: 0.65 }, // emerald
   { r: 0.3, g: 0.5, b: 1.0 }, // cobalt
+  { r: 0.15, g: 0.92, b: 0.65 }, // emerald ← center
   { r: 0.45, g: 0.95, b: 0.35 }, // chartreuse
   { r: 0.7, g: 0.25, b: 0.95 }, // violet
 ];
+
+// Seeds: center tree (i=2) uses the emerald-style seed (was i=1 → 2*7919)
+const TREE_SEEDS = [7919, 23757, 15838, 31676, 39595];
 
 /* ─── Helpers ─────────────────────────────────────── */
 
@@ -78,29 +74,28 @@ function generateTree(
 
     for (let s = 0; s < segments; s++) {
       const segLen = length / segments;
-      // Organic wobble increases with depth
-      const wobble = (rng() - 0.5) * (0.25 + depth * 0.1);
+      // Tighter wobble — more upright, less splayed
+      const wobble = (rng() - 0.5) * (0.15 + depth * 0.07);
       cx += Math.sin(angle + wobble) * segLen;
-      cy += Math.cos(angle * 0.3) * segLen + segLen * 0.65;
-      cz += (rng() - 0.5) * 0.12;
+      cy += Math.cos(angle * 0.2) * segLen + segLen * 0.75;
+      cz += (rng() - 0.5) * 0.08;
       pts.push([cx, cy, cz]);
     }
 
     branches.push({ points: pts, color, depth });
 
-    // Branching factor decreases with depth
     const forkCount =
       depth < 2 ? 2 + Math.floor(rng() * 2) : 1 + Math.floor(rng() * 2);
     for (let f = 0; f < forkCount; f++) {
-      const spread = depth < 1 ? 1.2 : 1.8;
+      // Tighter fork spread — more upright branching
+      const spread = depth < 1 ? 0.8 : 1.1;
       const newAngle = angle + (rng() - 0.5) * spread;
       const newLength = length * (0.5 + rng() * 0.28);
       branch(cx, cy, cz, newAngle, newLength, depth + 1);
     }
   }
 
-  // Main trunk
-  branch(rootX, rootY, 0, 0, 1.4 + rng() * 1.2, 0);
+  branch(rootX, rootY, 0, 0, 1.4 + rng() * 1.0, 0);
   return branches;
 }
 
@@ -120,182 +115,243 @@ const TREE_ROOTS = getTreeRoots(31337);
 function getAllTrees(): TreeBranch[][] {
   return TREE_ROOTS.map((root, i) => {
     const color = TREE_COLORS[i % TREE_COLORS.length];
-    const maxDepth = 3 + (i % 2); // Vary height: 3 or 4
-    return generateTree(root.x, root.y, color, maxDepth, (i + 1) * 7919);
+    const maxDepth = 3 + (i % 2);
+    return generateTree(root.x, root.y, color, maxDepth, TREE_SEEDS[i]);
   });
 }
 
 const ALL_TREES = getAllTrees();
 const ALL_BRANCHES = ALL_TREES.flat();
 
-/* ─── Ground network data ─────────────────────────── */
+/* ─── Root branches (organic, same style as trees) ─── */
 
-interface NetNode {
-  x: number;
-  y: number;
-  z: number;
-  treeColorIdx: number; // nearest tree index for color tinting
-}
-
-interface NetEdge {
-  a: number;
-  b: number;
-}
-
-function buildGroundNetwork(seed: number): {
-  nodes: NetNode[];
-  edges: NetEdge[];
-} {
+/** Generate horizontal root branches growing outward from each tree base */
+function generateRoots(
+  rootX: number,
+  rootY: number,
+  color: { r: number; g: number; b: number },
+  seed: number
+): TreeBranch[] {
+  const branches: TreeBranch[] = [];
   const rng = seedRandom(seed);
-  const nodes: NetNode[] = Array.from({ length: NET_NODE_COUNT }, () => {
-    const nx = (rng() - 0.5) * NET_BOUNDS.x * 2;
-    const nz = (rng() - 0.5) * NET_BOUNDS.z * 2;
-    // Assign nearest tree color
-    let minDist = Infinity;
-    let idx = 0;
-    for (let t = 0; t < TREE_ROOTS.length; t++) {
-      const d = Math.abs(TREE_ROOTS[t].x - nx);
-      if (d < minDist) {
-        minDist = d;
-        idx = t;
-      }
-    }
-    return { x: nx, y: NET_Y, z: nz, treeColorIdx: idx };
-  });
+  const spokeCount = 3 + Math.floor(rng() * 3); // 3-5 spokes per tree
 
-  const edges: NetEdge[] = [];
-  for (let a = 0; a < nodes.length && edges.length < NET_MAX_EDGES; a++) {
-    for (let b = a + 1; b < nodes.length && edges.length < NET_MAX_EDGES; b++) {
-      const dx = nodes[a].x - nodes[b].x;
-      const dz = nodes[a].z - nodes[b].z;
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < NET_CONNECT_DIST) {
-        edges.push({ a, b });
-      }
+  function rootBranch(
+    x: number,
+    y: number,
+    z: number,
+    angle: number,
+    length: number,
+    depth: number
+  ): void {
+    if (depth > 2 || length < 0.15) return;
+
+    const segments = 4 + Math.floor(rng() * 3);
+    const pts: [number, number, number][] = [[x, y, z]];
+    let cx = x;
+    let cy = y;
+    let cz = z;
+
+    for (let s = 0; s < segments; s++) {
+      const segLen = length / segments;
+      const wobble = (rng() - 0.5) * 0.35;
+      // Grow mostly horizontal with slight downward drift
+      cx += Math.cos(angle + wobble) * segLen;
+      cy -= rng() * 0.06 * segLen;
+      cz += (rng() - 0.5) * 0.15;
+      pts.push([cx, cy, cz]);
+    }
+
+    branches.push({ points: pts, color, depth });
+
+    const forkCount =
+      depth < 1 ? 2 + Math.floor(rng() * 2) : 1 + Math.floor(rng() * 2);
+    for (let f = 0; f < forkCount; f++) {
+      const spread = 0.5 + depth * 0.2;
+      const newAngle = angle + (rng() - 0.5) * spread;
+      rootBranch(
+        cx,
+        cy,
+        cz,
+        newAngle,
+        length * (0.45 + rng() * 0.25),
+        depth + 1
+      );
     }
   }
 
-  return { nodes, edges };
+  for (let i = 0; i < spokeCount; i++) {
+    // Fan out in horizontal directions from tree base
+    const baseAngle = (i / spokeCount) * Math.PI * 2 + (rng() - 0.5) * 0.6;
+    const length = 0.5 + rng() * 1.1;
+    rootBranch(rootX, rootY, 0, baseAngle, length, 0);
+  }
+
+  return branches;
 }
 
-const GROUND_NETWORK = buildGroundNetwork(54321);
+function getAllRoots(): TreeBranch[][] {
+  return TREE_ROOTS.map((root, i) => {
+    const color = TREE_COLORS[i % TREE_COLORS.length];
+    return generateRoots(root.x, root.y, color, TREE_SEEDS[i] + 99991);
+  });
+}
 
-/* ─── Ground Network component (codebases) ──────────── */
+const ALL_ROOT_BRANCHES = getAllRoots().flat();
 
-function GroundNet(): ReactElement {
+/* ─── Root Lines (same rendering as TreeLines) ──────── */
+
+function RootLines(): ReactElement {
   // biome-ignore lint/style/noNonNullAssertion: three.js ref pattern
   const lineRef = useRef<THREE.LineSegments>(null!);
-  // biome-ignore lint/style/noNonNullAssertion: three.js ref pattern
-  const nodeMeshRef = useRef<THREE.InstancedMesh>(null!);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
 
-  const { edgePosArray, edgeColArray, nodeColArray } = useMemo(() => {
-    const { nodes, edges } = GROUND_NETWORK;
-    const edgePos = new Float32Array(edges.length * 6);
-    const edgeCol = new Float32Array(edges.length * 6);
-
-    for (let i = 0; i < edges.length; i++) {
-      const na = nodes[edges[i].a];
-      const nb = nodes[edges[i].b];
-      const idx = i * 6;
-      edgePos[idx] = na.x;
-      edgePos[idx + 1] = na.y;
-      edgePos[idx + 2] = na.z;
-      edgePos[idx + 3] = nb.x;
-      edgePos[idx + 4] = nb.y;
-      edgePos[idx + 5] = nb.z;
-      // Blue-white tint for ground network
-      edgeCol[idx] = 0.2;
-      edgeCol[idx + 1] = 0.35;
-      edgeCol[idx + 2] = 0.6;
-      edgeCol[idx + 3] = 0.2;
-      edgeCol[idx + 4] = 0.35;
-      edgeCol[idx + 5] = 0.6;
+  const { positionArray, colorArray } = useMemo(() => {
+    let totalSegs = 0;
+    for (const b of ALL_ROOT_BRANCHES) {
+      totalSegs += Math.max(0, b.points.length - 1);
     }
 
-    const nodeCol = new Float32Array(nodes.length * 3);
-    for (let i = 0; i < nodes.length; i++) {
-      const c = TREE_COLORS[nodes[i].treeColorIdx % TREE_COLORS.length];
-      nodeCol[i * 3] = c.r * 0.3;
-      nodeCol[i * 3 + 1] = c.g * 0.3;
-      nodeCol[i * 3 + 2] = c.b * 0.3;
+    const pos = new Float32Array(totalSegs * 6);
+    const col = new Float32Array(totalSegs * 6);
+    let idx = 0;
+
+    for (const b of ALL_ROOT_BRANCHES) {
+      const brightness = Math.max(0.2, 0.7 - b.depth * 0.2);
+      for (let p = 0; p < b.points.length - 1; p++) {
+        const [x1, y1, z1] = b.points[p];
+        const [x2, y2, z2] = b.points[p + 1];
+        pos[idx] = x1;
+        pos[idx + 1] = y1;
+        pos[idx + 2] = z1;
+        pos[idx + 3] = x2;
+        pos[idx + 4] = y2;
+        pos[idx + 5] = z2;
+        col[idx] = b.color.r * brightness;
+        col[idx + 1] = b.color.g * brightness;
+        col[idx + 2] = b.color.b * brightness;
+        col[idx + 3] = b.color.r * brightness;
+        col[idx + 4] = b.color.g * brightness;
+        col[idx + 5] = b.color.b * brightness;
+        idx += 6;
+      }
     }
 
-    return {
-      edgePosArray: edgePos,
-      edgeColArray: edgeCol,
-      nodeColArray: nodeCol,
-    };
+    return { positionArray: pos, colorArray: col };
   }, []);
 
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     const geom = lineRef.current.geometry;
     const colAttr = geom.getAttribute("color");
-    if (colAttr) {
-      const arr = colAttr.array as Float32Array;
-      const { edges } = GROUND_NETWORK;
-      for (let i = 0; i < edges.length; i++) {
-        const pulse = 0.3 + 0.7 * Math.abs(Math.sin(t * 0.4 + i * 0.25));
-        const idx = i * 6;
-        for (let c = 0; c < 6; c++) {
-          arr[idx + c] = edgeColArray[idx + c] * pulse;
-        }
-      }
-      colAttr.needsUpdate = true;
-    }
+    if (!colAttr) return;
+    const arr = colAttr.array as Float32Array;
 
-    const { nodes } = GROUND_NETWORK;
-    for (let i = 0; i < nodes.length; i++) {
-      const n = nodes[i];
-      dummy.position.set(n.x, n.y, n.z);
-      const s = 0.5 + 0.5 * Math.sin(t * 0.8 + i * 0.45);
-      dummy.scale.setScalar(s);
-      dummy.updateMatrix();
-      nodeMeshRef.current.setMatrixAt(i, dummy.matrix);
+    let segIdx = 0;
+    for (const b of ALL_ROOT_BRANCHES) {
+      const brightness = Math.max(0.2, 0.7 - b.depth * 0.2);
+      for (let p = 0; p < b.points.length - 1; p++) {
+        const x = b.points[p][0];
+        const wave =
+          0.4 + 0.6 * Math.abs(Math.sin(t * 0.5 + x * 0.4 + segIdx * 0.07));
+        const a = brightness * wave;
+        const i = segIdx * 6;
+        arr[i] = b.color.r * a;
+        arr[i + 1] = b.color.g * a;
+        arr[i + 2] = b.color.b * a;
+        arr[i + 3] = b.color.r * a;
+        arr[i + 4] = b.color.g * a;
+        arr[i + 5] = b.color.b * a;
+        segIdx++;
+      }
     }
-    nodeMeshRef.current.instanceMatrix.needsUpdate = true;
+    colAttr.needsUpdate = true;
   });
 
-  const { nodes, edges } = GROUND_NETWORK;
+  return (
+    <lineSegments ref={lineRef}>
+      <bufferGeometry>
+        <bufferAttribute
+          attach="attributes-position"
+          args={[positionArray, 3]}
+        />
+        <bufferAttribute attach="attributes-color" args={[colorArray, 3]} />
+      </bufferGeometry>
+      <lineBasicMaterial
+        vertexColors
+        transparent
+        opacity={1}
+        blending={THREE.AdditiveBlending}
+      />
+    </lineSegments>
+  );
+}
+
+/* ─── Root Nodes (same style as TreeNodes) ──────────── */
+
+function RootNodes(): ReactElement {
+  // biome-ignore lint/style/noNonNullAssertion: three.js ref pattern
+  const meshRef = useRef<THREE.InstancedMesh>(null!);
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
+  const { nodePositions, nodeColors, count } = useMemo(() => {
+    const positions: [number, number, number][] = [];
+    const colors: { r: number; g: number; b: number }[] = [];
+
+    for (const b of ALL_ROOT_BRANCHES) {
+      const last = b.points[b.points.length - 1];
+      positions.push(last);
+      colors.push(b.color);
+      if (b.depth > 0 && b.points.length > 2) {
+        positions.push(b.points[0]);
+        colors.push(b.color);
+      }
+    }
+
+    return {
+      nodePositions: positions,
+      nodeColors: colors,
+      count: positions.length,
+    };
+  }, []);
+
+  const colorArray = useMemo(() => {
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      arr[i * 3] = nodeColors[i].r * 0.8;
+      arr[i * 3 + 1] = nodeColors[i].g * 0.8;
+      arr[i * 3 + 2] = nodeColors[i].b * 0.8;
+    }
+    return arr;
+  }, [count, nodeColors]);
+
+  useFrame(({ clock }) => {
+    const t = clock.getElapsedTime();
+    for (let i = 0; i < count; i++) {
+      const [x, y, z] = nodePositions[i];
+      dummy.position.set(x, y, z);
+      const s = 0.5 + 0.5 * Math.sin(t * 0.8 + i * 0.55);
+      dummy.scale.setScalar(s);
+      dummy.updateMatrix();
+      meshRef.current.setMatrixAt(i, dummy.matrix);
+    }
+    meshRef.current.instanceMatrix.needsUpdate = true;
+  });
 
   return (
-    <>
-      <lineSegments ref={lineRef}>
-        <bufferGeometry>
-          <bufferAttribute
-            attach="attributes-position"
-            args={[edgePosArray, 3]}
-          />
-          <bufferAttribute attach="attributes-color" args={[edgeColArray, 3]} />
-        </bufferGeometry>
-        <lineBasicMaterial
-          vertexColors
-          transparent
-          opacity={0.7}
-          blending={THREE.AdditiveBlending}
+    <instancedMesh ref={meshRef} args={[undefined, undefined, count]}>
+      <sphereGeometry args={[0.04, 6, 6]}>
+        <instancedBufferAttribute
+          attach="attributes-color"
+          args={[colorArray, 3]}
         />
-      </lineSegments>
-      <instancedMesh
-        ref={nodeMeshRef}
-        args={[undefined, undefined, nodes.length]}
-      >
-        <sphereGeometry args={[0.055, 6, 6]}>
-          <instancedBufferAttribute
-            attach="attributes-color"
-            args={[nodeColArray, 3]}
-          />
-        </sphereGeometry>
-        <meshBasicMaterial
-          vertexColors
-          transparent
-          opacity={0.85}
-          blending={THREE.AdditiveBlending}
-        />
-      </instancedMesh>
-      {/* Suppress unused edges variable lint */}
-      {edges.length > 0 && null}
-    </>
+      </sphereGeometry>
+      <meshBasicMaterial
+        vertexColors
+        transparent
+        opacity={0.85}
+        blending={THREE.AdditiveBlending}
+      />
+    </instancedMesh>
   );
 }
 
@@ -339,7 +395,6 @@ function TreeLines(): ReactElement {
     return { positionArray: pos, colorArray: col };
   }, []);
 
-  // Animate: wave pulse traveling upward through branches
   useFrame(({ clock }) => {
     const t = clock.getElapsedTime();
     const geom = lineRef.current.geometry;
@@ -351,7 +406,6 @@ function TreeLines(): ReactElement {
     for (const b of ALL_BRANCHES) {
       const brightness = Math.max(0.25, 1 - b.depth * 0.22);
       for (let p = 0; p < b.points.length - 1; p++) {
-        // Pulse wave that travels upward along the Y axis
         const y = b.points[p][1];
         const wave = 0.5 + 0.5 * Math.sin(t * 0.6 - y * 0.8 + segIdx * 0.05);
         const a = brightness * (0.4 + wave * 0.6);
@@ -401,11 +455,9 @@ function TreeNodes(): ReactElement {
     const colors: { r: number; g: number; b: number }[] = [];
 
     for (const b of ALL_BRANCHES) {
-      // Tip of each branch
       const last = b.points[b.points.length - 1];
       positions.push(last);
       colors.push(b.color);
-      // Junction point for deeper branches
       if (b.depth > 0 && b.points.length > 2) {
         positions.push(b.points[0]);
         colors.push(b.color);
@@ -434,7 +486,6 @@ function TreeNodes(): ReactElement {
     for (let i = 0; i < count; i++) {
       const [x, y, z] = nodePositions[i];
       dummy.position.set(x, y, z);
-      // Breathing glow — staggered per node
       const s = 0.6 + 0.4 * Math.sin(t * 1.0 + i * 0.6);
       dummy.scale.setScalar(s);
       dummy.updateMatrix();
@@ -479,7 +530,6 @@ function EnergyParticles(): ReactElement {
       offset: number;
     }[] = [];
 
-    // Select branches for particles — trunk + mid-depth branches
     for (const b of ALL_BRANCHES) {
       if (b.depth > 2) continue;
       if (b.points.length < 3) continue;
@@ -521,7 +571,6 @@ function EnergyParticles(): ReactElement {
         z1 + (z2 - z1) * frac
       );
 
-      // Fade in at start, peak in middle, fade at end
       const fade = Math.sin(progress * Math.PI);
       dummy.scale.setScalar(0.4 + fade * 1.8);
       dummy.updateMatrix();
@@ -549,114 +598,6 @@ function EnergyParticles(): ReactElement {
         blending={THREE.AdditiveBlending}
       />
     </instancedMesh>
-  );
-}
-
-/* ─── Cross-tree connections (merging branches) ───── */
-
-function CrossConnections(): ReactElement | null {
-  // biome-ignore lint/style/noNonNullAssertion: three.js ref pattern
-  const lineRef = useRef<THREE.LineSegments>(null!);
-
-  const { posArray, colArray, count } = useMemo(() => {
-    const allTips: {
-      pos: [number, number, number];
-      color: { r: number; g: number; b: number };
-      treeIdx: number;
-    }[] = [];
-
-    ALL_TREES.forEach((treeBranches, treeIdx) => {
-      for (const b of treeBranches) {
-        if (b.depth >= 2) {
-          allTips.push({
-            pos: b.points[b.points.length - 1],
-            color: b.color,
-            treeIdx,
-          });
-        }
-      }
-    });
-
-    const CONNECTION_RANGE = 3.0;
-    const segments: {
-      from: [number, number, number];
-      to: [number, number, number];
-      c1: { r: number; g: number; b: number };
-      c2: { r: number; g: number; b: number };
-    }[] = [];
-
-    for (let i = 0; i < allTips.length; i++) {
-      for (let j = i + 1; j < allTips.length; j++) {
-        if (allTips[i].treeIdx === allTips[j].treeIdx) continue;
-        const dx = allTips[i].pos[0] - allTips[j].pos[0];
-        const dy = allTips[i].pos[1] - allTips[j].pos[1];
-        const dz = allTips[i].pos[2] - allTips[j].pos[2];
-        const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-        if (dist < CONNECTION_RANGE && segments.length < 12) {
-          segments.push({
-            from: allTips[i].pos,
-            to: allTips[j].pos,
-            c1: allTips[i].color,
-            c2: allTips[j].color,
-          });
-        }
-      }
-    }
-
-    const pos = new Float32Array(segments.length * 6);
-    const col = new Float32Array(segments.length * 6);
-    for (let i = 0; i < segments.length; i++) {
-      const s = segments[i];
-      const idx = i * 6;
-      pos[idx] = s.from[0];
-      pos[idx + 1] = s.from[1];
-      pos[idx + 2] = s.from[2];
-      pos[idx + 3] = s.to[0];
-      pos[idx + 4] = s.to[1];
-      pos[idx + 5] = s.to[2];
-      col[idx] = s.c1.r * 0.25;
-      col[idx + 1] = s.c1.g * 0.25;
-      col[idx + 2] = s.c1.b * 0.25;
-      col[idx + 3] = s.c2.r * 0.25;
-      col[idx + 4] = s.c2.g * 0.25;
-      col[idx + 5] = s.c2.b * 0.25;
-    }
-
-    return { posArray: pos, colArray: col, count: segments.length };
-  }, []);
-
-  useFrame(({ clock }) => {
-    const t = clock.getElapsedTime();
-    const geom = lineRef.current.geometry;
-    const colAttr = geom.getAttribute("color");
-    if (!colAttr) return;
-    const arr = colAttr.array as Float32Array;
-
-    for (let i = 0; i < count; i++) {
-      const pulse = 0.2 + 0.8 * Math.abs(Math.sin(t * 0.4 + i * 1.5));
-      const idx = i * 6;
-      for (let c = 0; c < 6; c++) {
-        arr[idx + c] = colArray[idx + c] * pulse;
-      }
-    }
-    colAttr.needsUpdate = true;
-  });
-
-  if (count === 0) return null;
-
-  return (
-    <lineSegments ref={lineRef}>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[posArray, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colArray, 3]} />
-      </bufferGeometry>
-      <lineBasicMaterial
-        vertexColors
-        transparent
-        opacity={1}
-        blending={THREE.AdditiveBlending}
-      />
-    </lineSegments>
   );
 }
 
@@ -701,12 +642,10 @@ function AmbientBokeh(): ReactElement {
       positions[i][1] += velocities[i][1];
       positions[i][2] += velocities[i][2];
 
-      // Wrap vertically
       if (positions[i][1] > 8) positions[i][1] = -8;
       if (Math.abs(positions[i][0]) > 12) positions[i][0] *= -0.95;
 
       dummy.position.set(positions[i][0], positions[i][1], positions[i][2]);
-      // Subtle twinkle
       const twinkle = 0.6 + 0.4 * Math.sin(t * 1.5 + i * 2.3);
       dummy.scale.setScalar(sizes[i] * twinkle);
       dummy.updateMatrix();
@@ -742,11 +681,11 @@ function AmbientBokeh(): ReactElement {
 function Scene(): ReactElement {
   return (
     <>
-      <GroundNet />
+      <RootLines />
+      <RootNodes />
       <TreeLines />
       <TreeNodes />
       <EnergyParticles />
-      <CrossConnections />
       <AmbientBokeh />
     </>
   );
