@@ -26,19 +26,7 @@ import {
 } from "@/components/kit/overlays/Dialog";
 import { cn } from "@/shared/util/cn";
 
-/**
- * Graph descriptor for UI display.
- * Matches AgentDescriptor from port layer.
- * Per LANGGRAPH_SERVER_ALIGNED: uses 'name' field.
- */
-export interface GraphOption {
-  /** Fully-qualified graph ID (e.g., "langgraph:poet") */
-  readonly graphId: GraphId;
-  /** Human-readable name (matches LangGraph Server 'name' field) */
-  readonly name: string;
-  /** Short description (nullable per LangGraph Server) */
-  readonly description: string | null;
-}
+import type { GraphOption } from "./graph-catalog";
 
 export interface GraphPickerProps {
   graphs: readonly GraphOption[];

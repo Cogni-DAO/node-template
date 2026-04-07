@@ -321,6 +321,7 @@ export async function completionStream(
   input: CompletionInput & { abortSignal?: AbortSignal },
   ctx: RequestContext
 ): Promise<{
+  runId: string;
   stream: AsyncIterable<AiEvent>;
   final: Promise<StreamFinalResult>;
 }> {
@@ -479,5 +480,5 @@ export async function completionStream(
     }
   })();
 
-  return { stream, final };
+  return { runId, stream, final };
 }

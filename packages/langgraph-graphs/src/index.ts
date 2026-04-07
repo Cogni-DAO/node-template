@@ -23,13 +23,10 @@ export {
   type LangGraphCatalogKeys,
   type LangGraphGraphId,
 } from "./catalog";
-
 // Re-export graph constants and factories
 export { BRAIN_GRAPH_NAME, POET_GRAPH_NAME } from "./graphs/index";
-
 // Re-export inproc runner (all LangChain logic contained in package)
 export { createInProcGraphRunner } from "./inproc/runner";
-
 // Re-export inproc types for provider to use
 export type {
   CompletionFn,
@@ -42,7 +39,6 @@ export type {
   ToolExecFn,
   ToolExecResult,
 } from "./inproc/types";
-
 // Re-export runtime types (interfaces only, not implementations)
 export type { MakeLangChainToolOptions } from "./runtime/index";
 export type { McpServerConfig, McpServersConfig } from "./runtime/mcp/index";
@@ -52,3 +48,5 @@ export {
   McpToolSource,
   parseMcpConfigFromEnv,
 } from "./runtime/mcp/index";
+// Graph viz (precomputed shapes for UI)
+export { DEFAULT_GRAPH_VIZ, GRAPH_VIZ, type GraphViz } from "./viz";

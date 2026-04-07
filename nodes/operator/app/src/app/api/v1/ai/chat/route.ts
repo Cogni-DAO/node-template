@@ -284,7 +284,11 @@ export const POST = wrapRouteHandlerWithLogging(
       const idempotencyKey =
         request.headers.get("idempotency-key") ?? undefined;
 
-      const { stream: deltaStream, final } = await completionStream(
+      const {
+        runId,
+        stream: deltaStream,
+        final,
+      } = await completionStream(
         {
           messages: messageDtos,
           modelRef: input.modelRef,
@@ -526,7 +530,7 @@ export const POST = wrapRouteHandlerWithLogging(
       // but wrapRouteHandlerWithLogging expects NextResponse.
       const sseResponse = createUIMessageStreamResponse({
         stream: uiStream,
-        headers: { "X-State-Key": stateKey },
+        headers: { "X-State-Key": stateKey, "X-Run-Id": runId },
       });
       return new NextResponse(sseResponse.body, {
         status: sseResponse.status,

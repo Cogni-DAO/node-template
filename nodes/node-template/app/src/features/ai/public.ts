@@ -29,6 +29,7 @@ export {
   ChatComposerExtras,
   DEFAULT_GRAPH_ID,
 } from "./components/ChatComposerExtras";
+export { GraphPreview } from "./components/GraphPreview";
 // Chat error components
 export type { ChatErrorBubbleProps } from "./components/ChatErrorBubble";
 export { ChatErrorBubble } from "./components/ChatErrorBubble";

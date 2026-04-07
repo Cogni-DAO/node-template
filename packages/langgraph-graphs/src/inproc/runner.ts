@@ -158,7 +158,11 @@ export function createInProcGraphRunner<TTool = unknown>(
   };
 
   const tokenSink = { push: emit };
-  const toolExecFn = createToolExecFn(emit);
+  const baseToolExecFn = createToolExecFn(emit);
+  const toolExecFn: ToolExecFn = async (toolId, args, config) => {
+    emit({ type: "status", phase: "tool_use", label: toolId });
+    return baseToolExecFn(toolId, args, config);
+  };
 
   // Create no-arg CogniCompletionAdapter (reads from ALS + configurable at invoke time)
   const llm = new CogniCompletionAdapter();
@@ -189,6 +193,9 @@ export function createInProcGraphRunner<TTool = unknown>(
     try {
       const messages = request.messages.map(toBaseMessage);
 
+      // Signal start of reasoning for UI visualizers
+      emit({ type: "status", phase: "thinking" });
+
       // Set up ALS context and invoke graph
       // Per #35 NO_MODEL_IN_ALS: model comes from configurable, not ALS
       // Per #36 ALS_ONLY_FOR_NON_SERIALIZABLE_DEPS: ALS holds only completionFn, tokenSink, toolExecFn
@@ -215,6 +222,9 @@ export function createInProcGraphRunner<TTool = unknown>(
         result.structuredResponse !== undefined
           ? (result.structuredResponse as Record<string, unknown>)
           : undefined;
+
+      // Signal compaction/finalization
+      emit({ type: "status", phase: "compacting" });
 
       // ASSISTANT_FINAL_REQUIRED: exactly one per run
       emit({ type: "assistant_final", content: assistantContent });

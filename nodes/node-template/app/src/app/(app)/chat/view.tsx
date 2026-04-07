@@ -39,6 +39,7 @@ import { CHATGPT_MODELS } from "@/features/ai/components/ModelPicker";
 import {
   ChatComposerExtras,
   ChatErrorBubble,
+  GraphPreview,
   DEFAULT_GRAPH_ID,
   getPreferredModelId,
   pickDefaultModel,
@@ -83,6 +84,7 @@ export function ChatView(): ReactNode {
     null
   );
   const [selectedGraph, setSelectedGraph] = useState(DEFAULT_GRAPH_ID);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
   const [chatError, setChatError] = useState<ChatError | null>(null);
   const [isBlocked, setIsBlocked] = useState(false);
 
@@ -215,17 +217,20 @@ export function ChatView(): ReactNode {
   const handleSelectThread = useCallback((key: string) => {
     setChatError(null);
     setActiveThreadKey(key);
+    setActiveRunId(null);
   }, []);
 
   const handleNewThread = useCallback(() => {
     setChatError(null);
     setActiveThreadKey(null);
+    setActiveRunId(null);
   }, []);
 
   const handleDeleteThread = useCallback(
     (key: string) => {
       deleteThread.mutate(key);
       if (activeThreadKey === key) setActiveThreadKey(null);
+      setActiveRunId(null);
     },
     [activeThreadKey, deleteThread]
   );
@@ -326,6 +331,7 @@ export function ChatView(): ReactNode {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+      <GraphPreview graphId={selectedGraph} runId={activeRunId} />
       {isThreadLoading ? (
         <div className="flex flex-1 items-center justify-center">
           <div className="text-muted-foreground">Loading thread...</div>
@@ -341,6 +347,7 @@ export function ChatView(): ReactNode {
           onAuthExpired={() => signOut()}
           onError={handleError}
           onFinish={handleThreadFinish}
+          onRunId={setActiveRunId}
         >
           <Thread
             welcomeMessage={<ChatWelcomeWithHint />}

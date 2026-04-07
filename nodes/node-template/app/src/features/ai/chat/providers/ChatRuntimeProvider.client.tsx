@@ -58,6 +58,8 @@ interface ChatRuntimeProviderProps {
   onError?: (error: ChatError) => void;
   /** Called after each assistant response finishes (for sidebar refresh, etc.). */
   onFinish?: () => void;
+  /** Optional hook for capturing runId from server stream headers. */
+  onRunId?: (runId: string) => void;
 }
 
 export function ChatRuntimeProvider({
@@ -70,6 +72,7 @@ export function ChatRuntimeProvider({
   onAuthExpired,
   onError,
   onFinish,
+  onRunId,
 }: ChatRuntimeProviderProps) {
   const queryClient = useQueryClient();
   const modelRefRef = useRef(modelRef);
@@ -111,6 +114,11 @@ export function ChatRuntimeProvider({
         }));
       }
 
+      const runId = response.headers.get("X-Run-Id");
+      if (runId) {
+        onRunId?.(runId);
+      }
+
       if (response.status === 401) {
         onAuthExpired?.();
         throw new Error("Unauthorized");
@@ -141,7 +149,7 @@ export function ChatRuntimeProvider({
         throw new Error(body.error || "Request failed");
       }
     },
-    [defaultModelId, onAuthExpired, onError]
+    [defaultModelId, onAuthExpired, onError, onRunId]
   );
 
   // Handle stream finish - invalidate credits query + notify parent

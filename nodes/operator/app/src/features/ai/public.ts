@@ -32,6 +32,7 @@ export {
 // Chat error components
 export type { ChatErrorBubbleProps } from "./components/ChatErrorBubble";
 export { ChatErrorBubble } from "./components/ChatErrorBubble";
+export { GraphPreview } from "./components/GraphPreview";
 export type { ModelPickerProps } from "./components/ModelPicker";
 export { ModelPicker } from "./components/ModelPicker";
 // Model data hooks
