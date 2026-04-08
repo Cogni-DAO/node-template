@@ -4,7 +4,7 @@
 
 # Module: scripts/check-fast.sh
 # Purpose: Lightweight quality gate for iterative development.
-#          Workspace typecheck + tests run through Turborepo `--affected` on feature branches.
+#          Package prebuilds, workspace typecheck, and workspace tests scope to affected work where possible.
 #          Lint still auto-fixes repo-wide; format runs in check-only mode (matching CI).
 #          Run `pnpm format` manually to auto-fix format issues before retrying.
 # Usage: pnpm check:fast          # Compact output (quiet mode)
@@ -76,9 +76,8 @@ if [ "$VERBOSE" = true ]; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
 
-# Rebuild package declarations before turbo tests — stale dist/*.d.ts causes
-# false errors when package source changes (e.g. adding a field to a port interface).
-run_check "packages:build" "pnpm packages:build"
+# Rebuild only the affected package declarations needed for turbo checks.
+run_check "packages:build" "node scripts/run-scoped-package-build.mjs"
 run_check "workspace:typecheck" "bash scripts/run-turbo-checks.sh typecheck"
 run_check "lint" "pnpm lint:fix"
 run_check "format" "pnpm format:check"
