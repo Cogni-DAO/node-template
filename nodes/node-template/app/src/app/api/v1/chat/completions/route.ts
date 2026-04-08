@@ -23,8 +23,8 @@ import {
   chatCompletionStream,
   toOpenAiFinishReason,
 } from "@/app/_facades/ai/completion.server";
+import { resolveRequestIdentity } from "@/app/_lib/auth/request-identity";
 import { executionErrorToOpenAiError } from "@/app/_facades/ai/execution-error-mapper";
-import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import {
   type ChatCompletionChunk,
@@ -387,7 +387,7 @@ function createOpenAiSseStream(
 export const POST = wrapRouteHandlerWithLogging(
   {
     routeId: "chat.completions",
-    auth: { mode: "required", getSessionUser },
+    auth: { mode: "required", getSessionUser: resolveRequestIdentity },
   },
   async (ctx, request, sessionUser) => {
     try {
