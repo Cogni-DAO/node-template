@@ -3,9 +3,9 @@
 
 import { randomUUID } from "node:crypto";
 import { users } from "@cogni/db-schema";
+import { registerAgentOperation } from "@cogni/node-contracts";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { registerAgentOperation } from "@cogni/node-contracts";
 import { issueAgentApiKey } from "@/app/_lib/auth/request-identity";
 import { getContainer, resolveServiceDb } from "@/bootstrap/container";
 

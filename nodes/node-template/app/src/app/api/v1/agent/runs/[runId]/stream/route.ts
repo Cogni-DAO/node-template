@@ -16,11 +16,11 @@
  */
 
 import { toUserId, userActor } from "@cogni/ids";
+import { RunStreamParamsSchema } from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 import { resolveRequestIdentity } from "@/app/_lib/auth/request-identity";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { RunStreamParamsSchema } from "@cogni/node-contracts";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -49,7 +49,10 @@ interface RouteParams {
  * - 410: Stream expired (Redis TTL elapsed)
  */
 export const GET = wrapRouteHandlerWithLogging<RouteParams>(
-  { routeId: "agent.runs.stream", auth: { mode: "required", getSessionUser: resolveRequestIdentity } },
+  {
+    routeId: "agent.runs.stream",
+    auth: { mode: "required", getSessionUser: resolveRequestIdentity },
+  },
   async (ctx, request, sessionUser, routeParams) => {
     const log = ctx.log;
 
