@@ -78,7 +78,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.2",
     "ethers": "^5.7.2",
     "eventsource-parser": "^3.0.6",
     "fast-safe-stringify": "^2.1.1",

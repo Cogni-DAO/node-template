@@ -207,7 +207,7 @@
     "@cogni/work-items": "workspace:*",
     "@privy-io/node": "^0.10.1",
     "cron-parser": "^4.9.0",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.2",
     "pino": "^10.1.0",
     "postgres": "^3.4.5",
     "prom-client": "^15.1.3",
