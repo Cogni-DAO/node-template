@@ -18,10 +18,10 @@ initiative: proj.cicd-services-gitops
 
 ## Status
 
-- **Source branch:** `integration/multi-node`
-- **Argo branch:** `worktree-cicd-gap-analysis` (PR #628 — needs rebase onto integration/multi-node)
-- **Date:** 2026-04-02
-- **Constraint:** No production users — staging + prod can be wiped for clean bootstrap.
+- **Pipeline:** `canary → preview → production` (all three environments deployed)
+- **Key fix:** `fix/deploy-infra-ordering` — reordered deploy-infra to start Compose infra before k8s pod restarts; added ArgoCD sync gate + rollout wait
+- **Date:** 2026-04-08
+- **Constraint:** No production users — preview + prod can be wiped for clean bootstrap.
 
 ---
 
@@ -260,22 +260,81 @@ Source of truth: `.cogni/repo-spec.yaml` (operator), `nodes/{name}/.cogni/repo-s
 
 ## 4. E2E Flow: Code Change → Production
 
-### 4.1 CI Pipeline (Per Push to Integration Branch)
+### 4.1 CI Pipeline (Per PR and Push to canary)
 
-| Stage | Job            | What Happens                                                   | Output                   |
-| ----- | -------------- | -------------------------------------------------------------- | ------------------------ |
-| 1     | **static**     | typecheck + lint                                               | Gate for other jobs      |
-| 2a    | **unit**       | `pnpm check` + `test:ci`                                       | Coverage report          |
-| 2b    | **component**  | Testcontainers tests                                           | Pass/fail                |
-| 2c    | **stack-test** | Full docker-compose stack + integration tests                  | Pass/fail                |
-| 3     | **build**      | Build affected images (operator, poly, resy, scheduler-worker) | Tagged images            |
-| 4     | **push**       | Push to GHCR with digest refs                                  | `@sha256:...` digests    |
-| 5     | **promote**    | Update k8s overlays with new digests                           | Commit to staging branch |
-| 6     | **Argo sync**  | Argo CD detects overlay change, reconciles                     | Pods rolling-updated     |
-| 7     | **e2e**        | Playwright tests against preview                               | Pass/fail                |
-| 8     | **release**    | Create `release/*` branch + PR to main                         | Release PR               |
+| Stage | Job            | What Happens                                  | Output              |
+| ----- | -------------- | --------------------------------------------- | ------------------- |
+| 1     | **checks**     | typecheck + lint + format + unit tests        | Gate for other jobs |
+| 2a    | **component**  | Testcontainers tests                          | Pass/fail           |
+| 2b    | **stack-test** | Full docker-compose stack + integration tests | Pass/fail           |
 
-### 4.2 Image Build Matrix
+### 4.2 Build + Deploy Pipeline (Per Push to canary)
+
+Two workflows chain via `workflow_run`:
+
+```
+Push to canary
+  → build-multi-node.yml: build + push all node images to GHCR
+  → promote-and-deploy.yml (workflow_run trigger):
+      promote-k8s → wait-for-argocd → deploy-infra → verify → e2e → promote-to-preview
+```
+
+### 4.3 Promote and Deploy Flow (Single Workflow)
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  promote-and-deploy.yml                                                 │
+│                                                                         │
+│  1. promote-k8s                                                         │
+│     ├─ Resolve image digests from GHCR (docker buildx imagetools)       │
+│     ├─ promote-k8s-image.sh per app → overlay digest update             │
+│     ├─ Sync base/ and catalog/ from app branch to deploy branch         │
+│     └─ Direct commit+push to deploy/{env} (git history = audit trail)   │
+│                                                                         │
+│  2. deploy-infra (scripts/ci/deploy-infra.sh via SSH)                   │
+│     ├─ [NEW] wait-for-argocd.sh: block on ArgoCD sync+health           │
+│     ├─ Edge stack (Caddy) — idempotent start or config reload           │
+│     ├─ DB provisioning (roles, databases — idempotent)                  │
+│     ├─ Compose infra up (Temporal, LiteLLM, Redis, Alloy) ← FIRST      │
+│     ├─ Config checksum gates (LiteLLM restart, OpenClaw recreate)       │
+│     ├─ Temporal namespace creation                                      │
+│     ├─ Dependency reachability probes (Temporal, LiteLLM from k8s)      │
+│     ├─ k8s secrets apply + rollout restart ← AFTER infra is up          │
+│     └─ kubectl rollout status wait (all 4 deployments)                  │
+│                                                                         │
+│  3. verify (scripts/ci/verify-deployment.sh)                            │
+│     ├─ Poll /readyz for all 3 nodes (parallel, 30 attempts × 15s)       │
+│     └─ Smoke test /livez for all 3 nodes                                │
+│                                                                         │
+│  4. e2e                                                                 │
+│     └─ Playwright smoke tests against ${DOMAIN}                         │
+│                                                                         │
+│  5. promote-to-preview (canary only)                                    │
+│     └─ Locked snapshot model: deploy or record candidate SHA            │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+**Critical ordering invariant (fixed in this PR):** Compose infra must be healthy
+before k8s pods restart. k8s pods (scheduler-worker, app nodes) depend on Compose
+services (Temporal, LiteLLM, Redis) via EndpointSlice bridges. If pods restart before
+Compose is up, they crash-loop on connection timeouts.
+
+**Two controllers, one ordering:** ArgoCD syncs k8s manifests (Deployments,
+Services, EndpointSlices) from the deploy branch. `deploy-infra.sh` manages Compose
+services and k8s Secrets. The `wait-for-argocd.sh` gate ensures ArgoCD has finished
+syncing before `deploy-infra.sh` mutates secrets and triggers pod restarts.
+
+**Scripts own logic, YAML orchestrates:**
+
+| Script                  | Responsibility                                            |
+| ----------------------- | --------------------------------------------------------- |
+| `wait-for-argocd.sh`    | Block on ArgoCD app sync+health (pre-deploy gate)         |
+| `deploy-infra.sh`       | Compose infra + dependency probes + k8s secrets + restart |
+| `verify-deployment.sh`  | Post-deploy health polls + smoke tests                    |
+| `promote-to-preview.sh` | Locked snapshot promotion (canary→preview)                |
+| `promote-k8s-image.sh`  | Image digest update in k8s overlays                       |
+
+### 4.4 Image Build Matrix
 
 | App               | Dockerfile                             | Build Trigger                                    | Tag Format                                    |
 | ----------------- | -------------------------------------- | ------------------------------------------------ | --------------------------------------------- |
@@ -288,36 +347,31 @@ Source of truth: `.cogni/repo-spec.yaml` (operator), `nodes/{name}/.cogni/repo-s
 | scheduler-worker  | `services/scheduler-worker/Dockerfile` | Changes to `services/scheduler-worker/`          | `preview-{sha}-scheduler-worker`              |
 | litellm           | `infra/images/litellm/Dockerfile`      | Changes to `infra/images/litellm/`               | `preview-{sha}-litellm` (GHCR, digest-pinned) |
 
-### 4.3 Promotion Flow
-
-**Promotion uses a separate workflow**, not in-line in the build pipeline. This avoids
-the branch-mutation loop where a workflow commits to the branch that triggered it.
-The pattern mirrors `deploy-production.yml` (triggered by `build-prod` success via
-`workflow_run`).
+### 4.5 Promotion: Canary → Preview → Production
 
 ```
-Push to staging
-  → staging-preview.yml: build + push images + SSH deploy (Compose) + e2e + release PR
-  → promote-k8s-staging.yml (workflow_run trigger on staging-preview success):
-      fetch digest from GHCR → promote-k8s-image.sh per app → commit [skip ci] → push
-  → Argo CD detects overlay change → auto-syncs apps on k3s
+canary push → build-multi-node → promote-and-deploy (canary env)
+  → e2e passes → promote-to-preview.sh
+    → locked snapshot model:
+        if unlocked: deploy SHA to preview, lock for review
+        if reviewing: record SHA as candidate (next deploy)
+    → dispatch promote-and-deploy (preview env)
 
-Merge release/* to main
-  → build-prod.yml: build + push prod images
-  → deploy-production.yml (workflow_run trigger): SSH deploy (Compose)
-  → promote-k8s-production.yml (workflow_run trigger on build-prod success):
-      fetch digest → promote-k8s-image.sh --env production → commit [skip ci] → push
-  → Argo CD syncs production apps
+release/* PR merged to main → promote-and-deploy (production env)
 ```
 
-**Why separate workflows:** A workflow that commits to its own trigger branch is
-fragile even with `[skip ci]`. Separate `workflow_run`-triggered workflows fire once
-on completion, have their own concurrency group, and cannot loop.
+**Why direct commits to deploy branches:** Machine-written, deterministic state.
+Git history is the audit trail. No PR delays — all review happens on the source
+code, not the deploy commit.
 
-**Key detail:** Overlay digests flow with the code through the branch model. The
-`release/*` branch carries the staging overlay digests. After merge to main, CI
-rebuilds images with `prod-` prefix and updates production overlays. Production
-overlays always contain production-built digests, not staging ones.
+### 4.6 Future: Secrets under Git/Argo Ownership
+
+Currently, `deploy-infra.sh` applies k8s Secrets via `kubectl apply` from CI
+environment variables. This creates a two-controller race: ArgoCD syncs manifests
+while CI mutates secrets and restarts pods. The intermediate fix (this PR) adds
+ordering gates. The long-term fix: manage Secrets via Sealed Secrets or External
+Secrets Operator, committed to the deploy branch, synced by ArgoCD. This eliminates
+the CI `kubectl apply` path entirely.
 
 ### 4.4 Rollback
 
