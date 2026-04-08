@@ -262,11 +262,11 @@ Source of truth: `.cogni/repo-spec.yaml` (operator), `nodes/{name}/.cogni/repo-s
 
 ### 4.1 CI Pipeline (Per PR and Push to canary)
 
-| Stage | Job            | What Happens                                                   | Output                   |
-| ----- | -------------- | -------------------------------------------------------------- | ------------------------ |
-| 1     | **checks**     | typecheck + lint + format + unit tests                         | Gate for other jobs      |
-| 2a    | **component**  | Testcontainers tests                                           | Pass/fail                |
-| 2b    | **stack-test** | Full docker-compose stack + integration tests                  | Pass/fail                |
+| Stage | Job            | What Happens                                  | Output              |
+| ----- | -------------- | --------------------------------------------- | ------------------- |
+| 1     | **checks**     | typecheck + lint + format + unit tests        | Gate for other jobs |
+| 2a    | **component**  | Testcontainers tests                          | Pass/fail           |
+| 2b    | **stack-test** | Full docker-compose stack + integration tests | Pass/fail           |
 
 ### 4.2 Build + Deploy Pipeline (Per Push to canary)
 
@@ -326,13 +326,13 @@ syncing before `deploy-infra.sh` mutates secrets and triggers pod restarts.
 
 **Scripts own logic, YAML orchestrates:**
 
-| Script                    | Responsibility                                           |
-| ------------------------- | -------------------------------------------------------- |
-| `wait-for-argocd.sh`     | Block on ArgoCD app sync+health (pre-deploy gate)        |
-| `deploy-infra.sh`        | Compose infra + dependency probes + k8s secrets + restart |
-| `verify-deployment.sh`   | Post-deploy health polls + smoke tests                   |
-| `promote-to-preview.sh`  | Locked snapshot promotion (canary→preview)                |
-| `promote-k8s-image.sh`   | Image digest update in k8s overlays                      |
+| Script                  | Responsibility                                            |
+| ----------------------- | --------------------------------------------------------- |
+| `wait-for-argocd.sh`    | Block on ArgoCD app sync+health (pre-deploy gate)         |
+| `deploy-infra.sh`       | Compose infra + dependency probes + k8s secrets + restart |
+| `verify-deployment.sh`  | Post-deploy health polls + smoke tests                    |
+| `promote-to-preview.sh` | Locked snapshot promotion (canary→preview)                |
+| `promote-k8s-image.sh`  | Image digest update in k8s overlays                       |
 
 ### 4.4 Image Build Matrix
 
