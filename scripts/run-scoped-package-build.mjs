@@ -55,6 +55,21 @@ if (!useAffected) {
 
 const scopeBase = upstreamRef;
 const scopeHead = headRef;
+
+const globalBuildInputsTouched = didTouchGlobalBuildInputs(
+  scopeBase,
+  scopeHead
+);
+if (globalBuildInputsTouched) {
+  console.log(
+    `Package build scope: full (global inputs changed: ${scopeBase}...${scopeHead})`
+  );
+  if (!dryRun) {
+    runPnpm(["packages:build"]);
+  }
+  process.exit(0);
+}
+
 const workspaceGraph = loadWorkspaceGraph();
 const changedWorkspaceNames = getChangedWorkspaceNames(
   scopeBase,
@@ -310,10 +325,7 @@ function collectLocalDependencyClosure(startNames, workspaceGraph) {
 }
 
 function getChangedWorkspaceNames(scopeBase, scopeHead, workspaceGraph) {
-  const diffOutput = gitStdout(
-    ["diff", "--name-only", `${scopeBase}...${scopeHead}`],
-    false
-  ).trim();
+  const diffOutput = getChangedPaths(scopeBase, scopeHead);
 
   if (diffOutput.length === 0) {
     return [];
@@ -346,6 +358,41 @@ function getChangedWorkspaceNames(scopeBase, scopeHead, workspaceGraph) {
   }
 
   return [...matched];
+}
+
+function didTouchGlobalBuildInputs(scopeBase, scopeHead) {
+  const changedPaths = getChangedPaths(scopeBase, scopeHead);
+  if (changedPaths.length === 0) {
+    return false;
+  }
+
+  const paths = new Set(changedPaths.split("\n").map((line) => line.trim()));
+  const globalInputs = new Set([
+    "package.json",
+    "pnpm-lock.yaml",
+    "pnpm-workspace.yaml",
+    "tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.app.json",
+    "tsconfig.scripts.json",
+  ]);
+
+  for (const path of paths) {
+    if (globalInputs.has(path)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getChangedPaths(scopeBase, scopeHead) {
+  return gitStdout(
+    ["diff", "--name-only", `${scopeBase}...${scopeHead}`],
+    false
+  )
+    .trim()
+    .replace(/\r\n/g, "\n");
 }
 
 function resolveTypesPath(packageJson) {

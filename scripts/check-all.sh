@@ -92,7 +92,7 @@ if [ "$VERBOSE" = true ]; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
 
-run_check "packages:build" "pnpm packages:build > /dev/null"
+run_check "packages:build" "pnpm packages:build"
 run_check "workspace:typecheck" "bash scripts/run-turbo-checks.sh typecheck"
 
 if [ "$FIX_MODE" = true ]; then
