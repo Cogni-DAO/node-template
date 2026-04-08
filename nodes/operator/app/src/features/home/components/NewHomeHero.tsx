@@ -78,19 +78,6 @@ export function NewHomeHero(): ReactElement {
             </Button>
           </motion.div>
         </div>
-
-        {/* Scroll indicator */}
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 1.5, duration: 0.8 }}
-          className="absolute bottom-8 z-20 flex flex-col items-center gap-2"
-        >
-          <span className="text-muted-foreground/50 text-xs uppercase tracking-widest">
-            Scroll
-          </span>
-          <div className="h-8 w-px animate-pulse bg-gradient-to-b from-muted-foreground/30 to-transparent" />
-        </motion.div>
       </section>
     </>
   );
