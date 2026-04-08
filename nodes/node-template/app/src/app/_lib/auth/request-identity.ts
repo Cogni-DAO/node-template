@@ -31,8 +31,11 @@ function safeCompare(a: string, b: string): boolean {
 
 function extractBearerToken(authHeader: string | null): string | null {
   if (!authHeader) return null;
-  const match = authHeader.match(/^Bearer\s+(.+)$/i);
-  return match?.[1]?.trim() ?? null;
+  // Avoid regex backtracking: use startsWith + slice (O(n), no ReDoS risk).
+  const lower = authHeader.toLowerCase();
+  if (!lower.startsWith("bearer ")) return null;
+  const token = authHeader.slice(7).trimStart();
+  return token || null;
 }
 
 function signPayload(payloadB64: string): string {

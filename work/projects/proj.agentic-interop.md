@@ -117,6 +117,20 @@ See [mcp-control-plane.md](../../docs/spec/mcp-control-plane.md) for full spec.
 | Phase 2: Multi-tenant isolation (per-tenant deployments + RLS)     | Not Started | 3   | —         |
 | Phase 3: ToolHive operator + vMCP gateway (requires k8s migration) | Not Started | 5   | —         |
 
+**x402 Pay-Per-Tool (P1 — HIGH PRIORITY):**
+
+A working prototype exists. x402 gates non-streaming tool calls behind HTTP 402 → USDC micro-payment → access. Streaming LLM inference stays on the existing LiteLLM billing path.
+
+| Deliverable                                                                           | Status      | Est | Work Item |
+| ------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| Resurrect x402 prototype, wire to `ToolInvocationContext` at `toolRunner.exec()` gate | Not Started | 2   | —         |
+| x402 price oracle: tool pricing table (per-call USDC amounts per tool)                | Not Started | 1   | —         |
+| x402 payment verification: validate USDC tx before tool execution                     | Not Started | 1   | —         |
+| Expose x402 price hints in `GET /api/v1/public/graphs` response                       | Not Started | 1   | —         |
+| Skip x402 for agents with active credit balance (free-tier fallback)                  | Not Started | 1   | —         |
+| Test: agent calls paid tool → 402 returned → agent pays → tool executes               | Not Started | 2   | —         |
+| Docs: x402 tool payment flow for external agents                                      | Not Started | 1   | —         |
+
 **Async MCP (when spec stabilizes):**
 
 | Deliverable                                                           | Status      | Est | Work Item |
@@ -148,7 +162,7 @@ See [mcp-control-plane.md](../../docs/spec/mcp-control-plane.md) for full spec.
 - **AGENT_IDENTITY_REQUIRED** — All outbound agent actions carry verifiable identity via OAuth token with `ActorId`.
 - **HUMAN_REVIEW_REQUIRED_MVP** — Cross-agent delegation and autonomous spending require human approval initially.
 - **REUSE_TOOL_PIPELINE** — MCP `tools/call` delegates to existing `toolRunner.exec()`. No parallel execution path.
-- **NO_X402_YET** — x402 does not support streaming token billing (our primary cost). Evaluate when protocol matures for dynamic-amount use cases.
+- **X402_NON_STREAMING_FIRST** — x402 does not support streaming token billing (our primary cost center). Existing prototype targets non-streaming tool gating (data APIs, static resources). Ship P1 x402 for non-streaming agent tool calls; streaming billing stays on LiteLLM audit→charge_receipts path.
 
 ## Dependencies
 
