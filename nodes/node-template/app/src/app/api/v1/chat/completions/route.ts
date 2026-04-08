@@ -27,8 +27,8 @@ import {
   chatCompletionStream,
   toOpenAiFinishReason,
 } from "@/app/_facades/ai/completion.server";
-import { resolveRequestIdentity } from "@/app/_lib/auth/request-identity";
 import { executionErrorToOpenAiError } from "@/app/_facades/ai/execution-error-mapper";
+import { resolveRequestIdentity } from "@/app/_lib/auth/request-identity";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { isAccountsFeatureError } from "@/features/accounts/public";
 import type { AiEvent, StreamFinalResult } from "@/features/ai/public";

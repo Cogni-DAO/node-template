@@ -12,12 +12,12 @@
  */
 
 import { toUserId, userActor } from "@cogni/ids";
+import { listRunsOperation } from "@cogni/node-contracts";
+import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
 import { resolveRequestIdentity } from "@/app/_lib/auth/request-identity";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { listRunsOperation } from "@cogni/node-contracts";
-import { COGNI_SYSTEM_PRINCIPAL_USER_ID } from "@cogni/node-shared";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
@@ -47,7 +47,10 @@ function handleRouteError(
  * - 401: Not authenticated
  */
 export const GET = wrapRouteHandlerWithLogging(
-  { routeId: "agent.runs.list", auth: { mode: "required", getSessionUser: resolveRequestIdentity } },
+  {
+    routeId: "agent.runs.list",
+    auth: { mode: "required", getSessionUser: resolveRequestIdentity },
+  },
   async (ctx, request, sessionUser) => {
     try {
       const { searchParams } = new URL(request.url);
