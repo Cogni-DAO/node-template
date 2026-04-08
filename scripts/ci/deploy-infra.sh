@@ -674,10 +674,136 @@ log_info "[$(date -u +%H:%M:%S)] DB provisioning complete"
 emit_deployment_event "infra_deployment.db_provision_complete" "success" "Database provisioned successfully"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 6.5: Create/update k8s secrets + rolling restart (bridge — task.0284 replaces)
+# Step 6.6: Start/update infra services (rolling update, no down)
+# Compose infra (Temporal, LiteLLM, Redis) must be up BEFORE k8s pods restart,
+# because k8s pods depend on these via EndpointSlice bridges.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+log_info "[$(date -u +%H:%M:%S)] Starting infra services (rolling update)..."
+emit_deployment_event "infra_deployment.stack_up_started" "in_progress" "Starting infrastructure services"
+
+# Autoheal guard: stop autoheal before compose up to prevent race condition
+# (autoheal can restart a container between compose stop and remove)
+$RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
+
+# Infra services only — excludes app, scheduler-worker, db-migrate
+INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
+$RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
+
+# Sandbox-openclaw services (separate profile)
+# Non-fatal: openclaw is non-functional in multi-node (git-sync exit 1 kills compose).
+# Keep starting it best-effort so the containers exist for future enablement.
+$RUNTIME_COMPOSE --profile sandbox-openclaw up -d openclaw-gateway llm-proxy-openclaw || \
+  log_info "⚠️  Sandbox-openclaw services failed to start (non-fatal, openclaw is non-functional in multi-node)"
+
+log_info "[$(date -u +%H:%M:%S)] Infra stack up complete"
+emit_deployment_event "infra_deployment.stack_up_complete" "success" "Infrastructure services started"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 6.6a: Checksum-gated restart for LiteLLM config changes
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HASH_DIR="/var/lib/cogni"
+LITELLM_CONFIG="/opt/cogni-template-runtime/configs/litellm.config.yaml"
+LITELLM_HASH_FILE="$HASH_DIR/litellm-config.sha256"
+
+if [[ ! -f "$LITELLM_CONFIG" ]]; then
+  log_warn "LiteLLM config missing at $LITELLM_CONFIG, skipping restart check"
+else
+  mkdir -p "$HASH_DIR"
+  NEW_HASH=$(hash_file "$LITELLM_CONFIG")
+  OLD_HASH=$(cat "$LITELLM_HASH_FILE" 2>/dev/null || echo "none")
+
+  if [[ "$NEW_HASH" != "$OLD_HASH" && "$NEW_HASH" != "no-hash-tool" ]]; then
+    log_info "LiteLLM config changed (hash: ${NEW_HASH:0:12}...), restarting container..."
+    emit_deployment_event "infra_deployment.litellm_restart" "in_progress" "Restarting LiteLLM due to config change"
+    $RUNTIME_COMPOSE restart litellm
+    echo "$NEW_HASH" > "$LITELLM_HASH_FILE"
+    log_info "LiteLLM restarted with new config"
+    emit_deployment_event "infra_deployment.litellm_restart_complete" "success" "LiteLLM restarted successfully"
+  else
+    log_info "LiteLLM config unchanged (hash: ${NEW_HASH:0:12}...), no restart needed"
+  fi
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 6.6b: Checksum-gated recreate for OpenClaw config changes
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPENCLAW_CONFIG="/opt/cogni-template-runtime/openclaw/openclaw-gateway.json"
+OPENCLAW_HASH_FILE="$HASH_DIR/openclaw-gateway.sha256"
+
+mkdir -p "$HASH_DIR"
+
+NEW_HASH="$(hash_file "$OPENCLAW_CONFIG")"
+OLD_HASH="$(cat "$OPENCLAW_HASH_FILE" 2>/dev/null || true)"
+
+if [[ "$NEW_HASH" != "$OLD_HASH" ]]; then
+  log_info "OpenClaw config changed (hash: ${NEW_HASH:0:12}...), recreating gateway..."
+  emit_deployment_event "infra_deployment.openclaw_recreate" "in_progress" "Recreating OpenClaw gateway due to config change"
+  if $RUNTIME_COMPOSE --profile sandbox-openclaw up -d --no-deps --force-recreate openclaw-gateway; then
+    echo "$NEW_HASH" > "$OPENCLAW_HASH_FILE"
+    log_info "OpenClaw gateway recreated with new config"
+    emit_deployment_event "infra_deployment.openclaw_recreate_complete" "success" "OpenClaw gateway recreated successfully"
+  else
+    log_info "⚠️  OpenClaw gateway recreate failed (non-fatal)"
+  fi
+else
+  log_info "OpenClaw config unchanged (hash: ${NEW_HASH:0:12}...), no recreate needed"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 6.6c: OpenClaw readiness gate (fail deploy if crash-looping)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+OPENCLAW_CID=$($RUNTIME_COMPOSE --profile sandbox-openclaw ps -q openclaw-gateway 2>/dev/null || true)
+if [[ -n "$OPENCLAW_CID" ]] && docker inspect -f '{{.State.Status}}' "$OPENCLAW_CID" 2>/dev/null | grep -q "running"; then
+  log_info "Waiting for OpenClaw readiness..."
+  bash /tmp/healthcheck-openclaw.sh "$RUNTIME_COMPOSE --profile sandbox-openclaw"
+else
+  log_warn "OpenClaw gateway not running — skipping readiness gate"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 6.7: Ensure Temporal namespace exists (idempotent)
+# App pods need cogni-${env} namespace registered in Temporal before /readyz passes.
+# Same script used by provision-test-vm.sh — one shared primitive.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+TEMPORAL_NAMESPACE="cogni-${DEPLOY_ENVIRONMENT}" \
+TEMPORAL_CONTAINER="cogni-runtime-temporal-1" \
+TEMPORAL_TIMEOUT=60 \
+  bash /tmp/ensure-temporal-namespace.sh
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 6.8: Dependency reachability probes
+# Verify Compose services are reachable from k8s pods before restarting them.
+# These use the same EndpointSlice bridges the app pods will use.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if command -v kubectl &>/dev/null; then
+  K8S_NS="cogni-${DEPLOY_ENVIRONMENT}"
+  log_info "[$(date -u +%H:%M:%S)] Probing dependency reachability from k8s..."
+
+  probe_dependency() {
+    local name="$1" host="$2" port="$3"
+    local pod_name="probe-${name}-$(date +%s)"
+    kubectl -n "${K8S_NS}" delete pod "$pod_name" --ignore-not-found 2>/dev/null || true
+    if kubectl -n "${K8S_NS}" run --rm -i --restart=Never \
+      --image=busybox:1.36 "$pod_name" \
+      --timeout=30s -- nc -zw10 "$host" "$port" 2>/dev/null; then
+      log_info "  ✅ ${name} reachable at ${host}:${port}"
+    else
+      log_warn "  ⚠️  ${name} not reachable at ${host}:${port} from k8s (may recover after sync)"
+    fi
+  }
+
+  probe_dependency "temporal" "temporal" "7233"
+  probe_dependency "litellm" "$(hostname -I | awk '{print $1}')" "4000"
+  probe_dependency "redis" "$(hostname -I | awk '{print $1}')" "6379"
+fi
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Step 7: Create/update k8s secrets + rolling restart (bridge — task.0284 replaces)
 # k3s is on the same VM; kubectl is available. deploy-infra has ALL secrets
 # from GitHub Environment — unlike provision which only has agent-generated ones.
 # Uses --from-env-file for cleaner secret definitions.
+# NOTE: This runs AFTER compose infra is up (Step 6.6) and dependency
+# reachability is confirmed (Step 6.8). Long-term, secrets move to Git/Argo.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if command -v kubectl &>/dev/null; then
   log_info "[$(date -u +%H:%M:%S)] Creating/updating k8s secrets..."
@@ -763,118 +889,43 @@ SECEOF
   rm -f "$SECRET_FILE"
   log_info "  Applied sandbox-openclaw-secrets"
 
+  log_info "[$(date -u +%H:%M:%S)] k8s secrets applied"
+  emit_deployment_event "infra_deployment.k8s_secrets_complete" "success" "k8s secrets applied"
+
   # ── Rolling restart — pods must restart to pick up changed secrets ──────────
+  # This happens AFTER compose infra is up (Step 6.6) and dependency reachability
+  # is confirmed (Step 6.8), so pods boot into a healthy environment.
   kubectl -n "${K8S_NS}" rollout restart \
     deployment/operator-node-app \
     deployment/poly-node-app \
     deployment/resy-node-app \
     deployment/scheduler-worker 2>/dev/null || true
-  log_info "[$(date -u +%H:%M:%S)] k8s secrets applied, pods restarting"
-  emit_deployment_event "infra_deployment.k8s_secrets_complete" "success" "k8s secrets applied"
+  log_info "[$(date -u +%H:%M:%S)] Pods restarting..."
+
+  # ── Wait for rollouts to complete — don't exit until pods are Running ──────
+  # Parallel wait: all 4 rollouts run concurrently, total timeout = max(individual), not sum.
+  ROLLOUT_PIDS=""
+  for deploy in operator-node-app poly-node-app resy-node-app scheduler-worker; do
+    kubectl -n "${K8S_NS}" rollout status "deployment/${deploy}" --timeout=300s 2>/dev/null &
+    ROLLOUT_PIDS="$ROLLOUT_PIDS $!"
+  done
+  ROLLOUT_FAILED=0
+  for pid in $ROLLOUT_PIDS; do
+    if ! wait "$pid"; then
+      ROLLOUT_FAILED=1
+    fi
+  done
+  if [ $ROLLOUT_FAILED -ne 0 ]; then
+    log_warn "One or more rollouts did not complete within 300s"
+  fi
+  log_info "[$(date -u +%H:%M:%S)] All rollouts complete"
+  emit_deployment_event "infra_deployment.rollouts_complete" "success" "All k8s deployments rolled out"
 else
   log_warn "kubectl not found — skipping k8s secret creation (k3s may not be installed)"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 7: Start/update infra services (rolling update, no down)
-# Only starts infrastructure services — app and scheduler-worker are managed by k8s.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "[$(date -u +%H:%M:%S)] Starting infra services (rolling update)..."
-emit_deployment_event "infra_deployment.stack_up_started" "in_progress" "Starting infrastructure services"
-
-# Autoheal guard: stop autoheal before compose up to prevent race condition
-# (autoheal can restart a container between compose stop and remove)
-$RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
-
-# Infra services only — excludes app, scheduler-worker, db-migrate
-INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
-$RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
-
-# Sandbox-openclaw services (separate profile)
-# Non-fatal: openclaw is non-functional in multi-node (git-sync exit 1 kills compose).
-# Keep starting it best-effort so the containers exist for future enablement.
-$RUNTIME_COMPOSE --profile sandbox-openclaw up -d openclaw-gateway llm-proxy-openclaw || \
-  log_info "⚠️  Sandbox-openclaw services failed to start (non-fatal, openclaw is non-functional in multi-node)"
-
-log_info "[$(date -u +%H:%M:%S)] Infra stack up complete"
-emit_deployment_event "infra_deployment.stack_up_complete" "success" "Infrastructure services started"
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 7.5: Ensure Temporal namespace exists (idempotent)
-# App pods need cogni-${env} namespace registered in Temporal before /readyz passes.
-# Same script used by provision-test-vm.sh — one shared primitive.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-TEMPORAL_NAMESPACE="cogni-${DEPLOY_ENVIRONMENT}" \
-TEMPORAL_CONTAINER="cogni-runtime-temporal-1" \
-TEMPORAL_TIMEOUT=60 \
-  bash /tmp/ensure-temporal-namespace.sh
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 8: Checksum-gated restart for LiteLLM config changes
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-HASH_DIR="/var/lib/cogni"
-LITELLM_CONFIG="/opt/cogni-template-runtime/configs/litellm.config.yaml"
-LITELLM_HASH_FILE="$HASH_DIR/litellm-config.sha256"
-
-if [[ ! -f "$LITELLM_CONFIG" ]]; then
-  log_warn "LiteLLM config missing at $LITELLM_CONFIG, skipping restart check"
-else
-  mkdir -p "$HASH_DIR"
-  NEW_HASH=$(hash_file "$LITELLM_CONFIG")
-  OLD_HASH=$(cat "$LITELLM_HASH_FILE" 2>/dev/null || echo "none")
-
-  if [[ "$NEW_HASH" != "$OLD_HASH" && "$NEW_HASH" != "no-hash-tool" ]]; then
-    log_info "LiteLLM config changed (hash: ${NEW_HASH:0:12}...), restarting container..."
-    emit_deployment_event "infra_deployment.litellm_restart" "in_progress" "Restarting LiteLLM due to config change"
-    $RUNTIME_COMPOSE restart litellm
-    echo "$NEW_HASH" > "$LITELLM_HASH_FILE"
-    log_info "LiteLLM restarted with new config"
-    emit_deployment_event "infra_deployment.litellm_restart_complete" "success" "LiteLLM restarted successfully"
-  else
-    log_info "LiteLLM config unchanged (hash: ${NEW_HASH:0:12}...), no restart needed"
-  fi
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 8.2: Checksum-gated recreate for OpenClaw config changes
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-OPENCLAW_CONFIG="/opt/cogni-template-runtime/openclaw/openclaw-gateway.json"
-OPENCLAW_HASH_FILE="$HASH_DIR/openclaw-gateway.sha256"
-
-mkdir -p "$HASH_DIR"
-
-NEW_HASH="$(hash_file "$OPENCLAW_CONFIG")"
-OLD_HASH="$(cat "$OPENCLAW_HASH_FILE" 2>/dev/null || true)"
-
-if [[ "$NEW_HASH" != "$OLD_HASH" ]]; then
-  log_info "OpenClaw config changed (hash: ${NEW_HASH:0:12}...), recreating gateway..."
-  emit_deployment_event "infra_deployment.openclaw_recreate" "in_progress" "Recreating OpenClaw gateway due to config change"
-  if $RUNTIME_COMPOSE --profile sandbox-openclaw up -d --no-deps --force-recreate openclaw-gateway; then
-    echo "$NEW_HASH" > "$OPENCLAW_HASH_FILE"
-    log_info "OpenClaw gateway recreated with new config"
-    emit_deployment_event "infra_deployment.openclaw_recreate_complete" "success" "OpenClaw gateway recreated successfully"
-  else
-    log_info "⚠️  OpenClaw gateway recreate failed (non-fatal)"
-  fi
-else
-  log_info "OpenClaw config unchanged (hash: ${NEW_HASH:0:12}...), no recreate needed"
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 8.5: OpenClaw readiness gate (fail deploy if crash-looping)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# OpenClaw readiness gate — skip if gateway container doesn't exist or never started.
-# Not all environments run OpenClaw (e.g. preview may not have the image).
-OPENCLAW_CID=$($RUNTIME_COMPOSE --profile sandbox-openclaw ps -q openclaw-gateway 2>/dev/null || true)
-if [[ -n "$OPENCLAW_CID" ]] && docker inspect -f '{{.State.Status}}' "$OPENCLAW_CID" 2>/dev/null | grep -q "running"; then
-  log_info "Waiting for OpenClaw readiness..."
-  bash /tmp/healthcheck-openclaw.sh "$RUNTIME_COMPOSE --profile sandbox-openclaw"
-else
-  log_warn "OpenClaw gateway not running — skipping readiness gate"
-fi
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 9: Verify deployment
+# Step 8: Verify deployment
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 log_info "Waiting for containers to be ready..."
 sleep 10

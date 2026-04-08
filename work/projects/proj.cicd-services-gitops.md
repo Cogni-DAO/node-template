@@ -51,6 +51,7 @@ deploy/canary, deploy/preview, deploy/production  (deploy state)
 | 4   | **SHA-pin OpenClaw images** — gateway uses `:latest`                             | ❌ RED      | —     | Violates IMAGE_IMMUTABILITY                                        |
 | 5   | **160 stale branches** — 16 release/_, 19 claude/_, 7 codex/_, old feat/_        | ❌ RED      | —     | Repo hygiene. Need auto-tag+delete workflow.                       |
 | 6   | **preview.cognidao.org TLS** — last cert pending                                 | ⚠️ WAITING  | —     | Self-resolves (Caddy auto-retry)                                   |
+| 12  | **deploy-infra ordering race** — pods restart before Compose infra + ArgoCD sync | ❌ RED      | —     | fix/deploy-infra-ordering: reorder + ArgoCD wait gate + rollout wait. Root cause: Step 6.5 restarts pods before Step 7 starts Temporal/LiteLLM |
 | 7   | **Argo EndpointSlice OutOfSync** — k8s metadata drift                            | ⚠️ COSMETIC | —     | `ignoreDifferences` fix needed                                     |
 | 8   | **Prometheus metrics gap** — Alloy on canary only                                | ⚠️ GAP      | —     | Preview/production have no metrics scraping                        |
 | 9   | **VM IPs in public repo** — EndpointSlices expose bare IPs                       | ⚠️ SECURITY | —     | bug.0295                                                           |
@@ -131,6 +132,7 @@ deploy/canary, deploy/preview, deploy/production  (deploy state)
 
 | Deliverable                                                                | Status      | Est |
 | -------------------------------------------------------------------------- | ----------- | --- |
+| **Migrate k8s secrets from CI `kubectl apply` to Git/Argo ownership** (Sealed Secrets or External Secrets Operator) — eliminates the two-controller race between deploy-infra and ArgoCD | Not Started | 3   |
 | Delete `APP_DB_*` + `POSTGRES_ROOT_*` secrets from GitHub                  | Not Started | 2   |
 | Graph-scoped builds (`pnpm deploy` for service Dockerfiles)                | Not Started | 3   |
 | Test architecture: move `tests/_fakes/` and `tests/_fixtures/` out of root | Not Started | 3   |
