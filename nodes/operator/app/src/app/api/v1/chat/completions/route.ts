@@ -108,7 +108,7 @@ function handleRouteError(
     if (error.status === 404) {
       logRequestWarn(ctx.log, error, "MODEL_NOT_FOUND");
       return openAiError(
-        "The model does not exist or you do not have access to it.",
+        "The model does not exist or you do not have access to it. See GET /api/v1/public/models for the list of available models.",
         "invalid_request_error",
         404,
         "model_not_found",
@@ -170,7 +170,14 @@ function handleRouteError(
     return openAiError(message, type, status);
   }
 
-  return null; // Unhandled → let wrapper catch as 500
+  // Catch-all: never let an unknown error escape and crash the process.
+  // Agents sending bad model names or unsupported params should get a 503, not a 502.
+  logRequestWarn(ctx.log, error, "UNHANDLED_ROUTE_ERROR");
+  return openAiError(
+    "An unexpected error occurred. Check GET /api/v1/public/models for available models and GET /api/v1/public/graphs for available graphs.",
+    "server_error",
+    503
+  );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

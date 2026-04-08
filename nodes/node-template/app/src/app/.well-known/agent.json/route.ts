@@ -16,6 +16,9 @@ export async function GET(request: Request) {
       completions: `${origin}/api/v1/chat/completions`,
       runs: `${origin}/api/v1/agent/runs`,
       runStream: `${origin}/api/v1/agent/runs/{runId}/stream`,
+      models: `${origin}/api/v1/public/models`,
+      graphs: `${origin}/api/v1/public/graphs`,
     },
+    hint: "Call endpoints.models to list valid model strings. Call endpoints.graphs to list valid graph_name values for completions.",
   });
 }
