@@ -36,9 +36,9 @@ Build-time scripts for migrations, seeds, type generation, development utilities
 ## Public Surface
 
 - **Exports:** none
-- **CLI (if any):** Migration, seed, database drop, and validation commands
-- **Env/Config keys:** Database connection, development flags
-- **Files considered API:** validate-agents-md.mjs (validation script), db/drop-test-db.ts (test database utility), diag-openclaw-sandbox.mjs (OpenClaw-in-sandbox diagnostic)
+- **CLI (if any):** Migration, seed, database drop, validation, and workspace-check orchestration commands
+- **Env/Config keys:** Database connection, development flags, CI-style test env fallbacks for `run-turbo-checks.sh`
+- **Files considered API:** validate-agents-md.mjs (validation script), db/drop-test-db.ts (test database utility), diag-openclaw-sandbox.mjs (OpenClaw-in-sandbox diagnostic), run-turbo-checks.sh (workspace-scoped local check helper)
 
 ## Ports (optional)
 

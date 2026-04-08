@@ -3,9 +3,10 @@
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 # Module: scripts/check-fast.sh
-# Purpose: Lightweight quality gate for iterative development: typecheck + lint + format check + unit tests.
-#          Auto-fixes lint issues; format runs in check-only mode (matching CI). Run `pnpm format`
-#          manually to auto-fix format issues before retrying.
+# Purpose: Lightweight quality gate for iterative development.
+#          Workspace typecheck + tests run through Turborepo `--affected` on feature branches.
+#          Lint still auto-fixes repo-wide; format runs in check-only mode (matching CI).
+#          Run `pnpm format` manually to auto-fix format issues before retrying.
 # Usage: pnpm check:fast          # Compact output (quiet mode)
 #        pnpm check:fast:verbose  # Full banners + live streaming output
 #        Direct: bash scripts/check-fast.sh [--verbose]
@@ -75,15 +76,13 @@ if [ "$VERBOSE" = true ]; then
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 fi
 
-# Rebuild package declarations before typecheck — stale dist/*.d.ts causes
+# Rebuild package declarations before turbo tests — stale dist/*.d.ts causes
 # false errors when package source changes (e.g. adding a field to a port interface).
 run_check "packages:build" "pnpm packages:build"
-run_check "typecheck" "pnpm typecheck"
+run_check "workspace:typecheck" "bash scripts/run-turbo-checks.sh typecheck"
 run_check "lint" "pnpm lint:fix"
 run_check "format" "pnpm format:check"
-run_check "test:app" "pnpm vitest run --config nodes/operator/app/vitest.config.mts"
-run_check "test:packages:local" "pnpm test:packages:local"
-run_check "test:services:local" "pnpm test:services:local"
+run_check "workspace:test" "bash scripts/run-turbo-checks.sh test --concurrency=1"
 
 if [ "$VERBOSE" = true ]; then
   echo ""
