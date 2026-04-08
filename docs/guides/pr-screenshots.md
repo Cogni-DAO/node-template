@@ -1,7 +1,7 @@
 ---
 id: guide.pr-screenshots
 type: guide
-title: "PR Screenshots — Playwright capture + GitHub release assets workflow"
+title: "UI Update Validation Process"
 status: draft
 trust: draft
 summary: Step-by-step guide for taking desktop and mobile screenshots of the operator UI from a dev worktree and publishing them to a pull request via GitHub release assets.
@@ -12,7 +12,7 @@ verified:
 tags: [playwright, screenshots, pr, ui, workflow]
 ---
 
-# PR Screenshots Guide
+# UI Update Validation Process
 
 Capture and publish desktop + mobile screenshots for UI pull requests.
 
