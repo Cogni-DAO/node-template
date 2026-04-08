@@ -34,6 +34,9 @@ This causes a recurring failure mode: **agents push Husky-verified commits that 
 
 - Update `scripts/check-fast.sh` (Husky pre-push) to also run `workspace:lint` via `scripts/run-turbo-checks.sh lint`.
 - Update `scripts/check-all.sh` to include the same `workspace:lint` step for parity.
+- Add a `check:prepush` entrypoint that runs non-fixing checks (no `lint:fix`) so Husky can't "pass" by applying local-only fixes that CI never sees.
+- Ensure `check:prepush` uses `origin/canary` as the `--affected` base so it doesn't accidentally become a no-op on branches tracking their own remote head.
+- Ensure `check:prepush` runs a full `pnpm packages:build` (CI parity) so root `pnpm test:ci` doesn't fail in fresh clones due to missing built workspace package outputs.
 - Document the intent in `scripts/AGENTS.md`.
 
 ## Validation
