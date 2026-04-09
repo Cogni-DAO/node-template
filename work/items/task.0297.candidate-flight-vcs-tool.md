@@ -2,7 +2,7 @@
 id: task.0297
 type: task
 title: "Add candidate-flight tool to VCS capability / git manager agent"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 2
 estimate: 2
@@ -67,12 +67,14 @@ The tool dispatches via `POST .../actions/workflows/candidate-flight.yml/dispatc
 **Cherry-pick strategy for git-manager**: PR #794 (`feat/git-manager`, merged to canary 2026-04-06, commit `c5743653`) has the complete graph source. Cherry-pick applies clean with zero conflicts. Implementation cherry-picks this commit, then adds `VCS_FLIGHT_CANDIDATE_NAME` to `GIT_MANAGER_TOOL_IDS`.
 
 **Reuses**:
+
 - `VcsCapability` interface — add one method (`flightCandidate`)
 - `GitHubVcsAdapter` — add one method using the same `getOctokit()` helper
 - PR #794 cherry-pick — provides git-manager graph, prompt, catalog entry
 - GitHub commits/pulls API — resolve PR from SHA (already using Octokit throughout)
 
 **Rejected**:
+
 - `getCandidateLease()` tool — V0 relies on the workflow's own busy check. Dispatch fires; if slot is occupied the workflow fails fast and posts `candidate-flight: failure` on the SHA. Agent reads the failure from `getCiStatus` after dispatch — no pre-check needed.
 - `getCandidateFlightStatus()` tool — fully redundant with `getCiStatus`; that already returns all commit statuses including `candidate-flight`.
 - Separate `CandidateFlightCapability` interface — unnecessary complexity; one more method on `VcsCapability` is consistent with the existing pattern.
@@ -122,6 +124,7 @@ Step 5 — wire flight tool into git-manager:
 ### Key implementation notes
 
 **`flightCandidate` signature**:
+
 ```typescript
 flightCandidate(params: {
   owner: string;
@@ -133,6 +136,7 @@ flightCandidate(params: {
 ```
 
 **SHA → PR resolution** (when `prNumber` not supplied):
+
 ```typescript
 // GET /repos/{owner}/{repo}/commits/{sha}/pulls
 // Returns PRs associated with this commit. Take first open PR's number.
@@ -140,6 +144,7 @@ flightCandidate(params: {
 ```
 
 **Workflow dispatch**:
+
 ```typescript
 // POST /repos/{owner}/{repo}/actions/workflows/candidate-flight.yml/dispatches
 // ref: "main"  ← workflow YAML lives on main (merged via PR #851), not staging
@@ -148,6 +153,7 @@ flightCandidate(params: {
 ```
 
 **git-manager flight prompt addition** (patch onto cherry-picked prompt):
+
 > **Candidate Flight**: To flight a build, you need the commit SHA — not just a PR number. A PR may have many builds; you are flying a specific artifact. Verify the build is complete (`getCiStatus` shows all checks green including `build`) before flighting. Call `core__vcs_flight_candidate({ sha })`. After dispatch, poll `getCiStatus` to watch `candidate-flight` resolve. If it fails immediately, the slot was busy — report and stop. Do NOT queue or auto-retry.
 
 ## Validation
