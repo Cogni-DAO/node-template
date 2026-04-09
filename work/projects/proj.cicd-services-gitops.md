@@ -20,6 +20,8 @@ labels: [deployment, infra, ci-cd]
 
 Get the canary-first pipeline fully green: build once on canary, promote proven digests through preview to production. Currently 60% complete — build, promote-k8s, and deploy-infra work. Everything after verify is blocked (other dev actively fixing EndpointSlice routing + Temporal bootstrap). Even when unblocked, 9 verified gaps prevent clean end-to-end release flow.
 
+Preservation snapshot: [Canary Preservation Matrix](../../docs/runbooks/CANARY_PRESERVATION_MATRIX.md) — current deploy-state matrix, frozen canary PRs, and local workspace preservation map for the 2026-04 stabilization window.
+
 ## Pipeline Health
 
 ```
