@@ -230,38 +230,47 @@ Bootstrap ordering remains valid under the trunk-based model. What changes later
 
 This section replaces the old staging-first flow. The target model has two lanes only.
 
-| Lane | Stage | Job / Concern          | What Happens                                                                            | Output                         |
-| ---- | ----- | ---------------------- | --------------------------------------------------------------------------------------- | ------------------------------ |
-| PR   | 1     | **checks**             | `ci.yaml` runs affected static, unit, component, and stack checks as policy requires    | Required status checks         |
-| PR   | 2     | **build**              | `build-multi-node.yml` builds immutable images for the authoritative pre-merge artifact | Tagged images + digests        |
-| PR   | 3     | **slot-acquire**       | Candidate controller assigns `candidate-a` or `candidate-b`                             | Slot lease / lock              |
-| PR   | 4     | **promote-candidate**  | `promote-and-deploy.yml` writes digests to `deploy/candidate-*`                         | Deploy-branch commit           |
-| PR   | 5     | **Argo sync**          | Argo reconciles candidate environment from deploy branch                                | Updated pods                   |
-| PR   | 6     | **validation**         | Thin smoke pack and any required flight checks run on the candidate slot                | Safe / unsafe signal           |
-| PR   | 7     | **merge**              | PR becomes mergeable only after candidate lane is green                                 | Safe accepted merge            |
-| Main | 8     | **promote-preview**    | Accepted digest promotes from `main` to `deploy/preview` without rebuild                | Preview deploy-state commit    |
-| Main | 9     | **preview validation** | Post-merge validation runs against preview                                              | Preview signal                 |
-| Main | 10    | **promote-production** | Same digest promotes to `deploy/production` by policy                                   | Production deploy-state commit |
+| Lane | Stage | Job / Concern          | What Happens                                                                                               | Output                         |
+| ---- | ----- | ---------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| PR   | 1     | **checks**             | `ci.yaml` runs affected static, unit, component, and stack checks as policy requires                       | Required status checks         |
+| PR   | 2     | **build**              | `build-multi-node.yml` builds immutable images for the PR head SHA, which is the authoritative v0 artifact | Tagged images + digests        |
+| PR   | 3     | **slot-acquire**       | Candidate controller assigns `candidate-a` or `candidate-b`                                                | Slot lease / lock              |
+| PR   | 4     | **promote-candidate**  | `promote-and-deploy.yml` writes digests to `deploy/candidate-*`                                            | Deploy-branch commit           |
+| PR   | 5     | **Argo sync**          | Argo reconciles candidate environment from deploy branch                                                   | Updated pods                   |
+| PR   | 6     | **validation**         | Thin smoke pack and any required flight checks run on the candidate slot                                   | Safe / unsafe signal           |
+| PR   | 7     | **merge**              | PR becomes mergeable only after candidate lane is green                                                    | Safe accepted merge            |
+| Main | 8     | **promote-preview**    | Accepted digest promotes from `main` to `deploy/preview` without rebuild                                   | Preview deploy-state commit    |
+| Main | 9     | **preview validation** | Post-merge validation runs against preview                                                                 | Preview signal                 |
+| Main | 10    | **promote-production** | Same digest promotes to `deploy/production` by policy                                                      | Production deploy-state commit |
 
 ### 4.2 Authoritative Artifact Rule
 
-This is the single most important unresolved design choice before workflow surgery starts.
+For v0, the authoritative artifact is the **PR head SHA artifact**.
 
-The system currently wants all of the following:
+That means:
 
-- `pull_request` and `merge_group` participate in pre-merge validation
-- CI builds the exact pre-merge artifact
-- the same proven digest promotes after merge
+- `pull_request` builds the artifact that candidate validation exercises
+- candidate-slot validation proves that exact PR artifact safe
+- when the PR merges, the same digest promotes forward from `main`
+- preview and production consume that same accepted digest without rebuild
 
-Those only line up if one artifact authority model is chosen explicitly.
+This is the simplest clean path because it preserves build-once promotion and avoids merge-queue complexity while the candidate-slot model is still being stood up.
 
-| Option                      | Description                                                   | Pros                                                               | Cons                                                        |
-| --------------------------- | ------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
-| **A. PR SHA artifact**      | Build the PR head SHA and treat it as authoritative           | Fast PR feedback, simpler local reasoning                          | Weak if merge queue rebases or batches changes              |
-| **B. merge-group artifact** | Build the merge-group candidate and treat it as authoritative | Strongest fit for merge queue; exact artifact that lands on `main` | Requires merge-group workflow support and artifact plumbing |
-| **C. rebuild on `main`**    | Rebuild after merge and promote the new artifact              | Operationally simple to describe                                   | Violates build-once promotion and reintroduces drift        |
+#### Why v0 does not include merge queue
 
-**Constraint:** no workflow rewrite should begin until this spec picks between A and B. Option C is incompatible with the target model.
+GitHub merge queue requires separate `merge_group` workflow triggers and required-check reporting on merge-group runs. That is real orchestration complexity, not a naming tweak. Introducing it now would force the workflow graph to choose merge-group artifact authority and wire additional plumbing before the basic candidate-slot model is stable.
+
+So v0 chooses:
+
+- **authoritative artifact:** PR head SHA
+- **pre-merge validation authority:** candidate-slot validation on the PR artifact
+- **post-merge promotion:** same digest from `main`
+- **merge queue:** deferred to a later phase if concurrency pressure actually demands it
+
+Rejected for v0:
+
+- **merge-group artifact authority now** — stronger eventual model, but unnecessary complexity before the candidate controller exists
+- **rebuild on `main`** — violates build-once promotion and reintroduces artifact drift
 
 ### 4.3 Image Build Matrix
 
@@ -279,7 +288,7 @@ Those only line up if one artifact authority model is chosen explicitly.
 Promotion must be explicit and environment-driven, not branch-name-driven.
 
 ```text
-PR update or merge-group run
+PR update
   → ci.yaml
   → build-multi-node.yml
   → candidate-slot controller chooses candidate-a or candidate-b
@@ -299,7 +308,17 @@ Merge to main
 
 **Key detail:** the accepted artifact must flow through deploy branches unchanged. Preview and production should receive the same digest that was accepted pre-merge.
 
-### 4.5 Validation Authority In V0
+### 4.5 Deploy Branch Policy
+
+`deploy/*` branches remain long-lived on purpose, but they are not alternate code trunks.
+
+- `main` stays the protected, human-reviewed code truth
+- `deploy/*` stays bot-written environment truth
+- routine deploy-state bumps on `deploy/*` should not require PRs
+- push access on `deploy/*` should be restricted to the CI app or bot, with incident-only human bypass
+- Argo should keep watching those deploy refs rather than relying on direct CI-to-Argo mutation
+
+### 4.6 Validation Authority In V0
 
 Validation authority must be blunt, not implied.
 
@@ -309,7 +328,7 @@ Validation authority must be blunt, not implied.
 
 Preview is not a pre-merge bottleneck in v0. It validates already-accepted code after merge.
 
-### 4.6 Rollback
+### 4.7 Rollback
 
 | Scenario             | Action                              | Effect                                                |
 | -------------------- | ----------------------------------- | ----------------------------------------------------- |
@@ -518,21 +537,23 @@ ApplicationSets alone are not enough. The control plane also needs:
 
 Those rules belong in workflow and controller logic, but the Argo model must leave room for them.
 
+Deploy refs themselves should remain long-lived. The control boundary is not short-lived versus long-lived branch; it is human-reviewed code branch versus machine-written environment branch.
+
 ---
 
 ## 10. Critical Gap Analysis
 
 ### 10.1 Trunk-Alignment Gaps
 
-| #   | Gap                                                           | Severity | What Exists                                                                    | What's Needed                                                       | Effort    |
-| --- | ------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------- | --------- |
-| G1  | **Authoritative artifact rule unresolved**                    | Blocker  | `pull_request`, `merge_group`, and same-digest promotion are all desired       | Choose PR artifact vs merge-group artifact and encode it everywhere | 0.5-1 day |
-| G2  | **Candidate slot controller undefined**                       | Blocker  | Candidate-slot concept exists in prose only                                    | Define lock, TTL, cancellation, cleanup, and status ownership       | 1 day     |
-| G3  | **Validation authority too squishy**                          | Blocker  | Human and AI validation mentioned loosely                                      | State required vs advisory checks in v0                             | 0.5 day   |
-| G4  | **Preview semantics can drift back into gate behavior**       | High     | Preview exists, but legacy habits may reuse it as shared pre-merge bottleneck  | Keep preview post-merge only in workflow and docs                   | 0.5 day   |
-| G5  | **Legacy branch semantics remain in workflows and docs**      | High     | `staging`, `canary`, and `release/* -> main` assumptions still appear in files | Purge workflow, prompt, AGENTS, and namespace drift                 | 1-2 days  |
-| G6  | **Deploy routing still inferred from branch names**           | High     | Current workflow logic still maps env from branch names                        | Make environment routing explicit and deploy-state driven           | 1 day     |
-| G7  | **Production can still drift from accepted artifact lineage** | High     | Legacy rebuild assumptions still exist in some paths                           | Ensure preview and production consume the accepted digest lineage   | 1 day     |
+| #   | Gap                                                           | Severity | What Exists                                                                    | What's Needed                                                          | Effort   |
+| --- | ------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------- | -------- |
+| G1  | **Candidate slot controller undefined**                       | Blocker  | Candidate-slot concept exists in prose only                                    | Define lock, TTL, cancellation, cleanup, and status ownership          | 1 day    |
+| G2  | **Validation authority too squishy**                          | Blocker  | Human and AI validation mentioned loosely                                      | State required vs advisory checks in v0                                | 0.5 day  |
+| G3  | **Preview semantics can drift back into gate behavior**       | High     | Preview exists, but legacy habits may reuse it as shared pre-merge bottleneck  | Keep preview post-merge only in workflow and docs                      | 0.5 day  |
+| G4  | **Legacy branch semantics remain in workflows and docs**      | High     | `staging`, `canary`, and `release/* -> main` assumptions still appear in files | Purge workflow, prompt, AGENTS, and namespace drift                    | 1-2 days |
+| G5  | **Deploy routing still inferred from branch names**           | High     | Current workflow logic still maps env from branch names                        | Make environment routing explicit and deploy-state driven              | 1 day    |
+| G6  | **Production can still drift from accepted artifact lineage** | High     | Legacy rebuild assumptions still exist in some paths                           | Ensure preview and production consume the accepted digest lineage      | 1 day    |
+| G7  | **Deploy branch access policy is not encoded yet**            | High     | Deploy refs exist, but push authority and no-PR policy are still implicit      | Restrict push to CI app or bot and document incident-only human bypass | 0.5 day  |
 
 ### 10.2 Multi-Node Gaps That Still Matter
 
@@ -605,8 +626,8 @@ All node apps use `base/node-app/` as a shared Kustomize base. Overlays customiz
 
 | File                                       | Current Burden                        | Target Role                                                     |
 | ------------------------------------------ | ------------------------------------- | --------------------------------------------------------------- |
-| `.github/workflows/ci.yaml`                | mixed PR and branch checks            | required PR and merge-group checks                              |
-| `.github/workflows/build-multi-node.yml`   | branch-oriented build entrypoint      | authoritative artifact build entrypoint                         |
+| `.github/workflows/ci.yaml`                | mixed PR and branch checks            | required PR checks for v0; add merge-group only later if needed |
+| `.github/workflows/build-multi-node.yml`   | branch-oriented build entrypoint      | authoritative PR-artifact build entrypoint                      |
 | `.github/workflows/promote-and-deploy.yml` | branch-inferred environment promotion | explicit candidate / preview / production deployment            |
 | `.github/workflows/e2e.yml`                | legacy chained E2E path               | either retire or narrow to a single explicit validation concern |
 | `.github/workflows/release.yml`            | legacy release conveyor               | re-evaluate; not default accepted-code path                     |
@@ -651,7 +672,7 @@ The workflow layer needs concrete hooks for:
 - acquire slot
 - renew or hold lease while validation is running
 - release slot on success, failure, superseding push, PR close, or timeout
-- post status back to the PR or merge queue
+- post status back to the PR
 
 This may live in plain workflow logic, in a dedicated script, or in a git-manager style agent, but the owner must be explicit.
 
@@ -670,11 +691,11 @@ This may live in plain workflow logic, in a dedicated script, or in a git-manage
 
 ### Phase 0: Lock The Rules Before YAML Surgery
 
-| Task                                  | Why                                          |
-| ------------------------------------- | -------------------------------------------- |
-| Freeze authoritative artifact rule    | Prevent merge-queue and promotion drift      |
-| Define candidate-slot operating rules | Prevent deadlocks and human-chaos slot usage |
-| Define v0 validation authority        | Prevent ambiguous merge decisions            |
+| Task                                  | Why                                                         |
+| ------------------------------------- | ----------------------------------------------------------- |
+| Freeze authoritative artifact rule    | Lock PR-head artifact authority and prevent promotion drift |
+| Define candidate-slot operating rules | Prevent deadlocks and human-chaos slot usage                |
+| Define v0 validation authority        | Prevent ambiguous merge decisions                           |
 
 ### Phase 1: Align The Specs And Control Plane
 
@@ -688,7 +709,7 @@ This may live in plain workflow logic, in a dedicated script, or in a git-manage
 
 | Task                                                        | Why                                                 |
 | ----------------------------------------------------------- | --------------------------------------------------- |
-| Rework `ci.yaml` for PR and merge-group authority           | Required checks must match accepted-code flow       |
+| Rework `ci.yaml` for PR authority in v0                     | Required checks must match accepted-code flow       |
 | Rework `build-multi-node.yml` around authoritative artifact | Build once, promote once                            |
 | Rework `promote-and-deploy.yml` around explicit env routing | Remove branch-name inference                        |
 | Decide fate of `e2e.yml` and `release.yml`                  | Remove duplicate orchestration and legacy conveyors |
@@ -705,27 +726,27 @@ This may live in plain workflow logic, in a dedicated script, or in a git-manage
 
 ## 14. Risk Register
 
-| Risk                                                  | Likelihood | Impact                                                       | Mitigation                                                          |
-| ----------------------------------------------------- | ---------- | ------------------------------------------------------------ | ------------------------------------------------------------------- |
-| **Merge queue and artifact mismatch**                 | High       | Accepted code differs from validated artifact                | Freeze artifact rule before workflow rewrites                       |
-| **Candidate slot starvation or stale locks**          | High       | PRs stop flowing or require manual babysitting               | Define slot lease, TTL, and cleanup semantics                       |
-| **Validation authority remains ambiguous**            | Medium     | Unsafe merges or unnecessary merge blocking                  | Make required vs advisory checks explicit                           |
-| **Legacy guidance causes branch-model regression**    | High       | Agents and humans keep reintroducing staging/canary behavior | Purge prompts, AGENTS, and workflow docs                            |
-| **Promotion drift from accepted digest lineage**      | Medium     | Preview or production diverges from accepted code            | Enforce build-once promotion through deploy branches                |
-| **Compose↔k3s networking breaks during env renames** | Medium     | Billing callbacks or readiness fail                          | Preserve networking primitives while changing branch semantics only |
+| Risk                                                  | Likelihood | Impact                                                             | Mitigation                                                           |
+| ----------------------------------------------------- | ---------- | ------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| **Future merge queue and artifact mismatch**          | Medium     | Later merge-queue adoption could break the accepted-artifact model | Keep merge queue out of v0 and revisit artifact authority explicitly |
+| **Candidate slot starvation or stale locks**          | High       | PRs stop flowing or require manual babysitting                     | Define slot lease, TTL, and cleanup semantics                        |
+| **Validation authority remains ambiguous**            | Medium     | Unsafe merges or unnecessary merge blocking                        | Make required vs advisory checks explicit                            |
+| **Legacy guidance causes branch-model regression**    | High       | Agents and humans keep reintroducing staging/canary behavior       | Purge prompts, AGENTS, and workflow docs                             |
+| **Promotion drift from accepted digest lineage**      | Medium     | Preview or production diverges from accepted code                  | Enforce build-once promotion through deploy branches                 |
+| **Compose↔k3s networking breaks during env renames** | Medium     | Billing callbacks or readiness fail                                | Preserve networking primitives while changing branch semantics only  |
 
 ---
 
 ## 15. Open Questions And TODO Headers
 
-- [ ] **Freeze authoritative artifact rule**
-      Decide whether the authoritative artifact is the PR SHA or the merge-group artifact.
+- [x] **Freeze authoritative artifact rule**
+      V0 uses the PR head SHA artifact as authoritative. Merge queue is explicitly deferred.
 - [ ] **Define candidate-slot operating rules**
       Lock owner, lease, TTL, cancellation, cleanup, and overflow behavior when all slots are busy.
 - [ ] **Define v0 validation authority**
       Pin which checks are required, which are advisory, and where optional human policy fits.
-- [ ] **Decide merge queue integration model**
-      Ensure required checks work on `merge_group` without creating a shadow integration branch.
+- [ ] **Decide merge queue integration model later**
+      If concurrency pressure justifies it, add `merge_group` support as a separate phase and revisit artifact authority then.
 - [ ] **Decide git-manager agent ownership boundaries**
       Define whether a first-class agent owns PR build tracking, slot coordination, promotion, and status fan-in.
 - [ ] **Decide OpenFeature rollout expectations**

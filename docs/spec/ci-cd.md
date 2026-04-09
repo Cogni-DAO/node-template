@@ -70,26 +70,29 @@ previewEnv --> productionEnv[ProductionEnv]
 
 ### PR Lane
 
-The PR lane is authoritative for merge safety.
+The PR lane is authoritative for merge safety in v0.
 
-1. `pull_request` and `merge_group` run affected-only CI where available.
-2. CI builds an immutable image for the exact PR SHA.
-3. Automation assigns a fixed candidate slot such as `candidate-a` or `candidate-b`.
-4. CI commits the digest to the matching `deploy/candidate-*` branch.
-5. Argo syncs the already-running candidate environment.
-6. Required safety validation runs against that candidate slot.
-7. The PR becomes mergeable only after the candidate lane is green.
+1. `pull_request` runs affected-only CI where available.
+2. CI builds an immutable image for the exact PR head SHA.
+3. The PR-head artifact is the authoritative v0 artifact.
+4. Automation assigns a fixed candidate slot such as `candidate-a` or `candidate-b`.
+5. CI commits the digest to the matching `deploy/candidate-*` branch.
+6. Argo syncs the already-running candidate environment.
+7. Required safety validation runs against that candidate slot.
+8. The PR becomes mergeable only after the candidate lane is green.
 
 ### Main Lane
 
 The main lane is authoritative for promotion, not for pre-merge acceptance.
 
-1. Merge to `main` records the accepted SHA.
+1. Merge to `main` records the accepted PR SHA.
 2. The same proven digest promotes forward without rebuild.
 3. `preview` is the first required post-merge promotion lane in v0.
 4. Production promotion happens from the same digest by policy.
 
 If a post-merge soak lane is retained later, it must be modeled as an explicitly named environment with a distinct purpose. The term `canary` must not be reused for pre-merge acceptance.
+
+Merge queue is deferred in v0. If the repo later adopts merge queue, the workflow graph must add `merge_group` support and revisit artifact authority explicitly instead of assuming the PR-head artifact still maps cleanly to the accepted merge candidate.
 
 ## Minimum Authoritative Validation For V0
 
@@ -146,24 +149,27 @@ When implementation begins, workflow changes should follow these rules:
 
 ## Deploy Branch Rules
 
-- Deploy branches are machine-written environment state.
+- Deploy branches are long-lived, machine-written environment-state refs.
 - They may contain image digests, overlay patches, and other deployment facts such as environment endpoints.
 - They are never merged back into app branches.
-- Git history is the audit trail; PRs are not required for routine automated digest updates.
+- PRs are not required for routine automated deploy-state updates; git history is the audit trail.
+- Push access on `deploy/*` should be restricted to the CI app or bot, with incident-only human bypass if needed.
 - Rollback is by reverting deployment-state commits.
 
 ## Known Unknowns
 
 Track these explicitly during the spec rewrite, following the CI/CD scorecard style of keeping unresolved questions visible:
 
-- [ ] **Merge queue and candidate selection logic**
-      Define how candidate slots are assigned, reused, preempted, or serialized, and how that interacts with `merge_group` so required checks do not deadlock merges.
+- [ ] **Candidate selection and slot control**
+      Define how candidate slots are assigned, reused, preempted, or serialized, and who owns lease, timeout, cleanup, and status reporting.
 - [ ] **E2E validation workflows**
       Decide what stays in the authoritative v0 gate versus what remains advisory, and define how smoke tests, richer black-box E2E, and post-merge validation divide across the PR lane and main lane.
 - [ ] **Git-manager agent as a first-class control-plane actor**
       Define whether a git-manager style agent owns PR build tracking, candidate slot coordination, deploy-branch promotion, and status reporting, or whether those responsibilities stay in plain workflows with agent assistance around them.
 - [ ] **OpenFeature flags**
       Decide how feature flags reduce PR scope, shrink risky surface area, and let code merge when safe without requiring every incomplete capability to be fully user-exposed.
+- [ ] **Merge queue integration later**
+      If concurrency pressure eventually justifies merge queue, add `merge_group` workflows and revisit authoritative artifact selection at that time rather than mixing both models in v0.
 
 ## Legacy Surfaces To Retire
 
