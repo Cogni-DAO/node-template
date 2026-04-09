@@ -297,13 +297,14 @@ export class GitHubVcsAdapter implements VcsCapability {
       const openPrs = (prs as Array<{ number: number; state: string }>).filter(
         (pr) => pr.state === "open"
       );
-      if (openPrs.length === 0) {
+      const firstOpenPr = openPrs[0];
+      if (firstOpenPr === undefined) {
         throw new Error(
           `No open PR found for SHA ${params.sha} in ${params.owner}/${params.repo}. ` +
             "Ensure PR Build has completed and the PR is still open."
         );
       }
-      resolvedPrNumber = openPrs[0]!.number;
+      resolvedPrNumber = firstOpenPr.number;
     }
 
     // Dispatch the candidate-flight workflow.

@@ -12,9 +12,8 @@
  */
 
 import { describe, expect, it, vi } from "vitest";
-
-import { hasToolId } from "../src/catalog";
 import type { VcsCapability } from "../src/capabilities/vcs";
+import { hasToolId } from "../src/catalog";
 import {
   createVcsFlightCandidateImplementation,
   VCS_FLIGHT_CANDIDATE_NAME,
@@ -29,9 +28,7 @@ import {
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-function makeCapability(
-  overrides: Partial<VcsCapability> = {}
-): VcsCapability {
+function makeCapability(overrides: Partial<VcsCapability> = {}): VcsCapability {
   return {
     listPrs: vi.fn(),
     getCiStatus: vi.fn(),
@@ -187,7 +184,8 @@ describe("createVcsFlightCandidateImplementation", () => {
       dispatched: true,
       sha: "abc1234def5",
       prNumber: 900,
-      workflowUrl: "https://github.com/Cogni-DAO/node-template/actions/workflows/candidate-flight.yml",
+      workflowUrl:
+        "https://github.com/Cogni-DAO/node-template/actions/workflows/candidate-flight.yml",
       message: "Flight dispatched for PR #900 @ abc1234",
     };
     const cap = makeCapability({
@@ -253,7 +251,9 @@ describe("vcsFlightCandidateStubImplementation", () => {
 
 describe("vcsFlightCandidateBoundTool", () => {
   it("bound tool has contract and stub implementation", () => {
-    expect(vcsFlightCandidateBoundTool.contract).toBe(vcsFlightCandidateContract);
+    expect(vcsFlightCandidateBoundTool.contract).toBe(
+      vcsFlightCandidateContract
+    );
     expect(vcsFlightCandidateBoundTool.implementation).toBe(
       vcsFlightCandidateStubImplementation
     );
