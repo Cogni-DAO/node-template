@@ -77,7 +77,6 @@
 | 1 | 2 | 3 | needs_design | task.0282 | Secure secret delivery for CI/CD deploys — replace SSH command-line passing | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 2 | 3 | needs_design | task.0283 | Provision VM as GitHub Action — eliminate local .env.{env} dependency |  |  |
 | 1 | 2 | 3 | needs_implement | task.0286 | Eval POC — 2 evals with 4o-mini judge, Langfuse datasets, canary HTTP target |  |  |
-| 1 | 2 | 2 | needs_merge | task.0297 | Add candidate-flight tool to VCS capability / git manager agent | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 3 | 1 | needs_design | bug.0011 | Gateway streaming truncates output mid-sentence in UI | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 3 | 3 | needs_design | task.0099 | Node + scope identity infra: repo-spec, DB persistence, scope_id columns, boot-time drift protection |  |  |
 | 1 | 3 | 3 | needs_research | spike.0119 | Quarterly people-centric attribution review — evaluation payload, governance input, and signal collection | Transparent Credit Payouts | proj.transparent-credit-payouts |
@@ -313,6 +312,7 @@
 | 1 | task.0248 | Deduplicate node platform: capability extractions + thin app shell | Operator Plane | proj.operator-plane |
 | 1 | task.0250 | Extract @cogni/graph-execution-host package | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | story.0262 | Agent contributor protocol — shared workflow for AI agents coordinating on a codebase | Development Workflows | proj.development-workflows |
+| 1 | task.0297 | Add candidate-flight tool to VCS capability / git manager agent | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |

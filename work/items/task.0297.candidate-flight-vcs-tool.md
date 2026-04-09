@@ -2,7 +2,7 @@
 id: task.0297
 type: task
 title: "Add candidate-flight tool to VCS capability / git manager agent"
-status: needs_merge
+status: done
 priority: 1
 rank: 2
 estimate: 2
