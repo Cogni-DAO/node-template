@@ -303,7 +303,7 @@ export class GitHubVcsAdapter implements VcsCapability {
             "Ensure PR Build has completed and the PR is still open."
         );
       }
-      resolvedPrNumber = openPrs[0].number;
+      resolvedPrNumber = openPrs[0]!.number;
     }
 
     // Dispatch the candidate-flight workflow.
