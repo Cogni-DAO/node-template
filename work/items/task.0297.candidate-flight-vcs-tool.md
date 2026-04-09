@@ -18,7 +18,7 @@ assignees: []
 credit:
 project: proj.cicd-services-gitops
 initiative: ini.cicd-trunk-based
-branch: task/0297-candidate-flight-vcs
+branch: task/0297-candidate-flight-vcs-main
 ---
 
 # task.0297 — Add candidate-flight tool to VCS capability
