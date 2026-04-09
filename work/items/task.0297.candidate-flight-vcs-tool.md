@@ -19,6 +19,7 @@ credit:
 project: proj.cicd-services-gitops
 initiative: ini.cicd-trunk-based
 branch: task/0297-candidate-flight-vcs
+pr: https://github.com/Cogni-DAO/node-template/pull/855
 ---
 
 # task.0297 — Add candidate-flight tool to VCS capability
