@@ -2,7 +2,7 @@
 id: bug.0297
 type: bug
 title: "GitHub OAuth is broken across the deployment matrix; centralize it behind one auth hub"
-status: needs_implement
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 3
@@ -14,9 +14,9 @@ assignees: derekg1729
 credit:
 project: proj.operator-plane
 branch: bug/0297-github-oauth-hub-prototype
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/857
 reviewer:
-revision: 0
+revision: 1
 blocked_by: []
 deploy_verified: false
 created: 2026-04-09
