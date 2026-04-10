@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start -p 3400 -H 0.0.0.0",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
-    "auth:migrate": "pnpm dlx @better-auth/cli@latest migrate --config ./src/lib/auth.ts --yes"
+    "auth:migrate": "pnpm dlx @better-auth/cli@1.6.2 migrate --config ./src/lib/auth.ts --yes"
   },
   "dependencies": {
     "@better-auth/oauth-provider": "1.6.2",
