@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start -p 3400 -H 0.0.0.0",
     "typecheck": "tsc -p tsconfig.app.json --noEmit",
+    "test": "vitest run --config vitest.config.mts",
     "auth:migrate": "pnpm dlx @better-auth/cli@1.6.2 migrate --config ./src/lib/auth.ts --yes"
   },
   "dependencies": {

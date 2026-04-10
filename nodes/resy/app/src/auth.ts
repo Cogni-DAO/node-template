@@ -15,20 +15,7 @@
 /* eslint-disable boundaries/no-unknown-files */
 
 import nodeCrypto, { randomUUID } from "node:crypto";
-
-import { and, eq, gt, isNull } from "drizzle-orm";
 import type { Database } from "@cogni/db-client";
-import type { Account, NextAuthOptions, Profile } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-import Discord from "next-auth/providers/discord";
-import GitHub from "next-auth/providers/github";
-import Google from "next-auth/providers/google";
-import type { OAuthConfig } from "next-auth/providers/oauth";
-import { getCsrfToken } from "next-auth/react";
-import { SiweMessage } from "siwe";
-
-import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
-import { createBinding } from "@/adapters/server/identity/create-binding";
 import {
   AnalyticsEvents,
   AUTH_HUB_GITHUB_ID_CLAIM,
@@ -39,6 +26,17 @@ import {
   isPendingIntent,
   linkIntentStore,
 } from "@cogni/node-shared";
+import { and, eq, gt, isNull } from "drizzle-orm";
+import type { Account, NextAuthOptions, Profile } from "next-auth";
+import Credentials from "next-auth/providers/credentials";
+import Discord from "next-auth/providers/discord";
+import GitHub from "next-auth/providers/github";
+import Google from "next-auth/providers/google";
+import type { OAuthConfig } from "next-auth/providers/oauth";
+import { getCsrfToken } from "next-auth/react";
+import { SiweMessage } from "siwe";
+import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
+import { createBinding } from "@/adapters/server/identity/create-binding";
 import {
   aiThreads,
   billingAccounts,
@@ -665,7 +663,12 @@ export const authOptions: NextAuthOptions = {
           existing.userId !== canonicalUserId
         ) {
           getLog().warn(
-            { externalId, provider, verifiedUserId, bindingUserId: existing.userId },
+            {
+              externalId,
+              provider,
+              verifiedUserId,
+              bindingUserId: existing.userId,
+            },
             "[OAuth] Link rejected — GitHub identity already belongs to another local user"
           );
           return "/profile?error=already_linked";

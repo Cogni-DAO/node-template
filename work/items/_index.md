@@ -25,6 +25,7 @@
 | 0 | 1 | 2 | needs_triage | bug.0276 | K8s deployed app crashes to white — client-side exception after initial render | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 3 | needs_implement | task.0285 | Provision script resilience — credential reset, migrations, complete .env |  |  |
 | 0 | 1 | 3 | needs_merge | bug.0287 | Provision script incompatible with deploy branch model — 3 gaps |  |  |
+| 0 | 1 | 3 | needs_design | task.0296 | Candidate slot controller v0 — one-slot PR flight control plane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 3 | needs_merge | bug.0297 | GitHub OAuth is broken across the deployment matrix; centralize it behind one auth hub | Operator Plane | proj.operator-plane |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -77,6 +78,7 @@
 | 1 | 2 | 3 | needs_design | task.0282 | Secure secret delivery for CI/CD deploys — replace SSH command-line passing | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 2 | 3 | needs_design | task.0283 | Provision VM as GitHub Action — eliminate local .env.{env} dependency |  |  |
 | 1 | 2 | 3 | needs_implement | task.0286 | Eval POC — 2 evals with 4o-mini judge, Langfuse datasets, canary HTTP target |  |  |
+| 1 | 2 | 2 | needs_design | task.0297 | Add candidate-flight tool to VCS capability / git manager agent | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 3 | 1 | needs_design | bug.0011 | Gateway streaming truncates output mid-sentence in UI | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 3 | 3 | needs_design | task.0099 | Node + scope identity infra: repo-spec, DB persistence, scope_id columns, boot-time drift protection |  |  |
 | 1 | 3 | 3 | needs_research | spike.0119 | Quarterly people-centric attribution review — evaluation payload, governance input, and signal collection | Transparent Credit Payouts | proj.transparent-credit-payouts |
