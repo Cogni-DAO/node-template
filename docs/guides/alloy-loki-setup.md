@@ -110,34 +110,59 @@ The long-term target (per [task.0284](../../work/items/task.0284-secrets-single-
 
 ## Rollout plan
 
-Three envs, three phases. Do not batch — validate each env end-to-end before moving to the next.
+Per [docs/spec/ci-cd.md](../spec/ci-cd.md), candidate-a is the **pre-merge** validation lane — PRs fly to candidate-a before they merge to main. Preview and production are post-merge promotion lanes. Do not batch — validate each env end-to-end before moving to the next.
 
-### Phase 1 — candidate-a (unblocked now)
+The secret bootstrap is **decoupled from the PR flow**. The Secret is a cluster-side object that persists across syncs; create it once and it stays until rotated.
 
-| Step                                                                       | Action                                        | Success signal                                                            |
-| -------------------------------------------------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------- |
-| 1. Merge this PR to `main`                                                 | GitHub                                        | PR green, merged                                                          |
-| 2. `candidate-a` ApplicationSet generates `candidate-a-alloy`              | Argo CD auto-sync                             | `kubectl -n argocd get app candidate-a-alloy` shows Synced/Missing-Secret |
-| 3. SSH to candidate-a VM and run the `kubectl create secret` command above | One-time manual bootstrap                     | `kubectl -n cogni-candidate-a get secret alloy-secrets`                   |
-| 4. DaemonSet reconciles                                                    | Automatic (Argo)                              | `kubectl -n cogni-candidate-a get ds alloy` → Ready 1/1                   |
-| 5. Verify data in Grafana Cloud                                            | Grafana Cloud UI — see **Verification** below | `up{env="candidate-a"}` returns ≥4 targets all =1                         |
+### Phase 0 — one-time Secret bootstrap (do this before flighting the PR)
 
-### Phase 2 — preview (gated on Phase 1 green for ≥1 hour)
+**candidate-a** (SSH explicitly authorized):
 
-Preview must NOT get the same manual SSH treatment long-term. Two options:
+```bash
+ssh root@<candidate-a-vm-ip> \
+  "kubectl -n cogni-candidate-a create secret generic alloy-secrets \
+    --from-literal=LOKI_WRITE_URL='...' \
+    --from-literal=LOKI_USERNAME='...' \
+    --from-literal=LOKI_PASSWORD='glc_...' \
+    --from-literal=PROMETHEUS_REMOTE_WRITE_URL='...' \
+    --from-literal=PROMETHEUS_USERNAME='...' \
+    --from-literal=PROMETHEUS_PASSWORD='glc_...' \
+    --from-literal=METRICS_TOKEN='...'"
+```
 
-**Option 2A — fast path (recommended for v0):** repeat the Phase 1 steps for preview (one-time SSH + `kubectl create secret`). Accept that this is a second manual bootstrap and track it on the CI/CD scorecard row #16. Same runbook as candidate-a, with `-n cogni-preview` and the preview VM IP.
+The Secret sits idle until Alloy syncs and references it. No Argo activity required for this step.
 
-**Option 2B — delay until task.0311 ships:** hold preview until ksops is activated end-to-end. Pod logs and metrics for preview remain dark until then.
+**preview** and **production**: do NOT run this yet. See phases 2 and 3.
 
-The user's call. I recommend 2A — one more SSH action costs ~2 minutes and unblocks preview observability immediately. The scorecard red line already tracks the gap.
+### Phase 1 — fly the PR to candidate-a (pre-merge validation)
+
+| Step                                             | Action                                                                     | Success signal                                                   |
+| ------------------------------------------------ | -------------------------------------------------------------------------- | ---------------------------------------------------------------- |
+| 1. Confirm Phase 0 secret is in place            | `kubectl -n cogni-candidate-a get secret alloy-secrets`                    | Secret exists                                                    |
+| 2. Flight PR #864 to candidate-a                 | Whatever mechanism drives `deploy/candidate-a` (candidate-flight workflow) | `deploy/candidate-a` branch advances to the PR head state        |
+| 3. candidate-a Argo CD syncs `candidate-a-alloy` | Automatic                                                                  | `kubectl -n argocd get app candidate-a-alloy` → Synced + Healthy |
+| 4. DaemonSet rolls out                           | Automatic                                                                  | `kubectl -n cogni-candidate-a get ds alloy` → Ready 1/1          |
+| 5. Verify data in Grafana Cloud                  | Grafana Cloud UI — see **Verification** below                              | `up{env="candidate-a"}` returns ≥4 targets all =1                |
+| 6. If green, PR is safe to merge                 | Merge PR #864 to `main`                                                    | PR merged                                                        |
+
+### Phase 2 — preview (post-merge, gated on Phase 1 green + merge complete)
+
+Preview is a post-merge promotion lane. Once PR #864 is on `main`, the preview promotion flow advances `deploy/preview` to the accepted digest and the preview ApplicationSet picks up the `alloy` catalog entry.
+
+Bootstrap options for preview's `alloy-secrets`:
+
+**Option 2A — fast path (recommended for v0):** bootstrap the preview Secret via SSH before the preview promotion completes. Same runbook as candidate-a with `-n cogni-preview` and the preview VM IP. Tracks as scorecard row #16.
+
+**Option 2B — delay until task.0311 ships:** hold the preview promotion of alloy until ksops is activated end-to-end. Preview metrics stay dark in the meantime (pod logs still flow via the existing compose Alloy per the legacy path).
+
+Recommendation: **2A** — one more SSH action costs ~2 minutes. The scorecard red line already tracks the gap, so this doesn't hide it.
 
 ### Phase 3 — production (gated on Phase 2 green for ≥24 hours)
 
-Production should **not** get manual SSH secret bootstrap. By the time production is ready, one of the following should be true:
+Production must **not** get manual SSH Secret bootstrap. By the time production is ready, one of the following is required:
 
-1. **task.0311 has shipped** — ksops is end-to-end wired. Deploy production via the encrypted `alloy-secrets.enc.yaml` in git. Zero SSH, zero manual steps.
-2. **task.0284 (ESO) is in progress** — use ESO instead of ksops. `ExternalSecret` CRD syncs from the secret store.
+1. **task.0311 shipped** — ksops end-to-end wired. Deploy production via the encrypted `alloy-secrets.enc.yaml` in git. Zero SSH.
+2. **task.0284 in progress** — use ESO instead of ksops. `ExternalSecret` CRD syncs from the secret store.
 
 If you're forced to ship production observability before either task lands, document the exception explicitly in the PR description, flip scorecard row #16 from RED to BLACK (regression), and file a remediation task.
 
