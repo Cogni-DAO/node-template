@@ -15,7 +15,8 @@ metadata:
   name: alloy
 rules:
   - apiGroups: [""]
-    resources: ["nodes", "nodes/proxy", "nodes/metrics", "pods", "endpoints", "services"]
+    resources:
+      ["nodes", "nodes/proxy", "nodes/metrics", "pods", "endpoints", "services"]
     verbs: ["get", "list", "watch"]
   - apiGroups: ["discovery.k8s.io"]
     resources: ["endpointslices"]
@@ -34,4 +35,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: alloy
-    namespace: cogni-staging
+    # Namespace must be patched per overlay (cogni-canary, cogni-preview, etc.)
+    # ClusterRoleBinding is cluster-scoped and is NOT affected by kustomize's
+    # `namespace:` field — overlays MUST include a JSON patch to set this.
+    namespace: PATCH_ME

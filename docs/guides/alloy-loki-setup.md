@@ -12,9 +12,145 @@ verified: 2026-02-06
 tags: [observability, infra]
 ---
 
-# Alloy + Grafana Cloud Loki Setup (V2)
+# Alloy + Grafana Cloud Loki Setup
 
 ## When to Use This
+
+You are setting up or troubleshooting the Alloy log + metrics pipeline that forwards cluster observability data to Grafana Cloud. Two deployment targets exist:
+
+1. **k3s (multi-node production)** — Alloy runs as a DaemonSet inside each env's k3s cluster, delivered via Argo CD. This is the primary path. See **Part 1** below.
+2. **Docker Compose (legacy / local dev)** — Alloy runs as a compose service reading `/var/run/docker.sock`. See **Part 2** below.
+
+Promtail is deprecated (EOL March 2, 2026) — Alloy is the replacement.
+
+---
+
+## Part 1 — K3s Deployment
+
+### Topology
+
+Each environment (`canary`, `candidate-a`, `preview`, `production`) is a standalone k3s cluster on a dedicated Cherry Servers VM. Each cluster runs one Alloy DaemonSet in its own `cogni-{env}` namespace. The Alloy pod:
+
+- Tails pod logs from `/var/log/pods` (hostPath)
+- Tails host `journald` (every systemd unit — containerd, k3s, docker daemon, sshd, kernel, cron) with a 12h backlog cap
+- Scrapes kubelet `/metrics/cadvisor` for per-container CPU/memory/network
+- Runs the `unix` exporter for host metrics (`/proc`, `/sys`, `/`)
+- Scrapes each node-app pod's `/api/metrics` endpoint with a bearer token
+- Ships everything to Grafana Cloud (Loki + Mimir) via `loki.write` and `prometheus.remote_write`
+
+### File layout
+
+```
+infra/k8s/base/alloy/
+├── config.alloy            # Alloy river config (merged into alloy-config configmap)
+├── configmap.yaml          # alloy-config — DEPLOY_ENVIRONMENT override is overlay-patched
+├── daemonset.yaml          # grafana/alloy:v1.9.2 + hostPath mounts + Grafana Cloud env
+├── kustomization.yaml
+└── rbac.yaml               # ServiceAccount + ClusterRole + ClusterRoleBinding (patched per overlay)
+
+infra/k8s/overlays/{canary,candidate-a,preview,production}/alloy/
+└── kustomization.yaml      # per-env namespace + DEPLOY_ENVIRONMENT patch
+
+infra/catalog/alloy.yaml    # catalog entry — ApplicationSets auto-generate one Argo App per env
+```
+
+### Bootstrap — create the Grafana Cloud Secret
+
+Each cluster needs one Secret named `alloy-secrets` in the `cogni-{env}` namespace. Alloy reads seven keys from it (Loki basic auth, Prometheus basic auth, METRICS_TOKEN for `/api/metrics` scrape).
+
+#### Current path (interim) — manual `kubectl create secret`
+
+ksops is configured in Argo CD but has never been end-to-end activated — `.sops.yaml` still holds placeholder age keys, and no real encrypted secret file is in git. Until that bootstrap happens (task.0311), the alloy Secret is created imperatively on each cluster:
+
+```bash
+# Replace all seven values with real Grafana Cloud credentials + your app METRICS_TOKEN.
+# URLs come from: Grafana Cloud → Connections → Data Sources → Loki / Prometheus
+kubectl -n cogni-canary create secret generic alloy-secrets \
+  --from-literal=LOKI_WRITE_URL="https://logs-prod-us-central1.grafana.net/loki/api/v1/push" \
+  --from-literal=LOKI_USERNAME="123456" \
+  --from-literal=LOKI_PASSWORD="glc_REPLACE_ME" \
+  --from-literal=PROMETHEUS_REMOTE_WRITE_URL="https://prometheus-prod-01-us-central1.grafana.net/api/prom/push" \
+  --from-literal=PROMETHEUS_USERNAME="123456" \
+  --from-literal=PROMETHEUS_PASSWORD="glc_REPLACE_ME" \
+  --from-literal=METRICS_TOKEN="REPLACE_WITH_APP_METRICS_TOKEN"
+```
+
+Repeat with `-n cogni-candidate-a`, `-n cogni-preview`, `-n cogni-production` for the other envs. This is a **one-time cluster-side action**, not something CI re-runs on every deploy.
+
+#### Target path — ksops GitOps delivery
+
+The file shape is already in place: `infra/k8s/secrets/{canary,candidate-a,preview,production}/alloy-secrets.enc.yaml.example` templates the Secret. The follow-up task [task.0311](../../work/items/task.0311.ksops-activate-alloy-secrets.md) covers the one-time activation work:
+
+1. Generate real age keys per env (`age-keygen`)
+2. Install the private keys into each cluster's `argocd/sops-age-key` Secret
+3. Replace placeholder keys in `.sops.yaml` with the real public keys
+4. Encrypt each `.enc.yaml.example` → `.enc.yaml` with `sops --encrypt`
+5. Add the encrypted file as a resource in each overlay's `kustomization.yaml`
+6. Delete this manual section from the guide
+
+Until task.0311 lands, treat the manual bootstrap above as the operational path. The secret delivery gap is flagged on the CI/CD scorecard as row #16 in `work/projects/proj.cicd-services-gitops.md`.
+
+The long-term target (per [task.0284](../../work/items/task.0284-secrets-single-source-eso.md)) is External Secrets Operator — ksops is only the interim. Do not build additional automation against ksops beyond what task.0311 requires.
+
+### Deploy via Argo CD
+
+The catalog entry `infra/catalog/alloy.yaml` is automatically picked up by the per-env ApplicationSets at `infra/k8s/argocd/*-applicationset.yaml`. After you merge this PR into `main` → canary, Argo will generate four Applications named `canary-alloy`, `candidate-a-alloy`, `preview-alloy`, `production-alloy` and sync them.
+
+You can watch the rollout:
+
+```bash
+kubectl -n argocd get applications -l argocd.argoproj.io/application-set-name=cogni-canary
+kubectl -n cogni-canary get daemonset alloy
+kubectl -n cogni-canary logs -l app.kubernetes.io/name=alloy --tail=50
+```
+
+### Verification — is health data flowing?
+
+Once the DaemonSet is running and the secret is in place:
+
+**1. Alloy component health (from inside the cluster):**
+
+```bash
+kubectl -n cogni-canary port-forward daemonset/alloy 12345:12345
+# Open http://127.0.0.1:12345 in your browser.
+# Every component should show "Healthy". Red = misconfigured or auth failed.
+```
+
+**2. Grafana Cloud — Prometheus side:**
+
+Run these in Grafana Cloud Explore → Mimir:
+
+```promql
+up{env="canary"}                                               # 4+ targets, all =1
+container_cpu_usage_seconds_total{env="canary", pod=~"operator-.*"}  # CPU per operator pod
+http_requests_total{env="canary", service=~"operator|poly|resy"}     # app-level metrics back
+```
+
+**3. Grafana Cloud — Loki side:**
+
+```logql
+{env="canary", app="cogni-template"}                          # pod logs
+{env="canary", source="journald"}                             # host systemd logs
+{env="canary", source="journald", unit=~"k3s.*|containerd.*"} # k3s + containerd only
+```
+
+If the Prometheus scrape for `/api/metrics` is failing (`up{job="app_metrics"}=0`), the most common cause is the `METRICS_TOKEN` in `alloy-secrets` not matching the app's expected token. Fix by re-creating the secret with the correct value.
+
+### Troubleshooting — k3s path
+
+| Symptom                                  | Likely cause                                                                                                                             |
+| ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `CrashLoopBackOff` on alloy pod          | Missing `alloy-secrets` Secret. Run the bootstrap command above.                                                                         |
+| Pod runs but no metrics in Grafana Cloud | Wrong `PROMETHEUS_REMOTE_WRITE_URL` or expired API key. Check Alloy UI.                                                                  |
+| `up{job="app_metrics"}=0`                | `METRICS_TOKEN` wrong, or pods don't have `app.kubernetes.io/component=node` label.                                                      |
+| No journald logs                         | Host uses `/run/log/journal` only (no persistent journal). Both paths are mounted — check the Alloy UI for `loki.source.journal` errors. |
+| Kubelet cAdvisor scrape 403              | RBAC not applied. Check `kubectl -n cogni-canary get clusterrolebinding alloy`.                                                          |
+
+---
+
+## Part 2 — Docker Compose Deployment (legacy / local dev)
+
+### When to Use This
 
 You are setting up or troubleshooting the Alloy log collection pipeline that forwards container logs to Grafana Cloud Loki. Promtail is deprecated (EOL March 2, 2026) — Alloy is the replacement.
 

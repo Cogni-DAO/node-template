@@ -68,6 +68,16 @@ spec:
             - name: hostroot
               mountPath: /host/root
               readOnly: true
+            # journald on the host — every systemd service log
+            - name: varlogjournal
+              mountPath: /var/log/journal
+              readOnly: true
+            - name: runlogjournal
+              mountPath: /run/log/journal
+              readOnly: true
+            - name: machineid
+              mountPath: /etc/machine-id
+              readOnly: true
           resources:
             requests:
               memory: "128Mi"
@@ -108,3 +118,12 @@ spec:
         - name: hostroot
           hostPath:
             path: /
+        - name: varlogjournal
+          hostPath:
+            path: /var/log/journal
+        - name: runlogjournal
+          hostPath:
+            path: /run/log/journal
+        - name: machineid
+          hostPath:
+            path: /etc/machine-id
