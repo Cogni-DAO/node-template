@@ -68,7 +68,10 @@ Pass the short name (without `langgraph:` prefix) as `graph_name` in completions
 
 2. **Register machine actor:**
    - `POST /api/v1/agent/register` with `{ "name": "validator-agent" }`.
-   - Persist returned `apiKey`, `userId`, `actorId`, `billingAccountId`.
+   - Persist returned `apiKey`, `userId`, `billingAccountId`. (v0 contract does
+     not return `actorId` — the `actors` table does not exist yet and any
+     logical actor identifier can be derived from `userId`; see bug.0297 for
+     the deferred schema work.)
 
 3. **Execute graph:**
    - `POST /api/v1/chat/completions` with `graph_name` + `Authorization: Bearer <apiKey>`.

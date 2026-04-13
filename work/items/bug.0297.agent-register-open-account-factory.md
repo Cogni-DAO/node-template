@@ -13,7 +13,7 @@ assignees: derekg1729
 credit:
 project: proj.accounts-api-keys
 branch:
-pr:
+pr: https://github.com/Cogni-DAO/cogni-template/pull/845
 reviewer:
 revision: 0
 blocked_by:

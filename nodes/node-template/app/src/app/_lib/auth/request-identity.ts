@@ -1,6 +1,30 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@app/_lib/auth/request-identity`
+ * Purpose: Unified request identity resolver — returns a SessionUser for
+ *   either a valid HMAC-signed machine bearer token (`cogni_ag_sk_v1_...`)
+ *   or a browser session cookie. One entry point for both auth surfaces.
+ * Scope: Bearer parser + HMAC signer/verifier (issueAgentApiKey exported to
+ *   the register route only), and resolveRequestIdentity which
+ *   wrapRouteHandlerWithLogging consumes via `auth.getSessionUser`. Does NOT
+ *   read from the database — all session IO happens via getServerSessionUser.
+ * Invariants:
+ *   - NO_AUTH_CYCLE: imports getServerSessionUser DIRECTLY from @/lib/auth/server.
+ *     Must NOT import getSessionUser from @/app/_lib/auth/session (that module
+ *     re-exports this resolver and would create unbounded async recursion on
+ *     every non-bearer request — candidate-a OOM class of bug).
+ *   - BEARER_CLAIMS_EXCLUSIVE: when a bearer token is present but invalid,
+ *     returns null (does not fall back to session cookies). Prevents a stolen
+ *     cookie from winning when the client claimed machine identity.
+ *   - NO_REDOS: extractBearerToken uses startsWith/slice (O(n)), not regex
+ *     backtracking. Flagged by SonarQube on the original /^Bearer\s+(.+)$/i.
+ * Side-effects: IO (next/headers read, NextAuth session fetch via server.ts).
+ * Links: docs/spec/security-auth.md, docs/spec/identity-model.md
+ * @public
+ */
+
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { SessionUser } from "@cogni/node-shared";
 import { headers } from "next/headers";

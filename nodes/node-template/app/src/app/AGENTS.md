@@ -51,7 +51,8 @@ Next.js App Router delivery layer. UI pages and API routes that expose features 
   - Infra: `/health`, `/openapi.json`, `/meta/route-manifest` (via `(infra)/*`)
   - API: `/api/auth/*`, `/api/v1/chat/completions`
   - Internal ops: `/api/internal/ops/governance/schedules/sync` [POST] (deploy-only trigger)
-- **Files considered API:** layout.tsx, page.tsx, api/\*\*/route.ts, (infra)/\*\*/route.ts
+  - Agent discovery: `/.well-known/agent.json` [GET] — public discovery document for machine clients
+- **Files considered API:** layout.tsx, page.tsx, api/\*\*/route.ts, (infra)/\*\*/route.ts, .well-known/\*\*/route.ts
 
 ## Responsibilities
 
