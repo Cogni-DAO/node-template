@@ -86,10 +86,6 @@ ENV PORT=3100
 ENV HOSTNAME=0.0.0.0
 ENV LOG_FORMAT=json
 
-# Build SHA plumbing: CI passes --build-arg BUILD_SHA=${GITHUB_SHA}; app reads APP_BUILD_SHA at runtime.
-ARG BUILD_SHA="dev"
-ENV APP_BUILD_SHA=$BUILD_SHA
-
 LABEL org.opencontainers.image.title="cogni-poly"
 
 # Copy standalone bundle (includes production dependencies)
@@ -116,6 +112,12 @@ COPY --from=builder --chown=nextjs:nodejs /tmp/codex-native/@openai/ ./node_modu
 # MCP server config — parseMcpConfigFromEnv reads config/mcp.servers.json relative to CWD.
 # Next.js standalone does process.chdir(__dirname) → CWD becomes /app/nodes/poly/app at runtime.
 COPY --from=builder --chown=nextjs:nodejs /app/config/mcp.servers.json ./nodes/poly/app/config/mcp.servers.json
+
+# Build SHA plumbing: CI passes --build-arg BUILD_SHA=${GITHUB_SHA}; app reads APP_BUILD_SHA at runtime.
+# Placed last so cache invalidation from a new commit only rebuilds the final metadata layer,
+# not the expensive upstream COPY + pnpm-add-codex layers.
+ARG BUILD_SHA="dev"
+ENV APP_BUILD_SHA=$BUILD_SHA
 
 USER nextjs
 
