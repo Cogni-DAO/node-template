@@ -84,8 +84,10 @@ Authoritative sources per env:
 
 Scan open PRs in `Cogni-DAO/node-template`. Filter **ready to flight**:
 
-- All required CI checks green (`require-pinned-release-branch` on non-release PRs is non-blocking)
-- `PR Build` workflow succeeded — images present in GHCR as `pr-<N>-<SHA>-*` (operator, migrate, scheduler-worker, poly, resy)
+- All required CI checks green. **Expected-failing non-blocking checks** (mention in scorecard, do not halt on them):
+  - `require-pinned-release-branch` — fails on every non-release PR to main by design
+  - `SonarCloud Code Analysis` — currently always failing; policy fix pending
+- `PR Build` workflow succeeded AND images actually exist in GHCR as `pr-<N>-<SHA>-*` (operator, migrate, scheduler-worker, poly, resy). **Verify the images list is non-empty** — infra-only PRs pass `PR Build` vacuously with zero images pushed, which the flight workflow cannot handle (see Manual Deploy Escape Hatch).
 - Head SHA not currently the one flighted on candidate-a (check `deploy/candidate-a` last commit)
 
 Rank by: explicit user priority → label / title signal → smaller scope → newer push.
@@ -130,6 +132,31 @@ QA window open. Say "score it" when done.
 ```
 
 On flight failure, collect the failing step's logs, summarize, **halt the loop**.
+
+### 3a. Proof of rollout (REQUIRED after every flight)
+
+`wait-for-candidate-ready.sh` (used by the flight workflow) only proves an endpoint answers 200. It does **not** prove the new image is running. **Never open the QA window until rollout is independently verified** via at least one of:
+
+1. **Build SHA in `/readyz`** (preferred, post PR #865):
+
+   ```bash
+   curl -sk https://test.cognidao.org/readyz | jq -r .version
+   # assert == <PR head SHA>
+   ```
+
+2. **Build SHA in Loki startup log** (preferred, post PR #865):
+
+   ```
+   {namespace="cogni-candidate-a"} |= "app started"
+   # parse JSON → assert buildSha == <PR head SHA>
+   ```
+
+3. **Fresh replicaset fingerprint** (fallback for pre-#865 builds):
+   - **Baseline before dispatch**: capture current operator pod names via `mcp__grafana__list_loki_label_values labelName=pod` (filter `operator-node-app-.*`)
+   - **Post-flight**: re-query, assert a new replicaset hash (different middle segment, e.g. `795fc4f9df` vs `667b949458`) within 90s
+   - If no new hash appears within 90s, Argo is stuck — see Manual Deploy Escape Hatch step 5 for force-sync, or halt
+
+If **none** of these prove rollout, halt the loop and escalate. Do not score under false pretenses. An unrolled flight is worse than a failed flight because it silently serves the previous build.
 
 ### 4. Observe
 
@@ -187,6 +214,39 @@ gh pr review <N> --repo Cogni-DAO/node-template \
 
 After either outcome, append to `dashboard.md` "Recent Flights", re-enter Triage, and present the next candidate + alternates.
 
+## Manual Deploy Escape Hatch (rare, gated)
+
+Some PRs cannot ride `candidate-flight.yml` — most commonly **infra-only PRs** where `detect-affected.sh` builds zero images, causing the flight workflow to abort at the `Require at least one built image` gate. Examples: k8s overlay additions, DaemonSet bumps, kustomization-only changes.
+
+**Manual deploy is allowed but NOT recommended.** Default preference: extend the PR with a trivial app-code touch to force `pr-build` to produce images, then dispatch the normal flight. Only fall back to manual deploy when that is genuinely not an option.
+
+When manual deploy is the only path:
+
+1. Create a worktree on `origin/deploy/candidate-a`.
+2. Cherry-pick or rsync ONLY the relevant paths (overlay + base + catalog) from the source PR head — never sweep unrelated files.
+3. Commit with a message pointing back to the source PR and naming why the normal path was bypassed.
+4. Push `deploy/candidate-a`.
+5. Argo picks up the change on next poll (~3 min) or force-sync:
+   ```bash
+   kubectl -n argocd patch app candidate-a-<name> --type merge \
+     -p '{"operation":{"sync":{"revision":"HEAD"}}}'
+   ```
+6. Run the **Proof of rollout** ritual (step 3a) to confirm the change actually took effect. The flight workflow's readiness gate does not apply here — you are the gate.
+
+### VM-state discipline (HARD RULE)
+
+Any live VM change (SSH edit of config, `kubectl apply`, `systemctl restart`, etc.) must be **captured in a git-resident provisioning script or k8s manifest in the same turn** as the SSH apply, and a PR opened for it. "VM hotfix + git-capture PR" is one atomic unit of work. A live VM edit without a corresponding git commit is a reproducibility violation: the next provision will drop the fix and the failure will recur silently.
+
+Reference scripts to check when capturing VM state:
+
+- `infra/provision/cherry/base/bootstrap.yaml` — base VM cloud-init
+- `infra/provision/cherry/k3s/bootstrap-k3s.yaml` — k3s VM cloud-init
+- `scripts/setup/provision-test-vm.sh` — provision orchestrator
+- `scripts/ci/deploy-infra.sh` — compose infra deploy
+- `infra/k8s/base/*`, `infra/k8s/overlays/*` — manifests
+
+If you're unsure where a piece of VM state is generated, grep the repo for a unique string from the file before editing the VM.
+
 ## Sub-agents
 
 | Role            | Type            | Responsibility                                                 |
@@ -203,7 +263,9 @@ Use the `Agent` tool with `subagent_type: general-purpose`. Give each a tight, s
 - **grafana MCP must be loaded** before any flight. Halt the loop otherwise.
 - **Decision is automatic** once scorecard is issued — PASS merges, FAIL leaves a request-changes review. No silent skips.
 - **Flight failures halt the loop.** Collect logs, escalate, do not auto-advance.
-- **Never `--admin` on merge.** If branch protection blocks, escalate to Derek.
+- **Never `--admin` on merge.** Non-release PRs to main will always require human admin-merge until `release/*` policy lands — this is **expected, not a failure**. Post the scorecard, name it as the blocker, hand off to Derek.
+- **Verify rollout before opening QA window.** Run the Proof of Rollout ritual (step 3a) after every flight. An unrolled flight silently serves the previous build — worse than a hard failure.
+- **VM edits need git capture in the same turn.** See Manual Deploy Escape Hatch → VM-state discipline.
 - **Never commit `dashboard.md` updates.** It's session-scratch runtime state.
 - **Never modify someone's in-flight branch.** Operate only on remote refs and candidate-a overlays.
 

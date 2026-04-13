@@ -6,28 +6,28 @@
 
 ## Live Build Matrix
 
-| Env            | Operator (node-tpl)   | Poly                  | Resy                  | Flighted At        | Notes       |
-| -------------- | --------------------- | --------------------- | --------------------- | ------------------ | ----------- |
-| **test**       | _(idle)_              | _(idle)_              | _(idle)_              | —                  | slot=free   |
-| **preview**    | —                     | —                     | —                     | —                  | not tracked |
-| **production** | —                     | —                     | —                     | —                  | not tracked |
+| Env            | Operator (node-tpl) | Poly     | Resy     | Flighted At | Notes       |
+| -------------- | ------------------- | -------- | -------- | ----------- | ----------- |
+| **test**       | _(idle)_            | _(idle)_ | _(idle)_ | —           | slot=free   |
+| **preview**    | —                   | —        | —        | —           | not tracked |
+| **production** | —                   | —        | —        | —           | not tracked |
 
 **Fill format per cell:** `pr-<N>/<sha7>` (e.g. `pr-848/78dd38a`). Use `_(idle)_` when the deploy-branch points at the previous flight but no QA is active.
 
 ## Current Flight
 
-- **PR:**         —
-- **SHA:**        —
+- **PR:** —
+- **SHA:** —
 - **Started at:** —
-- **State:**      —  _(acquired | dispatched | waiting-ready | in-qa | scoring)_
-- **Derek QA:**   —
+- **State:** — _(acquired | dispatched | waiting-ready | in-qa | scoring)_
+- **Derek QA:** —
 - **grafana-watcher:** —
 
 ## Recent Flights (last 5)
 
-| When (UTC)       | PR   | SHA     | Verdict     | Notes                             |
-| ---------------- | ---- | ------- | ----------- | --------------------------------- |
-| —                | —    | —       | —           | —                                 |
+| When (UTC) | PR  | SHA | Verdict | Notes |
+| ---------- | --- | --- | ------- | ----- |
+| —          | —   | —   | —       | —     |
 
 ## Refresh Sources
 
