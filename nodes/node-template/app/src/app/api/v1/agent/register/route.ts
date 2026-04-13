@@ -19,7 +19,6 @@
 import { randomUUID } from "node:crypto";
 import { users } from "@cogni/db-schema";
 import { registerAgentOperation } from "@cogni/node-contracts";
-import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { issueAgentApiKey } from "@/app/_lib/auth/request-identity";
 import { getContainer, resolveServiceDb } from "@/bootstrap/container";
@@ -52,29 +51,13 @@ export const POST = wrapRouteHandlerWithLogging(
         displayName: input.name,
       });
 
-    const actorId = `user:${id}`;
     const apiKey = issueAgentApiKey({
       userId: id,
-      actorId,
       displayName: input.name,
     });
 
-    const persisted = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.id, id))
-      .limit(1);
-
-    if (persisted.length === 0) {
-      return NextResponse.json(
-        { error: "Failed to register actor" },
-        { status: 500 }
-      );
-    }
-
     return NextResponse.json(
       registerAgentOperation.output.parse({
-        actorId,
         userId: id,
         apiKey,
         billingAccountId: billingAccount.id,

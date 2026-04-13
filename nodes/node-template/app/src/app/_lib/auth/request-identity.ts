@@ -9,7 +9,6 @@ import { serverEnv } from "@/shared/env/server";
 
 type AgentTokenPayload = {
   sub: string;
-  actorId: string;
   displayName: string | null;
   iat: number;
   exp: number;
@@ -57,7 +56,7 @@ function parseAgentToken(token: string): AgentTokenPayload | null {
     const parsed = JSON.parse(
       Buffer.from(payloadB64, "base64url").toString("utf8")
     ) as AgentTokenPayload;
-    if (!parsed.sub || !parsed.actorId) return null;
+    if (!parsed.sub) return null;
     if (parsed.exp < Math.floor(Date.now() / 1000)) return null;
     return parsed;
   } catch {
@@ -67,12 +66,10 @@ function parseAgentToken(token: string): AgentTokenPayload | null {
 
 export function issueAgentApiKey(input: {
   userId: string;
-  actorId: string;
   displayName: string | null;
 }): string {
   const payload: AgentTokenPayload = {
     sub: input.userId,
-    actorId: input.actorId,
     displayName: input.displayName,
     iat: Math.floor(Date.now() / 1000),
     exp: Math.floor(Date.now() / 1000) + AGENT_KEY_TTL_SECONDS,

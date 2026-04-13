@@ -100,7 +100,6 @@ function makeRun(overrides: Partial<GraphRun> = {}): GraphRun {
 // below fails deterministically.
 const VALID_AGENT_TOKEN = issueAgentApiKey({
   userId: TEST_USER_ID_1,
-  actorId: `user:${TEST_USER_ID_1}`,
   displayName: "Test Validator",
 });
 

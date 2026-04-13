@@ -76,7 +76,6 @@ function headersFromRecord(record: Record<string, string>) {
 
 const VALID_AGENT_TOKEN = issueAgentApiKey({
   userId: TEST_USER_ID_1,
-  actorId: `user:${TEST_USER_ID_1}`,
   displayName: "Bearer Test",
 });
 

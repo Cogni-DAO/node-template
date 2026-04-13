@@ -19,7 +19,6 @@ export const registerAgentOperation = {
     name: z.string().min(1).max(80),
   }),
   output: z.object({
-    actorId: z.string().min(1),
     userId: z.string().min(1),
     apiKey: z.string().min(1),
     billingAccountId: z.string().min(1),

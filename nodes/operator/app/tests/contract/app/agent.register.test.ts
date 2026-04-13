@@ -82,7 +82,10 @@ describe("POST /api/v1/agent/register", () => {
 
         expect(response.status).toBe(201);
         const json = await response.json();
-        expect(json.actorId).toMatch(/^user:/);
+        // actorId is intentionally absent: v0 has no actors table, so the
+        // register contract returns only userId. Clients derive actor
+        // identity from userId until bug.0297 lands the actors schema.
+        expect(json.actorId).toBeUndefined();
         expect(json.userId).toBeTypeOf("string");
         expect(json.apiKey).toContain("cogni_ag_sk_v1_");
         expect(json.billingAccountId).toBe("billing-1");
