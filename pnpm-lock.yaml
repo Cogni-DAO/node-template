@@ -381,6 +381,9 @@ importers:
       '@cogni/node-shared':
         specifier: workspace:*
         version: link:../../../packages/node-shared
+      '@cogni/node-streams':
+        specifier: workspace:*
+        version: link:../../../packages/node-streams
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../../packages/repo-spec
@@ -717,6 +720,9 @@ importers:
       '@cogni/node-shared':
         specifier: workspace:*
         version: link:../../../packages/node-shared
+      '@cogni/node-streams':
+        specifier: workspace:*
+        version: link:../../../packages/node-streams
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../../packages/repo-spec
@@ -1021,6 +1027,9 @@ importers:
       '@cogni/node-shared':
         specifier: workspace:*
         version: link:../../../packages/node-shared
+      '@cogni/node-streams':
+        specifier: workspace:*
+        version: link:../../../packages/node-streams
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../../packages/repo-spec
@@ -1378,6 +1387,9 @@ importers:
       '@cogni/node-shared':
         specifier: workspace:*
         version: link:../../../packages/node-shared
+      '@cogni/node-streams':
+        specifier: workspace:*
+        version: link:../../../packages/node-streams
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../../packages/repo-spec
@@ -2023,6 +2035,19 @@ importers:
         version: 8.5.1(@swc/core@1.15.10)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.3)
       typescript:
         specifier: ^5
+        version: 5.9.3
+
+  packages/node-streams:
+    dependencies:
+      ioredis:
+        specifier: ^5.6.1
+        version: 5.10.0
+    devDependencies:
+      tsup:
+        specifier: ^8.4.0
+        version: 8.5.1(@swc/core@1.15.10)(jiti@2.6.1)(postcss@8.5.6)(tsx@4.20.6)(typescript@5.9.3)(yaml@2.8.3)
+      typescript:
+        specifier: ^5.9.3
         version: 5.9.3
 
   packages/operator-wallet:
