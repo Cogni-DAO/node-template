@@ -160,6 +160,7 @@
 | 2 | 4 | 2 | needs_triage | bug.0013 | Sandbox stack tests flaky — proxy container vanishes during readiness check | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 2 | 5 | 1 | needs_merge | bug.0233 | Model picker shows wrong icons, leaks codex models into OpenRouter tab, shows embedding models |  |  |
 | 2 | 5 | 1 | needs_review | bug.0275 | k8s migration Job fails — standalone app image lacks tsx + drizzle-kit | CI/CD Pipeline | proj.cicd-services-gitops |
+| 2 | 5 | 2 | needs_design | task.0310 | Rename k8s staging namespace and overlays to preview | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 8 | 1 | needs_design | task.0064 | OpenClaw preflight cost estimate 10x audit — real token consumption | Reliability & Uptime | proj.reliability |
 | 2 | 8 | 2 | needs_design | task.0280 | Per-node DB isolation for worker activities — evaluate approach | Unified Graph Launch | proj.unified-graph-launch |
 | 2 | 9 | 2 | needs_design | task.0039 | Billing reconciler — LiteLLM spend/logs polling in scheduler worker | Unified Graph Launch | proj.unified-graph-launch |
