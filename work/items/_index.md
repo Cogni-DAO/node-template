@@ -80,6 +80,7 @@
 | 1 | 2 | 3 | needs_design | task.0283 | Provision VM as GitHub Action — eliminate local .env.{env} dependency |  |  |
 | 1 | 2 | 3 | needs_implement | task.0286 | Eval POC — 2 evals with 4o-mini judge, Langfuse datasets, canary HTTP target |  |  |
 | 1 | 2 | 2 | needs_design | task.0297 | Add candidate-flight tool to VCS capability / git manager agent | CI/CD Pipeline | proj.cicd-services-gitops |
+| 1 | 2 | 1 | needs_implement | bug.0308 | Alloy DaemonSet hardcodes docker.io image — brittle under mirror failure, blocks ghcr.io-only clusters | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 2 | 3 | needs_design | task.0308 | Deployment observability scorecard — build/log correlation + git manager health matrix | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 3 | 1 | needs_design | bug.0011 | Gateway streaming truncates output mid-sentence in UI | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 3 | 3 | needs_design | task.0099 | Node + scope identity infra: repo-spec, DB persistence, scope_id columns, boot-time drift protection |  |  |
@@ -102,6 +103,7 @@
 | 1 | 5 | 3 | needs_merge | task.0209 | Multi-provider LLM rearchitecture — ModelCatalogPort + ModelRef | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 1 | 5 | 2 | needs_triage | bug.0231 | Token usage has three disagreeing sources — app logs, LiteLLM spend_logs, and billing callback |  |  |
 | 1 | 5 | 3 | needs_merge | task.0273 | Unify workspace: move operator to nodes/operator/app | Operator Plane | proj.operator-plane |
+| 1 | 5 | 3 | needs_design | bug.0297 | POST /api/v1/agent/register is an unauthenticated account + API-key factory |  |  |
 | 1 | 5 | 3 | needs_design | task.0311 | Activate ksops end-to-end for alloy-secrets (interim before ESO) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
