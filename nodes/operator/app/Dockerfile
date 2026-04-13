@@ -112,6 +112,13 @@ COPY --from=builder --chown=nextjs:nodejs /tmp/codex-native/@openai/ ./node_modu
 # Next.js standalone does process.chdir(__dirname) → CWD becomes /app/nodes/operator/app at runtime.
 COPY --from=builder --chown=nextjs:nodejs /app/config/mcp.servers.json ./nodes/operator/app/config/mcp.servers.json
 
+# Build SHA plumbing: CI passes --build-arg BUILD_SHA=${GITHUB_SHA}; app reads APP_BUILD_SHA at runtime.
+# Placed last so cache invalidation from a new commit only rebuilds the trailing metadata layer,
+# not the expensive upstream COPY + pnpm-add-codex layers.
+# No default: if CI forgets to pass the arg, APP_BUILD_SHA is empty and the pod visibly reports it.
+ARG BUILD_SHA
+ENV APP_BUILD_SHA=$BUILD_SHA
+
 USER nextjs
 
 EXPOSE 3000
