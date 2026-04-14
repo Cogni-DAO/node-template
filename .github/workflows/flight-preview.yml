@@ -43,7 +43,9 @@ jobs:
       - name: Checkout app source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
-          fetch-depth: 0
+          # Shallow is enough: the workflow_dispatch path does its own
+          # `git fetch origin main --depth=100` before the ancestor check.
+          fetch-depth: 1
 
       - name: Resolve target SHA and associated PR
         id: pr

@@ -56,9 +56,6 @@ cd "$TMPDIR"
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
 
-REVIEW_STATE=$(cat .promote-state/review-state 2>/dev/null || echo unlocked)
-echo "📖 review-state = ${REVIEW_STATE}"
-
 # -----------------------------------------------------------------------------
 # Build the commit for this attempt. apply_intent is re-called on each rebase
 # inside push_with_retry so the staged content always targets the latest tip.
