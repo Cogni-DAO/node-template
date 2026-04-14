@@ -2,13 +2,13 @@
 id: bug.0297
 type: bug
 title: "POST /api/v1/agent/register is an unauthenticated account + API-key factory"
-status: needs_design
+status: blocked
 priority: 1
 rank: 5
 estimate: 3
-summary: "PR #845 exposed /api/v1/agent/register in the proxy's public allowlist. Anyone on the internet can POST a name and receive a fresh user row plus a 30-day signed API key. No auth, no rate limit, no audit trail."
-outcome: "Register is closed by default: only a holder of a short-lived, admin-minted invitation token can redeem it for an API key. One redemption per invitation. Rate-limited. All attempts auditable."
-spec_refs: [security-auth]
+summary: "PR #845 exposed /api/v1/agent/register in the proxy's public allowlist. Anyone on the internet can POST a name and receive a fresh user row plus a 30-day signed API key. No auth, no rate limit, no audit trail. Remediation redirected: bounded-by-quota (per-actor spend cap + IP rate limit) via the agent-first auth spec, NOT invitation-gating. Phase 1 (contract lock) is task.0312; Phase 2 (keypair proof-of-possession) closes the residual."
+outcome: "Rate-limited registration and per-actor spend cap bound the blast radius without requiring an invitation flow. Each issued credential carries a 24h TTL and is explicitly revocable via the actors table. Phase 2 adds cryptographic proof-of-possession and 5-minute proof-bound access tokens."
+spec_refs: [agent-first-auth, security-auth]
 assignees: derekg1729
 credit:
 project: proj.accounts-api-keys
@@ -16,14 +16,30 @@ branch:
 pr: https://github.com/Cogni-DAO/cogni-template/pull/845
 reviewer:
 revision: 0
-blocked_by:
+blocked_by: [task.0312]
 deploy_verified: false
 created: 2026-04-13
-updated: 2026-04-13
+updated: 2026-04-14
 labels: [security, auth]
 external_refs:
   - https://github.com/Cogni-DAO/cogni-template/pull/845
 ---
+
+> **2026-04-14 direction change.** The original "admin-minted invitation token"
+> remediation (§ Plan below) is SUPERSEDED by the agent-first design at
+> [`docs/spec/agent-first-auth.md`](../../docs/spec/agent-first-auth.md).
+> The critical-severity exposure is closed in two phases:
+>
+> 1. **Phase 1 — task.0312**: contract lock (AuthPrincipal + wrapper refactor +
+>    `actors` table + IP rate limit + per-actor daily spend cap + 24h TTL).
+>    Downgrades this bug from critical to medium.
+> 2. **Phase 2 — future task**: keypair proof-of-possession + 5-min proof-bound
+>    access tokens. Closes this bug entirely.
+>
+> The "Identity Model Gaps" section below (Gaps 1, 4, 5, 6, 7, 8) is still
+> valid; most gaps land naturally in Phase 1 (actors table → 1, 4; quota →
+> implicit idempotency bounding → 8; revoked_at → 6). Gaps 5 and 7 are
+> orthogonal and stay tracked here.
 
 # Agent register endpoint is an open account factory
 
