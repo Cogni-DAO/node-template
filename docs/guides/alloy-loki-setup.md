@@ -148,7 +148,9 @@ These variables are already configured in:
 
 ### Step 3: Alloy Configuration
 
-The live Alloy configuration is at `infra/compose/runtime/configs/alloy-config.metrics.alloy` — the logs+metrics variant shipped to canary/preview/production via `scripts/ci/deploy-infra.sh`. A simpler logs-only variant for local dev lives at `infra/compose/configs/alloy-config.alloy`.
+The live Alloy configuration is at `infra/compose/runtime/configs/alloy-config.metrics.alloy` — the logs+metrics variant shipped to `preview` and `production` VMs via `scripts/ci/deploy-infra.sh` during `promote-and-deploy.yml`. A simpler logs-only variant for local dev lives at `infra/compose/configs/alloy-config.alloy`.
+
+> **Note:** The `candidate-a` VM is currently operated by `candidate-flight.yml`, which only rsyncs k8s overlays — it does **not** run `deploy-infra.sh`. Compose changes in `infra/compose/**` therefore land on `candidate-a` only via the initial `provision-test-vm.sh` bootstrap. PRs that touch the Alloy config cannot be validated pre-merge on `candidate-a` until that gap is closed (tracked under bug.0312).
 
 Key knobs in the metrics config:
 

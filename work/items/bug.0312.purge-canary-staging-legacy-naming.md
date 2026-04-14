@@ -8,6 +8,7 @@ rank: 2
 estimate: 3
 created: 2026-04-14
 updated: 2026-04-14
+revision: 1
 summary: "docs/spec/ci-cd.md (PR #851, 0e1395871) established the trunk-based model — candidate-a for pre-merge flight, preview + production for post-merge promotion, no canary environment. But the runtime workflows, 11 docs, 26 work items, and the live promote-and-deploy.yml all still use `canary` as the env name for what should be candidate-a (pre-merge) or preview (post-merge); 28 docs still reference the retired `staging` code branch. The drift blocks every future observability, deploy, and onboarding task from being spec-aligned."
 outcome: "One coherent naming across spec, workflows, scorecards, guides, and Loki/Prometheus labels: `candidate-a` for pre-merge flight slots, `preview` for post-merge validation, `production` for production. No `canary` environment. No `staging` code branch references. One canonical e2e CI/CD diagram in docs/spec/ci-cd.md that matches what the workflows actually do, with legacy terms retired or marked explicitly as historical."
 spec_refs:
@@ -23,6 +24,7 @@ related:
   - PR #851
   - PR #859
   - PR #869
+  - PR #870
 ---
 
 # bug.0312 — Purge canary/staging legacy naming; document the e2e CI/CD flow
@@ -38,21 +40,29 @@ related:
 - Environment Model: _"This spec does not require a `canary` environment."_
 - Legacy to retire: _"long-lived `staging` or `canary` code-branch semantics; branch-based environment inference in workflow logic; prompts, skills, AGENTS files, or workflow docs that steer agents toward `origin/staging` or PRs into non-`main` branches."_
 
-### 2. Runtime drift (workflows still say canary)
+### 2. Runtime drift (post-PR #870 delta)
 
-`.github/workflows/promote-and-deploy.yml`:
+PR #870 (task.0293) landed 2026-04-14 and closed most of the post-merge workflow drift:
 
-- `workflow_dispatch.inputs.environment.default: canary`
-- `case "$BRANCH" in main) ENV=canary ;;` (line ~63) — branch-name inference for env routing, explicitly forbidden by ci-cd.md Workflow Design Target #2.
-- `deploy_branch=deploy/canary` on the main path.
-- Concurrency group: `promote-deploy-canary`.
+- ✅ `promote-merged-pr.yml` deleted → renamed to `.github/workflows/flight-preview.yml` (originally `flight-merged-pr-to-preview.yml`, shortened in same PR)
+- ✅ `promote-and-deploy.yml` `case "$BRANCH" in main) ENV=canary` arm deleted — workflow_run trigger now fails loudly with a clear message
+- ✅ `scripts/ci/promote-to-preview.sh` → renamed to `scripts/ci/flight-preview.sh` (it's a gate + dispatcher, not a promoter)
+- ✅ New three-value lease (`unlocked | dispatching | reviewing`) on `deploy/preview:.promote-state/` with deterministic concurrency safety
+- ✅ Auto-unlock on deploy failure (any non-success result)
+- ✅ `docs/spec/ci-cd.md` gained a **Preview Review Lock** subsection documenting the contract
+- ✅ `docs/spec/cd-pipeline-e2e.md` §4.1, §4.4, §12.1, §12.5, Appendix A refreshed to name real workflows
 
-`.github/workflows/promote-merged-pr.yml`:
+**Remaining runtime drift** (non-blocking for #870, blocker for this bug):
 
-- Workflow name: `Promote Merged PR to Canary`.
-- `gh workflow run promote-and-deploy.yml ... -f environment=canary` (line ~147) — every merged PR lands as env=canary.
-
-Both of these fire on every merge to main, so every downstream artifact (GitHub environment name, Loki `env` label, k8s namespace, `DEPLOY_ENVIRONMENT` runtime env var, deploy branch) inherits `canary` until this rename lands.
+- `.github/workflows/promote-and-deploy.yml`:
+  - `workflow_dispatch.inputs.environment.default: canary` (should be `preview`)
+  - `options: [canary, preview, production]` (drop `canary`)
+  - `description: "Target environment (canary, preview, production)"`
+  - `concurrency.group: promote-${{ ... || 'canary' }}` fallback
+  - `case "$ENV" in canary) ...` arm — dead path, no one should dispatch it
+  - Dead `on.workflow_run.workflows: ["Build Multi-Node"]` trigger (fails loudly, but the trigger block itself should go)
+- `infra/compose/runtime/configs/alloy-config.metrics.alloy` L50 env allowlist regex — fixed in this PR (`canary → candidate-a`)
+- Other active docs (enumerated in Phase 3 below)
 
 ### 3. Scale of the staleness
 
@@ -87,20 +97,73 @@ The spec was rewritten in PR #851 (Apr 9, 2026) faster than the runtime could be
    - Option B: add new environment alongside, migrate workflows one at a time, retire `canary` last.
    - Option A is faster and matches "build once, retire once"; Option B is less risky but stretches the migration across weeks.
 
-### Phase 2 — workflow rename
+### Phase 2 — remaining workflow cleanup (post-#870)
+
+Most of the rename landed in PR #870 (task.0293). What's left:
 
 1. `.github/workflows/promote-and-deploy.yml`:
-   - `default: canary` → `default: <new>`
-   - Case stmt `main) ENV=canary` → `main) ENV=<new>`
-   - `deploy/canary` → `deploy/<new>` for the branch ref
-   - Concurrency group `promote-deploy-canary` → `promote-deploy-<new>`
-2. `.github/workflows/promote-merged-pr.yml`:
-   - Name `Promote Merged PR to Canary` → `Promote Merged PR to <new>`
-   - Dispatch `-f environment=canary` → `-f environment=<new>`
-   - Fallback dispatch `build-multi-node.yml` (no env change needed)
-3. Rename the GitHub environment in repo settings: `canary` → `<new>` (preserves all secrets/vars).
-4. Rename the deploy branch: `deploy/canary` → `deploy/<new>` (requires coordination with Argo CD ApplicationSet generators).
-5. `infra/compose/runtime/configs/alloy-config.metrics.alloy` L50 — update the env allowlist regex.
+   - `workflow_dispatch.inputs.environment.default: canary` → `default: preview`
+   - `options: [canary, preview, production]` → `[preview, production]` (remove `canary` option; manual-dispatch to a dead env is a footgun)
+   - Description string mentioning canary
+   - `concurrency.group: promote-${{ ... || 'canary' }}` dead-fallback → drop the `|| 'canary'`
+   - `case "$ENV" in canary) OVERLAY=canary; DEPLOY_BRANCH=deploy/canary ;;` arm — delete entire canary case (nothing dispatches `env=canary`)
+   - `on.workflow_run.workflows: ["Build Multi-Node"]` trigger — delete (fallback path was killed in #870, trigger is now dead code that exits 1 if ever fired)
+2. `.github/workflows/build-multi-node.yml` — audit: still lives as a dispatch-only fallback. Decide whether to keep or retire in favor of `pr-build.yml` only.
+3. **GitHub environment rename** (`canary` → `candidate-a`): repo settings → Environments → rename. Preserves secrets/vars. Callers: `candidate-flight.yml` already uses `environment: candidate-a` so that PROBABLY already exists; confirm and drop the old `canary` environment.
+4. **Deploy branch retire** (`deploy/canary`): after the GitHub environment rename and after confirming no workflow references it, `git push origin :deploy/canary` (delete remote) and clean up Argo CD ApplicationSet generators that list it.
+5. `infra/compose/runtime/configs/alloy-config.metrics.alloy` env allowlist regex — fixed in PR #869 commits.
+
+### Phase 2.5 — close the candidate-a Compose deploy gap (HIGH PRIORITY)
+
+**Current state:** `candidate-flight.yml` only rsyncs `infra/k8s/base/`, `infra/catalog/`, and `infra/k8s/overlays/candidate-a/` to `deploy/candidate-a`, then lets Argo CD reconcile. It does **not** run `scripts/ci/deploy-infra.sh` against the candidate-a VM. Consequences:
+
+- Compose service changes under `infra/compose/**` (alloy config, litellm, temporal, caddy, postgres, redis) cannot be validated pre-merge on candidate-a
+- The candidate-a VM's compose state is frozen at whatever `scripts/setup/provision-test-vm.sh` wrote at provision time
+- A PR that breaks `alloy-config.metrics.alloy` (or any compose service) is first exercised live on the preview VM after merge — if it wedges, preview goes red and `unlock-preview-on-failure` fires, but the bad code is already on main
+- Pre-merge validation lane for infra PRs does not exist
+
+**Fix options:**
+
+**Option A — Extend `candidate-flight.yml` with a deploy-infra step.** Add a new step after "Commit and push deploy/candidate-a" and before "Wait for candidate readiness" that runs `scripts/ci/deploy-infra.sh` against the candidate-a VM. Requires:
+
+- candidate-a GitHub environment already has `VM_HOST` and `SSH_DEPLOY_KEY` (from provision). Confirm.
+- All ~30 compose-deploy env vars (`DATABASE_URL`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, etc.) must be on the `candidate-a` environment. Many already are (provision step wrote them).
+- `scripts/ci/deploy-infra.sh` is idempotent; running it against candidate-a is the same shape as against preview.
+- Adds ~5 min to every candidate flight (compose up/down + health check).
+
+Blast-radius analysis: if the new step fails, `release-candidate-slot.sh` still fires on failure, the lease is released, the PR author gets a red candidate-flight status. Same failure semantics as today.
+
+Code shape:
+
+```yaml
+- name: Deploy infra to candidate-a VM
+  if: steps.acquire.outcome == 'success' && steps.acquire.outputs.slot_busy != 'true'
+  env:
+    VM_HOST: ${{ secrets.VM_HOST }}
+    DOMAIN: ${{ vars.DOMAIN }}
+    DEPLOY_ENVIRONMENT: candidate-a
+    APP_ENV: production
+    # ...full env block mirrored from promote-and-deploy.yml:deploy-infra...
+  run: |
+    mkdir -p ~/.ssh && chmod 700 ~/.ssh
+    echo "${{ secrets.SSH_DEPLOY_KEY }}" | tr -d '\r' > ~/.ssh/deploy_key
+    chmod 600 ~/.ssh/deploy_key
+    ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+    bash app-src/scripts/ci/deploy-infra.sh
+```
+
+**Option B — Extract `deploy-infra` to a reusable workflow.** Create `.github/workflows/_deploy-infra.yml` with `on: workflow_call`, move the 60-line env block + SSH setup + `deploy-infra.sh` invocation into it, then have both `candidate-flight.yml` and `promote-and-deploy.yml` call it with `secrets: inherit`. Cleaner long-term, ~1hr refactor, but duplication in current state is bounded so Option A is the faster v0 path.
+
+**Option C — Path-gated manual dispatch.** Detect if a PR touches `infra/compose/**` and fail hard with "flight this PR manually to deploy infra" — but that still requires the step to exist, so it collapses back to Option A or B.
+
+**Recommended:** **Option A** now (fast, unblocks the lane, matches existing duplication cost); **Option B** as a follow-up refactor once the call sites stabilize.
+
+**Acceptance for Phase 2.5:**
+
+- [ ] `candidate-flight.yml` runs `deploy-infra.sh` against candidate-a after acquiring the slot
+- [ ] A PR that changes `infra/compose/runtime/configs/alloy-config.metrics.alloy` can be flighted into candidate-a and the alloy config on the candidate-a VM reflects the PR's change before merge
+- [ ] `smoke-candidate.sh` catches any regression from the compose change
+- [ ] Candidate-a Environment Status row in the project scorecard reads "Compose infra healthy ✅ (CI-reconciled)" instead of "(frozen at provision)"
 
 ### Phase 3 — docs and scorecard purge
 

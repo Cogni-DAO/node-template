@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 //
-// Alloy configuration with logs + metrics shipping (canary/preview/production)
+// Alloy configuration with logs + metrics shipping (candidate-a / preview / production)
 // Requires: PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_USERNAME, PROMETHEUS_PASSWORD, METRICS_TOKEN
 // Use alloy-config.alloy for logs-only (local dev)
 
@@ -47,7 +47,7 @@ discovery.relabel "docker_logs" {
 
   rule {
     source_labels = ["env"]
-    regex         = "^(local|canary|preview|production)$"
+    regex         = "^(local|candidate-a|preview|production)$"
     action        = "keep"
   }
 }
