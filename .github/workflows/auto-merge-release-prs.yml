@@ -121,7 +121,7 @@ jobs:
           CANDIDATE=$(git show "refs/remotes/origin/${DEPLOY_BRANCH}:.promote-state/candidate-sha" 2>/dev/null || echo "")
           if [ -n "$CANDIDATE" ] && [ "$CANDIDATE" != "$CURRENT" ]; then
             echo "🚀 Draining queued candidate ${CANDIDATE:0:8} (current=${CURRENT:0:8})"
-            gh workflow run flight-merged-pr-to-preview.yml \
+            gh workflow run flight-preview.yml \
               --repo "${{ github.repository }}" \
               --ref main \
               -f sha="$CANDIDATE"

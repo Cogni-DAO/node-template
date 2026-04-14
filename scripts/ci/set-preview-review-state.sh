@@ -6,7 +6,7 @@ set -euo pipefail
 # Target states: dispatching | reviewing | unlocked
 #   reviewing:   also writes current-sha (required)
 #   unlocked:    does not touch current-sha or candidate-sha
-#   dispatching: primarily written by promote-to-preview.sh inline; this helper supports it for
+#   dispatching: primarily written by flight-preview.sh inline; this helper supports it for
 #                symmetry and manual recovery
 #
 # Idempotent: if current state already equals target (and sha matches when applicable), no-op.

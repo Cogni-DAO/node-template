@@ -44,7 +44,7 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 | `push.sh`                          | Push images to GHCR, capture digests                                    |
 | `test-image.sh`                    | Validate container health (livez) before push                           |
 | `promote-k8s-image.sh`             | Update kustomization.yaml overlays with new digests                     |
-| `promote-to-preview.sh`            | Three-value lease gate (unlocked→dispatching) + dispatch preview flight |
+| `flight-preview.sh`                | Three-value lease gate (unlocked→dispatching) + dispatch preview flight |
 | `set-preview-review-state.sh`      | Write `.promote-state/review-state` on `deploy/preview` with retry      |
 | `deploy-infra.sh`                  | SSH deploy Compose infra (postgres, temporal, litellm, redis, caddy)    |
 | `deploy.sh`                        | Legacy full-stack SSH deploy (being retired)                            |
@@ -60,7 +60,7 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 | ---------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
 | `pr-build.yml`                           | PR open/sync                    | Build `pr-{N}-{sha}` images for the PR head                                                  |
 | `candidate-flight.yml`                   | workflow_dispatch               | Flight a selected PR into `candidate-a` slot for pre-merge validation                        |
-| `flight-merged-pr-to-preview.yml`        | push to main; workflow_dispatch | Re-tag `pr-{N}-{sha}` → `preview-{sha}` and call `promote-to-preview.sh` lock-gate           |
+| `flight-preview.yml`                     | push to main; workflow_dispatch | Re-tag `pr-{N}-{sha}` → `preview-{sha}` and call `flight-preview.sh` lock-gate               |
 | `build-multi-node.yml`                   | workflow_dispatch (fallback)    | Build all node images + services when pr-build is unavailable                                |
 | `promote-and-deploy.yml`                 | workflow_dispatch               | Commit digests to deploy branch, deploy infra, verify, E2E, drive preview review-state lease |
 | `ci.yaml`                                | PR + push to main               | Typecheck, lint, unit, component, stack tests                                                |

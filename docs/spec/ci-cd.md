@@ -151,7 +151,7 @@ Transitions:
 
 | From → To                 | Written by                                                  | Trigger                                                                                                       |
 | ------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| `unlocked → dispatching`  | `scripts/ci/promote-to-preview.sh`                          | merge to main (or manual flight dispatch); atomic with `candidate-sha` update                                 |
+| `unlocked → dispatching`  | `scripts/ci/flight-preview.sh`                              | merge to main (or manual flight dispatch); atomic with `candidate-sha` update                                 |
 | `dispatching → reviewing` | `lock-preview-on-success` job in `promote-and-deploy.yml`   | preview deploy reaches E2E success; writes `current-sha`                                                      |
 | `dispatching → unlocked`  | `unlock-preview-on-failure` job in `promote-and-deploy.yml` | any of `promote-k8s`, `deploy-infra`, `verify`, `e2e` does not reach success (failure, cancelled, or skipped) |
 | `reviewing → unlocked`    | `auto-merge-release-prs.yml`                                | release PR merges                                                                                             |

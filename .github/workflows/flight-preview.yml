@@ -1,8 +1,8 @@
-name: Flight Merged PR to Preview
+name: Flight Preview
 
 # Triggered on every push to main (PR merged) or via workflow_dispatch(sha).
 # Re-tags pr-{N}-{sha} → preview-{sha} in GHCR (no rebuild) and then calls
-# scripts/ci/promote-to-preview.sh which handles the three-value lease gate:
+# scripts/ci/flight-preview.sh which handles the three-value lease gate:
 # unlocked → dispatching → reviewing. See task.0293 for the full model.
 #
 # Direct pushes to main (no associated PR) are NOT a supported flight trigger:
@@ -27,7 +27,7 @@ permissions:
 
 # Serialize entry to the unlocked → dispatching transition. Two merges landing
 # within seconds will run back-to-back, not in parallel. The three-value lease
-# in promote-to-preview.sh is the correctness guarantee; this concurrency group
+# in flight-preview.sh is the correctness guarantee; this concurrency group
 # just reduces push-retry churn under bursty merges.
 concurrency:
   group: flight-preview
@@ -150,7 +150,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
         run: |
-          bash scripts/ci/promote-to-preview.sh \
+          bash scripts/ci/flight-preview.sh \
             "${{ steps.pr.outputs.head_sha }}" \
             "${{ github.repository }}" \
             "deploy/preview" \

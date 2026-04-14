@@ -58,7 +58,7 @@ jobs:
           else
             # workflow_run path is reserved for future re-entry from build workflows.
             # Today there is no supported workflow_run trigger — the authoritative
-            # entry point is flight-merged-pr-to-preview.yml (which calls this via
+            # entry point is flight-preview.yml (which calls this via
             # workflow_dispatch). Fail loudly so we never silently land on a dead env.
             BRANCH="${{ github.event.workflow_run.head_branch }}"
             echo "❌ workflow_run trigger is not wired to an environment. branch=$BRANCH"
@@ -508,7 +508,7 @@ jobs:
 
   # ── Preview review-state lease transitions ─────────────────────
   # Three-value lease model (task.0293): unlocked → dispatching → reviewing.
-  # flight-merged-pr-to-preview.yml claims the dispatching lease before invoking
+  # flight-preview.yml claims the dispatching lease before invoking
   # this workflow. The two jobs below drive the terminal transitions:
   #   - lock-preview-on-success: dispatching → reviewing + write current-sha
   #   - unlock-preview-on-failure: dispatching → unlocked (current-sha untouched)

@@ -1,11 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# promote-to-preview.sh — main→preview flighting with three-value lease gate.
+# flight-preview.sh — request a preview flight for a merged-PR SHA.
 #
-# Called by flight-merged-pr-to-preview.yml after a PR merges to main (or via
-# manual workflow_dispatch). The PR merge gate is authoritative — no external
-# CI polling happens here.
+# This script does NOT perform the deploy — it is a gate + dispatcher. It
+# reads the preview review-state lease, claims it atomically if unlocked,
+# and then delegates the actual promote/deploy/verify/e2e work to
+# promote-and-deploy.yml via `gh workflow run`.
+#
+# Called by flight-preview.yml after a PR merges to main (or via manual
+# workflow_dispatch). The PR merge gate is authoritative — no external CI
+# polling happens here.
 #
 # Preview review-state contract (files under .promote-state/ on deploy/preview):
 #   unlocked   — no flight in progress; safe to claim the lease
@@ -24,9 +29,9 @@ set -euo pipefail
 # --reread-lease rebases and re-reads review-state. The loser sees dispatching
 # and deterministically demotes to queue-only by setting FLIGHT_LEASE_LOST=1.
 #
-# Usage: promote-to-preview.sh <sha> <repo> <deploy-branch> <gh-token>
+# Usage: flight-preview.sh <sha> <repo> <deploy-branch> <gh-token>
 
-SHA="${1:?Usage: promote-to-preview.sh <sha> <repo> <deploy-branch> <gh-token>}"
+SHA="${1:?Usage: flight-preview.sh <sha> <repo> <deploy-branch> <gh-token>}"
 REPO="${2:?}"
 DEPLOY_BRANCH="${3:-deploy/preview}"
 GH_TOKEN="${4:-${GH_TOKEN:-}}"

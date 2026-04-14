@@ -27,7 +27,7 @@ build → promote → deploy-infra → verify → e2e → preview → release �
 GREEN    GREEN      GREEN          AMBER    TBD    TBD       NEW       LEGACY
 ```
 
-Verify is AMBER: TLS rate limit (resets hourly). Build Multi-Node + CI running on latest push. E2E, preview promotion (new `promote-to-preview.sh`), and release (`release.yml`) are untested in production — first real run pending.
+Verify is AMBER: TLS rate limit (resets hourly). Build Multi-Node + CI running on latest push. E2E, preview promotion (new `flight-preview.sh`), and release (`release.yml`) are untested in production — first real run pending.
 
 ## Active Blockers
 

@@ -446,8 +446,8 @@ The 6 non-blocking items below are acknowledged and left for a separate pass (or
     ref: main
     path: main-src
     `  Then run`bash main-src/scripts/ci/set-preview-review-state.sh ...`.
-- [ ] **`flight-merged-pr-to-preview.yml` fetch-depth** — `fetch-depth: 0` at L46 is full-history, used only for the dispatch ancestor check. Change to `fetch-depth: 1` and rely on the inline `git fetch origin main --depth=100` at L61.
-- [ ] **`promote-to-preview.sh` L54-55** — unused `REVIEW_STATE` read; remove or repurpose.
+- [ ] **`flight-preview.yml` fetch-depth** — `fetch-depth: 0` at L46 is full-history, used only for the dispatch ancestor check. Change to `fetch-depth: 1` and rely on the inline `git fetch origin main --depth=100` at L61.
+- [ ] **`flight-preview.sh` L58-59** — unused `REVIEW_STATE` read; remove or repurpose. (Pre-rename path: `promote-to-preview.sh`.)
 - [ ] **`set-preview-review-state.sh` L64, L66** — use `::warning::` annotation instead of plain echo for unexpected-transition warnings so they surface on the job summary.
 - [ ] **Drain on unlock-on-failure (symmetry)** — `unlock-preview-on-failure` could drain a queued `candidate-sha` the same way `auto-merge-release-prs.yml` does. Current asymmetry leaves queued SHAs stranded until a human or another merge intervenes. Low severity; could be a follow-up.
 
