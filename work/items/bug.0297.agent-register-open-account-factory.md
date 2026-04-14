@@ -16,7 +16,7 @@ branch:
 pr: https://github.com/Cogni-DAO/cogni-template/pull/845
 reviewer:
 revision: 0
-blocked_by: [task.0312]
+blocked_by: [task.0313]
 deploy_verified: false
 created: 2026-04-13
 updated: 2026-04-14
@@ -32,10 +32,15 @@ external_refs:
 Track`](../projects/proj.accounts-api-keys.md). The critical-severity
 > exposure is closed in two steps:
 >
-> 1. **Contract lock (task.0312)**: `AuthPrincipal` + wrapper refactor + `actors`
->    table + IP rate limit + per-actor daily spend cap + 24h TTL on the issued
->    bearer. Downgrades this bug from critical to medium.
-> 2. **Proof-of-possession follow-up (A3 in the project track)**: keypair
+> 1. **Contract lock (`task.0312`, A1)**: `AuthPrincipal` + wrapper refactor.
+>    Pure handler-facing contract change; no schema; no storage mutation;
+>    no register change. Unblocks the storage swap in A2 without perturbing
+>    `bug.0297`'s severity.
+> 2. **Register hardening (`task.0313`, A2)**: `actors` table + users
+>    backfill + register rewrite + IP rate limit + per-actor daily spend
+>    cap + 24h TTL on the issued bearer. Downgrades this bug from critical
+>    to medium.
+> 3. **Proof-of-possession follow-up (A3 in the project track)**: keypair
 >    registration + 5-minute proof-bound access tokens. Closes this bug
 >    entirely.
 >

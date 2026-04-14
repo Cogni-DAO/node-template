@@ -237,16 +237,18 @@ Files: update `src/app/api/v1/ai/completion/route.ts`, `tests/stack/api/ai/compl
 
 **Goal:** `bug.0297` drops from critical → medium. Register creates an `actors` row (not a `users` row), is rate-limited per source IP, and every actor has a daily spend + concurrency cap.
 
-| Deliverable                                                                                         | Status      | Est | Work Item     |
-| --------------------------------------------------------------------------------------------------- | ----------- | --- | ------------- |
-| `actors` table migration + users → actors backfill                                                  | Not Started | —   | (see A2 task) |
-| `agent.register.v1.contract.ts` output → `{ actorId, tenantId, policyTier, spendCapCents, apiKey }` | Not Started | —   | (see A2 task) |
-| Register IP rate-limit (existing `ioredis` client)                                                  | Not Started | —   | (see A2 task) |
-| Per-actor daily spend cap enforcement in LLM dispatch path                                          | Not Started | —   | (see A2 task) |
-| Per-actor concurrency cap enforcement                                                               | Not Started | —   | (see A2 task) |
-| `apiKey` TTL dropped from 30d to 24h; claims encode `actorId`                                       | Not Started | —   | (see A2 task) |
+| Deliverable                                                                                         | Status      | Est | Work Item |
+| --------------------------------------------------------------------------------------------------- | ----------- | --- | --------- |
+| `actors` table migration + users → actors backfill (idempotent + post-condition)                    | Not Started | —   | task.0313 |
+| `agent.register.v1.contract.ts` output → `{ actorId, tenantId, policyTier, spendCapCents, apiKey }` | Not Started | —   | task.0313 |
+| Register rewrite: create actors row, not users row                                                  | Not Started | —   | task.0313 |
+| Register IP rate-limit (existing `ioredis` client)                                                  | Not Started | —   | task.0313 |
+| Per-actor daily spend cap enforcement in LLM dispatch path                                          | Not Started | —   | task.0313 |
+| Per-actor concurrency cap enforcement                                                               | Not Started | —   | task.0313 |
+| `apiKey` TTL dropped from 30d to 24h; claims encode `actorId`                                       | Not Started | —   | task.0313 |
+| `resolveAuthPrincipal` replaces temporary `actorId = users.id` cast with actors table lookup        | Not Started | —   | task.0313 |
 
-> **A1 vs A2 split:** A1 locks the contract and is the safer/smaller atomic change. A2 addresses `bug.0297` and requires the schema. A2 is logically separable from A1 (`actorId` can temporarily be `users.id` during A1) but MUST follow A1 on the same branch to avoid churning the contract twice.
+> **A1 vs A2 split:** A1 (`task.0312`) locks the handler-facing contract — no schema changes, no register mutation, no quotas. Safe to ship in isolation. A2 (`task.0313`) carries the storage change, the user-facing contract break, and the production-risk backfill migration. A2 depends on A1 landing first (`blocked_by: [task.0312]`).
 
 #### A3 — Proof-of-possession (target)
 
