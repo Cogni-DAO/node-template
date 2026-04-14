@@ -2,7 +2,7 @@
 id: task.0293
 type: task
 title: "Flight merged-PR digests to preview with lock-gate"
-status: needs_closeout
+status: needs_merge
 revision: 1
 priority: 0
 rank: 2
