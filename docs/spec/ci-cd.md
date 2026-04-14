@@ -8,7 +8,7 @@ summary: Trunk-based CI/CD where PRs prove safety in fixed candidate slots befor
 read_when: Understanding deployment pipelines, release workflow, or CI configuration
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-04-08
+verified: 2026-04-14
 tags: []
 ---
 
@@ -138,6 +138,27 @@ Promotion environments run accepted code only.
 | production  | `deploy/production` | production            |
 
 This spec does not require a `canary` environment. If one is retained during migration, it must be described explicitly as a post-merge soak lane and not as a branch or as a pre-merge safety lane.
+
+### Preview Review Lock
+
+`deploy/preview` holds a small state directory, `.promote-state/`, that drives merge-to-main flighting. Three files:
+
+- **`candidate-sha`** — the most recent successfully built merge-to-main SHA. High-water mark. Written unconditionally on every flight attempt (`unlocked`, `dispatching`, or `reviewing`). Policy is **latest-wins, not FIFO**: if a hotfix is queued behind a later merge, only the latest is retained.
+- **`current-sha`** — the SHA actually deployed to preview and under human review. Written only after a preview deploy reaches the E2E success step. `create-release.sh` reads this to cut release branches.
+- **`review-state`** — `unlocked | dispatching | reviewing`. This is a pre-dispatch lease, not a boolean.
+
+Transitions:
+
+| From → To                 | Written by                                                  | Trigger                                                                                                       |
+| ------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `unlocked → dispatching`  | `scripts/ci/flight-preview.sh`                              | merge to main (or manual flight dispatch); atomic with `candidate-sha` update                                 |
+| `dispatching → reviewing` | `lock-preview-on-success` job in `promote-and-deploy.yml`   | preview deploy reaches E2E success; writes `current-sha`                                                      |
+| `dispatching → unlocked`  | `unlock-preview-on-failure` job in `promote-and-deploy.yml` | any of `promote-k8s`, `deploy-infra`, `verify`, `e2e` does not reach success (failure, cancelled, or skipped) |
+| `reviewing → unlocked`    | `auto-merge-release-prs.yml`                                | release PR merges                                                                                             |
+
+On release-merge unlock, if `candidate-sha != current-sha` the workflow dispatches a fresh flight with `sha=candidate-sha` to drain the queue. A flight concurrency group (`flight-preview`) serializes entry to the `unlocked → dispatching` transition; the three-value lease is the correctness guarantee even if concurrency is bypassed.
+
+**Direct pushes to main are not a supported flight trigger.** The flight workflow re-tags `pr-{N}-{sha}` → `preview-{sha}` in GHCR and requires an associated PR number; direct pushes exit 0 with a message.
 
 ## Workflow Design Targets
 

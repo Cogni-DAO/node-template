@@ -8,7 +8,7 @@ summary: End-to-end specification for multi-node GitOps deployment aligned to tr
 read_when: Aligning the multi-node deployment pipeline, updating GitHub workflows, or deriving implementation tasks from the trunk-based CI/CD model
 owner: cogni-dev
 created: 2026-04-02
-verified: 2026-04-08
+verified: 2026-04-14
 initiative: proj.cicd-services-gitops
 ---
 
@@ -25,7 +25,7 @@ initiative: proj.cicd-services-gitops
 
 - **Target code branch model:** feature branches and PRs into `main`
 - **Target deploy-state model:** `deploy/candidate-*`, `deploy/preview`, `deploy/production`
-- **Date:** 2026-04-08
+- **Date:** 2026-04-14
 - **Constraint:** keep the strong parts of the multi-node GitOps design, while replacing branch semantics, artifact authority, and workflow ownership that were built around `staging` or a long-lived `canary` branch
 
 ---
@@ -231,18 +231,23 @@ Bootstrap ordering remains valid under the trunk-based model. What changes later
 
 This section replaces the old staging-first flow. The target model has two lanes only.
 
-| Lane | Stage | Job / Concern          | What Happens                                                                                               | Output                         |
-| ---- | ----- | ---------------------- | ---------------------------------------------------------------------------------------------------------- | ------------------------------ |
-| PR   | 1     | **checks**             | `ci.yaml` runs affected static, unit, component, and stack checks as policy requires                       | Required status checks         |
-| PR   | 2     | **build**              | `build-multi-node.yml` builds immutable images for the PR head SHA, which is the authoritative v0 artifact | Tagged images + digests        |
-| PR   | 3     | **ready-for-flight**   | Passing PR becomes eligible for manual candidate flight                                                    | PR ready for operator choice   |
-| PR   | 4     | **flight trigger**     | Human explicitly requests flight, for example with `flight-now` or `workflow_dispatch`                     | One PR selected for inspection |
-| PR   | 5     | **promote-candidate**  | `promote-and-deploy.yml` writes digests to `deploy/candidate-a`                                            | Deploy-branch commit           |
-| PR   | 6     | **Argo sync**          | Argo reconciles the candidate environment from deploy branch                                               | Updated pods                   |
-| PR   | 7     | **validation**         | Thin smoke pack and required flight checks run on the stable candidate slot                                | Flight result                  |
-| Main | 8     | **promote-preview**    | Accepted digest promotes from `main` to `deploy/preview` without rebuild                                   | Preview deploy-state commit    |
-| Main | 9     | **preview validation** | Post-merge validation runs against preview                                                                 | Preview signal                 |
-| Main | 10    | **promote-production** | Same digest promotes to `deploy/production` by policy                                                      | Production deploy-state commit |
+| Lane | Stage | Job / Concern          | What Happens                                                                                                                                   | Output                         |
+| ---- | ----- | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------ |
+| PR   | 1     | **checks**             | `ci.yaml` runs affected static, unit, component, and stack checks as policy requires                                                           | Required status checks         |
+| PR   | 2     | **build**              | `pr-build.yml` builds immutable `pr-{N}-{sha}` images for the PR head SHA. This is the authoritative v0 artifact.                              | Tagged images + digests        |
+| PR   | 3     | **ready-for-flight**   | Passing PR becomes eligible for manual candidate flight                                                                                        | PR ready for operator choice   |
+| PR   | 4     | **flight trigger**     | Human dispatches `candidate-flight.yml` with the PR number                                                                                     | One PR selected for inspection |
+| PR   | 5     | **promote-candidate**  | `candidate-flight.yml` acquires the `candidate-a` lease and writes resolved digests to `deploy/candidate-a` via `promote-build-payload.sh`     | Deploy-branch commit           |
+| PR   | 6     | **Argo sync**          | Argo reconciles the candidate-a environment from the deploy branch                                                                             | Updated pods                   |
+| PR   | 7     | **validation**         | `smoke-candidate.sh` runs the v0 smoke pack against the stable candidate slot                                                                  | Flight result status           |
+| Main | 8     | **re-tag**             | On merge to main, `flight-preview.yml` re-tags `pr-{N}-{sha} → preview-{sha}` in GHCR (no rebuild)                                             | Promotable digest              |
+| Main | 9     | **preview lease**      | `flight-preview.sh` claims the `unlocked → dispatching` lease on `deploy/preview:.promote-state/` and dispatches `promote-and-deploy.yml`      | Lease commit on deploy branch  |
+| Main | 10    | **preview deploy**     | `promote-and-deploy.yml env=preview` writes overlay digests to `deploy/preview`, SSH-deploys Compose infra, verifies health, runs E2E          | Preview pods rolled            |
+| Main | 11    | **preview review**     | On E2E success, `lock-preview-on-success` writes `current-sha` and transitions lease to `reviewing`. Failure fires `unlock-preview-on-failure` | Preview signal                 |
+| Main | 12    | **release (policy)**   | Human dispatches `release.yml`, which cuts `release/*` from `current-sha`. `auto-merge-release-prs.yml` merges and unlocks preview.            | Release PR merged              |
+| Main | 13    | **promote-production** | Same digest promotes to `deploy/production` by policy                                                                                          | Production deploy-state commit |
+
+See [ci-cd.md § Preview Review Lock](./ci-cd.md#preview-review-lock) for the full three-value lease contract (`unlocked | dispatching | reviewing`) that drives stages 9–12.
 
 ### 4.2 Authoritative Artifact Rule
 
@@ -290,20 +295,30 @@ Promotion must be explicit and environment-driven, not branch-name-driven.
 
 ```text
 PR update
-  → ci.yaml
-  → build-multi-node.yml
+  → ci.yaml (required checks)
+  → pr-build.yml builds pr-{N}-{sha} images
   → PR becomes ready for manual flight
-  → human triggers flight-now for one PR
-  → promote-and-deploy.yml writes digests to deploy/candidate-a
-  → Argo syncs candidate slot
-  → validation runs
+  → human dispatches candidate-flight.yml -f pr_number=N
+  → candidate-flight.yml acquires candidate-a lease, writes digests to deploy/candidate-a
+  → Argo syncs candidate-a
+  → smoke-candidate.sh runs validation
   → human decides merge based on standard CI + candidate-flight result
 
 Merge to main
-  → promote-and-deploy.yml writes same digest to deploy/preview
-  → Argo syncs preview
-  → post-merge validation runs
-  → same digest later promotes to deploy/production
+  → flight-preview.yml fires on push:main (or manual workflow_dispatch)
+  → re-tag pr-{N}-{sha} → preview-{sha} in GHCR
+  → flight-preview.sh reads .promote-state/review-state on deploy/preview
+      ├── unlocked   → claim dispatching lease, dispatch promote-and-deploy
+      ├── dispatching → queue-only (candidate-sha high-water mark)
+      └── reviewing  → queue-only (candidate-sha high-water mark)
+  → promote-and-deploy.yml env=preview
+      → promote-k8s → deploy-infra → verify → e2e
+      ├── success → lock-preview-on-success: write current-sha, lease → reviewing
+      └── any failure → unlock-preview-on-failure: lease → unlocked
+  → human review
+  → human dispatches release.yml (cuts release/* from current-sha)
+  → auto-merge-release-prs.yml merges release PR, unlocks preview, drains queued candidate-sha if any
+  → same digest later promotes to deploy/production by policy
 ```
 
 **Why separate workflows still matter:** a workflow that commits to the same branch that triggered it is fragile. That concern survives the trunk rewrite. Deploy-state updates should happen on deploy branches, with distinct orchestration and concurrency groups.
@@ -625,13 +640,16 @@ All node apps use `base/node-app/` as a shared Kustomize base. Overlays customiz
 
 ### 12.1 Workflow Ownership
 
-| File                                       | Current Burden                        | Target Role                                                           |
-| ------------------------------------------ | ------------------------------------- | --------------------------------------------------------------------- |
-| `.github/workflows/ci.yaml`                | mixed PR and branch checks            | required PR checks for v0; add merge-group only later if needed       |
-| `.github/workflows/build-multi-node.yml`   | branch-oriented build entrypoint      | authoritative PR-artifact build entrypoint                            |
-| `.github/workflows/promote-and-deploy.yml` | branch-inferred environment promotion | explicit manual candidate flight plus preview / production deployment |
-| `.github/workflows/e2e.yml`                | legacy chained E2E path               | either retire or narrow to a single explicit validation concern       |
-| `.github/workflows/release.yml`            | legacy release conveyor               | re-evaluate; not default accepted-code path                           |
+| File                                           | Current Role                                                                                                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `.github/workflows/ci.yaml`                    | Required PR checks: typecheck, lint, unit, component, stack tests                                                                          |
+| `.github/workflows/pr-build.yml`               | Authoritative PR-artifact builder; produces `pr-{N}-{sha}` images                                                                          |
+| `.github/workflows/build-multi-node.yml`       | Workflow_dispatch fallback when `pr-build.yml` is unavailable                                                                              |
+| `.github/workflows/candidate-flight.yml`       | Human-dispatched pre-merge candidate flight into the `candidate-a` slot                                                                    |
+| `.github/workflows/flight-preview.yml`         | On push:main (or manual dispatch), re-tag `pr-{N}-{sha}` → `preview-{sha}` and call `flight-preview.sh` to claim the lease                 |
+| `.github/workflows/promote-and-deploy.yml`     | Writes overlay digests to deploy branch, SSH-deploys Compose infra, verifies, runs E2E, drives `dispatching → reviewing` lease transitions |
+| `.github/workflows/auto-merge-release-prs.yml` | Auto-merge approved `release/*` PRs, unlock preview lease, drain queued `candidate-sha`                                                    |
+| `.github/workflows/release.yml`                | Human-dispatched release PR creation from `deploy/preview:.promote-state/current-sha`                                                      |
 
 ### 12.2 Build Matrix
 
@@ -680,12 +698,22 @@ This may live in plain workflow logic, in a dedicated script, or in a git-manage
 
 ### 12.5 CLI Entry Points (Scripts Are The API)
 
-| Script                                        | Purpose                                        |
-| --------------------------------------------- | ---------------------------------------------- |
-| `scripts/ci/promote-k8s-image.sh`             | Update overlay digest for a target app and env |
-| `scripts/ci/check-gitops-manifests.sh`        | Validate Kustomize overlays render             |
-| `scripts/ci/check-gitops-service-coverage.sh` | Validate catalog and overlay coverage          |
-| `scripts/ci/deploy-infra.sh`                  | Reconcile Compose-managed infrastructure       |
+| Script                                        | Purpose                                                                                                     |
+| --------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| `scripts/ci/promote-k8s-image.sh`             | Update overlay digest for a target app and env                                                              |
+| `scripts/ci/promote-build-payload.sh`         | Apply a resolved pr-image digest payload to a target overlay                                                |
+| `scripts/ci/resolve-pr-build-images.sh`       | Resolve pr-{N}-{sha} digests from GHCR into a JSON payload                                                  |
+| `scripts/ci/acquire-candidate-slot.sh`        | Acquire the candidate-a lease on `deploy/candidate-a`                                                       |
+| `scripts/ci/release-candidate-slot.sh`        | Release the candidate-a lease                                                                               |
+| `scripts/ci/wait-for-candidate-ready.sh`      | Poll candidate slot until healthy pods are rolled                                                           |
+| `scripts/ci/smoke-candidate.sh`               | Run the v0 smoke pack against the candidate slot                                                            |
+| `scripts/ci/report-candidate-status.sh`       | Post `candidate-flight` commit status back to the PR                                                        |
+| `scripts/ci/flight-preview.sh`                | Three-value lease gate for `deploy/preview`; claim `unlocked → dispatching` and dispatch promote-and-deploy |
+| `scripts/ci/set-preview-review-state.sh`      | Idempotently write `review-state` (and `current-sha` when applicable) to `deploy/preview` with push retry   |
+| `scripts/ci/create-release.sh`                | Cut a release/\* branch + PR from `deploy/preview:.promote-state/current-sha`                               |
+| `scripts/ci/check-gitops-manifests.sh`        | Validate Kustomize overlays render                                                                          |
+| `scripts/ci/check-gitops-service-coverage.sh` | Validate catalog and overlay coverage                                                                       |
+| `scripts/ci/deploy-infra.sh`                  | Reconcile Compose-managed infrastructure                                                                    |
 
 ---
 
@@ -743,8 +771,8 @@ This may live in plain workflow logic, in a dedicated script, or in a git-manage
 
 - [x] **Freeze authoritative artifact rule**
       V0 uses the PR head SHA artifact as authoritative. Merge queue is explicitly deferred.
-- [ ] **Define candidate-slot operating rules**
-      Lock the manual flight trigger, owner, lease, TTL, cancellation, cleanup, and busy behavior without building a queue.
+- [x] **Define candidate-slot operating rules**
+      Covered by [`candidate-slot-controller.md`](./candidate-slot-controller.md) spec plus `candidate-flight.yml` + `acquire-candidate-slot.sh` / `release-candidate-slot.sh` implementation.
 - [ ] **Define v0 validation authority**
       Pin which checks are required, which are advisory, and where optional human policy fits.
 - [ ] **Decide merge queue integration model later**
@@ -758,16 +786,18 @@ This may live in plain workflow logic, in a dedicated script, or in a git-manage
 
 ## Appendix A: Workflow And File Crosswalk
 
-| Concern                  | Primary Files                                                                 |
-| ------------------------ | ----------------------------------------------------------------------------- |
-| Required checks          | `.github/workflows/ci.yaml`                                                   |
-| Image build              | `.github/workflows/build-multi-node.yml`                                      |
-| Deployment and promotion | `.github/workflows/promote-and-deploy.yml`, `scripts/ci/promote-k8s-image.sh` |
-| Legacy chained E2E       | `.github/workflows/e2e.yml`                                                   |
-| Release conveyor legacy  | `.github/workflows/release.yml`                                               |
-| Manifest validation      | `scripts/ci/check-gitops-manifests.sh`                                        |
-| Overlay coverage         | `scripts/ci/check-gitops-service-coverage.sh`                                 |
-| Compose infra deploy     | `scripts/ci/deploy-infra.sh`                                                  |
+| Concern                      | Primary Files                                                                                                                              |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Required PR checks           | `.github/workflows/ci.yaml`                                                                                                                |
+| PR image build               | `.github/workflows/pr-build.yml`                                                                                                           |
+| Manual pre-merge flight      | `.github/workflows/candidate-flight.yml`, `scripts/ci/acquire-candidate-slot.sh`, `scripts/ci/smoke-candidate.sh`                          |
+| Merge-to-main preview flight | `.github/workflows/flight-preview.yml`, `scripts/ci/flight-preview.sh`                                                                     |
+| Preview lease transitions    | `.github/workflows/promote-and-deploy.yml` (lock-preview-on-success / unlock-preview-on-failure), `scripts/ci/set-preview-review-state.sh` |
+| Deployment and promotion     | `.github/workflows/promote-and-deploy.yml`, `scripts/ci/promote-k8s-image.sh`, `scripts/ci/promote-build-payload.sh`                       |
+| Release creation and merge   | `.github/workflows/release.yml`, `.github/workflows/auto-merge-release-prs.yml`, `scripts/ci/create-release.sh`                            |
+| Manifest validation          | `scripts/ci/check-gitops-manifests.sh`                                                                                                     |
+| Overlay coverage             | `scripts/ci/check-gitops-service-coverage.sh`                                                                                              |
+| Compose infra deploy         | `scripts/ci/deploy-infra.sh`                                                                                                               |
 
 ## Appendix B: Glossary
 
