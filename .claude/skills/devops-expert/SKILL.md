@@ -37,33 +37,35 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 
 ### CI scripts (`scripts/ci/`)
 
-| Script                             | Purpose                                                              |
-| ---------------------------------- | -------------------------------------------------------------------- |
-| `build.sh`                         | Build app + migrator Docker images                                   |
-| `build-service.sh`                 | Build scheduler-worker image                                         |
-| `push.sh`                          | Push images to GHCR, capture digests                                 |
-| `test-image.sh`                    | Validate container health (livez) before push                        |
-| `promote-k8s-image.sh`             | Update kustomization.yaml overlays with new digests                  |
-| `deploy-infra.sh`                  | SSH deploy Compose infra (postgres, temporal, litellm, redis, caddy) |
-| `deploy.sh`                        | Legacy full-stack SSH deploy (being retired)                         |
-| `validate-dsns.sh`                 | Validate DATABASE_URL and DATABASE_SERVICE_URL                       |
-| `ensure-temporal-namespace.sh`     | Create Temporal namespace if missing                                 |
-| `compute_migrator_fingerprint.sh`  | Content-hash for migrator cache                                      |
-| `check-gitops-manifests.sh`        | Validate k8s manifest correctness                                    |
-| `check-gitops-service-coverage.sh` | Ensure all services have k8s manifests                               |
+| Script                             | Purpose                                                                 |
+| ---------------------------------- | ----------------------------------------------------------------------- |
+| `build.sh`                         | Build app + migrator Docker images                                      |
+| `build-service.sh`                 | Build scheduler-worker image                                            |
+| `push.sh`                          | Push images to GHCR, capture digests                                    |
+| `test-image.sh`                    | Validate container health (livez) before push                           |
+| `promote-k8s-image.sh`             | Update kustomization.yaml overlays with new digests                     |
+| `promote-to-preview.sh`            | Three-value lease gate (unlocked→dispatching) + dispatch preview flight |
+| `set-preview-review-state.sh`      | Write `.promote-state/review-state` on `deploy/preview` with retry      |
+| `deploy-infra.sh`                  | SSH deploy Compose infra (postgres, temporal, litellm, redis, caddy)    |
+| `deploy.sh`                        | Legacy full-stack SSH deploy (being retired)                            |
+| `validate-dsns.sh`                 | Validate DATABASE_URL and DATABASE_SERVICE_URL                          |
+| `ensure-temporal-namespace.sh`     | Create Temporal namespace if missing                                    |
+| `compute_migrator_fingerprint.sh`  | Content-hash for migrator cache                                         |
+| `check-gitops-manifests.sh`        | Validate k8s manifest correctness                                       |
+| `check-gitops-service-coverage.sh` | Ensure all services have k8s manifests                                  |
 
 ### Workflows (`.github/workflows/`)
 
-| Workflow                                 | Trigger                         | Purpose                                                      |
-| ---------------------------------------- | ------------------------------- | ------------------------------------------------------------ |
-| `build-multi-node.yml`                   | push to canary                  | Build all node images + services                             |
-| `promote-and-deploy.yml`                 | workflow_run on build; dispatch | Commit digests to deploy branch, deploy infra, verify health |
-| `e2e.yml`                                | workflow_run on promote-deploy  | Playwright smoke, promote canary→preview                     |
-| `ci.yaml`                                | PR + push to canary/main        | Typecheck, lint, unit, component, stack tests                |
-| `build-prod.yml`                         | push to main                    | Legacy prod build (to be retired)                            |
-| `deploy-production.yml`                  | workflow_run on build-prod      | Legacy SSH prod deploy (to be retired)                       |
-| `auto-merge-release-prs.yml`             | PR review                       | Auto-merge approved release/\* PRs                           |
-| `require-pinned-release-prs-to-main.yml` | PR to main                      | Enforce release/\* branch + SHA pinning                      |
+| Workflow                                 | Trigger                         | Purpose                                                                                      |
+| ---------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
+| `pr-build.yml`                           | PR open/sync                    | Build `pr-{N}-{sha}` images for the PR head                                                  |
+| `candidate-flight.yml`                   | workflow_dispatch               | Flight a selected PR into `candidate-a` slot for pre-merge validation                        |
+| `flight-merged-pr-to-preview.yml`        | push to main; workflow_dispatch | Re-tag `pr-{N}-{sha}` → `preview-{sha}` and call `promote-to-preview.sh` lock-gate           |
+| `build-multi-node.yml`                   | workflow_dispatch (fallback)    | Build all node images + services when pr-build is unavailable                                |
+| `promote-and-deploy.yml`                 | workflow_dispatch               | Commit digests to deploy branch, deploy infra, verify, E2E, drive preview review-state lease |
+| `ci.yaml`                                | PR + push to main               | Typecheck, lint, unit, component, stack tests                                                |
+| `auto-merge-release-prs.yml`             | PR review                       | Auto-merge approved release/\* PRs; unlock preview review-state; drain queued candidate-sha  |
+| `require-pinned-release-prs-to-main.yml` | PR to main                      | Enforce release/\* branch + SHA pinning                                                      |
 
 ### Provision (`scripts/setup/`, `infra/provision/`)
 

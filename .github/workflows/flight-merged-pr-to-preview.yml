@@ -1,19 +1,23 @@
-name: Promote Merged PR to Canary
+name: Flight Merged PR to Preview
 
-# Triggered on every push to main (i.e., after a PR merges).
-# Detects which PR was merged, resolves its pr-{N}-{sha} images from GHCR,
-# re-tags them as preview-{sha} (no rebuild), then dispatches promote-and-deploy
-# for the canary environment.
+# Triggered on every push to main (PR merged) or via workflow_dispatch(sha).
+# Re-tags pr-{N}-{sha} → preview-{sha} in GHCR (no rebuild) and then calls
+# scripts/ci/promote-to-preview.sh which handles the three-value lease gate:
+# unlocked → dispatching → reviewing. See task.0293 for the full model.
 #
-# If no PR images exist (CI-only PR or direct push), dispatches build-multi-node
-# as fallback so the canary pipeline still advances.
-#
-# This replaces the old canary-branch push → Build Multi-Node → promote-and-deploy
-# chain with a main-branch-native, BUILD_ONCE_PROMOTE-compliant flow.
+# Direct pushes to main (no associated PR) are NOT a supported flight trigger:
+# the re-tag source images are pr-{N}-{sha}, and a direct push has no PR number.
+# Such pushes exit 0 with a message and do nothing.
 
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: "Merged commit SHA (must be reachable from origin/main)"
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -21,37 +25,54 @@ permissions:
   pull-requests: read
   actions: write
 
+# Serialize entry to the unlocked → dispatching transition. Two merges landing
+# within seconds will run back-to-back, not in parallel. The three-value lease
+# in promote-to-preview.sh is the correctness guarantee; this concurrency group
+# just reduces push-retry churn under bursty merges.
 concurrency:
-  group: promote-merged-pr
+  group: flight-preview
   cancel-in-progress: false
 
 env:
   IMAGE_NAME: ghcr.io/cogni-dao/cogni-template
 
 jobs:
-  promote:
+  flight:
     runs-on: ubuntu-latest
     steps:
-      - name: Detect merged PR and head SHA
+      - name: Checkout app source
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve target SHA and associated PR
         id: pr
         env:
           GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          DISPATCH_SHA: ${{ inputs.sha }}
+          PUSH_SHA: ${{ github.sha }}
         run: |
-          COMMIT_MSG="${{ github.event.head_commit.message }}"
-          PR_NUMBER=$(echo "$COMMIT_MSG" | grep -oP '(?<=#)\d+' | head -1)
+          set -euo pipefail
 
-          if [ -z "$PR_NUMBER" ]; then
-            echo "No PR number in commit message — direct push to main, falling back to build"
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            exit 0
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            HEAD_SHA="$DISPATCH_SHA"
+            # Ancestor check: refuse to flight a SHA not on main.
+            git fetch origin main --depth=100 >/dev/null
+            if ! git merge-base --is-ancestor "$HEAD_SHA" origin/main 2>/dev/null; then
+              echo "❌ SHA $HEAD_SHA is not reachable from origin/main — refusing to flight"
+              exit 1
+            fi
+          else
+            HEAD_SHA="$PUSH_SHA"
           fi
 
-          # Get PR head SHA (the branch tip before merge, which was built as pr-{N}-{sha})
-          HEAD_SHA=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}" \
-            --jq '.head.sha' 2>/dev/null || true)
+          # Canonical "find PR that produced this commit" — GitHub's API for it.
+          PR_NUMBER=$(gh api "repos/${{ github.repository }}/commits/${HEAD_SHA}/pulls" \
+            --jq '.[0].number // empty' 2>/dev/null || true)
 
-          if [ -z "$HEAD_SHA" ]; then
-            echo "Could not resolve head SHA for PR #${PR_NUMBER} — PR may be deleted, falling back to build"
+          if [ -z "$PR_NUMBER" ]; then
+            echo "ℹ️  No PR associated with ${HEAD_SHA:0:8} — direct push to main is not a supported flight trigger"
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
@@ -61,13 +82,6 @@ jobs:
           echo "image_tag=pr-${PR_NUMBER}-${HEAD_SHA}" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "Merged PR #${PR_NUMBER} head SHA ${HEAD_SHA:0:8}"
-
-      - name: Checkout app source
-        if: steps.pr.outputs.skip != 'true'
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
 
       - name: Set up Docker Buildx
         if: steps.pr.outputs.skip != 'true'
@@ -89,18 +103,13 @@ jobs:
           OUTPUT_FILE: ${{ runner.temp }}/resolved-pr-images.json
         run: bash scripts/ci/resolve-pr-build-images.sh
 
-      # No PR images → CI-only PR (workflow/script/doc changes) or build not run.
-      # Dispatch build-multi-node so the canary environment still advances.
-      - name: Fallback — dispatch build-multi-node (no PR images)
+      - name: Abort when no PR images exist
         if: steps.pr.outputs.skip != 'true' && steps.images.outputs.has_images != 'true'
-        env:
-          GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
         run: |
-          echo "No PR images found for ${{ steps.pr.outputs.image_tag }} — dispatching build-multi-node fallback"
-          gh workflow run build-multi-node.yml \
-            --repo "${{ github.repository }}" \
-            --ref main
-          echo "✅ build-multi-node dispatched"
+          echo "❌ No PR images found for ${{ steps.pr.outputs.image_tag }}"
+          echo "   pr-build.yml must run successfully on the PR before it can be flighted."
+          echo "   Re-run pr-build and re-dispatch this workflow with workflow_dispatch(sha)."
+          exit 1
 
       # Re-tag only the images that were actually built (affected-only CI may skip services).
       # promote-and-deploy resolves preview-{sha} tags — this creates them without rebuilding.
@@ -136,14 +145,13 @@ jobs:
 
           echo "✅ Re-tag complete for preview-${HEAD_SHA:0:8}"
 
-      - name: Dispatch promote-and-deploy for canary
+      - name: Flight to preview (lock-gate aware)
         if: steps.pr.outputs.skip != 'true' && steps.images.outputs.has_images == 'true'
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
         run: |
-          gh workflow run promote-and-deploy.yml \
-            --repo "${{ github.repository }}" \
-            --ref main \
-            -f environment=canary \
-            -f source_sha=${{ steps.pr.outputs.head_sha }}
-          echo "✅ Dispatched promote-and-deploy (canary) for pr-${{ steps.pr.outputs.pr_number }} @ ${{ steps.pr.outputs.head_sha }}"
+          bash scripts/ci/promote-to-preview.sh \
+            "${{ steps.pr.outputs.head_sha }}" \
+            "${{ github.repository }}" \
+            "deploy/preview" \
+            "$GH_TOKEN"
