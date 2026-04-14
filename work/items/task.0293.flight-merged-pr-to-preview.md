@@ -19,7 +19,7 @@ assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
 branch: feat/task-0293-flight-merged-pr-to-preview
-pr_url:
+pr_url: https://github.com/Cogni-DAO/node-template/pull/870
 created: 2026-04-05
 updated: 2026-04-14
 labels: [ci-cd, deploy, flight]
