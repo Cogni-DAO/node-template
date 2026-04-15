@@ -61,11 +61,30 @@ case "$DEPLOY_ENV" in
     RESY_DOMAIN="${RESY_DOMAIN:-resy.cognidao.org}"
     WORKSPACE="production"
     ;;
+  candidate-*)
+    # Pre-merge candidate slots. All fields derive from ${DEPLOY_ENV} so
+    # spinning up candidate-b, candidate-c, ... only needs (1) a matching
+    # infra/k8s/argocd/${slot}-applicationset.yaml, (2) a matching
+    # infra/k8s/overlays/${slot}/ overlay tree, and (3) DNS. No edits
+    # here. candidate-a historically inherited test.cognidao.org from the
+    # retired canary env — pass DOMAIN=test.cognidao.org when provisioning
+    # candidate-a to preserve that; other candidates default to
+    # ${slot}.cognidao.org.
+    SLOT="$DEPLOY_ENV"
+    BRANCH="main"
+    DEPLOY_BRANCH="deploy/${SLOT}"
+    K8S_NAMESPACE="cogni-${SLOT}"
+    OVERLAY_DIR="${SLOT}"
+    APPSET_FILE="${SLOT}-applicationset.yaml"
+    DOMAIN="${DOMAIN:-${SLOT}.cognidao.org}"
+    POLY_DOMAIN="${POLY_DOMAIN:-poly-${SLOT}.cognidao.org}"
+    RESY_DOMAIN="${RESY_DOMAIN:-resy-${SLOT}.cognidao.org}"
+    WORKSPACE="${SLOT}"
+    ;;
   *)
     echo "Unknown environment: $DEPLOY_ENV"
-    echo "Must be one of: preview, production"
-    echo "(canary was retired in bug.0312; candidate-a is the new pre-merge slot"
-    echo " and is provisioned by CI, not this script.)"
+    echo "Must be one of: preview, production, candidate-*"
+    echo "(canary was retired in bug.0312; candidate-a is its successor.)"
     exit 1
     ;;
 esac
