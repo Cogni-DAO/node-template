@@ -54,7 +54,7 @@ For `pull_request`-triggered workflows, GitHub Actions sets `GITHUB_SHA` to the 
 
 `.github/workflows/pr-build.yml:27` does a clean checkout at `ref: github.event.pull_request.head.sha`, so inside the build step `git rev-parse HEAD` correctly equals the PR head. But the script prefers `$GITHUB_SHA` over `git rev-parse HEAD`, so the wrong value wins.
 
-Meanwhile the image *tag* is derived from `github.event.pull_request.head.sha` at workflow env-block time (`pr-build.yml:16`), so the tag is correct. The tag and baked BUILD_SHA come from different sources and diverge on pull_request triggers.
+Meanwhile the image _tag_ is derived from `github.event.pull_request.head.sha` at workflow env-block time (`pr-build.yml:16`), so the tag is correct. The tag and baked BUILD_SHA come from different sources and diverge on pull_request triggers.
 
 ## Impact
 
@@ -86,3 +86,16 @@ Other callers of the script: none today. `build-multi-node.yml` calls `docker/bu
 ## Non-transient
 
 This bug affects every PR flight, repeatedly. Each force-push or commit to a PR branch generates a new ephemeral merge commit; the bug surfaces every time. Fix, don't ignore.
+
+## Validation
+
+- Open any PR after the fix lands. Confirm `pr-build.yml` succeeds and produces `pr-{N}-{head.sha}` image tags in GHCR.
+- `docker buildx imagetools inspect ghcr.io/cogni-dao/cogni-template:pr-{N}-{head.sha}` reports `org.opencontainers.image.revision == {head.sha}`.
+- Dispatch `candidate-flight.yml -f pr_number={N}`. After Argo reconciles, `curl -sS https://test.cognidao.org/readyz | jq -r .version` returns exactly `{head.sha}`.
+- `/pr-coordinator-v0` Proof of Rollout option 1 (strict equality between `/readyz.version` and flighted SHA) passes without falling back to the replicaset fingerprint heuristic.
+
+## Notes
+
+- Surfaced during a `/pr-coordinator-v0` flight of PR #868 on 2026-04-15 — pod was serving image tagged `pr-868-188ba63f…` correctly, but `/readyz` reported `version=365a37f3…` which maps to `refs/pull/868/merge` (not reachable in git).
+- Related: bug.0312 (candidate-a deploy-infra gap) — same pipeline, different blocker.
+- Related: PR #865 (introduced `/readyz` build-SHA exposure that made this bug visible).
