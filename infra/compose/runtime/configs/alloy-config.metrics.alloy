@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 //
-// Alloy configuration with logs + metrics shipping (canary/preview/production)
+// Alloy configuration with logs + metrics shipping (candidate-a / preview / production)
 // Requires: PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_USERNAME, PROMETHEUS_PASSWORD, METRICS_TOKEN
 // Use alloy-config.alloy for logs-only (local dev)
 
@@ -47,7 +47,7 @@ discovery.relabel "docker_logs" {
 
   rule {
     source_labels = ["env"]
-    regex         = "^(local|canary|preview|production)$"
+    regex         = "^(local|candidate-a|preview|production)$"
     action        = "keep"
   }
 }
@@ -143,14 +143,18 @@ loki.write "loki" {
 // =============================================================================
 // K8s Pod Log Collection (k3s)
 // =============================================================================
-// Tails pod logs from /var/log/pods/ for k3s-managed app pods (operator, poly, resy).
-// Only ships logs from cogni-* namespaces. Excludes kube-system and argocd.
+// Tails pod logs from /var/log/pods/ for k3s-managed pods: cogni-* app pods
+// (operator, poly, resy) plus control-plane namespaces argocd and kube-system.
+// Wide glob at the file layer + post-label stage.match allowlist at the pipeline
+// layer — lets us see Argo CD sync events and kubelet/coredns/kube-proxy logs
+// in Loki without SSH, while still dropping noise from unrelated namespaces
+// (default, cert-manager, local-path-storage, etc.).
 // Requires host mount: /var/log/pods:/var/log/pods:ro
 // On VMs without k3s, local.file_match simply finds no files — zero overhead.
 
 local.file_match "k8s_pods" {
   path_targets = [{
-    __path__ = "/var/log/pods/cogni-*/**/*.log",
+    __path__ = "/var/log/pods/*/**/*.log",
   }]
   sync_period = "10s"
 }
@@ -177,6 +181,14 @@ loki.process "k8s_pod_logs" {
       container = "",
       service   = "container",
     }
+  }
+
+  // Namespace allowlist: keep cogni-*, argocd, kube-system; drop everything else.
+  // The file-layer glob is wide so control-plane logs reach the pipeline; this
+  // stage is the single gate deciding what actually ships to Loki.
+  stage.match {
+    selector = "{namespace!~\"cogni-.*|argocd|kube-system\"}"
+    action   = "drop"
   }
 
   stage.static_labels {

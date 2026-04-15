@@ -8,7 +8,9 @@
 #          only handles infra services.
 # Ported from: scripts/ci/deploy.sh (sections listed in work/handoffs/task.0281.handoff.md)
 # Invariants:
-#   - DEPLOY_ENVIRONMENT must be set to 'canary', 'preview', or 'production'
+#   - DEPLOY_ENVIRONMENT must be set to 'candidate-a', 'preview', or 'production'
+#     (legacy 'canary' value is still accepted for backward compatibility during
+#     the bug.0312 rename; will be removed once no caller sends it)
 #   - App/migrator/scheduler-worker containers are NOT started (k8s handles those)
 #   - DB migrations are NOT run (k8s PreSync hook handles those)
 #   - SSH_KEEPALIVE: All SSH connections use ServerAliveInterval to survive long operations.
@@ -159,13 +161,14 @@ fi
 # Validate environment
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if [[ -z "${DEPLOY_ENVIRONMENT:-}" ]]; then
-    log_error "DEPLOY_ENVIRONMENT must be explicitly set to 'canary', 'preview', or 'production'"
+    log_error "DEPLOY_ENVIRONMENT must be explicitly set to 'candidate-a', 'preview', or 'production'"
     exit 1
 fi
 
 ENVIRONMENT="$DEPLOY_ENVIRONMENT"
-if [[ "$ENVIRONMENT" != "canary" && "$ENVIRONMENT" != "preview" && "$ENVIRONMENT" != "production" ]]; then
-    log_error "DEPLOY_ENVIRONMENT must be 'canary', 'preview', or 'production'"
+# 'canary' retained as a legacy alias during bug.0312 rename. Drop once no caller sends it.
+if [[ "$ENVIRONMENT" != "candidate-a" && "$ENVIRONMENT" != "canary" && "$ENVIRONMENT" != "preview" && "$ENVIRONMENT" != "production" ]]; then
+    log_error "DEPLOY_ENVIRONMENT must be 'candidate-a', 'preview', or 'production'"
     log_error "Current value: $ENVIRONMENT"
     exit 1
 fi

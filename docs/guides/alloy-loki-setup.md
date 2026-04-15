@@ -8,7 +8,7 @@ summary: How to set up Alloy log forwarding to Grafana Cloud Loki, including Gra
 read_when: Setting up or troubleshooting the Alloy → Grafana Cloud Loki log pipeline.
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-02-06
+verified: 2026-04-13
 tags: [observability, infra]
 ---
 
@@ -16,172 +16,20 @@ tags: [observability, infra]
 
 ## When to Use This
 
-You are setting up or troubleshooting the Alloy log + metrics pipeline that forwards cluster observability data to Grafana Cloud. Two deployment targets exist:
+You are setting up or troubleshooting the Alloy log + metrics pipeline that forwards container, pod, and host observability data to Grafana Cloud (Loki + Mimir).
 
-1. **k3s (multi-node production)** — Alloy runs as a DaemonSet inside each env's k3s cluster, delivered via Argo CD. This is the primary path. See **Part 1** below.
-2. **Docker Compose (legacy / local dev)** — Alloy runs as a compose service reading `/var/run/docker.sock`. See **Part 2** below.
+**v0 deploy model: one Alloy per VM, via Docker Compose.** Each env's VM runs a single `alloy` compose service defined in `infra/compose/runtime/docker-compose.yml` with config file `infra/compose/runtime/configs/alloy-config.metrics.alloy`. The config is delivered to the VM by `scripts/ci/deploy-infra.sh`, dispatched via `.github/workflows/promote-and-deploy.yml`. What it ships:
+
+- **Docker container logs** for operator, poly, resy, litellm, temporal, openclaw-gateway, autoheal, caddy — tailed via `/var/run/docker.sock`
+- **K3s pod logs** from `/var/log/pods` for `cogni-*`, `argocd`, and `kube-system` namespaces — so Argo CD sync events and kubelet/coredns/kube-proxy logs are queryable in Loki without SSH
+- **Host `journald`** — every systemd unit (containerd, k3s, docker daemon, sshd, kernel, cron) with a 12h backlog cap
+- **App metrics** — operator and scheduler-worker `/api/metrics` via bearer-token Prometheus scrape
+- **Docker cAdvisor per-container metrics** via `prometheus.exporter.cadvisor`
+- **Host metrics** via `prometheus.exporter.unix` (`/proc`, `/sys`, `/`)
+
+There is no k8s DaemonSet Alloy on v0. A speculative one landed in PR #864 and was reverted in PR #869 because on a single-VM deploy it duplicated the compose pod-log tail at `/var/log/pods`, producing 2× ingest to Grafana Cloud with no added coverage. A multi-node Alloy topology (DaemonSet for node-local collection + singleton Deployment for cluster-scoped scraping like kube-state-metrics and argocd-metrics) is future work, deferred until the k3s cluster splits past a single VM.
 
 Promtail is deprecated (EOL March 2, 2026) — Alloy is the replacement.
-
----
-
-## Part 1 — K3s Deployment
-
-### Topology
-
-Per [docs/spec/ci-cd.md](../spec/ci-cd.md), the environment model is `candidate-a` (pre-merge PR validation lane), `preview` (post-merge validation), and `production`. `canary` and `staging` are legacy and being purged — do not add new artifacts to them.
-
-Today (v0), a single k3s cluster hosts all three namespaces (`cogni-candidate-a`, `cogni-preview`, `cogni-production`) plus the legacy `cogni-canary` namespace. Each env gets its own Alloy DaemonSet via per-env overlays; each DaemonSet scrapes only pods on its own node (`discovery.kubernetes` + `__meta_kubernetes_pod_node_name` keep-filter) so the topology scales cleanly when the cluster splits one-per-env.
-
-The Alloy pod:
-
-- Tails pod logs from `/var/log/pods` (hostPath)
-- Tails host `journald` (every systemd unit — containerd, k3s, docker daemon, sshd, kernel, cron) with a 12h backlog cap
-- Scrapes kubelet `/metrics/cadvisor` for per-container CPU/memory/network
-- Runs the `unix` exporter for host metrics (`/proc`, `/sys`, `/`)
-- Scrapes each node-app pod's `/api/metrics` endpoint with a bearer token
-- Ships everything to Grafana Cloud (Loki + Mimir) via `loki.write` and `prometheus.remote_write`
-
-### File layout
-
-```
-infra/k8s/base/alloy/
-├── config.alloy            # Alloy river config (merged into alloy-config configmap)
-├── configmap.yaml          # alloy-config — DEPLOY_ENVIRONMENT override is overlay-patched
-├── daemonset.yaml          # grafana/alloy:v1.9.2 + hostPath mounts + Grafana Cloud env
-├── kustomization.yaml
-└── rbac.yaml               # ServiceAccount + ClusterRole + ClusterRoleBinding (patched per overlay)
-
-infra/k8s/overlays/{candidate-a,preview,production}/alloy/
-└── kustomization.yaml      # per-env namespace + DEPLOY_ENVIRONMENT patch
-
-infra/k8s/secrets/{candidate-a,preview,production}/alloy-secrets.enc.yaml.example
-                            # Secret shape for future ksops GitOps delivery (task.0311)
-
-infra/catalog/alloy.yaml    # type=agent catalog entry — ApplicationSets auto-generate one Argo App per env
-```
-
-### Bootstrap — create the Grafana Cloud Secret
-
-Each cluster needs one Secret named `alloy-secrets` in the `cogni-{env}` namespace. Alloy reads seven keys from it (Loki basic auth, Prometheus basic auth, METRICS_TOKEN for `/api/metrics` scrape).
-
-#### Current path (interim) — manual `kubectl create secret`
-
-ksops is configured in Argo CD but has never been end-to-end activated — `.sops.yaml` still holds placeholder age keys, and no real encrypted secret file is in git. Until that bootstrap happens (task.0311), the alloy Secret is created imperatively on each cluster.
-
-**Secret bootstrap is decoupled from the PR/Argo flow.** The Secret is a cluster-side object that persists independent of deploys; create it once and it sits waiting for the Alloy DaemonSet to reference it on first sync.
-
-The fastest path when the VM already has Grafana Cloud credentials in `/opt/cogni-template-runtime/.env` (populated by `deploy-infra.sh` from the env's GitHub environment secrets) is to source them on the VM and feed them directly to `kubectl`. This avoids ever echoing credentials through your workstation:
-
-```bash
-ssh -i .local/<env>-vm-key root@<vm-ip> 'set -a; source /opt/cogni-template-runtime/.env; set +a; \
-  kubectl -n cogni-<env> create secret generic alloy-secrets \
-    --from-literal=LOKI_WRITE_URL="$LOKI_WRITE_URL" \
-    --from-literal=LOKI_USERNAME="$LOKI_USERNAME" \
-    --from-literal=LOKI_PASSWORD="$LOKI_PASSWORD" \
-    --from-literal=PROMETHEUS_REMOTE_WRITE_URL="$PROMETHEUS_REMOTE_WRITE_URL" \
-    --from-literal=PROMETHEUS_USERNAME="$PROMETHEUS_USERNAME" \
-    --from-literal=PROMETHEUS_PASSWORD="$PROMETHEUS_PASSWORD" \
-    --from-literal=METRICS_TOKEN="$METRICS_TOKEN"'
-```
-
-- **candidate-a** — SSH explicitly authorized. Run the command with `<env>=candidate-a` and the key at `.local/canary-vm-key` (the VM was provisioned as `canary` and now hosts candidate-a via the `cogni-candidate-a` namespace).
-- **preview**, **production** — do NOT run this yet. See the ksops target path below and the scorecard row #16. These envs should receive secrets via ksops (task.0311) or ESO (task.0284), not via a second manual SSH.
-
-Verify with:
-
-```bash
-kubectl -n cogni-candidate-a describe secret alloy-secrets
-```
-
-All 7 keys should be present with non-zero byte lengths.
-
-#### Target path — ksops GitOps delivery
-
-The file shape is already in place: `infra/k8s/secrets/{candidate-a,preview,production}/alloy-secrets.enc.yaml.example` templates the Secret. The follow-up task [task.0311](../../work/items/task.0311.ksops-activate-alloy-secrets.md) covers the one-time activation work:
-
-1. Generate real age keys per env (`age-keygen`)
-2. Install the private keys into each cluster's `argocd/sops-age-key` Secret
-3. Replace placeholder keys in `.sops.yaml` with the real public keys
-4. Encrypt each `.enc.yaml.example` → `.enc.yaml` with `sops --encrypt`
-5. Add the encrypted file as a resource in each overlay's `kustomization.yaml`
-6. Delete this manual section from the guide
-
-Until task.0311 lands, treat the manual bootstrap above as the operational path. The secret delivery gap is flagged on the CI/CD scorecard as row #16 in `work/projects/proj.cicd-services-gitops.md`.
-
-The long-term target (per [task.0284](../../work/items/task.0284-secrets-single-source-eso.md)) is External Secrets Operator — ksops is only the interim. Do not build additional automation against ksops beyond what task.0311 requires.
-
-### Deploy via Argo CD
-
-candidate-a is the **pre-merge** validation lane. The flow is:
-
-1. Flight the PR (containing the alloy overlay + catalog entry) to candidate-a via the candidate-flight workflow — this pushes the PR state to `deploy/candidate-a`.
-2. The `candidate-a` ApplicationSet picks up `infra/catalog/alloy.yaml`, generates a `candidate-a-alloy` Application, and syncs.
-3. The `alloy-secrets` Secret you created in Phase 0 is found by the DaemonSet on first reconcile.
-4. Validate observability in Grafana Cloud. If green, merge the PR to `main`.
-5. Post-merge: preview and production promotion flows advance `deploy/preview` and `deploy/production` respectively. Their alloy secrets must exist in-cluster (via ksops task.0311) before the promotion completes.
-
-Watch the rollout:
-
-```bash
-ssh -i .local/canary-vm-key root@84.32.109.160 \
-  'kubectl -n argocd get applications | grep alloy; \
-   kubectl -n cogni-candidate-a get daemonset alloy; \
-   kubectl -n cogni-candidate-a logs -l app.kubernetes.io/name=alloy --tail=50'
-```
-
-**Known benign noise**: the legacy `canary` ApplicationSet will try to generate a `canary-alloy` Application but fail with `ComparisonError: path not found` because this repo intentionally has no `infra/k8s/overlays/canary/alloy/`. Localized — doesn't cascade to other `canary-*` Applications. Disappears when the canary ApplicationSet is retired in a separate cleanup PR.
-
-### Verification — is health data flowing?
-
-Once the DaemonSet is running and the secret is in place:
-
-**1. Alloy component health (from inside the cluster):**
-
-```bash
-kubectl -n cogni-candidate-a port-forward daemonset/alloy 12345:12345
-# Open http://127.0.0.1:12345 in your browser.
-# Every component should show "Healthy". Red = misconfigured or auth failed.
-```
-
-**2. Grafana Cloud — Prometheus side:**
-
-Run these in Grafana Cloud Explore → Mimir:
-
-```promql
-up{env="candidate-a"}                                                     # 4+ targets, all =1
-container_cpu_usage_seconds_total{env="candidate-a", pod=~"operator-.*"}  # CPU per operator pod
-http_requests_total{env="candidate-a", service=~"operator|poly|resy"}     # app-level metrics back
-```
-
-**3. Grafana Cloud — Loki side:**
-
-```logql
-{env="candidate-a", app="cogni-template"}                          # pod logs
-{env="candidate-a", source="journald"}                             # host systemd logs
-{env="candidate-a", source="journald", unit=~"k3s.*|containerd.*"} # k3s + containerd only
-```
-
-If the Prometheus scrape for `/api/metrics` is failing (`up{job="app_metrics"}=0`), the most common cause is the `METRICS_TOKEN` in `alloy-secrets` not matching the app's expected token. Fix by re-creating the secret with the correct value.
-
-### Troubleshooting — k3s path
-
-| Symptom                                          | Likely cause                                                                                                                         |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `CrashLoopBackOff` on alloy pod                  | Missing `alloy-secrets` Secret. Run the bootstrap command above.                                                                     |
-| Pod runs but no metrics in Grafana Cloud         | Wrong `PROMETHEUS_REMOTE_WRITE_URL` or expired API key. Check Alloy UI.                                                              |
-| `up{job="app_metrics"}=0`                        | `METRICS_TOKEN` wrong, or the target pods don't carry `app.kubernetes.io/component=node` + `app.kubernetes.io/part-of=cogni` labels. |
-| No journald logs                                 | Host uses `/run/log/journal` only. Both paths are mounted — check `loki.source.journal` component status in the Alloy UI.            |
-| Kubelet cAdvisor scrape 403                      | RBAC not applied. `kubectl -n cogni-candidate-a get clusterrolebinding alloy` must exist and reference the right SA namespace.       |
-| `canary-alloy` Argo App stuck on ComparisonError | Expected — see "Known benign noise" above. Not a regression.                                                                         |
-
----
-
-## Part 2 — Docker Compose Deployment (legacy / local dev)
-
-### When to Use This
-
-You are setting up or troubleshooting the Alloy log collection pipeline that forwards container logs to Grafana Cloud Loki. Promtail is deprecated (EOL March 2, 2026) — Alloy is the replacement.
 
 ## Preconditions
 
@@ -300,14 +148,19 @@ These variables are already configured in:
 
 ### Step 3: Alloy Configuration
 
-The Alloy configuration is already created at `infra/compose/configs/alloy-config.alloy` with:
+The live Alloy configuration is at `infra/compose/runtime/configs/alloy-config.metrics.alloy` — the logs+metrics variant shipped to `preview` and `production` VMs via `scripts/ci/deploy-infra.sh` during `promote-and-deploy.yml`. A simpler logs-only variant for local dev lives at `infra/compose/configs/alloy-config.alloy`.
 
-- **Container allowlist**: `(app|litellm|caddy)` only
-- **Strict label cardinality**: `{app, env, service, stream}` only
-- **Grafana Cloud endpoint**: Uses `sys.env("GRAFANA_CLOUD_LOKI_URL")`
-- **Authentication**: Basic auth with user ID and API key from environment
+> **Note:** The `candidate-a` VM is currently operated by `candidate-flight.yml`, which only rsyncs k8s overlays — it does **not** run `deploy-infra.sh`. Compose changes in `infra/compose/**` therefore land on `candidate-a` only via the initial `provision-test-vm.sh` bootstrap. PRs that touch the Alloy config cannot be validated pre-merge on `candidate-a` until that gap is closed (tracked under bug.0312).
 
-See the actual config file for full implementation details.
+Key knobs in the metrics config:
+
+- **Docker container allowlist** — `(app|litellm|caddy|scheduler-worker|temporal|openclaw-gateway|llm-proxy-openclaw|autoheal)` on the `loki.source.docker` side
+- **K3s pod namespace allowlist** — `(cogni-.*|argocd|kube-system)` applied as a `stage.match` drop filter inside `loki.process.k8s_pod_logs` (wide file glob, pipeline-level filter)
+- **Strict label cardinality** — `{app, env, service, stream}` for docker logs; `{app, env, source, namespace, pod, container, service}` for k8s pod logs
+- **Grafana Cloud endpoint** — `sys.env("LOKI_WRITE_URL")` with basic auth via env vars
+- **Prometheus scrapes** — app `/api/metrics`, scheduler-worker, docker cAdvisor, unix host exporter
+
+See the config file for the full pipeline.
 
 ### Step 4: Deploy Stack
 
@@ -336,6 +189,7 @@ Wait ~30 seconds for services to stabilize.
    - Merge `.env.example` into `.env.local.example`
    - Delete `.env.example`
    - Update all references in docs and scripts
+7. Widen k8s pod-log namespace allowlist to include `argocd` and `kube-system` (PR #869), replacing the earlier speculative k8s-side DaemonSet approach (PR #864, reverted).
 
 ## Verification
 
@@ -351,17 +205,23 @@ Open http://127.0.0.1:12345 in your browser:
 
 1. Navigate to https://your-org.grafana.net/a/logs (Explore → Loki)
 2. Run LogQL queries:
-   - `{app="cogni-template"}` - Should show all logs
-   - `{service="app"}` - Application logs only
-   - `{service="app"} | json | level="error"` - Filter errors
+   - `{app="cogni-template"}` — all logs from this env
+   - `{service="app"}` — operator logs only (docker source)
+   - `{source="k8s", namespace=~"cogni-.*"}` — k3s app pod logs
+   - `{source="k8s", namespace="argocd"}` — Argo CD sync/reconcile events
+   - `{source="k8s", namespace="kube-system"}` — kubelet / coredns / kube-proxy
+   - `{source="journald"}` — host systemd logs
+   - `{service="app"} | json | level="error"` — filter errors
 
 **Validation Checklist:**
 
 - [ ] Alloy UI accessible at http://127.0.0.1:12345
-- [ ] Alloy discovers containers (check UI targets)
-- [ ] Only allowlisted services shown (app, litellm, caddy)
-- [ ] Grafana Cloud shows `app="cogni-template"` logs
-- [ ] Labels contain exactly: `app`, `env`, `service`, `stream`
+- [ ] Alloy discovers docker containers (check UI targets)
+- [ ] On a k3s host: `local.file_match.k8s_pods` shows >0 targets
+- [ ] Grafana Cloud shows `app="cogni-template"` logs across all three sources (docker, k8s, journald)
+- [ ] `{source="k8s", namespace="argocd"}` returns Argo CD controller/server logs
+- [ ] `{source="k8s", namespace="kube-system"}` returns kubelet/coredns/kube-proxy logs
+- [ ] Existing `{namespace=~"cogni-.*"}` logs still flow (no regression)
 - [ ] High-cardinality fields (reqId) queryable via `| json`
 
 ## Troubleshooting
@@ -395,6 +255,15 @@ Open http://127.0.0.1:12345 in your browser:
 1. Verify `APP_ENV` is set: `docker exec alloy env | grep APP_ENV`
 2. Check Alloy relabeling rules in `configs/alloy-config.alloy`
 3. Query in Grafana Cloud: `{app="cogni-template"}` to inspect labels
+
+### Problem: argocd or kube-system logs missing
+
+**Solution:**
+
+1. Confirm the host actually runs k3s — `ls /var/log/pods/` on the VM should show directories like `argocd_argocd-server-*`, `kube-system_coredns-*`, `cogni-candidate-a_operator-*`
+2. Confirm `/var/log/pods:/var/log/pods:ro` is mounted into the alloy container (check `docker inspect alloy | jq '.[0].Mounts'`)
+3. Confirm the `stage.match` selector in `loki.process.k8s_pod_logs` includes the namespace you expect — the allowlist is `{namespace!~"cogni-.*|argocd|kube-system"}` as a drop filter, so adding a new namespace means editing that regex
+4. Check `local.file_match.k8s_pods` target count in the Alloy UI — if it shows 0, the glob isn't matching any files (e.g. file permissions, or host isn't a k3s host)
 
 ## Related
 
