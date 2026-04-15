@@ -20,9 +20,9 @@ resources:
   - https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.4/manifests/install.yaml
   # ksops CMP plugin ConfigMap
   - ksops-cmp.yaml
-  # ApplicationSets — one per environment
+  # ApplicationSets — one per environment.
+  # canary was retired in bug.0312; candidate-a replaces it as the pre-merge slot.
   - candidate-a-applicationset.yaml
-  - canary-applicationset.yaml
   - preview-applicationset.yaml
   - production-applicationset.yaml
 

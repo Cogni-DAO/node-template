@@ -183,6 +183,28 @@ jobs:
           fi
           echo "✅ SSH connection successful"
 
+      # Reconcile the ApplicationSet on the candidate-a VM (bug.0312 fix — see
+      # promote-and-deploy.yml for the rationale).
+      - name: Reconcile ArgoCD ApplicationSet from repo
+        if: |
+          steps.acquire.outcome == 'success' &&
+          steps.acquire.outputs.slot_busy != 'true' &&
+          steps.ssh-setup.outputs.has_vm == 'true'
+        env:
+          VM_HOST: ${{ secrets.VM_HOST }}
+          SSH_OPTS: "-i /home/runner/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6"
+        run: |
+          APPSET_FILE="app-src/infra/k8s/argocd/candidate-a-applicationset.yaml"
+          if [ ! -f "$APPSET_FILE" ]; then
+            echo "⚠️  No ApplicationSet file at ${APPSET_FILE} — skipping"
+            exit 0
+          fi
+          # shellcheck disable=SC2086
+          scp $SSH_OPTS "$APPSET_FILE" root@"$VM_HOST":/tmp/appset.yaml
+          # shellcheck disable=SC2086
+          ssh $SSH_OPTS root@"$VM_HOST" "kubectl apply -f /tmp/appset.yaml -n argocd && rm -f /tmp/appset.yaml"
+          echo "✅ candidate-a ApplicationSet reconciled"
+
       - name: Deploy Compose infra to candidate-a VM
         if: |
           steps.acquire.outcome == 'success' &&

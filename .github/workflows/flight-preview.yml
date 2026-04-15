@@ -79,11 +79,24 @@ jobs:
             exit 0
           fi
 
+          # Squash-merge subtlety: HEAD_SHA is the commit on main (merge SHA for
+          # merge commits, or the squashed commit itself for squash merges). But
+          # pr-build.yml built images against the PR branch head
+          # (github.event.pull_request.head.sha), which on a squash merge is a
+          # DIFFERENT SHA that lives only on the closed PR branch. Look up the
+          # PR's recorded head SHA and use it as the image lookup key.
+          PR_HEAD_SHA=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUMBER}" --jq '.head.sha')
+          if [ -z "$PR_HEAD_SHA" ]; then
+            echo "❌ Failed to resolve head SHA for PR #${PR_NUMBER}"
+            exit 1
+          fi
+
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
-          echo "image_tag=pr-${PR_NUMBER}-${HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "pr_head_sha=$PR_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "image_tag=pr-${PR_NUMBER}-${PR_HEAD_SHA}" >> "$GITHUB_OUTPUT"
           echo "skip=false" >> "$GITHUB_OUTPUT"
-          echo "Merged PR #${PR_NUMBER} head SHA ${HEAD_SHA:0:8}"
+          echo "Merged PR #${PR_NUMBER}: main SHA ${HEAD_SHA:0:8}, PR head SHA ${PR_HEAD_SHA:0:8}"
 
       - name: Set up Docker Buildx
         if: steps.pr.outputs.skip != 'true'
@@ -115,6 +128,8 @@ jobs:
 
       # Re-tag only the images that were actually built (affected-only CI may skip services).
       # promote-and-deploy resolves preview-{sha} tags — this creates them without rebuilding.
+      # Source tags use pr_head_sha (matches pr-build.yml); destination uses head_sha
+      # (the commit on main) so promote-and-deploy can look up preview-{mainSHA}.
       - name: Re-tag PR images as preview-{sha} in GHCR
         if: steps.pr.outputs.skip != 'true' && steps.images.outputs.has_images == 'true'
         env:
