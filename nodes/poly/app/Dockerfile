@@ -18,6 +18,7 @@ COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY --parents nodes/poly/app/package.json ./
 COPY --parents packages/*/package.json ./
 COPY --parents nodes/*/app/package.json ./
+COPY --parents nodes/*/graphs/package.json ./
 COPY --parents nodes/*/packages/*/package.json ./
 
 # Use official node dist to avoid unofficial-builds.nodejs.org flakiness
