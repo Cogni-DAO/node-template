@@ -59,9 +59,11 @@ import {
   VCS_GET_CI_STATUS_NAME,
   VCS_LIST_PRS_NAME,
   VCS_MERGE_PR_NAME,
+  WALLET_TOP_TRADERS_NAME,
   WEB_SEARCH_NAME,
   WORK_ITEM_QUERY_NAME,
   WORK_ITEM_TRANSITION_NAME,
+  walletTopTradersStubImplementation,
 } from "@cogni/ai-tools";
 
 /**
@@ -123,6 +125,12 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     [MARKET_LIST_NAME]: createMarketListImplementation({
       marketCapability: deps.marketCapability,
     }) as AnyToolImplementation,
+
+    // Wallet top-traders: poly-only tool. Bound as stub here so the shared
+    // TOOL_CATALOG iteration in createBoundToolSource does not throw; the
+    // node-template brain does not expose this tool to its graph.
+    [WALLET_TOP_TRADERS_NAME]:
+      walletTopTradersStubImplementation as AnyToolImplementation,
 
     [METRICS_QUERY_NAME]: createMetricsQueryImplementation({
       metricsCapability: deps.metricsCapability,

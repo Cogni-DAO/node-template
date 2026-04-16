@@ -147,7 +147,7 @@ export function TopWalletsCard(): ReactElement {
                   <TableCell className="text-muted-foreground text-sm tabular-nums">
                     {t.rank}
                   </TableCell>
-                  <TableCell className="max-w-[10rem] truncate font-medium text-sm">
+                  <TableCell className="max-w-40 truncate font-medium text-sm">
                     {t.userName}
                   </TableCell>
                   <TableCell className="font-mono text-muted-foreground text-xs">
