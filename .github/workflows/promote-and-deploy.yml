@@ -124,7 +124,7 @@ jobs:
               digest=$(docker buildx imagetools inspect "$full_tag" 2>/dev/null | grep -oP 'Digest:\s+\Ksha256:[a-f0-9]+' | head -1) || true
             fi
             if [ -z "$digest" ]; then
-              echo "⚠️  Image not found: $full_tag (not built in this run — overlay entry unchanged)"
+              echo "⚠️  Image not found: $full_tag (not built in this run — overlay entry unchanged)" >&2
               echo ""
               return 0
             fi
@@ -148,7 +148,7 @@ jobs:
           echo "scheduler_worker=$SW_DIGEST" >> $GITHUB_OUTPUT
 
           echo "Resolved digests:"
-          echo "  operator:         $OPERATOR_DIGEST"
+          echo "  operator:         ${OPERATOR_DIGEST:-"(not built)"}"
           echo "  poly:             ${POLY_DIGEST:-"(not built)"}"
           echo "  resy:             ${RESY_DIGEST:-"(not built)"}"
           echo "  migrator:         ${MIGRATOR_DIGEST:-"(not built)"}"
