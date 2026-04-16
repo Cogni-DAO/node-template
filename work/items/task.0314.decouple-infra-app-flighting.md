@@ -2,7 +2,7 @@
 id: task.0314
 type: task
 title: "Decouple infra flighting from app flighting — two independent levers"
-status: needs_implement
+status: needs_closeout
 revision: 2
 priority: 0
 rank: 1
@@ -373,7 +373,13 @@ Purpose: verify no doc or runbook advertises behavior that no longer matches (e.
 
 ## Review Feedback
 
-### Revision 2 (2026-04-16) — REQUEST CHANGES
+### Revision 2 (2026-04-16) — addressed
+
+- **B1'** — Hoisted `VM_HOST` + all other env vars to job-level `env:` block in `candidate-flight-infra.yml`, matching the proven `promote-and-deploy.yml:280–307` pattern. Removed duplicated per-step env declarations. `if: env.VM_HOST != ''` now evaluates against job-level env and correctly gates the Deploy step.
+- **S5** — Added `--ref=value` equals-form support; reject empty values (`--ref ""`, `--ref=`) with a clear error.
+- **S6** — Captured `git fetch` stderr into `FETCH_STDERR` so `log_fatal` at the unresolvable-ref branch surfaces the underlying reason (network error, auth, unknown ref).
+
+### Revision 2 (2026-04-16) — REQUEST CHANGES (original)
 
 **Blocking:**
 

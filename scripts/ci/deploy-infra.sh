@@ -42,16 +42,27 @@ set -euo pipefail
 #                  (rsync source, VM target, services) without any SSH.
 REF="main"
 DRY_RUN=false
+usage() {
+  echo "Usage: $0 [--ref <git-ref>] [--dry-run]" >&2
+  exit 2
+}
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --ref)
-      if [[ $# -lt 2 || "$2" == --* ]]; then
-        echo "--ref requires a value (got: '${2:-<end-of-args>}')" >&2
-        echo "Usage: $0 [--ref <git-ref>] [--dry-run]" >&2
-        exit 2
+      if [[ $# -lt 2 || -z "$2" || "$2" == --* ]]; then
+        echo "--ref requires a non-empty value (got: '${2:-<end-of-args>}')" >&2
+        usage
       fi
       REF="$2"
       shift 2
+      ;;
+    --ref=*)
+      REF="${1#--ref=}"
+      if [[ -z "$REF" ]]; then
+        echo "--ref= requires a non-empty value" >&2
+        usage
+      fi
+      shift
       ;;
     --dry-run)
       DRY_RUN=true
@@ -59,8 +70,7 @@ while [[ $# -gt 0 ]]; do
       ;;
     *)
       echo "Unknown flag: $1" >&2
-      echo "Usage: $0 [--ref <git-ref>] [--dry-run]" >&2
-      exit 2
+      usage
       ;;
   esac
 done
@@ -346,15 +356,14 @@ trap cleanup_worktree EXIT
 
 log_info "Resolving source worktree at ref: $REF"
 # Fetch the ref to handle shallow clones (GHA typically checks out with fetch-depth=1)
-if ! git -C "$CALLER_REPO" fetch origin "$REF" --depth=1 --quiet 2>/dev/null; then
-    log_warn "git fetch origin $REF failed; will try local ref"
-fi
+FETCH_STDERR=$(git -C "$CALLER_REPO" fetch origin "$REF" --depth=1 2>&1 >/dev/null) || \
+    log_warn "git fetch origin $REF failed: $FETCH_STDERR (will try local ref)"
 if git -C "$CALLER_REPO" rev-parse --verify "origin/$REF" >/dev/null 2>&1; then
     git -C "$CALLER_REPO" worktree add --detach --quiet "$SRC_WORKTREE" "origin/$REF"
 elif git -C "$CALLER_REPO" rev-parse --verify "$REF" >/dev/null 2>&1; then
     git -C "$CALLER_REPO" worktree add --detach --quiet "$SRC_WORKTREE" "$REF"
 else
-    log_fatal "Cannot resolve ref '$REF' (tried origin/$REF and $REF)"
+    log_fatal "Cannot resolve ref '$REF' — neither origin/$REF nor $REF exists locally (fetch stderr was: ${FETCH_STDERR:-<empty>})"
 fi
 REF_SHA=$(git -C "$SRC_WORKTREE" rev-parse HEAD)
 log_info "Source worktree at $REF_SHA ($SRC_WORKTREE)"
