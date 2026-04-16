@@ -2,7 +2,8 @@
 id: task.0314
 type: task
 title: "Decouple infra flighting from app flighting — two independent levers"
-status: needs_merge
+status: needs_implement
+revision: 1
 priority: 0
 rank: 1
 estimate: 5
@@ -25,6 +26,7 @@ blocks:
   - proj.cicd-services-gitops blocker #18 (PAT-dispatched workflow chain)
   - proj.cicd-services-gitops blocker #19 (deploy-infra unconditional)
 branch: task/0314-decouple-infra-app-flighting
+pr: https://github.com/Cogni-DAO/node-template/pull/883
 created: 2026-04-16
 updated: 2026-04-16
 labels: [ci-cd, deployment, spec-alignment, p0]
@@ -368,6 +370,24 @@ Purpose: verify no doc or runbook advertises behavior that no longer matches (e.
 **Post-merge** (sanity check with real merge flow):
 
 5. Merge any small PR to main; confirm the merge→preview chain fires end-to-end identically to today's behavior (no new failure modes, lock-gate writes correct SHAs).
+
+## Review Feedback
+
+### Revision 1 (2026-04-16) — REQUEST CHANGES
+
+**Blocking:**
+
+- **B1 — `candidate-flight-infra.yml` has no `Setup SSH` step.** The workflow passes `SSH_DEPLOY_KEY` as env but `deploy-infra.sh:193` reads the key from `$HOME/.ssh/deploy_key`. Without a step writing the key to disk + `ssh-keyscan` populating `known_hosts`, every SSH/rsync/scp in `deploy-infra.sh` fails. Copy the Setup SSH step verbatim from `promote-and-deploy.yml:364–385`, including the `VM_HOST` empty-check → `exit 0` guard.
+
+**Strongly suggested:**
+
+- **S1 — Preserve source-SHA invariant in `promote-and-deploy.yml deploy-infra` job.** Revert the job's checkout `ref: main` back to `ref: head_sha`. Pass `--ref main` to the script explicitly at L430 instead. Avoids an inter-merge race where the AppSet reconcile step + wait-for-argocd read files from a different SHA than `promote-k8s` pushed digests for.
+
+**Nice-to-have:**
+
+- **S2 — `--ref` flag value validation in `deploy-infra.sh`.** Guard against `--ref` as final arg or followed by another `--flag`.
+- **S3 — Explicit `--ref main` at `promote-and-deploy.yml:430`.** Self-documenting; removes reliance on script default.
+- **S4 — Drop placeholder `REPO_ROOT="$CALLER_REPO"` at `deploy-infra.sh:71`.** Let `set -u` catch accidental early use.
 
 ## Attribution
 
