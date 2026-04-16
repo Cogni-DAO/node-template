@@ -10,7 +10,7 @@ summary: Get the trunk-based pipeline fully green — PR build → candidate-a f
 outcome: One clean flow from feature PR through production with no rebuilds, pre-merge candidate validation, post-merge preview lease, policy-gated release, and first-class deploy-infra reconciliation on both candidate-a and preview VMs
 assignees: derekg1729
 created: 2026-02-06
-updated: 2026-04-14
+updated: 2026-04-16
 labels: [deployment, infra, ci-cd]
 ---
 

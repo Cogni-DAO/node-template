@@ -8,7 +8,7 @@ summary: Trunk-based CI/CD where PRs prove safety in fixed candidate slots befor
 read_when: Understanding deployment pipelines, release workflow, or CI configuration
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-04-14
+verified: 2026-04-16
 tags: []
 ---
 

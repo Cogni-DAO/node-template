@@ -3,10 +3,19 @@
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 # Script: scripts/ci/deploy-infra.sh
-# Purpose: Deploy Compose infrastructure (postgres, litellm, temporal, redis, alloy, caddy)
-#          to a remote VM via SSH. App containers are managed by k8s/Argo CD — this script
-#          only handles infra services.
-# Ported from: scripts/ci/deploy.sh (sections listed in work/handoffs/task.0281.handoff.md)
+# Purpose: Infra lever (task.0314) — deploy Compose infrastructure (postgres,
+#          litellm, temporal, redis, alloy, caddy) to a remote VM via SSH. App
+#          containers are managed by k8s/Argo CD; this script only handles
+#          infra services.
+# Usage:
+#   deploy-infra.sh [--ref <git-ref>] [--dry-run]
+#     --ref <git-ref>  Source ref for infra/compose/** (default: main). Rsync
+#                      source is a detached `git worktree add` of this ref,
+#                      NOT the caller workflow's checkout. An app PR branched
+#                      before an infra change on main cannot ship stale compose
+#                      config to the VM.
+#     --dry-run        Validate config + worktree resolution, print planned
+#                      actions, exit 0 without any SSH.
 # Invariants:
 #   - DEPLOY_ENVIRONMENT must be set to 'candidate-a', 'preview', or 'production'
 #     (legacy 'canary' value is still accepted for backward compatibility during
@@ -14,7 +23,11 @@
 #   - App/migrator/scheduler-worker containers are NOT started (k8s handles those)
 #   - DB migrations are NOT run (k8s PreSync hook handles those)
 #   - SSH_KEEPALIVE: All SSH connections use ServerAliveInterval to survive long operations.
-# Links: Called by .github/workflows/build-multi-node.yml; uses infra/compose/
+#   - INFRA_REF_IS_EXPLICIT (task.0314): rsync source is a clean worktree of --ref,
+#     never the caller's working tree.
+# Callers:
+#   - .github/workflows/candidate-flight-infra.yml  (candidate-a infra lever)
+#   - .github/workflows/promote-and-deploy.yml      (preview/prod deploy-infra job)
 
 set -euo pipefail
 
