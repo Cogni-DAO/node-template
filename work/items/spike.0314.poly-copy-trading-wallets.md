@@ -53,20 +53,17 @@ See the research doc for full detail. Key decisions:
 
 ## Follow-ups
 
-See the **Proposed Layout** section in the research doc for the full sequence. Items created:
+**One prototype task, not a decomposition.** The research doc sketches a phased architecture, but we ship a single working prototype first and let it earn the next wave of work.
 
-1. `task.0315` — Polymarket Data-API read methods (`listTopTraders`, `listUserActivity`, `listUserPositions`).
-2. `task.0316` — Wallet-ranking batch job + `poly_tracked_wallets` awareness table.
-3. `task.0317` — Live wallet poller → `ObservationEvent(kind=polymarket_wallet_trade)`.
-4. `spike.0318` — Signal-edge validation (≥2 weeks, pre-slippage vs market baseline). **Gate for mirror execution.**
+- `task.0315` — **Poly copy-trade prototype.** v0: top-wallet scoreboard tool for `poly-brain`. v0.1: single-wallet live mirror via `@polymarket/clob-client`, `DRY_RUN=true` by default, hard daily cap.
 
-Deferred until the edge-validation spike lands: paper-trading mirror, execution adapter spike, knowledge-plane write-back task.
+If the 2-week shadow run shows edge, that's the evidence base for writing real follow-ups (ranking pipeline, awareness-plane observations, multi-wallet, execution adapter, knowledge-plane write-back). If it doesn't, the feature dies cheaply.
 
 ## Validation
 
 - [x] Research doc published at `docs/research/poly-copy-trading-wallets.md`
-- [x] Options, recommendation, open questions, and proposed layout captured
-- [x] Follow-up items created: task.0315, task.0316, task.0317, spike.0318
+- [x] OSS landscape, options, recommendation, open questions captured
+- [x] One prototype task (task.0315) created — no premature decomposition
 - [x] `pnpm check:docs` passes
 
 ## Out of Scope

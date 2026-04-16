@@ -164,11 +164,7 @@
 | 2 | 5 | 1 | needs_merge | bug.0233 | Model picker shows wrong icons, leaks codex models into OpenRouter tab, shows embedding models |  |  |
 | 2 | 5 | 1 | needs_review | bug.0275 | k8s migration Job fails — standalone app image lacks tsx + drizzle-kit | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 5 | 2 | needs_design | task.0310 | Rename k8s staging namespace and overlays to preview | CI/CD Pipeline | proj.cicd-services-gitops |
-| 2 | 5 | 1 | needs_implement | task.0315 | Polymarket Data-API read methods — leaderboard, activity, positions | Cogni Poly | proj.poly-prediction-bot |
-| 2 | 5 | 2 | needs_design | task.0316 | Poly wallet-ranking batch job + poly_tracked_wallets table | Cogni Poly | proj.poly-prediction-bot |
-| 2 | 5 | 2 | needs_design | task.0317 | Live wallet poller → ObservationEvent(kind=polymarket_wallet_trade) | Cogni Poly | proj.poly-prediction-bot |
-| 2 | 5 | 2 | needs_design | spike.0318 | Validate copy-signal edge vs market baseline (2-week instrumentation) | Cogni Poly | proj.poly-prediction-bot |
-| 2 | 5 | 1 | needs_implement | task.0319 | Poly-brain wallet-watch AI tools — core__wallet_top_traders / activity / positions | Cogni Poly | proj.poly-prediction-bot |
+| 2 | 5 | 3 | needs_implement | task.0315 | Poly copy-trade prototype — v0 top-wallet scoreboard, v0.1 live 1-wallet mirror | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 8 | 1 | needs_design | task.0064 | OpenClaw preflight cost estimate 10x audit — real token consumption | Reliability & Uptime | proj.reliability |
 | 2 | 8 | 2 | needs_design | task.0280 | Per-node DB isolation for worker activities — evaluate approach | Unified Graph Launch | proj.unified-graph-launch |
 | 2 | 9 | 2 | needs_design | task.0039 | Billing reconciler — LiteLLM spend/logs polling in scheduler worker | Unified Graph Launch | proj.unified-graph-launch |
