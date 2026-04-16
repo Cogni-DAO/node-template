@@ -100,11 +100,11 @@ Land the candidate-a split as one coherent PR:
 
 ## Consistency Model
 
-Today's system is **pessimistically consistent**: every app flight re-syncs compose, so the VM is always aligned with the PR's view of infra. The new system is **eventually consistent**: app flights trust that main's compose is already on the VM, and `flight-infra.sh` must have been run after any infra-affecting merge.
+Today's system is **pessimistically consistent**: every app flight re-syncs compose, so the VM is always aligned with the PR's view of infra. The new system is **eventually consistent** for candidate-a only: app flights trust that main's compose is already on the VM, and the infra lever must have been run after any infra-affecting merge.
 
-**Named owner:** the agent or workflow that merges an `infra/compose/**` change to main is responsible for running `flight-infra.sh --env candidate-a` as part of the same turn. For preview/production, `promote-and-deploy.yml` already invokes both jobs sequentially on every merge, so no human owner is needed there — only candidate-a has the eventual-consistency window.
+**Named owner:** the agent or human that merges an `infra/compose/**` change to `main` is responsible for dispatching `candidate-flight-infra.yml` as part of the same turn. For preview/production, `promote-and-deploy.yml`'s sequential `promote-k8s → deploy-infra` jobs cover this automatically on every merge — only candidate-a has the eventual-consistency window.
 
-**Drift guard:** `flight-app.sh` preflight computes `git ls-tree origin/main -- infra/compose/runtime | sha256sum` locally and reads the equivalent digest from the VM (stored in `/opt/cogni-template-runtime/.tree-hash` by `flight-infra.sh` on each run). On mismatch, print a loud warning naming the drift; do NOT hard-fail (that would re-couple the levers). Agent/operator decides whether to run `flight-infra.sh` first or proceed.
+**Drift guard** (deferred to v1): a VM-side `.tree-hash` + preflight warning in `candidate-flight.yml`. Not required for v0 correctness. Listed as follow-up if operators repeatedly forget the infra dispatch.
 
 ## Supersedes
 
@@ -118,15 +118,13 @@ Today's system is **pessimistically consistent**: every app flight re-syncs comp
 
 ## Acceptance
 
-- [ ] Agent can run `gh workflow run candidate-flight-app.yml -f pr_number=N` and it flies ONLY the app pod changes. No VM SSH. Completes in <2 min when digests already exist in GHCR.
-- [ ] Agent can run `gh workflow run candidate-flight-infra.yml` and it rsyncs+redeploys compose from `main`. No app promotion.
+- [ ] Agent can run `gh workflow run candidate-flight.yml -f pr_number=N` and it flies ONLY the app pod changes. No `bash scripts/ci/deploy-infra.sh` call in the logs. Completes in <2 min when GHCR digests already exist.
+- [ ] Agent can run `gh workflow run candidate-flight-infra.yml` and it rsyncs+redeploys compose from `main`. No commits on `deploy/candidate-a`.
 - [ ] PR #879's failure mode (app PR branched before infra change) is impossible on the new levers — app flight never touches compose files.
 - [ ] Merge to main → `promote-and-deploy.yml` still deploys both app and infra to preview, with the 5-job graph + lock-gate lease behavior byte-identical to today.
-- [ ] `flight-infra.sh --dry-run` prints planned actions (rsync source, VM target, services) without SSH; exits 0.
-- [ ] `flight-app.sh` drift guard: when VM `.tree-hash` ≠ main's `infra/compose/runtime/` hash, prints a loud warning naming the drift but does not hard-fail.
-- [ ] `docs/spec/ci-cd.md` updated if it enumerates workflow filenames.
-- [ ] task.0281 closed with supersede note.
-- [ ] All references to `deploy-infra.sh` and `candidate-flight.yml` updated (callers audit complete).
+- [ ] `deploy-infra.sh --dry-run` prints planned actions (rsync source, VM target, services) without SSH; exits 0.
+- [ ] `deploy-infra.sh` without `--ref` continues to default to `main`.
+- [ ] task.0281 closed with supersede note; proj.cicd-services-gitops blockers #18, #19 marked done.
 
 ## Design
 
@@ -134,97 +132,86 @@ Today's system is **pessimistically consistent**: every app flight re-syncs comp
 
 An agent (or human) can flight an app-only PR to candidate-a in <2 min without touching the VM, and separately reconcile infra compose on the VM without touching any PR digests. Preview/prod promotion-on-merge still redeploys both. Eliminates the class of failure where an app PR ships stale compose config.
 
-### Approach
+### Approach — minimum delta
 
-**Leverage what already exists.** The monolith isn't actually monolithic — `candidate-flight.yml` already composes discrete scripts under `scripts/ci/` (`acquire-candidate-slot.sh`, `promote-k8s-image.sh`, `deploy-infra.sh`, `wait-for-argocd.sh`, `smoke-candidate.sh`, `release-candidate-slot.sh`). The only real refactor is (a) moving workflow-level step sequencing into two umbrella scripts, (b) making `deploy-infra.sh`'s rsync source parameterizable, (c) splitting the workflow file into two. **No new logic, no new OSS.**
+The monolith lives in **one YAML step** (`Deploy Compose infra to candidate-a VM`), not in missing scripts. Existing `scripts/ci/*.sh` are already well-factored and compose 1:1 with the workflow steps. So the surgery is far smaller than first drafted:
 
-**Rejected**: (1) Moving to reusable workflows with `workflow_call` — adds GHA chaining coupling, fights the "shell owns logic" principle. (2) Rewriting in TypeScript/Dagger — massive scope, blocked on task.0260 project decisions. (3) Keeping one workflow with conditional steps — leaves the "app flight pays infra cost" regression intact and still requires PR-checkout rsync.
+1. **Modify `scripts/ci/deploy-infra.sh`** — add `--ref` (default `main`) + `--dry-run` flags; replace `REPO_ROOT="$(git rev-parse --show-toplevel)"` rsync source with a clean `git worktree add <tmp> <ref>` checkout. No rename.
+2. **Modify `candidate-flight.yml`** — delete exactly one step: `Deploy Compose infra to candidate-a VM`. Everything else (SSH setup, AppSet reconcile, smoke, lease) stays. The workflow becomes the app lever by subtraction. No rename, no new umbrella script.
+3. **Create `candidate-flight-infra.yml`** — thin dispatcher (~30 lines) that invokes `deploy-infra.sh --env candidate-a --ref ${ref || main}`.
+4. **Modify `promote-and-deploy.yml`** — on the existing `deploy-infra` job, change `Checkout app source` from `ref: head_sha` to `ref: main`. That single line + letting `deploy-infra.sh`'s new default kick in is the entire rewire. 5-job graph, `needs:`, `if:`, lock-gate jobs all untouched.
+
+**One new file. Three modified files. Zero deletions. Zero renames.**
+
+**Rejected**: (1) Creating `flight-app.sh`/`flight-infra.sh` umbrella scripts — the workflows already compose existing scripts; adding another indirection layer is bloat. (2) Renaming `candidate-flight.yml` → `candidate-flight-app.yml` — breaks every existing caller (the pr-coordinator skill, dashboards, muscle memory) for zero semantic gain; "app lever" is clear from what it does, not its filename. (3) Reusable `workflow_call` workflows — violates "shell owns logic, not GHA." (4) Deleting `deploy-infra.sh` — zero reason once we're not renaming; breaks everything that references it. (5) TypeScript/Dagger rewrite — massive scope, orthogonal to this task.
 
 ### Architecture
 
 ```
-┌─ scripts/ci/flight-app.sh ─────────────────────────┐
-│  args: --pr N --env candidate-a|preview|production │
-│  reads:  GHCR pr-N-SHA-* digests                   │
-│  writes: deploy/{env} overlay commit               │
-│  emits:  deploy_branch_sha, head_sha               │
-│  calls:  acquire-candidate-slot (env==candidate-*) │
-│          resolve-pr-build-images                   │
-│          promote-k8s-image                         │
-│          push to deploy/{env}                      │
-│          reconcile-argocd-appset (via ssh)         │
-│          wait-for-argocd                           │
-│          verify-deployment (readyz SHA match)      │
-│          release-candidate-slot (env==candidate-*) │
-└────────────────────────────────────────────────────┘
+┌─ APP LEVER ─────────────────────────────────────────┐
+│  candidate-flight.yml (unchanged name, -1 step)     │
+│    dispatch: pr_number                              │
+│    steps: resolve digests → overlay commit → push   │
+│           → reconcile AppSet → wait-for-argocd      │
+│           → smoke → release slot                    │
+│    DOES NOT call deploy-infra.sh anymore.           │
+└─────────────────────────────────────────────────────┘
 
-┌─ scripts/ci/flight-infra.sh ───────────────────────┐
-│  args: --env candidate-a|preview|production        │
-│        --ref <git-ref> (default: main)             │
-│        --dry-run (optional: print actions, no ssh) │
-│  reads:  infra/compose/runtime/ @ ref              │
-│  writes: VM:/opt/cogni-template-runtime/           │
-│          VM:/opt/cogni-template-runtime/.tree-hash │
-│  emits:  (none — compose healthchecks gate return) │
-│  calls:  git worktree add <tmp> <ref>              │
-│          rsync <tmp>/infra/compose/runtime/ → VM   │
-│          write .tree-hash on VM (for drift guard)  │
-│          scp + ssh deploy-infra-remote.sh          │
-│          compose up + existing compose healthchecks│
-└────────────────────────────────────────────────────┘
+┌─ INFRA LEVER ───────────────────────────────────────┐
+│  candidate-flight-infra.yml (new, ~30 lines)        │
+│    dispatch: ref (default: main)                    │
+│    steps: checkout main → invoke deploy-infra.sh    │
+│                                                     │
+│  deploy-infra.sh (modified, same filename):         │
+│    args: --env <env> --ref <git-ref> [--dry-run]    │
+│    source: git worktree add <tmp> <ref>             │
+│            rsync <tmp>/infra/compose/runtime/ → VM  │
+│            (was: rsync $REPO_ROOT — stale-PR risk)  │
+└─────────────────────────────────────────────────────┘
+
+┌─ PREVIEW / PROD (promote-and-deploy.yml) ───────────┐
+│  5-job graph UNCHANGED.                             │
+│  Single diff: deploy-infra job's Checkout step      │
+│  changes `ref: head_sha` → `ref: main`.             │
+│  deploy-infra.sh default `--ref main` picks up.     │
+└─────────────────────────────────────────────────────┘
 ```
 
-Both scripts are **independently runnable locally** (with the right secrets) and in GHA. Workflows are thin:
+Dispatch surface for an agent:
 
-```yaml
-# candidate-flight-app.yml        (replaces candidate-flight.yml)
-on: workflow_dispatch: { inputs: { pr_number } }
-steps:
-  - checkout
-  - secrets → env
-  - bash scripts/ci/flight-app.sh --pr "${{ inputs.pr_number }}" --env candidate-a
+```bash
+# Fly an app PR to candidate-a (no VM SSH)
+gh workflow run candidate-flight.yml -f pr_number=879
 
-# candidate-flight-infra.yml      (new)
-on: workflow_dispatch: { inputs: { ref: { default: main } } }
-steps:
-  - checkout (ref: main, to get the script itself)
-  - secrets → env
-  - bash scripts/ci/flight-infra.sh --env candidate-a --ref "${{ inputs.ref || 'main' }}"
+# Reconcile VM compose to tip of main
+gh workflow run candidate-flight-infra.yml
+
+# Reconcile VM compose to a specific ref (v0: main only; v1 could relax)
+gh workflow run candidate-flight-infra.yml -f ref=main
 ```
 
 ### How preview/prod promotion-on-merge still runs both
 
-**Keep `promote-and-deploy.yml`'s 5-job graph intact.** The existing `promote-k8s` → `deploy-infra` → `verify` → `lock-preview-on-success` / `unlock-preview-on-failure` jobs use `needs:` + `if:` conditions over prior job status to drive the three-value lock-gate lease (task.0293). Collapsing these into one job would break per-job retry, per-job logs, and — critically — the `if: ${{ needs.promote-k8s.result == 'success' && ... }}` conditional structure that makes `lock-preview-on-success` fire only when both promote and deploy pass.
-
-**What actually changes:** only the *contents* of the two existing jobs swap from inline step-blocks to single script calls. No job boundaries move. No outputs contract changes.
+**The 5-job graph of `promote-and-deploy.yml` does not change.** Jobs, `needs:`, `if:` conditionals, outputs, and the three-value lock-gate lease (task.0293) are all untouched. The only edit is on the `deploy-infra` job's first step:
 
 ```yaml
-# promote-and-deploy.yml (diff shape — job graph identical)
-jobs:
-  promote-k8s:          # unchanged structure
-    outputs: { deploy_branch_sha, head_sha }   # unchanged
+# promote-and-deploy.yml — deploy-infra job only
+  deploy-infra:
+    needs: promote-k8s
+    if:   needs.promote-k8s.result == 'success'
     steps:
-      - checkout (ref: head_sha)
-      - login GHCR
-      - bash scripts/ci/flight-app.sh --phase promote-only --source-sha $SHA --env $ENV
-        # ↑ replaces the inline digest-resolve + promote-k8s-image.sh + commit-push block
-
-  deploy-infra:         # unchanged structure
-    needs: promote-k8s  # unchanged
-    if:   needs.promote-k8s.result == 'success'   # unchanged
-    steps:
-      - checkout (ref: main)   # ← was head_sha; now always main
-      - bash scripts/ci/flight-infra.sh --env $ENV --ref main
-        # ↑ replaces the inline rsync + SSH + deploy-infra-remote.sh block
-
-  verify:                        # unchanged
-  lock-preview-on-success:       # unchanged
-  unlock-preview-on-failure:     # unchanged
+      - name: Checkout app source
+        uses: actions/checkout@v4
+        with:
+          ref: main                      # ← was: ${{ steps.env.outputs.head_sha }}
+          # Everything else stays.
+      - name: Deploy Compose infra
+        run: bash scripts/ci/deploy-infra.sh   # now defaults to --ref main; no args change
 ```
 
-`flight-app.sh --phase promote-only` omits the Argo wait + verify steps because `promote-and-deploy.yml` already has `verify` as a dedicated downstream job. The candidate-a workflow, by contrast, runs `flight-app.sh` without `--phase` and gets the full pipeline including its own verify.
+Why this is enough: the job previously rsynced from its own checkout (= merge commit SHA). Since `deploy-infra.sh` still calls `$REPO_ROOT` internally, checking out `main` means it rsyncs from main. Even simpler than passing `--ref` explicitly — the script's new default wins.
 
-This preserves the existing lease + lock-gate behavior from task.0293 completely. The merge→preview→release chain is byte-identical from the caller's POV.
+Downstream `verify`, `lock-preview-on-success`, `unlock-preview-on-failure` jobs remain byte-identical. The merge → preview → release chain is unchanged from the caller's POV.
 
 ### Locking model
 
@@ -256,136 +243,114 @@ The **only logic change** inside today's `deploy-infra.sh` is replacing `REPO_RO
 
 ### Migration plan
 
-**Callers audit (run first):** grep the repo for every reference to the files being renamed/deleted before starting. Known tree to check: `scripts/ci/deploy-infra.sh` is referenced by `scripts/ci/AGENTS.md`, `infra/compose/runtime/AGENTS.md`, multiple runbooks under `docs/runbooks/`, and both `candidate-flight.yml` + `promote-and-deploy.yml`. `candidate-flight.yml` is referenced by this skill (`.claude/skills/pr-coordinator-v0/`), `proj.cicd-services-gitops.md`, and several work items. Full grep needs to land in the PR description.
+**Implementation order** (one PR, staged commits for reviewability):
 
-**Implementation order** (one PR, one merge, staged commits for reviewability):
-
-1. **Extract `flight-infra.sh`** — take today's `deploy-infra.sh` as-is, rename, add `--ref` and `--dry-run` flags, replace `REPO_ROOT="$(git rev-parse --show-toplevel)"` with `git worktree add <tmp> <ref>` against a clean checkout. Preserve all current secret passthrough byte-for-byte. Write `.tree-hash` to VM after rsync. Delete `deploy-infra.sh`.
-2. **Extract `flight-app.sh`** — new script that inlines the steps currently in `candidate-flight.yml` between "Resolve PR image digests" and "Release candidate slot after success" (~12 steps, most already scripts). Support `--phase promote-only` for the `promote-and-deploy.yml` caller. Implement drift guard preflight.
-3. **Create `candidate-flight-app.yml` and `candidate-flight-infra.yml`** — both thin dispatchers.
-4. **Rewire `promote-and-deploy.yml`** — swap only the step-contents of the existing `promote-k8s` + `deploy-infra` jobs. Job graph, `needs:`, `if:` conditions, outputs, and the lock-gate jobs all untouched.
-5. **Delete `candidate-flight.yml`** (same commit as #3 to keep the branch dispatchable).
-6. **Update every reference** found in the callers audit (AGENTS.md files, runbooks, skill metaprompt, project doc).
+1. **Modify `deploy-infra.sh`** — add `--ref` (default `main`) + `--dry-run` flags; replace `REPO_ROOT="$(git rev-parse --show-toplevel)"` with `git worktree add <tmp> <ref>` against a clean checkout. Preserve all existing behavior and secret passthrough. No rename.
+2. **Modify `candidate-flight.yml`** — delete the `Deploy Compose infra to candidate-a VM` step. Everything else stays.
+3. **Create `candidate-flight-infra.yml`** — thin dispatcher that calls `deploy-infra.sh --env candidate-a --ref ${ref || main}`. Independent GHA concurrency group `infra-candidate-a`.
+4. **Modify `promote-and-deploy.yml`** — in the `deploy-infra` job, change `Checkout app source`'s `ref` from `head_sha` to `main`. Nothing else.
+5. **Docs + skill pass** — surgical updates per "Documentation & Guides to Update" above.
 
 **Pre-merge validation** (required before the PR merges — addresses the chicken-and-egg of refactoring CI/CD with itself):
 
-- Dispatch from the PR branch via `gh workflow run candidate-flight-app.yml --ref task/0314-decouple-infra-app-flighting -f pr_number=<throwaway-test-PR>`. Confirm: no SSH occurs, `/readyz` reports the test PR's SHA.
-- Dispatch `gh workflow run candidate-flight-infra.yml --ref task/0314-...`. Confirm: no commits on `deploy/candidate-a`, VM compose matches `main`'s compose tree-hash.
+- Dispatch from the PR branch via `gh workflow run candidate-flight.yml --ref task/0314-decouple-infra-app-flighting -f pr_number=<throwaway-test-PR>`. Confirm: no SSH occurs during the flight, `/readyz` reports the test PR's SHA.
+- Dispatch `gh workflow run candidate-flight-infra.yml --ref task/0314-...`. Confirm: no commits on `deploy/candidate-a`, VM compose matches `main`'s compose tree.
 - Dispatch `gh workflow run promote-and-deploy.yml --ref task/0314-... -f environment=preview -f source_sha=<recent-preview-SHA>`. Confirm: full 5-job graph fires, lock-gate transitions fire, preview `/readyz` at the expected SHA.
-- Regression scenario: take any existing app-only PR branched before `fb8bd2232` (the #880 litellm-GHCR fix), rebase NOTHING, dispatch the new `candidate-flight-app.yml` against it — it must succeed. This is the exact failure that motivated the task.
+- Regression scenario: dispatch the new app-lever `candidate-flight.yml` against any app-only PR branched before `fb8bd2232` (the #880 litellm-GHCR fix) with NO rebase. It must succeed. This is the exact failure that motivated the task.
 - **Merge gate:** PR description must show those four runs green before merge approval.
 
 **Post-merge cleanup:**
 
 - Close `task.0281` with supersede note + link to this PR.
 - Mark `proj.cicd-services-gitops` blockers #18 + #19 ✅ DONE.
-- Update `docs/spec/ci-cd.md` if it enumerates workflow filenames (to verify: grep ci-cd.md for `candidate-flight.yml`).
 
-No backwards-compat path — `candidate-flight.yml` is agent-triggered, not user-facing, and the only active caller (this skill) updates in the same branch.
+No backwards-compat work — nothing is renamed or deleted, so existing callers continue to work.
 
 ### Invariants
 
 <!-- CODE REVIEW CRITERIA -->
 
-- [ ] **ARGO_OWNS_RECONCILIATION** — app flight writes deploy-branch state; Argo reconciles the pods. No SSH in the app lever. (spec: ci-cd.md §axioms)
-- [ ] **NO_WORKFLOW_RUN_CHAINING** — every new/rewired workflow is directly `workflow_dispatch`-triggerable. No `on: workflow_run`. (spec: ci-cd.md §workflow-design-targets)
-- [ ] **SCRIPT_OWNS_LOGIC** — non-trivial step sequencing lives in `scripts/ci/*.sh`. Workflows are secret-plumbing + single script invocation.
-- [ ] **INFRA_REF_IS_EXPLICIT** — `flight-infra.sh` rsyncs from a specified git ref (default `main`), NEVER from the workflow's PR checkout. Eliminates R2.
-- [ ] **LEVERS_ARE_INDEPENDENT** — app flight MUST work on a VM where `flight-infra.sh` has never run today; infra flight MUST work with no app promotion in the current lease.
-- [ ] **MERGE_TO_MAIN_UNCHANGED** — `promote-and-deploy.yml`'s external contract (inputs, lease semantics, lock-gate) is byte-identical before and after; only internal step wiring changes. (spec: ci-cd.md §preview-review-lock, task.0293)
-- [ ] **SIMPLE_SOLUTION** — no new OSS, no new runtimes. All existing scripts reused.
+- [ ] **ARGO_OWNS_RECONCILIATION** — app lever writes deploy-branch state; Argo reconciles the pods. No `deploy-infra.sh` call in the app lever workflow. (spec: ci-cd.md §axioms)
+- [ ] **NO_WORKFLOW_RUN_CHAINING** — every new/modified workflow is directly `workflow_dispatch`-triggerable. No `on: workflow_run`. (spec: ci-cd.md §workflow-design-targets)
+- [ ] **SCRIPT_OWNS_LOGIC** — non-trivial step sequencing lives in `scripts/ci/*.sh`. New workflow (`candidate-flight-infra.yml`) is a thin dispatcher that invokes one script.
+- [ ] **INFRA_REF_IS_EXPLICIT** — `deploy-infra.sh` rsyncs from a `git worktree add <ref>` checkout (default `main`), NEVER from `$REPO_ROOT` of the caller workflow. Eliminates R2.
+- [ ] **LEVERS_ARE_INDEPENDENT** — app lever MUST work on a VM where infra lever has never run today; infra lever MUST work with no app promotion in the current lease.
+- [ ] **MERGE_TO_MAIN_UNCHANGED** — `promote-and-deploy.yml`'s external contract (inputs, job graph, outputs, lease semantics, lock-gate) is byte-identical before and after; only one checkout `ref` changes. (spec: ci-cd.md §preview-review-lock, task.0293)
+- [ ] **NO_RENAMES_NO_DELETES** — `candidate-flight.yml` and `deploy-infra.sh` keep their names. Zero callers-audit blast radius.
+- [ ] **SIMPLE_SOLUTION** — no new OSS, no new runtimes, no umbrella scripts. One new YAML + three small edits.
 - [ ] **ARCHITECTURE_ALIGNMENT** — spec-aligns to ci-cd.md's already-written lane model.
 
 ### Desired End State
 
-**Workflows an agent or human can dispatch:**
+**Dispatch surface:**
 
-| Workflow | Purpose | Dispatches | Touches VM? | Touches Argo? |
-|---|---|---|---|---|
-| `candidate-flight-app.yml` | Fly a PR's app digests to candidate-a | `workflow_dispatch { pr_number }` | No | Yes |
-| `candidate-flight-infra.yml` | Reconcile candidate-a VM compose from a git ref | `workflow_dispatch { ref (default: main) }` | Yes | No |
-| `promote-and-deploy.yml` | Merge-triggered preview/prod promotion (unchanged 5-job graph) | `flight-preview.yml` → `workflow_dispatch` | Yes | Yes |
-| `flight-preview.yml` | Merge-to-main → dispatch promote-and-deploy with lease | `push: main` | No directly | No directly |
-
-**Scripts owning all non-trivial logic:**
-
-| Script | Purpose | Callers |
-|---|---|---|
-| `scripts/ci/flight-app.sh` | Resolve digests → overlay commit → Argo reconcile → verify | `candidate-flight-app.yml`, `promote-and-deploy.yml` (via `--phase promote-only`) |
-| `scripts/ci/flight-infra.sh` | `git worktree add <ref>` → rsync → SSH → compose up → tree-hash stamp | `candidate-flight-infra.yml`, `promote-and-deploy.yml` |
+| Workflow | Purpose | Touches VM? | Touches Argo? |
+|---|---|---|---|
+| `candidate-flight.yml` (existing, -1 step) | Fly a PR's app digests to candidate-a | No | Yes |
+| `candidate-flight-infra.yml` (new) | Reconcile candidate-a VM compose from a git ref | Yes | No |
+| `promote-and-deploy.yml` (existing, 1-line diff) | Merge-triggered preview/prod promotion | Yes | Yes |
+| `flight-preview.yml` (existing, untouched) | Merge-to-main → dispatch promote-and-deploy with lease | No directly | No directly |
 
 **Behaviors guaranteed:**
 
-- App flights never SSH a VM. Infra flights never commit to a `deploy/*` branch. They are composable; they are never coupled.
-- Infra rsync source is a named git ref (default `main`), never a PR checkout.
+- App flights never SSH a VM for compose. Infra flights never commit to a `deploy/*` branch. Orthogonal levers.
+- Infra rsync source is a named git ref (default `main`), never a PR checkout. Eliminates R2.
 - Preview/prod merge-on-main behavior is byte-identical: same 5-job graph, same lease, same lock-gate transitions.
 - An app PR branched before an infra change on main can be flown to candidate-a without rebasing — its stale compose file is never touched.
-- Flight duration: app lever <2 min when GHCR digests exist; infra lever ~5 min.
+- App flight duration: <2 min when GHCR digests exist. Infra flight: ~5 min.
 
 ### Files
 
-**Create (new code):**
+**Create (1):**
 
-- `scripts/ci/flight-app.sh` — umbrella script for app lever, ~60 lines, composes existing scripts. Supports `--phase promote-only`.
-- `scripts/ci/flight-infra.sh` — successor to `deploy-infra.sh` with `--ref` + `--dry-run` + `.tree-hash` stamp.
-- `.github/workflows/candidate-flight-app.yml` — thin dispatcher for app lever.
-- `.github/workflows/candidate-flight-infra.yml` — thin dispatcher for infra lever.
+- `.github/workflows/candidate-flight-infra.yml` — thin dispatcher, ~30 lines, single script call.
 
-**Modify (rewire internals, preserve contracts):**
+**Modify (3):**
 
-- `.github/workflows/promote-and-deploy.yml` — swap `promote-k8s` and `deploy-infra` job step-contents for script calls. Job graph, outputs, `needs:`, `if:`, lock-gate untouched.
+- `scripts/ci/deploy-infra.sh` — add `--ref` (default `main`) + `--dry-run` flags; replace `REPO_ROOT` rsync source with a `git worktree add <tmp> <ref>` checkout. Otherwise preserved byte-for-byte, including secret passthrough.
+- `.github/workflows/candidate-flight.yml` — delete exactly the `Deploy Compose infra to candidate-a VM` step. Concurrency, secrets, job graph unchanged.
+- `.github/workflows/promote-and-deploy.yml` — change the `deploy-infra` job's `Checkout app source` step `ref` from `head_sha` to `main`. Nothing else.
 
-**Delete:**
-
-- `.github/workflows/candidate-flight.yml` — replaced by the two new candidate workflows.
-- `scripts/ci/deploy-infra.sh` — replaced by `flight-infra.sh` (git history preserves).
+**Delete (0):** none. No renames, no removals.
 
 **Work items:**
 
 - `work/items/task.0281-canary-cicd-parity-staging-promotion.md` — set `status: done`, add supersede note → task.0314.
-- `work/projects/proj.cicd-services-gitops.md` — mark blockers **#18** (PAT-dispatched workflow chain) and **#19** (deploy-infra unconditional) ✅ DONE; add a row in the completed-tasks section for task.0314.
+- `work/projects/proj.cicd-services-gitops.md` — mark blockers **#18** (PAT-dispatched workflow chain) and **#19** (deploy-infra unconditional) ✅ DONE; note task.0314 as the closer.
 - `work/items/_index.md` — regen.
 
 ### Documentation & Guides to Update
 
-**Specs (contracts and invariants):**
+Because nothing is renamed or deleted, the doc update surface is small.
 
-- `docs/spec/ci-cd.md` — three surgical updates:
-  1. Line ~82 (Minimum Authoritative Validation): `candidate-flight` → `candidate-flight-app` (clarify the app lever is the merge gate; infra lever is orthogonal).
-  2. Line ~156 (Preview Review Lock transitions table): the `unlock-preview-on-failure` row cites `promote-k8s`, `deploy-infra`, `verify`, `e2e` — still accurate since job names don't change; re-verify after implementation.
-  3. Workflow inventory (if one exists after this refactor — add if missing): enumerate the four workflows + two umbrella scripts + deletion list so future readers see the lane topology at a glance.
+**Specs:**
 
-**Scorecards and planning:**
+- `docs/spec/ci-cd.md` — add a short subsection under Workflow Design Targets enumerating the two-lever topology and naming `candidate-flight-infra.yml` as the new dispatcher. No existing lines need to change — both `candidate-flight.yml` and `deploy-infra.sh` references stay valid.
 
-- `work/projects/proj.cicd-services-gitops.md` — Pipeline Health box (line ~26) currently says `build → promote → deploy-infra → verify → e2e → preview → release → production`. Update to reflect two-lever topology: `build → app-flight + infra-flight (independent) → verify → preview → release → production`. Move blockers #18 and #19 out of Active Blockers into a completed/supersedes reference.
+**Scorecards:**
 
-**Agent skills (operational runbooks):**
+- `work/projects/proj.cicd-services-gitops.md` — tick blockers **#18** and **#19** ✅ DONE with `→ task.0314` pointer. Leave the Pipeline Health ascii box alone (the names are still accurate).
 
-- `.claude/skills/pr-coordinator-v0/SKILL.md` — four call-sites need updating:
-  1. Line 77 (Dashboard authoritative sources): commit message format `candidate-flight: pr-<N> <sha>` — verify the new `flight-app.sh` preserves this commit subject, update if it changes.
-  2. Line 113 (Flight step): `gh workflow run candidate-flight.yml` → `candidate-flight-app.yml`.
-  3. Line 219 (Manual Deploy Escape Hatch): the "infra-only PR can't ride candidate-flight" gap is CLOSED by `candidate-flight-infra.yml`. Rewrite this subsection: "Infra-only PRs (no built images) now ride the infra lever directly — `gh workflow run candidate-flight-infra.yml -f ref=<PR branch>` once v1 adds per-ref support. For v0 (main-only), merge first and then dispatch infra lever from main." Remove the "manual cherry-pick to candidate-a" workaround.
-  4. Line 245 (VM-state discipline references): `scripts/ci/deploy-infra.sh` → `scripts/ci/flight-infra.sh`.
+**Agent skills:**
 
-**AGENTS.md files (sibling docs):**
+- `.claude/skills/pr-coordinator-v0/SKILL.md` — one meaningful rewrite:
+  - Line 219 (Manual Deploy Escape Hatch): the "infra-only PR can't ride candidate-flight" gap is closed by `candidate-flight-infra.yml`. Rewrite this subsection to describe the infra lever as the canonical escape hatch. v0 caveat: infra lever reconciles from `main` only, so infra PRs still merge-then-deploy.
+  - Lines 77, 113, 245 — no change needed (filenames unchanged).
 
-- `scripts/ci/AGENTS.md` — rename references, add the two umbrella scripts and their composition pattern.
-- `infra/compose/runtime/AGENTS.md` — update any pointer to `deploy-infra.sh` → `flight-infra.sh`.
-- `.github/workflows/AGENTS.md` (if present) — update workflow inventory.
+**AGENTS.md siblings:**
 
-**Runbooks (grep pass required):**
+- `scripts/ci/AGENTS.md` — one-line addition: `deploy-infra.sh now accepts --ref and --dry-run; rsync source is a clean worktree of the given ref (default: main).`
+- `.github/workflows/AGENTS.md` (if present) — add `candidate-flight-infra.yml` to the inventory list.
 
-- `docs/runbooks/*.md` — grep for `candidate-flight.yml`, `deploy-infra.sh`, `deploy-infra`; fix every hit.
-
-**Callers audit** (runs as step 1 of Migration Plan above) — full grep:
+**Callers audit (smaller because no renames):**
 
 ```bash
-rg -l "candidate-flight\.yml|deploy-infra\.sh|scripts/ci/deploy-infra" \
+rg -l "deploy-infra\.sh|candidate-flight\.yml" \
   --glob '!work/items/_index.md' \
   --glob '!.claude/worktrees/**'
 ```
 
-Every file in that list must be handled in the same PR.
+Purpose: verify no doc or runbook advertises behavior that no longer matches (e.g., "candidate-flight deploys the VM compose"). Edit text only where it misleads.
 
 **Test coverage:** manual dispatch matrix (see Validation section) is the authoritative proof. No new unit/integration tests — the system under test is the workflow graph itself.
 
@@ -393,10 +358,10 @@ Every file in that list must be handled in the same PR.
 
 **Pre-merge** (dispatched from the PR branch via `--ref task/0314-decouple-infra-app-flighting`; all four must be green before the PR merges):
 
-1. **App lever isolation** — `candidate-flight-app.yml` against an app-only test PR completes in <2 min with zero SSH/compose activity in logs. `/readyz` on the affected node returns the PR head SHA.
-2. **Infra lever isolation** — `candidate-flight-infra.yml` completes without touching `deploy/candidate-a` (no new commits on that branch); the VM's `/opt/cogni-template-runtime/docker-compose.yml` matches `main`'s tree-hash.
-3. **Preview merge parity** — `promote-and-deploy.yml -f environment=preview -f source_sha=<recent-preview-SHA>` fires the full 5-job graph (`promote-k8s` → `deploy-infra` → `verify` → `lock-preview-on-success`), lock-gate transitions fire correctly.
-4. **Regression proof** — replay PR #879's exact failure: take an app-only PR branched before `fb8bd2232` (pre-#880), do NOT rebase, dispatch the new `candidate-flight-app.yml` — it must succeed. Pre-refactor this would hard-fail at `deploy-infra`.
+1. **App lever isolation** — `candidate-flight.yml` against an app-only test PR completes in <2 min with zero `bash scripts/ci/deploy-infra.sh` in logs. `/readyz` on the affected node returns the PR head SHA.
+2. **Infra lever isolation** — `candidate-flight-infra.yml` completes without touching `deploy/candidate-a` (no new commits on that branch); the VM's `/opt/cogni-template-runtime/docker-compose.yml` matches `main`'s compose tree.
+3. **Preview merge parity** — `promote-and-deploy.yml -f environment=preview -f source_sha=<recent-preview-SHA>` fires the full 5-job graph (`promote-k8s` → `deploy-infra` → `verify` → `lock-preview-on-success`), lock-gate transitions fire correctly, preview `/readyz` returns the expected SHA.
+4. **Regression proof** — replay PR #879's exact failure: take an app-only PR branched before `fb8bd2232` (pre-#880), do NOT rebase, dispatch the app-lever `candidate-flight.yml` against it — it must succeed. Pre-refactor this would hard-fail at `deploy-infra`.
 
 **Post-merge** (sanity check with real merge flow):
 
