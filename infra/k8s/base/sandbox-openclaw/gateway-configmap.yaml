@@ -4,4 +4,8 @@ metadata:
   name: sandbox-openclaw-gateway-config
 data:
   openclaw.json: |
-    {}
+    {
+      "gateway": {
+        "mode": "local"
+      }
+    }
