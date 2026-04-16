@@ -288,6 +288,26 @@ export {
   vcsMergePrStubImplementation,
 } from "./tools/vcs-merge-pr";
 export {
+  createWalletTopTradersImplementation,
+  WALLET_TOP_TRADERS_NAME,
+  type WalletCapability,
+  type WalletOrderBy,
+  WalletOrderBySchema,
+  type WalletTimePeriod,
+  WalletTimePeriodSchema,
+  type WalletTopTraderItem,
+  WalletTopTraderItemSchema,
+  type WalletTopTradersDeps,
+  type WalletTopTradersInput,
+  WalletTopTradersInputSchema,
+  type WalletTopTradersOutput,
+  WalletTopTradersOutputSchema,
+  type WalletTopTradersRedacted,
+  walletTopTradersBoundTool,
+  walletTopTradersContract,
+  walletTopTradersStubImplementation,
+} from "./tools/wallet-top-traders";
+export {
   createWebSearchImplementation,
   WEB_SEARCH_NAME,
   type WebSearchDeps,

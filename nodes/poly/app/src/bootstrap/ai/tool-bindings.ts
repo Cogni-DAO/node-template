@@ -22,6 +22,7 @@ import type {
   ScheduleCapability,
   ToolImplementation,
   VcsCapability,
+  WalletCapability,
   WebSearchCapability,
   WorkItemCapability,
 } from "@cogni/ai-tools";
@@ -40,6 +41,7 @@ import {
   createVcsGetCiStatusImplementation,
   createVcsListPrsImplementation,
   createVcsMergePrImplementation,
+  createWalletTopTradersImplementation,
   createWebSearchImplementation,
   createWorkItemQueryImplementation,
   createWorkItemTransitionImplementation,
@@ -59,6 +61,7 @@ import {
   VCS_GET_CI_STATUS_NAME,
   VCS_LIST_PRS_NAME,
   VCS_MERGE_PR_NAME,
+  WALLET_TOP_TRADERS_NAME,
   WEB_SEARCH_NAME,
   WORK_ITEM_QUERY_NAME,
   WORK_ITEM_TRANSITION_NAME,
@@ -76,6 +79,7 @@ export interface ToolBindingDeps {
   readonly repoCapability: RepoCapability;
   readonly scheduleCapability: ScheduleCapability;
   readonly vcsCapability: VcsCapability;
+  readonly walletCapability: WalletCapability;
   readonly workItemCapability: WorkItemCapability;
 }
 
@@ -122,6 +126,10 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     // I/O tools (require capability injection)
     [MARKET_LIST_NAME]: createMarketListImplementation({
       marketCapability: deps.marketCapability,
+    }) as AnyToolImplementation,
+
+    [WALLET_TOP_TRADERS_NAME]: createWalletTopTradersImplementation({
+      walletCapability: deps.walletCapability,
     }) as AnyToolImplementation,
 
     [METRICS_QUERY_NAME]: createMetricsQueryImplementation({
