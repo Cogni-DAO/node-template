@@ -15,6 +15,27 @@ export {
   PolymarketAdapter,
   type PolymarketAdapterConfig,
 } from "./polymarket.adapter.js";
+export {
+  type ListTopTradersParams,
+  type ListUserActivityParams,
+  PolymarketDataApiClient,
+  type PolymarketDataApiClientConfig,
+} from "./polymarket.data-api.client.js";
+export {
+  type PolymarketLeaderboardEntry,
+  PolymarketLeaderboardEntrySchema,
+  type PolymarketLeaderboardOrderBy,
+  PolymarketLeaderboardOrderBySchema,
+  PolymarketLeaderboardResponseSchema,
+  type PolymarketLeaderboardTimePeriod,
+  PolymarketLeaderboardTimePeriodSchema,
+  type PolymarketUserPosition,
+  PolymarketUserPositionSchema,
+  PolymarketUserPositionsResponseSchema,
+  type PolymarketUserTrade,
+  PolymarketUserTradeSchema,
+  PolymarketUserTradesResponseSchema,
+} from "./polymarket.data-api.types.js";
 export { normalizePolymarketMarket } from "./polymarket.normalizer.js";
 export {
   type PolymarketRawMarket,

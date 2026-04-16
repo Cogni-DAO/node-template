@@ -2,11 +2,12 @@
 id: task.0315
 type: task
 title: "Poly copy-trade prototype — v0 top-wallet scoreboard, v0.1 shadow 1-wallet mirror"
-status: needs_implement
+status: needs_closeout
 priority: 2
 estimate: 5
 rank: 5
-summary: "One-shot prototype task. v0: poly-brain answers 'who are the top Polymarket wallets and what are their activity scores?' via a new core__wallet_top_traders tool backed by the Polymarket Data API. v0.1: pick one wallet, mirror its new fills from a Cogni-owned proxy wallet using @polymarket/clob-client. No new packages, no ports, no ranking pipeline, no awareness-plane tables. If it works, we scale it; if it doesn't, we learned cheaply."
+branch: research/poly-copy-trading-wallets
+summary: "One-shot prototype task. v0 (PR-A, this PR): poly-brain + dashboard answer 'who are the top Polymarket wallets?' via a new core__wallet_top_traders tool + /dashboard Top Wallets card backed by the Polymarket Data API. v0.1 (PR-B, not in this PR): single-wallet shadow mirror via @polymarket/clob-client. No new packages, no ports, no ranking pipeline, no awareness-plane tables. If it works, we scale it; if it doesn't, we learned cheaply."
 outcome: "A running prototype in the poly node: (v0) ask poly-brain 'top wallets this week' and get a ranked, scored list inline in chat; (v0.1) set ONE tracked wallet via env/config, a 30-second poller detects new fills, a mirror order is placed on Polymarket via @polymarket/clob-client with a small fixed USDC size. All behind a DRY_RUN flag until we trust it."
 spec_refs:
   - architecture
@@ -14,7 +15,7 @@ spec_refs:
 assignees: derekg1729
 project: proj.poly-prediction-bot
 created: 2026-04-17
-updated: 2026-04-17
+updated: 2026-04-18
 labels: [poly, polymarket, follow-wallet, copy-trading, prototype]
 external_refs:
   - docs/research/poly-copy-trading-wallets.md
@@ -25,6 +26,32 @@ external_refs:
 > Research: [poly-copy-trading-wallets](../../docs/research/poly-copy-trading-wallets.md)
 > Spike: [spike.0314](./spike.0314.poly-copy-trading-wallets.md)
 > Project: [proj.poly-prediction-bot](../projects/proj.poly-prediction-bot.md)
+
+## Plan (PR-A checkpoints)
+
+- [x] **Checkpoint 1 — market-provider Data-API client** ✅ PR-A
+  - Milestone: `PolymarketDataApiClient` class in `@cogni/market-provider`, verified against the saved fixture.
+  - Invariants: PACKAGES_NO_ENV, READ_ONLY, CONTRACT_IS_SOT.
+  - Todos: new `polymarket.data-api.types.ts` (Zod schemas) + `polymarket.data-api.client.ts` (class), extend barrel.
+  - Validation: `pnpm -F @cogni/market-provider test` + fixture-driven parsing test.
+
+- [x] **Checkpoint 2 — ai-tools `core__wallet_top_traders`** ✅ PR-A
+  - Milestone: bound tool + stub registered in `TOOL_CATALOG`, passes schema tests.
+  - Invariants: TOOL_ID_NAMESPACED, EFFECT_TYPED, REDACTION_REQUIRED, NO_LANGCHAIN.
+  - Todos: new `tools/wallet-top-traders.ts`, extend `index.ts` exports + `catalog.ts`.
+  - Validation: `pnpm -F @cogni/ai-tools test`.
+
+- [x] **Checkpoint 3 — poly node wiring** ✅ PR-A
+  - Milestone: `createWalletCapability` + tool binding + `POLY_BRAIN_TOOL_IDS` entry live in the container.
+  - Invariants: CAPABILITY_INJECTION, SCOPE_IS_SACRED.
+  - Todos: new `bootstrap/capabilities/wallet.ts`; update `container.ts`, `tool-bindings.ts`, `poly-brain/tools.ts`.
+  - Validation: `pnpm -F poly-app typecheck` + unit test on the factory.
+
+- [x] **Checkpoint 4 — dashboard "Top Wallets" card** ✅ PR-A
+  - Milestone: `/dashboard` renders a live top-10 table with a DAY/WEEK/MONTH/ALL selector.
+  - Invariants: SIMPLE_SOLUTION, CAPABILITY_NOT_ADAPTER in the API route.
+  - Todos: new `/api/v1/poly/top-wallets/route.ts`, `_api/fetchTopWallets.ts`, `_components/TopWalletsCard.tsx`; modify `view.tsx`.
+  - Validation: `pnpm check` clean; manual hit of the API route in dev confirms live data.
 
 ## Context
 

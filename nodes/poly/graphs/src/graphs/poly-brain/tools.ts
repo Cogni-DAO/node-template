@@ -11,13 +11,22 @@
  * @public
  */
 
-import { MARKET_LIST_NAME, WEB_SEARCH_NAME } from "@cogni/ai-tools";
+import {
+  MARKET_LIST_NAME,
+  WALLET_TOP_TRADERS_NAME,
+  WEB_SEARCH_NAME,
+} from "@cogni/ai-tools";
 
 /**
  * Tool IDs for poly-brain graph.
  * market_list: browse/search live prediction markets
+ * wallet_top_traders: scoreboard of top Polymarket wallets by PnL (day/week/month/all)
  * web_search: research events that affect market prices
  */
-export const POLY_BRAIN_TOOL_IDS = [MARKET_LIST_NAME, WEB_SEARCH_NAME] as const;
+export const POLY_BRAIN_TOOL_IDS = [
+  MARKET_LIST_NAME,
+  WALLET_TOP_TRADERS_NAME,
+  WEB_SEARCH_NAME,
+] as const;
 
 export type PolyBrainToolId = (typeof POLY_BRAIN_TOOL_IDS)[number];

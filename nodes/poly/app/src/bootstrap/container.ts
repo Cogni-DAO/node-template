@@ -112,6 +112,7 @@ import {
 import { createRepoCapability } from "@/bootstrap/capabilities/repo";
 import { createScheduleCapability } from "@/bootstrap/capabilities/schedule";
 import { stubVcsCapability } from "@/bootstrap/capabilities/vcs";
+import { createWalletCapability } from "@/bootstrap/capabilities/wallet";
 import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
@@ -567,6 +568,9 @@ function createContainer(): Container {
     KALSHI_API_SECRET: env.KALSHI_API_SECRET,
   });
 
+  // WalletCapability for AI tools (Polymarket wallet scoreboard — public Data API)
+  const walletCapability = createWalletCapability();
+
   // KnowledgeCapability for AI tools (optional — requires DOLTGRES_URL_POLY)
   // When configured, wraps KnowledgeStorePort with auto-commit on writes.
   // When not configured, tools throw "not configured" at invocation time.
@@ -605,6 +609,7 @@ function createContainer(): Container {
     repoCapability,
     scheduleCapability,
     vcsCapability: stubVcsCapability,
+    walletCapability,
     workItemCapability,
   });
   const toolSource = createBoundToolSource(toolBindings);

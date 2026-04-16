@@ -29,6 +29,7 @@ import { vcsCreateBranchBoundTool } from "./tools/vcs-create-branch";
 import { vcsGetCiStatusBoundTool } from "./tools/vcs-get-ci-status";
 import { vcsListPrsBoundTool } from "./tools/vcs-list-prs";
 import { vcsMergePrBoundTool } from "./tools/vcs-merge-pr";
+import { walletTopTradersBoundTool } from "./tools/wallet-top-traders";
 import { webSearchBoundTool } from "./tools/web-search";
 import { workItemQueryBoundTool } from "./tools/work-item-query";
 import { workItemTransitionBoundTool } from "./tools/work-item-transition";
@@ -119,6 +120,7 @@ export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
   vcsGetCiStatusBoundTool as CatalogBoundTool,
   vcsListPrsBoundTool as CatalogBoundTool,
   vcsMergePrBoundTool as CatalogBoundTool,
+  walletTopTradersBoundTool as CatalogBoundTool,
   webSearchBoundTool as CatalogBoundTool,
   workItemQueryBoundTool as CatalogBoundTool,
   workItemTransitionBoundTool as CatalogBoundTool,
