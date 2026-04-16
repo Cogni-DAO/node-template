@@ -42,7 +42,7 @@ function jsonResponse(body: unknown, ok = true, status = 200): Response {
 }
 
 describe("PolymarketDataApiClient.listTopTraders", () => {
-  it("parses the saved live leaderboard fixture without throwing", () => {
+  it("parses the saved leaderboard fixture without throwing", () => {
     const parsed = LEADERBOARD_FIXTURE.map((row) =>
       PolymarketLeaderboardEntrySchema.parse(row)
     );
