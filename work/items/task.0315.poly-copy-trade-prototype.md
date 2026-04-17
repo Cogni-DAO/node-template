@@ -248,20 +248,60 @@ poly_copy_trade_decisions (
 
 **Scope:**
 
-- `nodes/poly/app/src/bootstrap/capabilities/copy-trade.ts` — **permanent** factory:
-  - When `POLY_ROLE === 'trader'`, dynamic-imports `@cogni/market-provider/adapters/polymarket` + `@privy-io/node/viem#createViemAccount`, resolves the operator Privy wallet by `OPERATOR_WALLET_ADDRESS`, constructs `PolymarketClobAdapter` with a real pino child logger + a `prom-client`-backed `MetricsPort`, and wraps `adapter.placeOrder.bind(adapter)` in `createClobExecutor`.
-  - Returns `{placeOrder: executor}` (or `undefined` on non-trader roles).
-  - Non-trader roles: factory returns `undefined`, container field optional.
+- `nodes/poly/app/src/bootstrap/capabilities/copy-trade.ts` — **permanent** factory. Signature:
+  ```ts
+  createCopyTradeCapability(config: {
+    role: PolyRole;
+    creds?: ApiKeyCreds;
+    operatorWalletAddress?: `0x${string}`;
+    logger: LoggerPort;
+    metrics: MetricsPort;
+    /** TEST ONLY — bypasses Privy + adapter construction. Never populated in production bootstrap. */
+    placeOrderOverride?: MarketProviderPort["placeOrder"];
+  }): CopyTradeCapability | undefined
+  ```
+
+  - When `role === 'trader'` and no override: dynamic-imports `@cogni/market-provider/adapters/polymarket` + `@privy-io/node/viem#createViemAccount`, resolves the operator Privy wallet by `operatorWalletAddress`, constructs `PolymarketClobAdapter` with a real pino child logger + `MetricsPort`, and wraps `adapter.placeOrder.bind(adapter)` in `createClobExecutor`. **Fail-fast**: if the Privy wallet cannot be resolved, throw at boot — NOT at first request. Log `{event:"poly.capability.ready", wallet_id, address}` on success.
+  - When `placeOrderOverride` is set: skip dynamic imports; wrap the override in `createClobExecutor` directly. Used by stack tests.
+  - Non-trader roles: return `undefined`.
+  - **Test-fixture hook is the `placeOrderOverride` param** (reviewer callout #1, option c). Stack test bootstrap passes it; production bootstrap never does.
 - `nodes/poly/app/src/bootstrap/capabilities/metrics.ts` (new if absent) — shared `MetricsPort → prom-client` adapter using `registry.getSingleMetric(name) ?? new Counter/Histogram(...)` for hot-reload safety.
-- `nodes/poly/app/src/shared/env/server-env.ts` — add `POLY_ROLE` (`trader|web|scheduler`, default `web`) and the trader-required triple `POLY_CLOB_API_KEY` / `POLY_CLOB_API_SECRET` / `POLY_CLOB_PASSPHRASE`. Zod-refinement: trader role with missing creds fails boot with a clear message.
+- `nodes/poly/app/src/shared/env/server-env.ts` — add `POLY_ROLE` (`trader|web|scheduler`, default `web`) and the trader-required triple `POLY_CLOB_API_KEY` / `POLY_CLOB_API_SECRET` / `POLY_CLOB_PASSPHRASE`. `OPERATOR_WALLET_ADDRESS` is already the polymarket-signer convention (used by CP3.1 allowance script + CP3.2 dress rehearsal) — reuse it; `POLY_OPERATOR_WALLET_ADDRESS` alias is a follow-up. Zod-refinement: trader role with missing creds or malformed wallet address fails boot with a clear message.
 - `nodes/poly/app/src/app/api/internal/ops/poly/place/route.ts` — **permanent** POST endpoint:
   - Validates body against `OrderIntentSchema` from `@cogni/market-provider`.
   - Auth: existing admin/internal-ops pattern (same as `ops/governance/schedules/sync/route.ts`).
-  - Returns 503 if `POLY_ROLE !== 'trader'` or the capability is undefined.
+  - Returns **501** (not 503) if `POLY_ROLE !== 'trader'` or the capability is undefined — permanent for the pod, not a retry-later condition (reviewer callout #9).
   - Calls `container.copyTrade.placeOrder(intent)` and returns the `OrderReceipt` as JSON.
-  - Structured logs on entry + success + rejection + error via the capability's injected logger (logs already wired at the adapter + executor layers).
+  - **Route-layer structured log** at every phase (reviewer callout #2), bounded enum to keep Prom/Loki labels clean:
+    ```ts
+    // phase: "start" | "ok" | "zod_reject" | "auth_reject" | "capability_missing" | "error"
+    log.info(
+      {
+        event: "poly.ops.place",
+        phase,
+        client_order_id,
+        caller_ip,
+        result,
+        duration_ms,
+      },
+      `ops.place: ${phase}`
+    );
+    ```
+    Adapter-layer + executor-layer logs continue to fire inside the capability on their own events.
+  - Rate limit: 1 request per 5s per token (reviewer callout #4). Reuses existing rate-limit middleware if present; otherwise a simple in-memory token bucket scoped to this route.
+  - Body size cap: 8KB. `OrderIntent` is ~500B; no legitimate caller sends more (reviewer callout #5).
 - `.eslintrc` `no-restricted-imports` rule — `@polymarket/clob-client` and `polymarket.clob.adapter` can only be imported from `bootstrap/capabilities/copy-trade.ts`. Replaces the absence-of-module-load runtime test (reviewer pushback).
-- Stack test `tests/stack/poly/poly-place.stack.test.ts` — spins the poly node with a fake `placeOrder` seam injected into the capability (via the same test-fixture hook the CP4.3 stack test will use). Posts a valid `OrderIntent` to the ops route, asserts the fake received the intent verbatim and the route returned the canned receipt. Separate subtest: POST on `POLY_ROLE=web` container returns 503.
+- **k8s overlay:** trader deployment pinned to `replicas: 1` in `infra/.../poly/overlays/<env>/` (reviewer callout #8). SINGLE_WRITER topology commits to reality; CP4.3 inherits.
+- **Factory unit tests** (reviewer callout #7), distinct from the stack test:
+  - `POLY_ROLE=web` → factory returns `undefined`, no CLOB imports touched.
+  - `POLY_ROLE=trader` + missing creds → Zod refinement throws at boot with a clear message (not a Privy/adapter runtime error).
+  - `POLY_ROLE=trader` + unknown `OPERATOR_WALLET_ADDRESS` → factory throws at boot.
+  - Hot-reload: calling the factory twice against the same prom registry does NOT throw "metric already registered."
+- **Stack test** `tests/stack/poly/poly-place.stack.test.ts` — spins the poly node via the `placeOrderOverride` hook above. Posts a valid `OrderIntent` to the ops route, asserts: (a) the fake received the intent verbatim, (b) the route returned the canned receipt, (c) route-layer log emitted with `phase:"ok"` and matching `client_order_id`, (d) adapter/executor layer logs also emitted (structured-log-layering preserved). Separate subtests:
+  - POST on `POLY_ROLE=web` container returns **501** + `phase:"capability_missing"` log.
+  - Malformed `OrderIntent` → **400** + `phase:"zod_reject"` log.
+  - Missing `INTERNAL_OPS_TOKEN` → **401** + `phase:"auth_reject"` log.
+  - Rapid repeat within 5s → **429** (rate-limit).
 
 **Invariants** (review criteria):
 
@@ -270,6 +310,10 @@ poly_copy_trade_decisions (
 - `ADMIN_GATED_ROUTE` — the ops route uses the existing internal-ops auth middleware. No public trade placement.
 - `NO_BUSINESS_LOGIC_IN_ROUTE` — the route validates, calls `executor(intent)`, returns. No decide(), no DB writes, no dedupe. Those belong to CP4.3.
 - `CONTRACT_IS_SOT` — the route's request shape IS `OrderIntentSchema`; no parallel DTO.
+- `KILL_SWITCH_IS_AUTONOMY_ONLY` (reviewer callout) — the ops route bypasses `poly_copy_trade_config.enabled` by design. The kill-switch gates the autonomous loop in CP4.3; the ops route is the operator's manual override path and must keep working even when autonomy is off.
+- `CAPABILITY_FAIL_FAST` — Privy wallet-resolution errors at bootstrap crash the pod (loud, debuggable) rather than returning 500 on first request.
+- `TEST_HOOK_IS_FACTORY_PARAM` — the fake `placeOrder` substitution goes through `createCopyTradeCapability({placeOrderOverride})`, NOT env vars or container post-boot mutation. The stack test and CP4.3's stack test share this single mechanism.
+- `SINGLE_TRADER_REPLICA` — trader-role k8s overlay pins `replicas: 1`. No two-writer race for manual or autonomous placements.
 
 **🎯 CP4.25 E2E validation** (candidate-a milestone):
 
