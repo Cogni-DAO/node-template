@@ -72,6 +72,6 @@ Standalone workspace package (`@cogni/market-provider`) providing a typed port f
 
 - `MarketProviderPort` now carries Run methods (`placeOrder`, `cancelOrder`, `getOrder`). Adapters that do not implement trading (Kalshi, paper stub pre-P3, baseline Polymarket Gamma reader) throw `OrderNotSupportedError` — they satisfy the port at compile time without risking accidental order placement.
 - KalshiAdapter is READ-ONLY. It NEVER calls POST/PUT endpoints. The Kalshi API key may have real money — no order placement.
-- Baseline `PolymarketAdapter` uses only public Gamma API — no wallet operations. A CLOB adapter (to be added in CP3.2) wraps `@polymarket/clob-client` and takes a viem `LocalAccount` + `ApiKeyCreds` via constructor injection. `@polymarket/clob-client` moves from root devDeps to this package as optional peerDep in CP3.2.
+- Baseline `PolymarketAdapter` uses only public Gamma API — no wallet operations. `PolymarketClobAdapter` (task.0315 CP3.2) is the trade-only Run-phase companion: constructor takes `ClobSigner` (viem `WalletClient`) + `ApiKeyCreds` + funder EOA; `listMarkets` throws (use the Gamma adapter for reads). `@polymarket/clob-client` + `viem` are optional peerDeps on this package — install them in any node that consumes the CLOB adapter.
 - Walk phase will add `getPrices()`, `getOrderbook()` methods when the pipeline needs them.
 - PollAdapter (Walk) delegates to this port for HTTP calls — one client per platform, not two.

@@ -224,7 +224,6 @@
     "@openai/codex": "^0.116.0",
     "@openai/codex-sdk": "^0.116.0",
     "@playwright/test": "^1.56.1",
-    "@polymarket/clob-client": "^5.8.1",
     "@poupe/eslint-plugin-tailwindcss": "^0.2.4",
     "@tailwindcss/postcss": "^4.1.16",
     "@temporalio/worker": "^1.11.7",

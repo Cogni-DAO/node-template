@@ -83,7 +83,7 @@ export class PolymarketAdapter implements MarketProviderPort {
       new OrderNotSupportedError(
         "polymarket",
         "placeOrder",
-        "PolymarketAdapter (Gamma read-only) does not support placeOrder. Use PolymarketClobAdapter (CP3) with a signer + safe_proxy_address."
+        "PolymarketAdapter (Gamma read-only) does not support placeOrder. Use PolymarketClobAdapter with a viem LocalAccount + ApiKeyCreds."
       )
     );
   }
