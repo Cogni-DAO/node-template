@@ -20,7 +20,7 @@ import { z } from "zod";
  */
 export const TargetConfigSchema = z.object({
   /** Synthetic UUID for P1 (one per env target wallet); FK into `poly_copy_trade_targets` in P2. */
-  target_id: z.string().min(1),
+  target_id: z.string().uuid(),
   /** The wallet being copied. 0x-prefixed 40-hex. */
   target_wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   /** `live` → PolymarketClobAdapter; `paper` → paper adapter (P3). */

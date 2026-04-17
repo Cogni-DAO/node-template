@@ -56,7 +56,10 @@ export type CopyTradeExecutor = (intent: OrderIntent) => Promise<OrderReceipt>;
 export function createClobExecutor(
   deps: CopyTradeExecutorDeps
 ): CopyTradeExecutor {
-  const log = deps.logger.child({ component: "copy-trade-executor" });
+  // `subcomponent` (not `component`) so pino bindings layer cleanly with the
+  // downstream adapter's `component: "poly-clob-adapter"` child — we want both
+  // fields visible in Loki, not shadowed.
+  const log = deps.logger.child({ subcomponent: "copy-trade-executor" });
 
   return async function executePlacement(
     intent: OrderIntent
@@ -105,8 +108,11 @@ export function createClobExecutor(
         duration_ms,
         { result }
       );
+      // CLOB rejection bodies can contain EIP-712 domain dumps; cap at 512 to
+      // keep log lines bounded. Matches adapter's truncation behavior.
+      const truncated = msg.length > 512 ? `${msg.slice(0, 512)}…` : msg;
       log.error(
-        { ...baseFields, phase: result, duration_ms, error: msg },
+        { ...baseFields, phase: result, duration_ms, error: truncated },
         `execute: ${result}`
       );
       throw err;

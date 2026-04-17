@@ -7,7 +7,7 @@
  * Scope: Pure function. Does not perform I/O, does not read env, does not import adapters. All runtime state (caps, idempotency set, kill-switch) is supplied by the caller.
  * Invariants:
  *   - FAIL_CLOSED — kill-switch disabled OR unreadable → the caller must synthesize `{enabled: false}` and decide() returns skip/kill_switch_off. Caller MUST NOT default to enabled on read failure.
- *   - INTENT_BASED_CAPS — `today_spent_usdc` and `fills_last_hour` are counted against INTENT submissions, not realized fills. $100 cap blocks once $100 of intents were submitted, regardless of partial-fill drift. Revisit in P3 with paper-PnL evidence.
+ *   - INTENT_BASED_CAPS — `today_spent_usdc` and `fills_last_hour` are counted against INTENT submissions, not realized fills. Strict `>` comparison: a submission that lands at exactly `max_daily_usdc` is allowed; the NEXT submission is skipped. Revisit in P3 with paper-PnL evidence.
  *   - IDEMPOTENT_BY_CLIENT_ID — repeat of the same `(target_id, fill_id)` is silently dropped via `already_placed_ids`. Matches the DB PK on `poly_copy_trade_fills`.
  *   - DECIDE_IS_PURE — no side effects; same input → same output.
  * Side-effects: none
