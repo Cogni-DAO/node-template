@@ -17,9 +17,17 @@ import {
   mapOpenOrderToReceipt,
   mapOrderResponseToReceipt,
   normalizePolymarketStatus,
+  POLY_CLOB_METRICS,
   PolymarketClobAdapter,
 } from "../src/adapters/polymarket/polymarket.clob.adapter.js";
 import type { OrderIntent } from "../src/domain/order.js";
+import {
+  createRecordingMetrics,
+  type LoggerPort,
+  type MetricsPort,
+  noopLogger,
+  noopMetrics,
+} from "../src/port/observability.port.js";
 
 const BASE_INTENT: OrderIntent = {
   provider: "polymarket",
@@ -132,14 +140,17 @@ describe("PolymarketClobAdapter", () => {
   // Helper — construct the adapter with its underlying ClobClient replaced
   // by a stub. We avoid spinning up a real signer by asserting on the stub
   // directly after placement.
-  function makeAdapter(stub: {
-    createAndPostOrder?: ReturnType<typeof vi.fn>;
-    cancelOrder?: ReturnType<typeof vi.fn>;
-    getOrder?: ReturnType<typeof vi.fn>;
-    getTickSize?: ReturnType<typeof vi.fn>;
-    getNegRisk?: ReturnType<typeof vi.fn>;
-    getFeeRateBps?: ReturnType<typeof vi.fn>;
-  }) {
+  function makeAdapter(
+    stub: {
+      createAndPostOrder?: ReturnType<typeof vi.fn>;
+      cancelOrder?: ReturnType<typeof vi.fn>;
+      getOrder?: ReturnType<typeof vi.fn>;
+      getTickSize?: ReturnType<typeof vi.fn>;
+      getNegRisk?: ReturnType<typeof vi.fn>;
+      getFeeRateBps?: ReturnType<typeof vi.fn>;
+    },
+    observability?: { logger?: LoggerPort; metrics?: MetricsPort }
+  ) {
     stub.getTickSize ??= vi.fn().mockResolvedValue("0.01");
     stub.getNegRisk ??= vi.fn().mockResolvedValue(false);
     stub.getFeeRateBps ??= vi.fn().mockResolvedValue(0);
@@ -152,6 +163,12 @@ describe("PolymarketClobAdapter", () => {
     adapter.client = stub;
     // @ts-expect-error — test injection
     adapter.funderAddress = "0x1111111111111111111111111111111111111111";
+    // @ts-expect-error — test injection
+    adapter.chainId = 137;
+    // @ts-expect-error — test injection
+    adapter.log = observability?.logger ?? noopLogger;
+    // @ts-expect-error — test injection
+    adapter.metrics = observability?.metrics ?? noopMetrics;
     return adapter;
   }
 
@@ -290,5 +307,275 @@ describe("PolymarketClobAdapter", () => {
   it("listMarkets rejects — CLOB adapter is trade-only", async () => {
     const adapter = makeAdapter({});
     await expect(adapter.listMarkets()).rejects.toThrow(/listMarkets/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Observability (task.0315 CP3.2 — observability pass)
+// ---------------------------------------------------------------------------
+
+describe("PolymarketClobAdapter — observability", () => {
+  type LogCall = {
+    level: "debug" | "info" | "warn" | "error";
+    obj: Record<string, unknown>;
+    msg?: string;
+  };
+
+  function makeRecordingLogger(): { logger: LoggerPort; calls: LogCall[] } {
+    const calls: LogCall[] = [];
+    function mk(bindings: Record<string, unknown>): LoggerPort {
+      const bind = { ...bindings };
+      return {
+        debug(obj, msg) {
+          calls.push({ level: "debug", obj: { ...bind, ...obj }, msg });
+        },
+        info(obj, msg) {
+          calls.push({ level: "info", obj: { ...bind, ...obj }, msg });
+        },
+        warn(obj, msg) {
+          calls.push({ level: "warn", obj: { ...bind, ...obj }, msg });
+        },
+        error(obj, msg) {
+          calls.push({ level: "error", obj: { ...bind, ...obj }, msg });
+        },
+        child(extra) {
+          return mk({ ...bind, ...extra });
+        },
+      };
+    }
+    return { logger: mk({}), calls };
+  }
+
+  // Re-declared here so the observability suite is self-contained.
+  function makeAdapter(
+    stub: {
+      createAndPostOrder?: ReturnType<typeof vi.fn>;
+      cancelOrder?: ReturnType<typeof vi.fn>;
+      getOrder?: ReturnType<typeof vi.fn>;
+      getTickSize?: ReturnType<typeof vi.fn>;
+      getNegRisk?: ReturnType<typeof vi.fn>;
+      getFeeRateBps?: ReturnType<typeof vi.fn>;
+    },
+    observability: { logger?: LoggerPort; metrics?: MetricsPort } = {}
+  ) {
+    stub.getTickSize ??= vi.fn().mockResolvedValue("0.01");
+    stub.getNegRisk ??= vi.fn().mockResolvedValue(false);
+    stub.getFeeRateBps ??= vi.fn().mockResolvedValue(0);
+    const adapter = Object.create(
+      PolymarketClobAdapter.prototype
+    ) as PolymarketClobAdapter;
+    // @ts-expect-error — test injection
+    adapter.provider = "polymarket";
+    // @ts-expect-error — test injection
+    adapter.client = stub;
+    // @ts-expect-error — test injection
+    adapter.funderAddress = "0x1111111111111111111111111111111111111111";
+    // @ts-expect-error — test injection
+    adapter.chainId = 137;
+    // The real constructor binds provider/chain_id/funder on a child logger; we
+    // mirror that here so the tests exercise the same shape.
+    // @ts-expect-error — test injection
+    adapter.log = (observability.logger ?? noopLogger).child({
+      component: "poly-clob-adapter",
+      provider: "polymarket",
+      chain_id: 137,
+      funder: "0x1111111111111111111111111111111111111111",
+    });
+    // @ts-expect-error — test injection
+    adapter.metrics = observability.metrics ?? noopMetrics;
+    return adapter;
+  }
+
+  it("placeOrder emits start + ok logs with correlation fields and result=ok metrics", async () => {
+    const { logger, calls } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    const createAndPostOrder = vi.fn().mockResolvedValue({
+      orderID: "0xok",
+      status: "live",
+    });
+    const adapter = makeAdapter({ createAndPostOrder }, { logger, metrics });
+
+    await adapter.placeOrder(BASE_INTENT);
+
+    const starts = calls.filter((c) => c.obj.phase === "start");
+    const oks = calls.filter((c) => c.obj.phase === "ok");
+    expect(starts).toHaveLength(1);
+    expect(oks).toHaveLength(1);
+
+    // Correlation fields present on start.
+    expect(starts[0]?.obj).toMatchObject({
+      event: "poly.clob.place",
+      component: "poly-clob-adapter",
+      provider: "polymarket",
+      chain_id: 137,
+      funder: "0x1111111111111111111111111111111111111111",
+      client_order_id: BASE_INTENT.client_order_id,
+      token_id: BASE_INTENT.attributes?.token_id,
+      side: "BUY",
+      size_usdc: BASE_INTENT.size_usdc,
+      limit_price: BASE_INTENT.limit_price,
+    });
+
+    // Ok log carries order_id + duration.
+    expect(oks[0]?.obj).toMatchObject({
+      event: "poly.clob.place",
+      phase: "ok",
+      order_id: "0xok",
+    });
+    expect(typeof oks[0]?.obj.duration_ms).toBe("number");
+
+    // Metrics: one counter with result=ok, one duration with result=ok.
+    const okCounters = metrics.emissions.filter(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.placeTotal &&
+        e.labels.result === "ok"
+    );
+    expect(okCounters).toHaveLength(1);
+    const okDurations = metrics.emissions.filter(
+      (e) =>
+        e.kind === "duration" &&
+        e.name === POLY_CLOB_METRICS.placeDurationMs &&
+        e.labels.result === "ok"
+    );
+    expect(okDurations).toHaveLength(1);
+  });
+
+  it("placeOrder classifies success=false response as result=rejected and logs error", async () => {
+    const { logger, calls } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    const createAndPostOrder = vi.fn().mockResolvedValue({
+      orderID: "0xrej",
+      success: false,
+      errorMsg: "fee rate for the market must be 1000",
+    });
+    const adapter = makeAdapter({ createAndPostOrder }, { logger, metrics });
+
+    await expect(adapter.placeOrder(BASE_INTENT)).rejects.toThrow(
+      /CLOB rejected order/
+    );
+
+    // Counter labeled result=rejected (not error) — distinct for dashboards.
+    const rejects = metrics.emissions.filter(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.placeTotal &&
+        e.labels.result === "rejected"
+    );
+    expect(rejects).toHaveLength(1);
+
+    const errLog = calls.find((c) => c.level === "error");
+    expect(errLog?.obj).toMatchObject({
+      event: "poly.clob.place",
+      phase: "rejected",
+      client_order_id: BASE_INTENT.client_order_id,
+    });
+    expect(typeof errLog?.obj.duration_ms).toBe("number");
+    expect(String(errLog?.obj.error)).toContain("fee rate for the market");
+  });
+
+  it("placeOrder classifies thrown network errors as result=error", async () => {
+    const { logger, calls } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    const createAndPostOrder = vi
+      .fn()
+      .mockRejectedValue(new Error("ECONNRESET"));
+    const adapter = makeAdapter({ createAndPostOrder }, { logger, metrics });
+
+    await expect(adapter.placeOrder(BASE_INTENT)).rejects.toThrow(/ECONNRESET/);
+
+    const errs = metrics.emissions.filter(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.placeTotal &&
+        e.labels.result === "error"
+    );
+    expect(errs).toHaveLength(1);
+    const errLog = calls.find((c) => c.level === "error");
+    expect(errLog?.obj.phase).toBe("error");
+    expect(String(errLog?.obj.error)).toContain("ECONNRESET");
+  });
+
+  it("placeOrder with missing token_id emits error metric and log before throwing", async () => {
+    const { logger, calls } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    const adapter = makeAdapter({}, { logger, metrics });
+
+    const badIntent: OrderIntent = {
+      ...BASE_INTENT,
+      attributes: {},
+    };
+
+    await expect(adapter.placeOrder(badIntent)).rejects.toThrow(/token_id/);
+
+    const errs = metrics.emissions.filter(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.placeTotal &&
+        e.labels.result === "error"
+    );
+    expect(errs).toHaveLength(1);
+    const errLog = calls.find((c) => c.level === "error");
+    expect(errLog?.obj.reason).toBe("missing_token_id");
+  });
+
+  it("cancelOrder emits start + ok logs and cancel counter", async () => {
+    const { logger, calls } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    const cancelOrder = vi.fn().mockResolvedValue(undefined);
+    const adapter = makeAdapter({ cancelOrder }, { logger, metrics });
+
+    await adapter.cancelOrder("0xabc");
+
+    expect(
+      calls.filter((c) => c.obj.event === "poly.clob.cancel")
+    ).toHaveLength(2);
+    const okCounter = metrics.emissions.find(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.cancelTotal &&
+        e.labels.result === "ok"
+    );
+    expect(okCounter).toBeDefined();
+  });
+
+  it("cancelOrder error path increments cancel_total{result=error}", async () => {
+    const { logger } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    const cancelOrder = vi.fn().mockRejectedValue(new Error("not found"));
+    const adapter = makeAdapter({ cancelOrder }, { logger, metrics });
+
+    await expect(adapter.cancelOrder("0xabc")).rejects.toThrow(/not found/);
+    const errCounter = metrics.emissions.find(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.cancelTotal &&
+        e.labels.result === "error"
+    );
+    expect(errCounter).toBeDefined();
+  });
+
+  it("getOrder emits get_order metrics with result=ok", async () => {
+    const { logger } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    const getOrder = vi.fn().mockResolvedValue({
+      id: "0xq",
+      status: "live",
+      side: "BUY",
+      original_size: "1",
+      size_matched: "0",
+      price: "0.5",
+    });
+    const adapter = makeAdapter({ getOrder }, { logger, metrics });
+
+    await adapter.getOrder("0xq");
+
+    const okCounter = metrics.emissions.find(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.getOrderTotal &&
+        e.labels.result === "ok"
+    );
+    expect(okCounter).toBeDefined();
   });
 });

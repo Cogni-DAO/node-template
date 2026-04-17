@@ -46,3 +46,15 @@ export {
   type MarketProviderPort,
   OrderNotSupportedError,
 } from "./port/market-provider.port.js";
+// Observability ports — adapters accept these via constructor; no runtime deps.
+export {
+  createRecordingMetrics,
+  type LoggerPort,
+  type MetricsPort,
+  noopLogger,
+  noopMetrics,
+  type RecordedCounter,
+  type RecordedDuration,
+  type RecordedMetric,
+  type RecordingMetricsPort,
+} from "./port/observability.port.js";

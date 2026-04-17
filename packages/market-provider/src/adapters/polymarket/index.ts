@@ -19,6 +19,7 @@ export {
   mapOpenOrderToReceipt,
   mapOrderResponseToReceipt,
   normalizePolymarketStatus,
+  POLY_CLOB_METRICS,
   PolymarketClobAdapter,
   type PolymarketClobAdapterConfig,
 } from "./polymarket.clob.adapter.js";
