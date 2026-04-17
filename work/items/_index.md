@@ -199,6 +199,8 @@
 | 3 | 99 | 1 | needs_triage | bug.0150 | getAllReceipts query is unbounded — will degrade at scale |  |  |
 | 3 | 99 | 2 | needs_triage | spike.0239 | Three.js agent observatory — prototype + performance budget | Premium Frontend UX | proj.premium-frontend-ux |
 | 3 | 99 | 2 | needs_review | task.0316 | Wire per-node test:external lanes + move Ollama specs | System Test Architecture | proj.system-test-architecture |
+| 3 | 99 | 3 | needs_triage | task.0320 | Per-node candidate flighting (partial overlay promotion) | CI/CD Pipeline | proj.cicd-services-gitops |
+| 3 | 99 | 2 | needs_review | task.0321 | Parallelize pr-build.yml via per-target matrix | CI/CD Pipeline | proj.cicd-services-gitops |
 
 > Sort: priority ASC → rank ASC
 
