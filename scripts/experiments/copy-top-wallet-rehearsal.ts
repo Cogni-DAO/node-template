@@ -3,16 +3,10 @@
 
 /**
  * Module: `@scripts/experiments/copy-top-wallet-rehearsal`
- * Purpose: task.0315 Phase 1 CP3.2 dress rehearsal — discover a recent BUY from a
- *   top-leaderboard wallet, then mirror it with the minimum-legal size as a post-only
- *   GTC BUY far below the book (so it cannot match). Produces a real `order_id` from
- *   the prod Polymarket CLOB as CP5 evidence, at the smallest possible economic exposure.
- * Scope: No DB writes, no `decide()` invocation, no wallet state mutation beyond one
- *   order placement + one cancel. Env-directed operator wallet (v0).
- * Invariants: Polygon chainId 137 only; post-only enforced; filled_size_usdc must be 0
- *   at receipt time (hard assert); requires `--yes-real-money`.
- * Side-effects: IO (reads .env.local, HTTPS to Polymarket Data API + CLOB, Privy HSM
- *   sign, ONE real CLOB order placement + ONE cancel).
+ * Purpose: task.0315 Phase 1 CP3.2 dress rehearsal — discover a recent BUY from a top-leaderboard wallet, then mirror it with the minimum-legal size as a post-only GTC BUY at tick_size (cannot match). Produces a real order_id from the prod Polymarket CLOB as evidence, at minimal economic exposure.
+ * Scope: Reads env + Polymarket Data API, inspects the orderbook, signs via Privy-backed viem WalletClient, places one post-only order, asserts filled=0, cancels. Does not write to the DB, does not invoke decide(), does not leave an open position.
+ * Invariants: Polygon chainId 137; post-only enforced; filled_size_usdc must be 0 at receipt time (hard assert); --yes-real-money required.
+ * Side-effects: IO (reads .env.local; HTTPS to Polymarket Data API + CLOB; Privy HSM sign; one real post-only order placement + one cancel).
  * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP3.2 dress rehearsal)
  * @internal — experiment code, not shipped to production
  */

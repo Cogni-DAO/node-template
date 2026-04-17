@@ -3,18 +3,12 @@
 
 /**
  * Module: `@scripts/experiments/fill-market`
- * Purpose: Take a single Polymarket CLOB order against a specified token id + side +
- *   size. Unlike `copy-top-wallet-rehearsal.ts` this does NOT set post-only — the
- *   order is expected to match on the book and leave a real, held position. Used for
- *   the first live Cogni position on Polymarket.
- * Scope: Env-directed operator wallet. Requires `--yes-real-money` and explicit
- *   --token-id / --side / --size-usdc / --limit-price CLI flags (no defaults) so the
- *   target is always reviewed. Does not cancel; the position survives to resolution.
- * Invariants: Polygon chainId 137 only; BUY-only (SELL requires CTF setApprovalForAll).
- * Side-effects: IO (reads .env.local, HTTPS to CLOB, Privy HSM sign, ONE real BUY that
- *   will match against the book → produces an actual position).
+ * Purpose: task.0315 — place a single taking Polymarket CLOB BUY against explicit --token-id / --side / --size-usdc / --limit-price flags gated behind --yes-real-money. Unlike `copy-top-wallet-rehearsal.ts` this is NOT post-only and does not cancel; the resulting position is held to resolution.
+ * Scope: Reads env + CLI flags, signs via Privy-backed viem WalletClient, places one order through `PolymarketClobAdapter`, prints receipt + evidence block. Does not auto-discover targets, does not implement decide() logic, does not cancel.
+ * Invariants: Polygon chainId 137; BUY-only (SELL requires CTF setApprovalForAll); --yes-real-money required.
+ * Side-effects: IO (reads .env.local; HTTPS to Polymarket CLOB; Privy HSM sign; one real signed order that matches against the book and settles on-chain).
  * Links: work/items/task.0315.poly-copy-trade-prototype.md
- * @internal
+ * @internal — experiment code, not shipped to production
  */
 
 import path from "node:path";

@@ -7,7 +7,7 @@ created: 2026-04-17
 updated: 2026-04-17
 branch: design/poly-copy-trade-pr-b
 worktree: /Users/derek/dev/cogni-template-poly-copy-trade-pr-b
-last_commit: bf0e1794c
+last_commit: 00a9239a1
 ---
 
 # Handoff: task.0315 Phase 1 — CP3.2+ (CLOB adapter + wiring)
@@ -29,17 +29,22 @@ last_commit: bf0e1794c
 
 > **Honest read (2026-04-17 audit):** PR #890 is a **library + migration** PR, not an end-to-end v0. No deployed code path on any running container can trigger a Polymarket trade yet. The adapter + `client_order_id` helper are imported only by local dev scripts + unit tests. The poly app's runtime does not instantiate either. CP4 is where real "the app can trigger Polymarket trades" lands.
 
-**Shipped on branch (7 commits since `origin/main`):**
+**Shipped on branch (13 commits since `origin/main` as of `00a9239a1`):**
 
-| Commit      | What                                                                                                | What it actually proves                                                                                                                                                                                                             |
-| ----------- | --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `8293eb665` | CP1 — `MarketProviderPort` Run methods + `OrderIntent/Receipt/Status/Fill` Zod + paper-adapter stub | Package-land types only. No runtime wiring.                                                                                                                                                                                         |
-| `00fea90f9` | CP2 — Offline EIP-712 signing via `@privy-io/node/viem#createViemAccount`                           | Privy HSM → viem `LocalAccount` → `ClobSigner` works end-to-end **from a dev laptop** (not from a container).                                                                                                                       |
-| `a018fea4c` | Onboarding scripts + guide                                                                          | `derive-polymarket-api-keys` + `probe-polymarket-account` + setup doc. Dev-only.                                                                                                                                                    |
-| `c8ef5ca5c` | CP3.1 — USDC.e MaxUint256 approvals for {Exchange, Neg-Risk, Neg-Risk Adapter}                      | On-chain state on Polygon. Operator EOA `0xdCCa8…5056` can now be the maker on Polymarket.                                                                                                                                          |
-| `efbf49901` | CP3.1.5 — Delete dead signer surface                                                                | Removed `PolymarketOrderSigner` port, `OperatorWalletPort.signPolymarketOrder`, duplicated `Eip712TypedData`, `MarketCredentials.walletKey`, 4 fake-adapter impls, 1 contract test case. Made `PaperAdapter.provider` configurable. |
-| `3b9e1797a` | CP3.2 — `PolymarketClobAdapter` library                                                             | Runs against mocked `ClobClient` (13 tests). Not imported by any app; only by the local dry-rehearsal script + its tests.                                                                                                           |
-| `84729317f` | CP3.3 — Drizzle schema + migration 0027 + pinned `clientOrderIdFor` helper                          | Three tables created on `cogni_poly`; kill-switch singleton seeded `enabled=false`. Helper has a golden-vector test; not imported by any app.                                                                                       |
+| Commit      | What                                                                                                | What it actually proves                                                                                                                                                                                                                          |
+| ----------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `8293eb665` | CP1 — `MarketProviderPort` Run methods + `OrderIntent/Receipt/Status/Fill` Zod + paper-adapter stub | Package-land types only. No runtime wiring.                                                                                                                                                                                                      |
+| `00fea90f9` | CP2 — Offline EIP-712 signing via `@privy-io/node/viem#createViemAccount`                           | Privy HSM → viem `LocalAccount` → `ClobSigner` works end-to-end **from a dev laptop** (not from a container).                                                                                                                                    |
+| `a018fea4c` | Onboarding scripts + guide                                                                          | `derive-polymarket-api-keys` + `probe-polymarket-account` + setup doc. Dev-only.                                                                                                                                                                 |
+| `c8ef5ca5c` | CP3.1 — USDC.e MaxUint256 approvals for {Exchange, Neg-Risk, Neg-Risk Adapter}                      | On-chain state on Polygon. Operator EOA `0xdCCa8…5056` can now be the maker on Polymarket.                                                                                                                                                       |
+| `efbf49901` | CP3.1.5 — Delete dead signer surface                                                                | Removed `PolymarketOrderSigner` port, `OperatorWalletPort.signPolymarketOrder`, duplicated `Eip712TypedData`, `MarketCredentials.walletKey`, 4 fake-adapter impls, 1 contract test case. Made `PaperAdapter.provider` configurable.              |
+| `3b9e1797a` | CP3.2 — `PolymarketClobAdapter` library                                                             | Runs against mocked `ClobClient` (13 tests). Not imported by any app; only by the local dry-rehearsal script + its tests.                                                                                                                        |
+| `84729317f` | CP3.3 — Drizzle schema + migration 0027 + pinned `clientOrderIdFor` helper                          | Three tables created on `cogni_poly`; kill-switch singleton seeded `enabled=false`. Helper has a golden-vector test; not imported by any app.                                                                                                    |
+| `f1e8143e8` | Review blockers B1 + B2 + B5                                                                        | Per-market `tickSize` + `negRisk` fetched (B1); `success:false` rejections caught even with `orderID` populated (B2); dress-rehearsal is post-only + hard-asserts `filled=0` (B5).                                                               |
+| `2217244db` | Dress rehearsal — `feeRateBps` fetch + live `order_id` captured                                     | `getFeeRateBps` added to the per-market trio. Real Polymarket `order_id` `0xb14daf06…207ca9` placed (post-only, cancelled) via `copy-top-wallet-rehearsal.ts`. Evidence in the commit body.                                                      |
+| `770f91749` | Observability ports on the adapter                                                                  | `LoggerPort` + `MetricsPort` defined at `packages/market-provider/src/port/observability.port.ts`; adapter now emits structured logs + counters through them. Only the no-op sinks are constructed; real pino + prom-client wiring is CP4's job. |
+| `7cf50370e` | Fix B6 — `filled_size_usdc` unit drift                                                              | `makingAmount`/`takingAmount` are decimal USDC, not atomic 1e6. Previous `/1_000_000` produced values ~1M× too small. Surfaced by the live take-fill (`00a9239a1`). Tests updated; 77/77 passing.                                                |
+| `00a9239a1` | `scripts/experiments/fill-market.ts` + live take-fill                                               | First real Cogni-issued taking order on Polymarket — `0x61f7ae0d…17b58a` on "SPY Up or Down on April 17", `$5 USDC @ 0.994`, matched on Polygon tx `0xeeb76d56…a6c3`. Position live at `polymarket.com/profile/0xdcca8d85…95056`.                |
 
 **Operator wallet on Polygon mainnet** (CP3.1 state): 20.43 USDC.e funded · ~9.99 POL gas · L2 CLOB creds registered · 3 allowances at max. A real BUY is placeable **from a dev laptop via `scripts/experiments/place-polymarket-order.ts --yes-real-money`** — NOT yet from the deployed poly container. CP4 is what closes that gap.
 
@@ -60,18 +65,21 @@ last_commit: bf0e1794c
 - [x] **CP3.2 live dry-rehearsal script** ✅ `scripts/experiments/place-polymarket-order.ts`. Gated behind `--yes-real-money` flag. Env-directed wallet (v0) — per-tenant connections are vnext. Places one BUY far-below-market + immediate cancel. **Run manually to capture a real `order_id`** before CP5.
 - [x] **CP3.3 — DB migrations** ✅ `packages/db-schema/src/poly-copy-trade.ts` + `nodes/operator/app/src/adapters/server/db/migrations/0027_silent_nextwave.sql`. Tables: `poly_copy_trade_{fills,config,decisions}`. Kill-switch singleton seeded `enabled=false` (fail-closed). Applied cleanly against local poly DB. `client_order_id` helper at `@cogni/market-provider/domain/client-order-id` — pinned with a golden-vector test so CP4 executor + any future WS path share the exact same function.
   - **Pre-existing drift note:** drizzle snapshots 0024–0026 are missing (those were hand-authored SQL deltas). 0027 was generated, then hand-stripped to just my 3 poly tables; the generated snapshot correctly reflects full current schema going forward.
-- [ ] **CP3.2 review blockers** (rev-4 review at commit `d0366e215`, must-fix before CP5 dress rehearsal):
-  - **B1** — `PolymarketClobAdapter.placeOrder` hardcodes `{ tickSize: "0.01", negRisk: false }`; fetch via `ClobClient.getTickSize(tokenID)` + `getNegRisk(tokenID)` before `createAndPostOrder`.
-  - **B2** — `mapOrderResponseToReceipt` only checks `!r.orderID`; change to `if (r.success === false || !r.orderID) throw ...` + add rejection-with-orderID unit test.
-  - **B3** — `mapOpenOrderToReceipt` sets `client_order_id = platform id`; breaks CP4 `decide()` correlation. Options: (a) `getOrder(orderId, clientOrderId)` signature, (b) make `OrderReceipt.client_order_id` nullable, (c) rename for the openOrder case.
-  - **B4** — Recorded-fixture contract test for `@polymarket/clob-client` response-schema drift.
-  - **B5** — Dress-rehearsal place-then-cancel race; switch to `OrderType.FOK` or assert receipt is unfilled.
+- [x] **CP3.2 review blockers** (rev-4 review at commit `d0366e215`):
+  - [x] **B1** — per-market `tickSize` + `negRisk` + `feeRateBps` fetched before every placement (`f1e8143e8`, `2217244db`).
+  - [x] **B2** — `mapOrderResponseToReceipt` rejects on `success: false` regardless of `orderID` presence (`f1e8143e8`).
+  - [ ] **B3** — `mapOpenOrderToReceipt` `client_order_id`/`order_id` semantics. **Deferred to CP4** when `decide()` forces the correlation shape.
+  - [ ] **B4** — Recorded-fixture contract test vs. `@polymarket/clob-client` drift. **Deferred to CP4.**
+  - [x] **B5** — Dress rehearsal is post-only + asserts `filled_size_usdc === 0` (`f1e8143e8`).
+  - [x] **B6** — `filled_size_usdc` unit drift (decimal USDC, not atomic) — surfaced during the live take-fill and fixed in `7cf50370e`.
 - [ ] **CP4** (~4 days). Pure `decide()` + heavy unit tests (include fail-closed kill-switch branch); `clob-executor` with dynamic import gated on `POLY_ROLE=trader`; 30s poll job (`@scaffolding`, `Deleted-in-phase: 4`); SELECT-backed dashboard card (`@scaffolding`); container wiring; env vars. **This is where the adapter + helper get imported by the app and "trigger Polymarket trades" becomes a true statement about the running container.**
 - [ ] **CP5** (manual, ~1h). Deploy to canary. Tail container logs to confirm migration 0027 applied. Flip kill-switch → observe target → **container-issued** `order_id` → paste into PR.
-- [ ] **Merge gate for PR #890 (revised 2026-04-17):**
-  - **Realistic gate for what is on the branch today:** (a) migration 0027 applies cleanly on canary container boot; (b) local dress-rehearsal script produces one real Polymarket `order_id` (dev-laptop evidence), pasted into PR body.
-  - **Container-issued `order_id` gate belongs to CP4+CP5**, not to this PR. Previous handoff said otherwise; that was wrong because no deployed code path uses the adapter yet.
-  - PR description names the Privy HSM wallet custodian (operator EOA `0xdCCa8…5056`).
+- [x] **Merge gate for PR #890 (revised 2026-04-17):**
+  - [x] Local dress-rehearsal produced a real Polymarket `order_id` (`0xb14daf06…207ca9`, post-only + cancelled). Evidence in PR body + commit `2217244db`.
+  - [x] Live take-fill produced a real matched `order_id` (`0x61f7ae0d…17b58a`, $5 USDC on SPY Up, Polygon tx `0xeeb76d56…a6c3`). Evidence in PR body + commit `00a9239a1`.
+  - [x] PR description names the Privy HSM wallet custodian (operator EOA `0xdCCa8…5056`).
+  - [ ] Migration 0027 applies cleanly on canary container boot — verify post-deploy (the one remaining item before merge).
+  - **Container-issued `order_id` gate belongs to CP4+CP5**, not to this PR.
 
 ## Risks / Gotchas
 

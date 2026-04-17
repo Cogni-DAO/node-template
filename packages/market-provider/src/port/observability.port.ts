@@ -3,10 +3,8 @@
 
 /**
  * Module: `@cogni/market-provider/port/observability`
- * Purpose: Minimal logger + metrics interfaces for Run-phase adapters, structurally
- *   compatible with pino and prom-client without importing either.
- * Scope: Port-only. Adapters receive these via constructor; callers (node apps) wire
- *   the real pino/prom at the boundary. Package stays dep-minimal and env-free.
+ * Purpose: Minimal LoggerPort + MetricsPort interfaces for Run-phase adapters, structurally compatible with pino and prom-client so real instances can be passed in directly without the package importing either.
+ * Scope: Port + no-op default sinks only. Adapters receive sinks via constructor; node apps wire real pino/prom at the boundary. Does not import pino/prom, does not read env, does not define metric schemas.
  * Invariants: PURE_LIBRARY — no env vars, no singletons, no side effects on import.
  * Side-effects: none
  * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 — observability)
