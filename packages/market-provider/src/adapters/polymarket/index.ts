@@ -16,6 +16,14 @@ export {
   type PolymarketAdapterConfig,
 } from "./polymarket.adapter.js";
 export {
+  mapOpenOrderToReceipt,
+  mapOrderResponseToReceipt,
+  normalizePolymarketStatus,
+  POLY_CLOB_METRICS,
+  PolymarketClobAdapter,
+  type PolymarketClobAdapterConfig,
+} from "./polymarket.clob.adapter.js";
+export {
   type ListTopTradersParams,
   type ListUserActivityParams,
   PolymarketDataApiClient,

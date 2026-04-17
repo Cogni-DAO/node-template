@@ -11,13 +11,15 @@
  * @public
  */
 
+import type { OrderIntent, OrderReceipt } from "../../domain/order.js";
 import type {
   ListMarketsParams,
   NormalizedMarket,
 } from "../../domain/schemas.js";
-import type {
-  MarketProviderConfig,
-  MarketProviderPort,
+import {
+  type MarketProviderConfig,
+  type MarketProviderPort,
+  OrderNotSupportedError,
 } from "../../port/market-provider.port.js";
 import { normalizePolymarketMarket } from "./polymarket.normalizer.js";
 import { PolymarketMarketsResponseSchema } from "./polymarket.types.js";
@@ -69,5 +71,40 @@ export class PolymarketAdapter implements MarketProviderPort {
     const raw = PolymarketMarketsResponseSchema.parse(json);
 
     return raw.map(normalizePolymarketMarket);
+  }
+
+  // Run-phase surface — wired to `@polymarket/clob-client` in Phase 1 CP3.
+  // This baseline adapter (Gamma reads only, no signer, no CLOB creds) MUST
+  // continue to throw: a read-only Polymarket instance must not accidentally
+  // place orders because the port contract widened.
+
+  placeOrder(_intent: OrderIntent): Promise<OrderReceipt> {
+    return Promise.reject(
+      new OrderNotSupportedError(
+        "polymarket",
+        "placeOrder",
+        "PolymarketAdapter (Gamma read-only) does not support placeOrder. Use PolymarketClobAdapter with a viem LocalAccount + ApiKeyCreds."
+      )
+    );
+  }
+
+  cancelOrder(_orderId: string): Promise<void> {
+    return Promise.reject(
+      new OrderNotSupportedError(
+        "polymarket",
+        "cancelOrder",
+        "PolymarketAdapter (Gamma read-only) does not support cancelOrder. Use PolymarketClobAdapter (CP3)."
+      )
+    );
+  }
+
+  getOrder(_orderId: string): Promise<OrderReceipt> {
+    return Promise.reject(
+      new OrderNotSupportedError(
+        "polymarket",
+        "getOrder",
+        "PolymarketAdapter (Gamma read-only) does not support getOrder. Use PolymarketClobAdapter (CP3)."
+      )
+    );
   }
 }

@@ -50,11 +50,13 @@ Standalone workspace package (`@cogni/operator-wallet`) providing Privy-managed 
 
 ## Responsibilities
 
-- This directory **does**: implement `distributeSplit()` and `fundOpenRouterTopUp()` via Privy HSM, validate signing gates (SENDER_MATCH, DESTINATION_ALLOWLIST, CHAIN_MISMATCH, MIN_TOPUP, MAX_TOPUP_CAP), encode ERC-20 approve + Coinbase Commerce `transferTokenPreApproved` calldata.
-- This directory **does not**: hold raw key material, manage env vars, orchestrate charge creation, persist state, or interact with databases.
+- This directory **does**: implement `distributeSplit()` and `fundOpenRouterTopUp()` via Privy HSM on Base; validate signing gates (SENDER_MATCH, DESTINATION_ALLOWLIST, CHAIN_MISMATCH, MIN_TOPUP, MAX_TOPUP_CAP); encode ERC-20 approve + Coinbase Commerce `transferTokenPreApproved` calldata.
+- This directory **does not**: hold raw key material, manage env vars, orchestrate charge creation, persist state, interact with databases, or expose a generic `signTypedData`/`signMessage` surface (NO_GENERIC_SIGNING — every signing method is named for its use-case). Polymarket CLOB order signing does NOT live here — it flows through `@privy-io/node/viem#createViemAccount` directly in the trader-role runtime (task.0315 CP2).
 
 ## Notes
 
 - `fundOpenRouterTopUp` validates 5 gates before submitting any transaction — all BigInt arithmetic.
+- Polymarket CLOB order signing does **not** live on this port. `@privy-io/node/viem#createViemAccount` returns a viem `LocalAccount` that `@polymarket/clob-client` consumes natively — the CP1 `signPolymarketOrder` port method + stub were deleted in CP3.1.5 as dead surface. Existing Base methods remain pinned to `BASE_CAIP2`; no chain parameterization needed today.
+- CP2 evidence: `scripts/experiments/sign-polymarket-order.ts` — proves the Privy-HSM → clob-client signing seam on Polygon (chainId 137) with zero hand-rolled translation, zero shim, zero on-chain activity. `@polymarket/clob-client` is a root devDependency (only the experiment script consumes it); it moves to `packages/market-provider` as an optional peerDep in CP3.2.
 - SIMULATE_BEFORE_BROADCAST deferred to Privy infrastructure (SDK has no pre-sign simulation hook).
 - Transfers ABI in `src/domain/transfers-abi.ts` matches deployed contract `0x03059433BCdB6144624cC2443159D9445C32b7a8` on Base.

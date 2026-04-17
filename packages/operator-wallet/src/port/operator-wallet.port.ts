@@ -5,9 +5,11 @@
  * Module: `@cogni/operator-wallet/port`
  * Purpose: Operator wallet port — narrow, typed interface for outbound on-chain payments.
  * Scope: Defines the operator wallet interface and TransferIntent type. Does not implement custody logic or hold key material.
- * Invariants: NO_GENERIC_SIGNING — no signTransaction(calldata). KEY_NEVER_IN_APP — no raw key material.
+ * Invariants:
+ *   - NO_GENERIC_SIGNING — the port has no `signTransaction(calldata)` / `signMessage(bytes)` surface.
+ *   - KEY_NEVER_IN_APP — no raw key material.
  * Side-effects: none (interface definition only)
- * Links: docs/spec/operator-wallet.md
+ * Links: docs/spec/operator-wallet.md, work/items/task.0315.poly-copy-trade-prototype.md
  * @public
  */
 
@@ -56,8 +58,13 @@ export interface TransferIntent {
 }
 
 /**
- * Operator wallet port — a bounded payments actuator, not a generic signer.
+ * Operator wallet port — a bounded payments actuator.
  * Each outbound transaction type gets a named method. No raw signing surface.
+ *
+ * Polymarket CLOB order signing is NOT on this port: it is handled directly
+ * in the trader-role runtime via `@privy-io/node/viem#createViemAccount`,
+ * which produces a viem `LocalAccount` that `@polymarket/clob-client` consumes
+ * natively. Wrapping that in a bespoke port added no value — see task.0315 CP2.
  */
 export interface OperatorWalletPort {
   /** Return the operator wallet's public address (checksummed) */
