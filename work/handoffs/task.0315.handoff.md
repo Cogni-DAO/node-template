@@ -5,102 +5,119 @@ work_item_id: task.0315
 status: active
 created: 2026-04-17
 updated: 2026-04-17
-branch: design/poly-copy-trade-pr-b
-worktree: /Users/derek/dev/cogni-template-poly-copy-trade-pr-b
-last_commit: 00a9239a1
+branch: feat/poly-copy-trade-cp4
+worktree: /Users/derek/dev/cogni-template-cp4
+last_commit: 21bc70747
 ---
 
-# Handoff: task.0315 Phase 1 — CP3.2+ (CLOB adapter + wiring)
+# Handoff: task.0315 Phase 1 CP4.25 — validation + closeout
 
-## Where to work
+**Branch:** `feat/poly-copy-trade-cp4` (PR [#900](https://github.com/Cogni-DAO/node-template/pull/900))
+**Worktree:** `/Users/derek/dev/cogni-template-cp4`
+**State:** all code written, `pnpm check` green, review in flight. The remaining work is **candidate-a validation + closeout**, not code.
 
-- **Worktree:** `/Users/derek/dev/cogni-template-poly-copy-trade-pr-b` (separate from the main repo clone at `/Users/derek/dev/cogni-template`)
-- **Branch:** `design/poly-copy-trade-pr-b` (PR [#890](https://github.com/Cogni-DAO/node-template/pull/890))
-- **Env:** `.env.local` is symlinked from the main worktree — required for all `scripts/experiments/*` runs. Do not `cd` into the main worktree to work on this task; stay in the design worktree so commits land on the right branch.
+Previous CP3 handoff archived at `work/handoffs/archive/task.0315/2026-04-17T16-00-00.md`.
 
-## Context
+## Where it stands
 
-- **Mission:** Polymarket copy-trade prototype. v0 (PR-A) shipped a top-wallets scoreboard. v0.1 (PR #890, this branch) is a single-wallet shadow/live mirror that ends with one real `order_id` from a hardcoded target.
-- **Strategy:** stable-`decide()`-boundary design. Scaffolding (30s poll, dashboard card, env-based target) is intentionally disposable and labeled. Four phases: P1 first live order → P2 click-to-copy UI → P3 paper soak → P4 streaming (gated on P3 evidence).
-- **Phase 1 = CP1–CP4 on the design branch.** Each CP is a commit; CPs ≥ 3 split into sub-CPs of ≤½–1 day each.
-- **The operator Privy wallet (HSM-custodied EOA `0xdCCa8D85603C2CC47dc6974a790dF846f8695056`) is fully onboarded to Polymarket's CLOB via the direct-EOA path.** No Safe proxy, no browser ToS step. This is non-obvious and was discovered by probing; see the guide.
+```
+🟢 CP4.1   pure decide() + Polymarket Data-API normalizer       63f9f0868   on origin
+🟢 CP4.2   createClobExecutor(deps) with injected placeOrder    33288f220   on origin
+🟢 CP4.25  core__poly_place_trade agent-callable AI tool        21bc70747   on origin
+⚪ CP4.3   autonomous copy-trade loop (poll + fills/decisions writes, kill-switch read)
+⚪ CP4.5   read-only dashboard activity card
+```
 
-## Current State
+PR #900 carries CP4.1 + CP4.2 + CP4.25. **No autonomy loop, no DB writes, no admin ops route** — an agent chatting with poly-brain can invoke `core__poly_place_trade` and get a real CLOB `order_id` back. That's the entire merge gate.
 
-> **Honest read (2026-04-17 audit):** PR #890 is a **library + migration** PR, not an end-to-end v0. No deployed code path on any running container can trigger a Polymarket trade yet. The adapter + `client_order_id` helper are imported only by local dev scripts + unit tests. The poly app's runtime does not instantiate either. CP4 is where real "the app can trigger Polymarket trades" lands.
+## What a validation pass looks like on candidate-a
 
-**Shipped on branch (13 commits since `origin/main` as of `00a9239a1`):**
+Merge gate: **one registered agent places one real `order_id`, captured in Loki + visible on Polymarket, pasted into the PR.**
 
-| Commit      | What                                                                                                | What it actually proves                                                                                                                                                                                                                          |
-| ----------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `8293eb665` | CP1 — `MarketProviderPort` Run methods + `OrderIntent/Receipt/Status/Fill` Zod + paper-adapter stub | Package-land types only. No runtime wiring.                                                                                                                                                                                                      |
-| `00fea90f9` | CP2 — Offline EIP-712 signing via `@privy-io/node/viem#createViemAccount`                           | Privy HSM → viem `LocalAccount` → `ClobSigner` works end-to-end **from a dev laptop** (not from a container).                                                                                                                                    |
-| `a018fea4c` | Onboarding scripts + guide                                                                          | `derive-polymarket-api-keys` + `probe-polymarket-account` + setup doc. Dev-only.                                                                                                                                                                 |
-| `c8ef5ca5c` | CP3.1 — USDC.e MaxUint256 approvals for {Exchange, Neg-Risk, Neg-Risk Adapter}                      | On-chain state on Polygon. Operator EOA `0xdCCa8…5056` can now be the maker on Polymarket.                                                                                                                                                       |
-| `efbf49901` | CP3.1.5 — Delete dead signer surface                                                                | Removed `PolymarketOrderSigner` port, `OperatorWalletPort.signPolymarketOrder`, duplicated `Eip712TypedData`, `MarketCredentials.walletKey`, 4 fake-adapter impls, 1 contract test case. Made `PaperAdapter.provider` configurable.              |
-| `3b9e1797a` | CP3.2 — `PolymarketClobAdapter` library                                                             | Runs against mocked `ClobClient` (13 tests). Not imported by any app; only by the local dry-rehearsal script + its tests.                                                                                                                        |
-| `84729317f` | CP3.3 — Drizzle schema + migration 0027 + pinned `clientOrderIdFor` helper                          | Three tables created on `cogni_poly`; kill-switch singleton seeded `enabled=false`. Helper has a golden-vector test; not imported by any app.                                                                                                    |
-| `f1e8143e8` | Review blockers B1 + B2 + B5                                                                        | Per-market `tickSize` + `negRisk` fetched (B1); `success:false` rejections caught even with `orderID` populated (B2); dress-rehearsal is post-only + hard-asserts `filled=0` (B5).                                                               |
-| `2217244db` | Dress rehearsal — `feeRateBps` fetch + live `order_id` captured                                     | `getFeeRateBps` added to the per-market trio. Real Polymarket `order_id` `0xb14daf06…207ca9` placed (post-only, cancelled) via `copy-top-wallet-rehearsal.ts`. Evidence in the commit body.                                                      |
-| `770f91749` | Observability ports on the adapter                                                                  | `LoggerPort` + `MetricsPort` defined at `packages/market-provider/src/port/observability.port.ts`; adapter now emits structured logs + counters through them. Only the no-op sinks are constructed; real pino + prom-client wiring is CP4's job. |
-| `7cf50370e` | Fix B6 — `filled_size_usdc` unit drift                                                              | `makingAmount`/`takingAmount` are decimal USDC, not atomic 1e6. Previous `/1_000_000` produced values ~1M× too small. Surfaced by the live take-fill (`00a9239a1`). Tests updated; 77/77 passing.                                                |
-| `00a9239a1` | `scripts/experiments/fill-market.ts` + live take-fill                                               | First real Cogni-issued taking order on Polymarket — `0x61f7ae0d…17b58a` on "SPY Up or Down on April 17", `$5 USDC @ 0.994`, matched on Polygon tx `0xeeb76d56…a6c3`. Position live at `polymarket.com/profile/0xdcca8d85…95056`.                |
+1. Deploy PR #900 to candidate-a. Verify bootstrap logs show either:
+   - `poly.trade.capability.unavailable` (with `has_operator_wallet`/`has_clob_creds`/`has_privy` flags — use these to debug missing env), or
+   - No log yet — the capability is lazy; the first log is `poly.trade.capability.ready` on the first tool invocation with `wallet_id` + resolved `address`.
+2. From a registered agent chat session, message poly-brain:
+   > "Place a $5 BUY at 0.99 on Polymarket market `<conditionId>` outcome Yes, tokenId `<tokenId>`."
+   > Pick a conditionId / tokenId from `core__wallet_top_traders` output or an external reference. Keep size ≤ 25 USDC (zod cap); standard markets enforce ~$1 min, neg-risk ~$5.
+3. Agent response should include:
+   - `order_id` (0x-prefixed hex, matches PolymarketClobAdapter response)
+   - `status`: `open` / `filled` / `matched`
+   - `profile_url`: `https://polymarket.com/profile/0xdcca8d85603c2cc47dc6974a790df846f8695056`
+4. Confirm on Polymarket that the position is live under the operator EOA.
+5. Paste `{order_id, profile_url, transaction_hash_if_matched, agent name / session id}` into PR #900 as the evidence block.
+6. Update `task.0315` → `status: needs_closeout`, run `/closeout` for the final doc pass.
 
-**Operator wallet on Polygon mainnet** (CP3.1 state): 20.43 USDC.e funded · ~9.99 POL gas · L2 CLOB creds registered · 3 allowances at max. A real BUY is placeable **from a dev laptop via `scripts/experiments/place-polymarket-order.ts --yes-real-money`** — NOT yet from the deployed poly container. CP4 is what closes that gap.
+## Secrets propagation for candidate-a — **the `/env-update` skill is stale here**
 
-**What CP3.1.5 deleted** (pulled forward from original CP3.4 per design-review 2026-04-17): `PolymarketOrderSigner` port + `OperatorWalletPort.signPolymarketOrder` + CP1 stub + 4 `FakeOperatorWalletAdapter` impls + resy contract test case + duplicated `Eip712TypedData` type + `MarketCredentials.walletKey` escape hatch. `PaperAdapter.provider` is now constructor-configurable.
+`.claude/commands/env-update.md` still describes the legacy deploy model (production/staging-preview GitHub workflows + `scripts/ci/deploy.sh` to a VM over SSH). That path was superseded by the **k3s + Argo CD + candidate flighting** model (see `/deploy-node` and `/deploy-operator` skills — those are current).
 
-## Decisions Made
+**What the skill gets wrong for our current setup:**
 
-- **EOA path, not Safe proxy.** Confirmed by probing — Polymarket's CLOB accepts direct-EOA accounts created via `createOrDeriveApiKey`. See [docs/guides/polymarket-account-setup.md](../../docs/guides/polymarket-account-setup.md).
-- **Use `@privy-io/node/viem#createViemAccount`**, not a hand-rolled shim. Private discovery during CP2 rev 4; replaces the planned `PolymarketOrderSigner` adapter path. [Commit 4e1202124](https://github.com/Cogni-DAO/cogni-template/commit/4e1202124).
-- **Split CP3 into 4 sub-CPs** (3.1 allowances ✅, 3.2 adapter, 3.3 DB, 3.4 dead-surface cleanup). Each a separate commit so reviews stay small.
-- **`@polymarket/clob-client` currently in root devDeps.** CP3.2 moves it to `packages/market-provider` as an optional peerDep when that package becomes its only internal consumer.
-- **BUY-only prototype.** SELL orders additionally need ERC-1155 `setApprovalForAll` on the CTF contract; out of scope until SELL mirroring is planned.
+- References `.github/workflows/deploy-production.yml` + `deploy.sh` SSH-based provisioning — **not how candidate-a + canary + production flight today.**
+- Tells you to mount env into `docker-compose.dev.yml` + `docker-compose.yml` — still useful for local `pnpm dev:stack`, but the candidate-a deployment path is k8s.
+- Missing: how secrets get from GitHub → k3s sealed secrets / external-secrets operator → the poly Deployment.
 
-## Next Actions
+**What to actually do for CP4.25 on candidate-a (until the skill is rewritten):**
 
-- [x] **CP3.1.5 — Delete dead surface** ✅ pulled forward from original CP3.4. See "Current State" above.
-- [x] **CP3.2 — CLOB adapter** ✅ `PolymarketClobAdapter` at `packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts`. Constructor takes `ClobSigner` (viem `WalletClient`) + `ApiKeyCreds` + funder EOA. 13 mapping + adapter unit tests passing (`polymarket-clob-adapter.test.ts`). `@polymarket/clob-client` + `viem` moved to market-provider as optional peerDeps.
-- [x] **CP3.2 live dry-rehearsal script** ✅ `scripts/experiments/place-polymarket-order.ts`. Gated behind `--yes-real-money` flag. Env-directed wallet (v0) — per-tenant connections are vnext. Places one BUY far-below-market + immediate cancel. **Run manually to capture a real `order_id`** before CP5.
-- [x] **CP3.3 — DB migrations** ✅ `packages/db-schema/src/poly-copy-trade.ts` + `nodes/operator/app/src/adapters/server/db/migrations/0027_silent_nextwave.sql`. Tables: `poly_copy_trade_{fills,config,decisions}`. Kill-switch singleton seeded `enabled=false` (fail-closed). Applied cleanly against local poly DB. `client_order_id` helper at `@cogni/market-provider/domain/client-order-id` — pinned with a golden-vector test so CP4 executor + any future WS path share the exact same function.
-  - **Pre-existing drift note:** drizzle snapshots 0024–0026 are missing (those were hand-authored SQL deltas). 0027 was generated, then hand-stripped to just my 3 poly tables; the generated snapshot correctly reflects full current schema going forward.
-- [x] **CP3.2 review blockers** (rev-4 review at commit `d0366e215`):
-  - [x] **B1** — per-market `tickSize` + `negRisk` + `feeRateBps` fetched before every placement (`f1e8143e8`, `2217244db`).
-  - [x] **B2** — `mapOrderResponseToReceipt` rejects on `success: false` regardless of `orderID` presence (`f1e8143e8`).
-  - [ ] **B3** — `mapOpenOrderToReceipt` `client_order_id`/`order_id` semantics. **Deferred to CP4** when `decide()` forces the correlation shape.
-  - [ ] **B4** — Recorded-fixture contract test vs. `@polymarket/clob-client` drift. **Deferred to CP4.**
-  - [x] **B5** — Dress rehearsal is post-only + asserts `filled_size_usdc === 0` (`f1e8143e8`).
-  - [x] **B6** — `filled_size_usdc` unit drift (decimal USDC, not atomic) — surfaced during the live take-fill and fixed in `7cf50370e`.
-- [ ] **CP4** (~4 days). Pure `decide()` + heavy unit tests (include fail-closed kill-switch branch); `clob-executor` with dynamic import gated on `POLY_ROLE=trader`; 30s poll job (`@scaffolding`, `Deleted-in-phase: 4`); SELECT-backed dashboard card (`@scaffolding`); container wiring; env vars. **This is where the adapter + helper get imported by the app and "trigger Polymarket trades" becomes a true statement about the running container.**
-- [ ] **CP5** (manual, ~1h). Deploy to canary. Tail container logs to confirm migration 0027 applied. Flip kill-switch → observe target → **container-issued** `order_id` → paste into PR.
-- [x] **Merge gate for PR #890 (revised 2026-04-17):**
-  - [x] Local dress-rehearsal produced a real Polymarket `order_id` (`0xb14daf06…207ca9`, post-only + cancelled). Evidence in PR body + commit `2217244db`.
-  - [x] Live take-fill produced a real matched `order_id` (`0x61f7ae0d…17b58a`, $5 USDC on SPY Up, Polygon tx `0xeeb76d56…a6c3`). Evidence in PR body + commit `00a9239a1`.
-  - [x] PR description names the Privy HSM wallet custodian (operator EOA `0xdCCa8…5056`).
-  - [ ] Migration 0027 applies cleanly on canary container boot — verify post-deploy (the one remaining item before merge).
-  - **Container-issued `order_id` gate belongs to CP4+CP5**, not to this PR.
+The new env vars live at `nodes/poly/app/src/shared/env/server-env.ts`:
 
-## Risks / Gotchas
+```
+OPERATOR_WALLET_ADDRESS   already used by CP3.1 allowance script + CP3.2 dress
+                          rehearsal — should already exist on candidate-a
+POLY_CLOB_API_KEY         new — derived via scripts/experiments/derive-polymarket-api-keys.ts
+POLY_CLOB_API_SECRET      new
+POLY_CLOB_PASSPHRASE      new
+POLY_CLOB_HOST            optional; omit for prod CLOB
 
-- **Polygon public RPCs round-robin.** `publicnode.com` sometimes returns post-tx state from a pre-tx node. Always `waitForTransactionReceipt` first, then read with `blockNumber: receipt.blockNumber`. Hit this live during CP3.1 — see the block-pinned read in the approve script.
-- **`task.0315.status` frontmatter is stale (`needs_closeout`).** The task is actually mid-flight across multiple CPs on the design branch; the field is outdated. Don't treat it as truth — branch commits are the source.
-- **`.env.local` lives in the main worktree, symlinked into the design worktree.** Contains `PRIVY_APP_*`, `OPERATOR_WALLET_ADDRESS`, `POLY_CLOB_API_*`. Never commit `.env.local`. Re-run `derive-polymarket-api-keys` if rotating wallets.
-- **Minimum order size on Polymarket.** Historically ~$5 notional; $1 may be below floor for some markets. Confirm against the target market during CP5 — may need `COPY_TRADE_MIRROR_USDC=5` rather than 1.
-- **The `workspace:test` job in `check:fast` does NOT typecheck `scripts/`.** Script-only edits skate past `pnpm check:fast`. Always smoke-test scripts with `pnpm tsx --tsconfig tsconfig.scripts.json <file>` before commit.
+PRIVY_APP_ID              already wired; confirm presence
+PRIVY_APP_SECRET          already wired; confirm presence
+PRIVY_SIGNING_KEY         already wired; confirm presence
+```
+
+Propagation checklist for the current k3s + Argo CD flighting model:
+
+- [ ] **`.env.local`** in both worktrees (`cogni-template` + `cogni-template-cp4`): POLY*CLOB*\* populated for local dev + stack tests.
+- [ ] **`.env.test`** + **`.env.local.example`**: mock / placeholder values for CI + fresh clones.
+- [ ] **`.github/workflows/ci.yaml`**: every `env:` block that already references `PRIVY_APP_ID` or similar — add the three POLY*CLOB*\* entries with test-safe values. Check the `static`, `component`, `contract`, `stack` jobs specifically.
+- [ ] **Candidate-a k8s secret**: `POLY_CLOB_API_KEY`, `POLY_CLOB_API_SECRET`, `POLY_CLOB_PASSPHRASE` need to land in the poly app's k8s Secret on candidate-a. **Confirm the mechanism with the `/deploy-node` skill or whoever owns candidate-a provisioning** — this is the exact thing `/env-update` is stale on. Options depending on how the cluster is set up:
+  - SealedSecrets (`kubeseal`) committed to the cluster config repo
+  - External-secrets operator pulling from a secrets backend (GitHub, Doppler, etc.)
+  - Direct `kubectl create secret` on the cluster (one-shot, not GitOps-friendly)
+- [ ] **poly Deployment spec** (`infra/k8s/overlays/candidate-a/poly/`): ensure the container's `env:` / `envFrom:` references the new Secret keys.
+- [ ] **Sanity**: `kubectl exec` into the running poly pod post-deploy and `env | grep POLY_CLOB` — verifies the env actually landed.
+- [ ] **Add a work item** to rewrite `/env-update` for the k3s + Argo CD flighting model. It's the canonical "I added an env var, where do I put it?" guide and silently misleading devs now.
+
+**Non-blocker reminder:** the capability is lazy. Even if POLY*CLOB*\* is misconfigured, the pod boots fine; the tool registers as a stub that throws `core__poly_place_trade stub invoked` on invocation. No crashloop, no silent 500 — just a clear chat-surfaced error with the exact env vars to check.
+
+## Gotchas worth knowing
+
+- **OPERATOR_WALLET_ADDRESS is already the Polymarket signer** — no alias needed (this was in the CP4.25 design review as "POLY_OPERATOR_WALLET_ADDRESS?"). The wallet `0xdCCa8…5056` is on-chain funded + approved from CP3.1.
+- **viem dual-peerDep `as any` casts** in `bootstrap/capabilities/poly-trade.ts` lines 349–360 — not a bug, cross-peerDep type drift between `@privy-io/node/viem` and our app's viem. Same wiring that works live in `scripts/experiments/fill-market.ts`. Do NOT try to remove them without upgrading both sides atomically.
+- **First tool invocation is slow** — dynamic import of `@polymarket/clob-client` + Privy wallet resolution. ~1–3s first call, <100ms subsequent. Expected; do not panic.
+- **Biome `noRestrictedImports` on clob-client** — if CP4.3 or a follow-up ever needs a second importer of `@polymarket/clob-client`, extend the exception list in `biome/app.json`. Do NOT statically import it anywhere else; the containment is load-bearing for non-trader code paths in future pods.
+- **Prompt gate is soft** — the LLM is instructed to only call `core__poly_place_trade` on explicit user request with concrete params. A bad actor with chat access can still cajole it. The hard guardrails are: (a) 25 USDC max per trade (zod), (b) operator EOA balance cap (~20 USDC today), (c) kill the tool by removing one of the POLY*CLOB*\* env vars (capability becomes stub). CP4.3's kill-switch row + cap enforcement are future hardening.
+- **19 new tests + ~1234 total workspace tests pass.** Full `pnpm check` green on `21bc70747`.
 
 ## Pointers
 
-| File / Resource                                                                                      | Why it matters                                                                                                        |
-| ---------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
-| [work/items/task.0315.poly-copy-trade-prototype.md](../items/task.0315.poly-copy-trade-prototype.md) | Full Phase 1–4 plan; CP3 sub-CP breakdown is in the Plan section                                                      |
-| [docs/guides/polymarket-account-setup.md](../../docs/guides/polymarket-account-setup.md)             | Operator onboarding (verified 2026-04-17); the 4-step EOA-path flow                                                   |
-| `scripts/experiments/sign-polymarket-order.ts`                                                       | CP2 signing proof — pattern for `createViemAccount` + `ClobSigner`                                                    |
-| `scripts/experiments/derive-polymarket-api-keys.ts`                                                  | L2 cred derivation (idempotent; safe to re-run)                                                                       |
-| `scripts/experiments/probe-polymarket-account.ts`                                                    | Read-only sanity check — use as your "is the wallet still healthy?" probe                                             |
-| `scripts/experiments/approve-polymarket-allowances.ts`                                               | CP3.1 on-chain approvals — pattern for Privy-signed Polygon writes via viem                                           |
-| `packages/market-provider/src/port/market-provider.port.ts`                                          | Run-phase port CP3.2 implements                                                                                       |
-| `packages/operator-wallet/src/adapters/privy/privy-operator-wallet.adapter.ts`                       | Existing Privy adapter — pattern for wallet-id resolution + `authContext`                                             |
-| `node_modules/@polymarket/clob-client/dist/client.d.ts`                                              | `ClobClient` constructor + `createOrder`/`postOrder`/`cancelOrder` signatures                                         |
-| [PR #890](https://github.com/Cogni-DAO/node-template/pull/890)                                       | Phase-1 flight PR — merges to main when a real `order_id` lands                                                       |
-| [Phase 1 spec section](../items/task.0315.poly-copy-trade-prototype.md)                              | `### Phase 1` + `### Files — by phase`; invariants like `SINGLE_WRITER`, `DRY_RUN_DEFAULT`, `KEY_IN_TRADER_ROLE_ONLY` |
+```
+PR                       https://github.com/Cogni-DAO/node-template/pull/900
+Tool                     packages/ai-tools/src/tools/poly-place-trade.ts
+Capability factory       nodes/poly/app/src/bootstrap/capabilities/poly-trade.ts
+Env schema               nodes/poly/app/src/shared/env/server-env.ts
+Biome import guard       biome/app.json (noRestrictedImports on @polymarket/clob-client)
+Poly-brain tool list     nodes/poly/graphs/src/graphs/poly-brain/tools.ts
+Poly-brain system prompt nodes/poly/graphs/src/graphs/poly-brain/prompts.ts
+Task doc                 work/items/task.0315.poly-copy-trade-prototype.md
+Stale env skill          .claude/commands/env-update.md  ← needs rewrite for k3s + Argo CD
+Deploy skills (current)  .claude/commands/deploy-node.md, deploy-operator.md
+```
+
+## Next command for the incoming dev
+
+1. Review PR #900. Push back on anything in the architecture notes or merge-gate framing above.
+2. Propagate secrets to candidate-a per the checklist above. File a work item to rewrite `/env-update`.
+3. Drive the validation: single agent chat session → real `order_id` → paste evidence into PR #900.
+4. Once evidence lands: `/closeout` for doc pass + final merge.
+5. Afterward: CP4.3 (autonomy loop) and CP4.5 (dashboard card) are queued. CP4.3 reuses `container.copyTradeCapability.placeTrade` directly — no new adapter wiring.
