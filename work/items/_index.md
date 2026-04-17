@@ -195,6 +195,7 @@
 | 3 | 99 | 1 | needs_triage | task.0098 | Temporal retry workflow for failed identity bindings + scheduled backstop | User Identity Bindings + DID Readiness | proj.decentralized-identity |
 | 3 | 99 | 1 | needs_triage | bug.0150 | getAllReceipts query is unbounded — will degrade at scale |  |  |
 | 3 | 99 | 2 | needs_triage | spike.0239 | Three.js agent observatory — prototype + performance budget | Premium Frontend UX | proj.premium-frontend-ux |
+| 3 | 99 | 2 | needs_triage | task.0316 | Add per-node test:external lanes (poly, resy, node-template) | System Test Architecture | proj.system-test-architecture |
 
 > Sort: priority ASC → rank ASC
 

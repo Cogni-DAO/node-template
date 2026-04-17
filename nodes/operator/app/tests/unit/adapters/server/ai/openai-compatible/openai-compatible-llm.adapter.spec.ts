@@ -16,10 +16,36 @@ import { OpenAiCompatibleLlmAdapter } from "@/adapters/server/ai/openai-compatib
 
 const OLLAMA_URL = "http://localhost:11434";
 
-// Skip if Ollama not running
-const ollamaAvailable = await fetch(`${OLLAMA_URL}/`)
-  .then(() => true)
-  .catch(() => false);
+// Skip unless Ollama is up, has a pulled model, AND that model can actually
+// serve a completion. Previous probe (`fetch(/)`) unskipped on any HTTP
+// response, so a crashing model let these tests run and redden the default
+// lane. Probing an end-to-end tiny completion is the only reliable signal.
+async function probeOllama(): Promise<boolean> {
+  try {
+    const modelsRes = await fetch(`${OLLAMA_URL}/v1/models`);
+    if (!modelsRes.ok) return false;
+    const models = (await modelsRes.json().catch(() => null)) as {
+      data?: Array<{ id?: string }>;
+    } | null;
+    const firstModel = models?.data?.[0]?.id;
+    if (!firstModel) return false;
+    const completionRes = await fetch(`${OLLAMA_URL}/v1/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: firstModel,
+        messages: [{ role: "user", content: "hi" }],
+        max_tokens: 1,
+        stream: false,
+      }),
+    });
+    return completionRes.ok;
+  } catch {
+    return false;
+  }
+}
+
+const ollamaAvailable = await probeOllama();
 
 const caller = {
   billingAccountId: "test-ba",

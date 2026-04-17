@@ -52,7 +52,7 @@ This coordinator flights PRs to the `test` environment (slot `candidate-a`). Pre
 | -------- | ------------------------------ |
 | Operator | https://test.cognidao.org      |
 | Poly     | https://poly-test.cognidao.org |
-| Resy    | https://resy-test.cognidao.org |
+| Resy     | https://resy-test.cognidao.org |
 
 ## Observability Anchors
 
@@ -115,11 +115,11 @@ If `state == busy`, abort and report the owner PR. If `free`, proceed.
 
 Two dispatchable workflows (see "Two Independent Levers" below). Route by what the PR changes:
 
-| PR changes                                | Command                                                                  |
-| ----------------------------------------- | ------------------------------------------------------------------------ |
+| PR changes                                | Command                                                                                |
+| ----------------------------------------- | -------------------------------------------------------------------------------------- |
 | App code (`nodes/`, `packages/`, `apps/`) | `gh workflow run candidate-flight.yml --repo Cogni-DAO/node-template -f pr_number=<N>` |
 | Infra only (`infra/compose/**`)           | merge PR → `gh workflow run candidate-flight-infra.yml --repo Cogni-DAO/node-template` |
-| Both                                      | App lever; infra lever follows after merge                               |
+| Both                                      | App lever; infra lever follows after merge                                             |
 
 `gh run watch` the dispatched run. On success, post a sticky PR comment:
 
