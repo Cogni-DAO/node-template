@@ -686,3 +686,10 @@ No blockers. Ready to write CP2 code.
 ## Notes on "is this worth productizing?"
 
 The Phase 3 paper soak answers this with real numbers, not hypotheticals. Run P3 for 14 days on candidate wallets; if no wallet shows positive slippage-adjusted edge, the feature sunsets at P3 and Phase 4 (streaming) is not built. If it does survive, Phase 4 ships the realtime path.
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0315.handoff.md)
+- PR #890 (Phase 1): https://github.com/Cogni-DAO/node-template/pull/890
+- Guide: [polymarket-account-setup](../../docs/guides/polymarket-account-setup.md)
+- Archived handoffs: [work/handoffs/archive/task.0315/](../handoffs/archive/task.0315/)
