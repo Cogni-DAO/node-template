@@ -12,14 +12,16 @@
  */
 
 import { constants, createSign } from "node:crypto";
+import type { OrderIntent, OrderReceipt } from "../../domain/order.js";
 import type {
   ListMarketsParams,
   NormalizedMarket,
 } from "../../domain/schemas.js";
-import type {
-  MarketCredentials,
-  MarketProviderConfig,
-  MarketProviderPort,
+import {
+  type MarketCredentials,
+  type MarketProviderConfig,
+  type MarketProviderPort,
+  OrderNotSupportedError,
 } from "../../port/market-provider.port.js";
 import { normalizeKalshiMarket } from "./kalshi.normalizer.js";
 import { KalshiMarketsResponseSchema } from "./kalshi.types.js";
@@ -126,5 +128,40 @@ export class KalshiAdapter implements MarketProviderPort {
     const parsed = KalshiMarketsResponseSchema.parse(json);
 
     return parsed.markets.map(normalizeKalshiMarket);
+  }
+
+  // Kalshi adapter is READ-ONLY by design (AGENTS.md): the Kalshi API key may
+  // hold real money and this package MUST NEVER call POST/PUT endpoints. The
+  // Run-phase methods are present solely to satisfy the widened port contract
+  // and always throw.
+
+  placeOrder(_intent: OrderIntent): Promise<OrderReceipt> {
+    return Promise.reject(
+      new OrderNotSupportedError(
+        "kalshi",
+        "placeOrder",
+        "KalshiAdapter is read-only by design — no order placement."
+      )
+    );
+  }
+
+  cancelOrder(_orderId: string): Promise<void> {
+    return Promise.reject(
+      new OrderNotSupportedError(
+        "kalshi",
+        "cancelOrder",
+        "KalshiAdapter is read-only by design."
+      )
+    );
+  }
+
+  getOrder(_orderId: string): Promise<OrderReceipt> {
+    return Promise.reject(
+      new OrderNotSupportedError(
+        "kalshi",
+        "getOrder",
+        "KalshiAdapter is read-only by design."
+      )
+    );
   }
 }

@@ -59,7 +59,11 @@ external_refs:
 **v0.1 — four phases (each = one PR):**
 
 - [x] **Phase 0 — Pre-flight** (no code). Findings recorded below ("Phase 0 — Findings"). P1 migration header will cite them verbatim.
-- [ ] **Phase 1 — PR-B1 — First live order** (~1 week). Stable boundary (`decide()` + `clob-executor` + port Run methods + Privy `signPolymarketOrder` + DB tables) + disposable 30s poll scaffolding. 🎯 Real `order_id` on one hardcoded target.
+- [ ] **Phase 1 — PR-B1 — First live order** (~1 week). Four checkpoints on the design branch (`design/poly-copy-trade-pr-b`, PR #890). 🎯 Real `order_id` on one hardcoded target.
+  - [ ] **CP1** — types + ports (`MarketProviderPort` Run methods, `OrderIntent/OrderReceipt/OrderStatus/Fill` Zod, `PolymarketOrderSigner` port, `OperatorWalletPort.signPolymarketOrder`, paper-adapter stub). Package-land only, no runtime wiring. Unit tests on Zod round-trip.
+  - [ ] **CP2** — Privy Polygon EIP-712 signer. Chain-parameterize existing adapter (BASE_CAIP2 for transfers, new POLYGON_CAIP2 for Polymarket order signing). Mocked-Privy unit test.
+  - [ ] **CP3** — polymarket adapter Run methods via `@polymarket/clob-client`; signer + `safe_proxy_address` via constructor. New `poly_copy_trade_{fills,config,decisions}` tables with migration header citing the P0.2 `fill_id` shape verbatim. `DA_EMPTY_HASH_REJECTED` enforced at a normalizer. Contract test against a recorded clob-client fixture.
+  - [ ] **CP4** — pure `decide()` + heavy unit tests (skip branches + caps + idempotency); `clob-executor` dynamic-import-gated on `POLY_ROLE=trader`; disposable 30 s poll job (`@scaffolding` / `Deleted-in-phase: 4`); SELECT-backed dashboard card (`@scaffolding`); container wiring + env vars; absence-of-module-load assertion for non-trader replicas.
 - [ ] **Phase 2 — PR-B2 — Click-to-copy UI** (~4 days). `poly_copy_trade_targets` table + dashboard "Copy" button + Copy Targets card. DB-authoritative-when-populated; env fallback retained. Env-removal filed as follow-up.
 - [ ] **Phase 3 — PR-B3 — Paper-adapter body** (~3 days). 14-day soak produces the Phase 4 GO/NO-GO evidence. Sunsets the project if no edge.
 - [ ] **Phase 4 — PR-B4 — Streaming upgrade** (~1.5 weeks, **gated on P3 evidence**). WS → Redis streams → Temporal trigger → existing `decide()`. Dual-run 48h; cutover gate = zero double-fires.

@@ -39,7 +39,7 @@ Standalone workspace package (`@cogni/operator-wallet`) providing Privy-managed 
 
 ## Public Surface
 
-- **Exports:** `OperatorWalletPort`, `TransferIntent`, `PrivyOperatorWalletAdapter`, `PrivyOperatorWalletConfig`, `calculateSplitAllocations`, `SPLIT_TOTAL_ALLOCATION`, `OPENROUTER_CRYPTO_FEE_PPM`
+- **Exports:** `OperatorWalletPort`, `TransferIntent`, `Eip712TypedData`, `PrivyOperatorWalletAdapter`, `PrivyOperatorWalletConfig`, `calculateSplitAllocations`, `SPLIT_TOTAL_ALLOCATION`, `OPENROUTER_CRYPTO_FEE_PPM`
 - **Routes:** none
 - **Env/Config keys:** `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_SIGNING_KEY`, `OPERATOR_MAX_TOPUP_USD` (consumed by `apps/operator` bootstrap, not by this package directly)
 
@@ -50,11 +50,12 @@ Standalone workspace package (`@cogni/operator-wallet`) providing Privy-managed 
 
 ## Responsibilities
 
-- This directory **does**: implement `distributeSplit()` and `fundOpenRouterTopUp()` via Privy HSM, validate signing gates (SENDER_MATCH, DESTINATION_ALLOWLIST, CHAIN_MISMATCH, MIN_TOPUP, MAX_TOPUP_CAP), encode ERC-20 approve + Coinbase Commerce `transferTokenPreApproved` calldata.
-- This directory **does not**: hold raw key material, manage env vars, orchestrate charge creation, persist state, or interact with databases.
+- This directory **does**: implement `distributeSplit()` and `fundOpenRouterTopUp()` via Privy HSM on Base; implement `signPolymarketOrder()` on Polygon (EIP-712 typed-data signing, scoped to the Polymarket CLOB domain); validate signing gates (SENDER_MATCH, DESTINATION_ALLOWLIST, CHAIN_MISMATCH, MIN_TOPUP, MAX_TOPUP_CAP); encode ERC-20 approve + Coinbase Commerce `transferTokenPreApproved` calldata.
+- This directory **does not**: hold raw key material, manage env vars, orchestrate charge creation, persist state, interact with databases, or expose a generic `signTypedData`/`signMessage` surface (NO_GENERIC_SIGNING — every signing method is named for its use-case).
 
 ## Notes
 
 - `fundOpenRouterTopUp` validates 5 gates before submitting any transaction — all BigInt arithmetic.
+- `signPolymarketOrder` is a CP1 stub in this revision; the real Polygon (`eip155:137`) impl lands in task.0315 Phase 1 CP2. Existing Base methods remain pinned to `BASE_CAIP2` — the adapter is chain-parameterized per use-case, not globally.
 - SIMULATE_BEFORE_BROADCAST deferred to Privy infrastructure (SDK has no pre-sign simulation hook).
 - Transfers ABI in `src/domain/transfers-abi.ts` matches deployed contract `0x03059433BCdB6144624cC2443159D9445C32b7a8` on Base.

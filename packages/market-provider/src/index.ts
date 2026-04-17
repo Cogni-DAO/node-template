@@ -7,10 +7,25 @@
  * Scope: Root barrel exports port interface, Zod schemas, and normalizers. Does not export adapter implementations (use subpath imports).
  * Invariants: PACKAGES_NO_ENV, PACKAGES_NO_LIFECYCLE, PACKAGES_NO_SRC_IMPORTS.
  * Side-effects: none
- * Links: work/items/task.0230.market-data-package.md
+ * Links: work/items/task.0230.market-data-package.md, work/items/task.0315.poly-copy-trade-prototype.md
  * @public
  */
 
+// Order domain (Run phase — added task.0315 Phase 1)
+export {
+  type Fill,
+  FillSchema,
+  type FillSource,
+  FillSourceSchema,
+  type OrderIntent,
+  OrderIntentSchema,
+  type OrderReceipt,
+  OrderReceiptSchema,
+  type OrderSide,
+  OrderSideSchema,
+  type OrderStatus,
+  OrderStatusSchema,
+} from "./domain/order.js";
 // Domain types
 export {
   type ListMarketsParams,
@@ -23,8 +38,13 @@ export {
   NormalizedMarketSchema,
 } from "./domain/schemas.js";
 // Port interface
-export type {
-  MarketCredentials,
-  MarketProviderConfig,
-  MarketProviderPort,
+export {
+  type MarketCredentials,
+  type MarketProviderConfig,
+  type MarketProviderPort,
+  OrderNotSupportedError,
 } from "./port/market-provider.port.js";
+export type {
+  Eip712TypedData,
+  PolymarketOrderSigner,
+} from "./port/polymarket-order-signer.port.js";

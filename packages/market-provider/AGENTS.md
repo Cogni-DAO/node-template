@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Standalone workspace package (`@cogni/market-provider`) providing a typed port for prediction market platforms (Polymarket, Kalshi). Covers the full provider lifecycle: read markets (Crawl), trade positions (Run). Adapters use constructor-injected credentials aligned with the tenant-connections spec.
+Standalone workspace package (`@cogni/market-provider`) providing a typed port for prediction market platforms (Polymarket, Kalshi). Covers the full provider lifecycle: read markets (Crawl) and submit orders (Run — Polymarket only). Adapters use constructor-injected credentials aligned with the tenant-connections spec. A narrow `PolymarketOrderSigner` port decouples the Polymarket CLOB adapter from wallet-custody internals.
 
 ## Pointers
 
@@ -41,17 +41,22 @@ Standalone workspace package (`@cogni/market-provider`) providing a typed port f
 
 **Root barrel** (`@cogni/market-provider`):
 
-- Types: `MarketProviderPort`, `MarketCredentials`, `MarketProviderConfig`, `NormalizedMarket`, `MarketProvider`, `ListMarketsParams`, `MarketOutcome`
-- Schemas: `NormalizedMarketSchema`, `MarketProviderSchema`, `ListMarketsParamsSchema`, `MarketOutcomeSchema`
+- Types: `MarketProviderPort`, `MarketCredentials`, `MarketProviderConfig`, `NormalizedMarket`, `MarketProvider`, `ListMarketsParams`, `MarketOutcome`, `PolymarketOrderSigner`, `Eip712TypedData`, `OrderIntent`, `OrderReceipt`, `OrderStatus`, `OrderSide`, `Fill`, `FillSource`
+- Schemas: `NormalizedMarketSchema`, `MarketProviderSchema`, `ListMarketsParamsSchema`, `MarketOutcomeSchema`, `OrderIntentSchema`, `OrderReceiptSchema`, `OrderStatusSchema`, `OrderSideSchema`, `FillSchema`, `FillSourceSchema`
+- Errors: `OrderNotSupportedError`
 - Pure fns: `normalizePolymarketMarket()`, `normalizeKalshiMarket()`
 
 **Subpath** (`@cogni/market-provider/adapters/polymarket`):
 
-- `PolymarketAdapter`, `PolymarketAdapterConfig`
+- `PolymarketAdapter`, `PolymarketAdapterConfig` (Gamma reads; Run methods throw `OrderNotSupportedError` in CP1 baseline; CP3 lands the CLOB surface)
 
 **Subpath** (`@cogni/market-provider/adapters/kalshi`):
 
-- `KalshiAdapter`, `KalshiAdapterConfig`
+- `KalshiAdapter`, `KalshiAdapterConfig` (read-only by design; Run methods always throw)
+
+**Subpath** (`@cogni/market-provider/adapters/paper`):
+
+- `PaperAdapter`, `PaperAdapterConfig` (Phase-1 stub; body lands in Phase 3 per task.0315)
 
 ## Ports
 
@@ -60,12 +65,13 @@ Standalone workspace package (`@cogni/market-provider`) providing a typed port f
 
 ## Responsibilities
 
-- This directory **does**: define port interface, Zod domain schemas, pure normalizers, platform REST adapters (fetch + normalize).
-- This directory **does not**: load env vars, manage lifecycle, persist to DB, place trades (Crawl scope — read-only).
+- This directory **does**: define port interface, Zod domain schemas (Crawl + Run), pure normalizers, platform REST adapters, and the narrow `PolymarketOrderSigner` port that wallet-custody packages satisfy.
+- This directory **does not**: load env vars, manage lifecycle, persist to DB, hold key material, or know about Privy / any specific wallet backend.
 
 ## Notes
 
+- `MarketProviderPort` now carries Run methods (`placeOrder`, `cancelOrder`, `getOrder`). Adapters that do not implement trading (Kalshi, paper stub pre-P3, baseline Polymarket Gamma reader) throw `OrderNotSupportedError` — they satisfy the port at compile time without risking accidental order placement.
 - KalshiAdapter is READ-ONLY. It NEVER calls POST/PUT endpoints. The Kalshi API key may have real money — no order placement.
-- PolymarketAdapter uses only public Gamma API — no wallet operations.
-- Walk phase will add `getPrices()`, `getOrderbook()` methods. Run phase will add `placeOrder()`, `getPositions()`.
+- Baseline `PolymarketAdapter` uses only public Gamma API — no wallet operations. A CLOB adapter (to be added in CP3) wraps `@polymarket/clob-client` and depends on `PolymarketOrderSigner` via constructor injection.
+- Walk phase will add `getPrices()`, `getOrderbook()` methods when the pipeline needs them.
 - PollAdapter (Walk) delegates to this port for HTTP calls — one client per platform, not two.
