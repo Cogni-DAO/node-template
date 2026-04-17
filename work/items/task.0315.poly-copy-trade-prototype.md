@@ -7,6 +7,7 @@ priority: 2
 estimate: 5
 rank: 5
 branch: design/poly-copy-trade-pr-b
+revision: 1
 summary: "One-shot prototype task. v0 (PR-A, this PR): poly-brain + dashboard answer 'who are the top Polymarket wallets?' via a new core__wallet_top_traders tool + /dashboard Top Wallets card backed by the Polymarket Data API. v0.1 (PR-B, not in this PR): single-wallet shadow mirror via @polymarket/clob-client. No new packages, no ports, no ranking pipeline, no awareness-plane tables. If it works, we scale it; if it doesn't, we learned cheaply."
 outcome: "A running prototype in the poly node. v0 (PR-A, shipped): ask poly-brain 'top wallets this week' and get a ranked list in chat + dashboard. v0.1 = four phases on a stable `decide()` boundary — P1 ships first live Polymarket order_id on one hardcoded target via disposable 30s poll scaffolding; P2 adds click-to-copy UI (DB-authoritative-when-populated, env fallback retained); P3 ships paper-adapter body so paper PnL over a real shadow soak becomes the evidence gate; P4 upgrades to WS → Redis streams → Temporal, gated on P3 evidence that edge survives slippage."
 spec_refs:
@@ -504,6 +505,26 @@ Per-phase unit + integration tests are listed inline under each Phase's Files bl
 - Env-var removal in the same PR as the P2 UI change — filed as a separate deprecation PR after P2.
 
 Any requests here mid-flight → new follow-up task.
+
+## Review Feedback (revision 1, 2026-04-16)
+
+Phase 0 findings are directionally sound but have substantive issues that will bite P1's migration and P4's cutover. Fix before `/implement P1`:
+
+1. **`fill_id` composite is not unique** (L167–172). `polymarket.data-api.types.ts` declares `transactionHash: z.string().optional().default("")`. Empty-hash rows collapse to `data-api::<asset>:<side>` → PK violation silently drops fills. Multi-match settlements within one tx also share `(tx, asset, side)`. Decide between (a) include `timestamp` in `native_id`, or (b) reject/repair rows with empty `transactionHash`. Commit the final shape — with rationale for uniqueness — in the P1 migration header.
+
+2. **P4 cutover SQL is vacuous** (L281–287, L441). Composite prefixes make DA and WS rows different PKs for the same logical match, so `GROUP BY target_id, fill_id HAVING COUNT(*)>1` is unreachable by the unique constraint. Combined with the observe-only amendment, only WS inserts non-null `order_id`s — "zero double-placements" holds by construction and proves nothing. Replace with a cross-source join on `(target_wallet, conditionId, side, timestamp ± Δ)` and assert ≤1 non-null `order_id` per logical match, or make the gate `decision_paths_diverged` bounded + WS-order count ≈ DA-observed count within tolerance.
+
+3. **`decision_paths_diverged` counter referenced but not declared** (L176, L289 vs L395–398). Add it to the Observability section's counter list.
+
+4. **`decisions_total` needs a dual-run label** (L395). Without `mode=active|observe_only` (or equivalent), observe-only DA decisions double-count during the 48 h window, breaking any dashboard keyed on the counter.
+
+5. **`OBSERVE_ONLY_DUAL_RUN_P4` invariant missing** (L418–442). The executor-not-invoked amendment is the only mechanism preventing double-placement during dual-run. Prose is insufficient — add an invariant mandating that `clob-executor` is invoked solely from the WS path during dual-run, and that the DA poll records decisions without placing.
+
+6. **`FILL_ID_SHAPE_DECIDED` must mandate a P4 header commit** (L435). Current wording decides only the data-api shape. Add a clause requiring the P4 migration header to commit the final `clob-ws` native_id shape before the WS ingester activity lands.
+
+7. **Stale conditional phrasing** (L267, L381). "(if P0.1 showed it was missing)" — P0.1 is definitive. Replace with a direct statement.
+
+Non-blocking: in P4 reconcile prose, pre-commit the cross-source join key (likely `(target_wallet, conditionId, side, size, timestamp ± Δ)`) so the reconcile activity has an unambiguous target when implemented.
 
 ## Alignment Decisions (confirmed by operator before `/implement`)
 
