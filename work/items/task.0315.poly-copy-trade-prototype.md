@@ -607,6 +607,20 @@ All four reviewer items folded into the CP2 bullet above:
 
 Net: CP2 ships one adapter method + one shim + three mocked unit tests + one live clob-client-driven experiment. Still scoped small; structurally proves CP3's full seam.
 
+### CP2 SDK verify-first results (2026-04-17)
+
+Pre-implementation SDK reads against `node_modules/.pnpm/@privy-io+node@0.10.1.../node_modules/@privy-io/node` to resolve the two unconfirmed items from the reviewer feedback:
+
+1. **`authorization_context` on `signTypedData` input: CONFIRMED accepted (optional).** `PrivyEthereumService.signTypedData(walletId, input: SignTypedDataInput)` — the `SignTypedDataInput` type unrolls to `PrivyWalletsRpcInput<EthereumSignTypedDataRpcInput>` = `Prettify<WithIdempotency<WithAuthorization<Omit<EthereumSignTypedDataRpcInput, 'chain_type' | 'method'>>>>`. `WithAuthorization` (defined in `public-api/services/types.d.ts`) merges `AuthorizationConfig = { authorization_context?: AuthorizationContext }`. Therefore our adapter can pass `authorization_context: this.authContext` exactly the way it does for `sendTransaction` today. Field name: `authorization_context` (snake_case on the wire; the SDK method's internal destructuring converts to camelCase for the request header).
+
+2. **Response field name: `.signature` (0x-hex string).** `signTypedData` is typed `Promise<EthereumSignTypedDataRpcResponse.Data>` — the service method already unwraps the `{ method, data }` envelope. `Data = { encoding: 'hex'; signature: string }` (`resources/wallets/wallets.d.ts:L~580`). Adapter can return `(result.signature.startsWith("0x") ? result.signature : "0x" + result.signature) as \`0x${string}\``defensively — the`encoding: 'hex'` enum doesn't guarantee 0x-prefix. Unit test should check both prefix shapes.
+
+3. **Incidental find: Polymarket OSS packages are NOT installed.** Neither `@polymarket/clob-client` nor `@polymarket/order-utils` appears in `pnpm-lock.yaml`. Both were planned as CP3 additions, but the reviewer-preferred CP2 experiment path (`new ClobClient(host, 137, shim).createOrder({...})`) requires at least `@polymarket/clob-client` (which brings `order-utils` transitively). **Decision: install `@polymarket/clob-client` in CP2**, NOT CP3. Rationale: (a) the reviewer's point that "CP2 must prove CP3's seam" only works if the OSS is present in CP2; (b) installing once is cheaper than scoping two PRs around the same dep addition; (c) CP3's surface shrinks to adapter wiring only, which is what we want anyway.
+
+   Plan addendum: `pnpm add -F @cogni/operator-wallet @polymarket/clob-client` at the start of CP2 implementation. Pin the version; add the dep to `packages/operator-wallet/AGENTS.md` under External deps. The shim + experiment script import directly from this package.
+
+No blockers. Ready to write CP2 code.
+
 ## Alignment Decisions (confirmed by operator before `/implement`)
 
 - **Single-operator prototype.** No user-facing mirroring, no retail exposure, no multi-tenant. Scope expansion requires re-scoping in a new task.
