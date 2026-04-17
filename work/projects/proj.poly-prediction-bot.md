@@ -24,24 +24,29 @@ Build a prediction market bot that starts by reading and searching live markets 
 
 ### Crawl (P0) — Market Port
 
-**Goal:** Live market data flowing through the system. Users can browse and search active markets across platforms. The landing page shows real data instead of mocks.
+**Goal:** Live market data flowing through the system. Users can browse and search active markets across platforms.
 
-| Deliverable                                                                   | Status | Est | Work Item      |
-| ----------------------------------------------------------------------------- | ------ | --- | -------------- |
-| Backend research + API integration plan                                       | Done   | 3   | task.0226      |
-| Polymarket domain pack — adapters, normalizers, triggers, scoring, API routes | Done   | 5   | task.0227      |
-| `@cogni/market-provider` — port, Zod schemas, Polymarket + Kalshi adapters    | Done   | 3   | task.0230      |
-| `@cogni/poly-core` — domain types, normalizers, triggers, scoring             | Done   | 2   | (in task.0227) |
-| `db-schema/ingestion` — ObservationEvent table                                | Done   | 1   | (in task.0227) |
-| PollAdapters wrapping MarketProviderPort                                      | Done   | 1   | (in task.0227) |
-| Landing page APIs (`/markets`, `/signals`, `/status`)                         | Done   | 2   | (in task.0227) |
-| Landing page UI — live market cards, category filters, platform links         | Done   | 2   | (in task.0227) |
-| `core__market_list` AI tool + poly-brain LangGraph agent                      | Done   | 2   | (in task.0230) |
-| Live market capability wired into chat UI container                           | Done   | 1   | (in task.0230) |
+> **Ground-truth audit 2026-04-17:** this table was inflated. Rows that named files / packages / routes that do not exist in the tree (no `@cogni/poly-core` package, no `observation_events` table, no `/markets` `/signals` `/status` routes, no landing-page market-cards UI, no `poly-synth` graph, no Temporal market/analysis workflows) have been corrected to **Not Started** with notes. Items marked **Done** are grep-verified.
+
+| Deliverable                                                                                | Status      | Est | Work Item            |
+| ------------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
+| Backend research + API integration plan                                                    | Done        | 3   | task.0226            |
+| `@cogni/market-provider` — port + Zod schemas + Polymarket Gamma + Kalshi read adapters    | Done        | 3   | task.0230            |
+| `core__market_list` AI tool                                                                | Done        | 1   | (in task.0230)       |
+| `core__wallet_top_traders` AI tool + poly-brain chat binding + /dashboard Top Wallets card | Done        | 3   | task.0315 v0 (PR-A)  |
+| `@cogni/poly-core` domain package                                                          | Not Started | 2   | (not created yet)    |
+| Awareness-plane `observation_events` table                                                 | Not Started | 1   | (deferred; see note) |
+| `PollAdapter` wrapping `MarketProviderPort`                                                | Not Started | 2   | (create when needed) |
+| Landing page APIs (`/markets`, `/signals`, `/status`)                                      | Not Started | 2   | (create when needed) |
+| Landing page UI — live market cards, category filters, platform links                      | Not Started | 3   | (create when needed) |
+
+**Note on `observation_events`:** task.0315's design explicitly defers this table with a named trigger (second consumer arrives — `poly-synth` cross-wallet analysis, a second domain, or a third-party plug-in). Do NOT add it speculatively. Dedicated copy-trade tables (`poly_copy_trade_{fills,config,decisions}`, shipped in task.0315 CP3.3) cover the v0.1 needs.
 
 ### Walk (P1) — Intelligence Engine
 
 **Goal:** Continuous autonomous scanning with threshold-triggered AI analysis. Redis live stream feeds the UI. Significant observations persist to Postgres. AI brain fires on triggers, not timers.
+
+> **Not started.** Every row below is un-implemented. Listing them as "Not Started" is tracking, not progress.
 
 | Deliverable                                                                 | Status      | Est | Work Item            |
 | --------------------------------------------------------------------------- | ----------- | --- | -------------------- |
@@ -63,7 +68,7 @@ Build a prediction market bot that starts by reading and searching live markets 
 
 | Deliverable                                                                | Status      | Est | Work Item            |
 | -------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Follow-a-wallet v0 — single-operator copy-trade prototype (PR #890)        | In Review   | 5   | task.0315            |
+| Follow-a-wallet — trade library + migration (no VM wiring yet) (PR #890)   | In Review   | 5   | task.0315            |
 | Multi-tenant wallet auth — per-user EOA + RLS + durable trade grants       | Not Started | 5   | task.0318            |
 | Paper trading engine — simulated order execution against live odds         | Not Started | 4   | (create at P2 start) |
 | Position tracking + P&L ledger (integrated with `@cogni/financial-ledger`) | Not Started | 3   | (create at P2 start) |
@@ -95,9 +100,9 @@ Build a prediction market bot that starts by reading and searching live markets 
 
 ## As-Built Specs
 
-- [AI Awareness & Decision Plane](../../docs/spec/monitoring-engine.md) — record types, decision layers, invariants
 - [Data Streams](../../docs/spec/data-streams.md) — Redis live plane, selective Postgres persistence, SSE
 - [Knowledge Data Plane](../../docs/spec/knowledge-data-plane.md) — versioned strategy/prompt expertise (draft)
+- ~~AI Awareness & Decision Plane (`docs/spec/monitoring-engine.md`)~~ — referenced in the original roadmap but the file does not exist. Deleted from pointers until it's written.
 
 ## Design Notes
 
