@@ -4,7 +4,7 @@
 /**
  * Module: `@contracts/poly.wallet.balance.v1.contract`
  * Purpose: Contract for operator-wallet balance read — USDC available, USDC locked in Polymarket open orders, POL gas, and the operator EOA.
- * Scope: GET /api/v1/poly/wallet/balance. Returns the single-operator state for the poly prototype.
+ * Scope: GET /api/v1/poly/wallet/balance. Returns the single-operator state for the poly prototype. Does not execute trades, does not modify state, does not emit side effects.
  * Invariants: Amounts in USD (not atomic units). `locked` = sum of open-order USD notional from Polymarket; `available` = on-chain USDC.e balance.
  * Side-effects: none
  * Notes: HARDCODED_USER — single operator wallet per pod in v0. `change_over_time` is out-of-scope (vNext).

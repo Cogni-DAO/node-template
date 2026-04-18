@@ -4,7 +4,7 @@
 /**
  * Module: `@contracts/poly.copy-trade.orders.v1.contract`
  * Purpose: Contract for the order ledger read — copy-trade placements the operator's autonomous mirror + agent tool have submitted.
- * Scope: GET /api/v1/poly/copy-trade/orders. Supports `limit`, `status`, `target_id` filters.
+ * Scope: GET /api/v1/poly/copy-trade/orders. Supports `limit`, `status`, `target_id` filters. Does not execute trades, does not modify state, does not own DB queries.
  * Invariants: Rows ordered by `observed_at` DESC. `order_id` null for pending/error rows. `polymarket_profile_url` null on non-live rows.
  * Side-effects: none
  * Notes: HARDCODED_USER — response is not user-scoped in v0. Agent-tool placements are NOT in the ledger in v0 (follow-up tracked).

@@ -4,8 +4,10 @@
 /**
  * Module: `@contracts/poly.copy-trade.targets.v1.contract`
  * Purpose: Contract for listing Polymarket wallets the operator is monitoring / copy-trading.
- * Scope: Defines response schema for GET /api/v1/poly/copy-trade/targets.
- * Invariants: v0 returns exactly one env-derived target when `COPY_TRADE_TARGET_WALLET` is set; empty otherwise. P2 returns rows from `poly_copy_trade_targets`.
+ * Scope: Defines response schema for GET /api/v1/poly/copy-trade/targets. Does not execute trades, does not modify state, does not own target-resolution logic.
+ * Invariants:
+ *   - V0_ENV_DERIVED: exactly one env-derived target when `COPY_TRADE_TARGET_WALLET` is set; empty otherwise.
+ *   - P2_DB_BACKED: returns rows from `poly_copy_trade_targets` once the table exists.
  * Side-effects: none
  * Notes: HARDCODED_USER — response is not user-scoped in v0 (single-operator prototype). Tracked as task.0315 P2 follow-up.
  * Links: work/items/task.0315.poly-copy-trade-prototype.md, docs/spec/poly-copy-trade-phase1.md

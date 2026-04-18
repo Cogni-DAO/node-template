@@ -23,10 +23,8 @@ Generic Polymarket placement + order-ledger substrate. Every path that places an
 ```json
 {
   "layer": "features",
-  "may_import": ["features/trading", "ports", "core", "shared", "types"],
+  "may_import": ["features", "ports", "core", "shared", "types"],
   "must_not_import": [
-    "features/copy-trade",
-    "features/wallet-watch",
     "app",
     "adapters/server",
     "adapters/worker",
@@ -36,7 +34,7 @@ Generic Polymarket placement + order-ledger substrate. Every path that places an
 }
 ```
 
-`trading/` is intentionally siloed from `copy-trade/` and `wallet-watch/` — it does not know what calls it. The `copy-trade/mirror-coordinator` imports `trading/`, never the reverse.
+`trading/` is intentionally siloed from `copy-trade/` and `wallet-watch/` — it does not know what calls it. The `copy-trade/mirror-coordinator` imports `trading/`, never the reverse. The `features/copy-trade` + `features/wallet-watch` no-import rule is enforced by review + the `TRADING_IS_GENERIC` invariant below; the AGENTS.md validator only models coarse layers.
 
 ## Public Surface
 

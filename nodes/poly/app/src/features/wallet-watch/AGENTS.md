@@ -23,10 +23,8 @@ Generic Polymarket wallet observation primitive. Emits normalized `Fill[]` for a
 ```json
 {
   "layer": "features",
-  "may_import": ["features/wallet-watch", "ports", "core", "shared", "types"],
+  "may_import": ["features", "ports", "core", "shared", "types"],
   "must_not_import": [
-    "features/copy-trade",
-    "features/trading",
     "app",
     "adapters/server",
     "adapters/worker",
@@ -36,7 +34,7 @@ Generic Polymarket wallet observation primitive. Emits normalized `Fill[]` for a
 }
 ```
 
-`wallet-watch/` is intentionally siloed from `copy-trade/` and `trading/`. It produces `Fill[]` (from `@cogni/market-provider`) and has no opinion on what happens next.
+`wallet-watch/` is intentionally siloed from `copy-trade/` and `trading/`. It produces `Fill[]` (from `@cogni/market-provider`) and has no opinion on what happens next. The cross-slice no-import rule is enforced by review + the `WALLET_WATCH_IS_GENERIC` invariant below; the AGENTS.md validator only models coarse layers.
 
 ## Public Surface
 
