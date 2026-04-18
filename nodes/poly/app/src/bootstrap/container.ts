@@ -582,7 +582,7 @@ function createContainer(): Container {
       env.POLY_CLOB_API_SECRET &&
       env.POLY_CLOB_PASSPHRASE
   );
-  const polyTradeCapability = createPolyTradeCapability({
+  const polyTradeBundle = createPolyTradeCapability({
     logger: log,
     isTestMode: env.isTestMode,
     host: env.POLY_CLOB_HOST,
@@ -639,7 +639,7 @@ function createContainer(): Container {
     knowledgeCapability,
     marketCapability,
     metricsCapability,
-    polyTradeCapability,
+    polyTradeCapability: polyTradeBundle?.capability,
     webSearchCapability,
     repoCapability,
     scheduleCapability,
