@@ -12,4 +12,4 @@ After the split, poly's config points `drizzle-kit` at this dir. For fresh `cogn
 
 ## Going forward
 
-New poly-local tables land in `nodes/poly/app/src/shared/db/copy-trade.ts` (or new files alongside). `drizzle-kit generate` via `drizzle.poly.config.ts` emits new migration files here, numbered sequentially (0028_*, 0029_*, ...).
+New poly-local tables land in `nodes/poly/app/src/shared/db/copy-trade.ts` (or new files alongside). `drizzle-kit generate` via `drizzle.poly.config.ts` emits new migration files here, numbered sequentially (0028*\*, 0029*\*, ...).

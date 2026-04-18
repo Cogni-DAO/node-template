@@ -8,7 +8,7 @@ This directory is **operator-owned**. Each node has its own migrations dir after
 
 **Do not delete `0027_silent_nextwave.sql` from this directory** without first verifying that no deployed DB still has an `__drizzle_migrations` row pointing at its hash. Deleting it breaks `drizzle-kit migrate` on every DB that still has the row — the migrator errors with a missing-file hash mismatch.
 
-The poly_copy_trade_* tables exist in operator's DB as **harmless orphans** from the shared-schema era. Operator's app code never queries them (operator's runtime schema barrel excludes copy-trade). A future cleanup task can generate an explicit DROP migration here + drop the file, in that order.
+The poly*copy_trade*\* tables exist in operator's DB as **harmless orphans** from the shared-schema era. Operator's app code never queries them (operator's runtime schema barrel excludes copy-trade). A future cleanup task can generate an explicit DROP migration here + drop the file, in that order.
 
 ## Generating new migrations
 

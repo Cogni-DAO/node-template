@@ -38,15 +38,15 @@ Atlas adoption is preserved as a future upgrade in **task.0325** — pick it up 
 
 ## Context — current state (audited 2026-04-18)
 
-| Aspect | Reality |
-|---|---|
-| Per-node DBs | ✅ `cogni_template_dev`, `cogni_poly`, `cogni_resy` — separate DBs already exist, dev and k8s |
-| Shared schema | ⚠️ `packages/db-schema` — poly-copy-trade tables live here, land in every node's DB |
-| Per-node migration dirs | ⚠️ Exist, byte-identical copies of operator's 0000–0026. Operator has 0027 (poly-copy-trade). |
-| Per-node drizzle config | ❌ Single root `drizzle.config.ts` writes to operator's dir only |
-| `db:migrate:poly` / `:resy` | ⚠️ Swap `DATABASE_URL`, run root drizzle-kit — same migrations applied to every DB |
-| Prod poly/resy migration Jobs | 🚩 `exit 0` no-ops. `infra/k8s/overlays/production/{poly,resy}/kustomization.yaml:95` |
-| Doc accuracy | ✅ Fixed in Step 1 (Phase 0 below) |
+| Aspect                        | Reality                                                                                       |
+| ----------------------------- | --------------------------------------------------------------------------------------------- |
+| Per-node DBs                  | ✅ `cogni_template_dev`, `cogni_poly`, `cogni_resy` — separate DBs already exist, dev and k8s |
+| Shared schema                 | ⚠️ `packages/db-schema` — poly-copy-trade tables live here, land in every node's DB           |
+| Per-node migration dirs       | ⚠️ Exist, byte-identical copies of operator's 0000–0026. Operator has 0027 (poly-copy-trade). |
+| Per-node drizzle config       | ❌ Single root `drizzle.config.ts` writes to operator's dir only                              |
+| `db:migrate:poly` / `:resy`   | ⚠️ Swap `DATABASE_URL`, run root drizzle-kit — same migrations applied to every DB            |
+| Prod poly/resy migration Jobs | 🚩 `exit 0` no-ops. `infra/k8s/overlays/production/{poly,resy}/kustomization.yaml:95`         |
+| Doc accuracy                  | ✅ Fixed in Step 1 (Phase 0 below)                                                            |
 
 ## Design
 
@@ -92,8 +92,8 @@ Each node's `nodes/<node>/app/schema/index.ts` is the single entry point drizzle
 
 ```ts
 // nodes/poly/app/schema/index.ts
-export * from "@cogni/db-schema";     // core platform tables
-export * from "./copy-trade";         // poly-local
+export * from "@cogni/db-schema"; // core platform tables
+export * from "./copy-trade"; // poly-local
 ```
 
 Drizzle-kit follows the barrel, picks up both sets, diffs against the DB, emits one migration file in that node's `migrations/` dir. No composite-schema tooling needed.
@@ -132,16 +132,16 @@ Option B is simpler; Option A is cleaner. Pick B for now — one-line overlay pa
 
 ## Table Classification (commit before any code move)
 
-| Today's location | Domain file | Destination |
-|---|---|---|
-| `packages/db-schema/src/` | `auth.ts` | stay (core) |
-| `packages/db-schema/src/` | `identity.ts`, `profile.ts` | stay (core) |
-| `packages/db-schema/src/` | `billing.ts` | stay (core) |
-| `packages/db-schema/src/` | `ai.ts`, `ai-threads.ts` | stay (core) |
-| `packages/db-schema/src/` | `connections.ts` | stay (core) |
-| `packages/db-schema/src/` | `refs.ts`, `scheduling.ts`, `attribution.ts` | stay (core) |
-| `packages/db-schema/src/` | **`poly-copy-trade.ts`** | **→ `nodes/poly/app/schema/copy-trade.ts`** |
-| `packages/db-schema/src/` | DAO formation tables (if distinct) | → `nodes/operator/app/schema/` (PR-time discovery) |
+| Today's location          | Domain file                                  | Destination                                        |
+| ------------------------- | -------------------------------------------- | -------------------------------------------------- |
+| `packages/db-schema/src/` | `auth.ts`                                    | stay (core)                                        |
+| `packages/db-schema/src/` | `identity.ts`, `profile.ts`                  | stay (core)                                        |
+| `packages/db-schema/src/` | `billing.ts`                                 | stay (core)                                        |
+| `packages/db-schema/src/` | `ai.ts`, `ai-threads.ts`                     | stay (core)                                        |
+| `packages/db-schema/src/` | `connections.ts`                             | stay (core)                                        |
+| `packages/db-schema/src/` | `refs.ts`, `scheduling.ts`, `attribution.ts` | stay (core)                                        |
+| `packages/db-schema/src/` | **`poly-copy-trade.ts`**                     | **→ `nodes/poly/app/schema/copy-trade.ts`**        |
+| `packages/db-schema/src/` | DAO formation tables (if distinct)           | → `nodes/operator/app/schema/` (PR-time discovery) |
 
 Rule: **core = strict intersection of what every node needs**. When in doubt, node-local.
 
@@ -165,25 +165,29 @@ Rule: **core = strict intersection of what every node needs**. When in doubt, no
 ## Plan
 
 ### Phase 0 — Doc truth-up (DONE)
+
 - [x] **Step 0** — `docs/guides/multi-node-dev.md` DB/Auth section corrected to match reality.
 
 ### Phase 1 — Schema split (one PR, ~half-day)
+
 - [ ] **Step 1** — Commit the Table Classification. PR touches only this task file.
 - [ ] **Step 2** — Move `poly-copy-trade.ts` to `nodes/poly/app/schema/copy-trade.ts`. Create `nodes/{operator,poly,resy}/app/schema/index.ts` each re-exporting `@cogni/db-schema` + any node-local tables. Move operator-only tables (PR-time discovery) to `nodes/operator/app/schema/`.
 - [ ] **Step 3** — Create `drizzle.{operator,poly,resy}.config.ts`. Each points at its own schema glob and its own existing migrations dir. Update `package.json` `db:migrate:*` scripts to use the per-node configs.
 - [ ] **Step 4** — Run `pnpm db:migrate:poly` on TWO DBs:
   1. A fresh local `cogni_poly_p0_test` DB → should apply 0000–0027 cleanly, poly tables exist.
   2. A `pg_dump`-restored snapshot of **candidate-a's live `cogni_poly`** → must be a no-op (proves hash compatibility on a DB with the real historical migration rows, not just a local dev DB that may have been migrated differently).
-  Repeat both for operator and resy. The snapshot validation is the non-negotiable proof — local-already-migrated isn't sufficient.
+     Repeat both for operator and resy. The snapshot validation is the non-negotiable proof — local-already-migrated isn't sufficient.
 - [ ] **Step 4a** — Add `README.md` in each node's migrations dir explaining: migrations are node-owned; shared-era duplicates (specifically `0027_silent_nextwave.sql` in operator AND poly) are intentional; `__drizzle_migrations` rows reference these files by hash, so deleting one breaks migrate across node DBs. Tripwire to prevent a future "cleanup" PR from deleting the intentional duplicate.
 
 ### Phase 2 — CI + migrator image wiring (one PR, ~half-day)
+
 - [ ] **Step 5** — Extend `scripts/ci/compute_migrator_fingerprint.sh` input paths to `nodes/*/app/schema/**`, `nodes/*/app/src/adapters/server/db/migrations/**`, `drizzle.*.config.ts`. **Silent failure mode otherwise** — a poly-local schema change leaves the migrator cache valid and the new migration never runs.
 - [ ] **Step 6** — Extend `scripts/ci/detect-affected.sh` `add_target migrator` trigger to the same paths.
 - [ ] **Step 7** — `nodes/operator/app/Dockerfile` migrator stage copies all nodes' schema + migrations + the three drizzle configs. One image, selects via overlay.
 - [ ] **Step 8** — `infra/k8s/base/node-app/migration-job.yaml` + each overlay patch `command` to the right per-node migrate script. Preview migrates with the new model; should be zero diff vs today (same 0000-0026 applied).
 
 ### Phase 3 — Prod un-no-op (one PR, gated)
+
 - [ ] **Step 9** — Inspect prod DBs BEFORE removing `exit 0`:
   1. SSH to prod VM; `pg_dump --schema-only` for each prod DB (`cogni_template_dev`, `cogni_poly`, `cogni_resy`).
   2. Does `__drizzle_migrations` exist? How many rows? Hashes match our repo's SQL files?
@@ -195,11 +199,13 @@ Rule: **core = strict intersection of what every node needs**. When in doubt, no
   5. Monitor first prod promote-and-deploy cycle via Loki.
 
 ### Phase 4 — Spec surgical update (follow-up PR, non-blocking)
+
 - [ ] **Step 10** — `docs/spec/databases.md` § 2 Migration Strategy: per-node commands, per-node migration ownership, the "core table migration → duplicate into every node's dir" workflow. Link to this task for history.
 
 ## Validation
 
 ### Schema isolation proved
+
 ```bash
 pnpm db:migrate:poly
 pnpm db:migrate:resy
@@ -212,6 +218,7 @@ psql $DATABASE_URL_POLY -c "select count(*) from poly_copy_trade_fills;"
 ```
 
 ### Migration history per node
+
 ```bash
 psql $DATABASE_URL_POLY   -c "select count(*) from __drizzle_migrations;"   # ~27
 psql $DATABASE_URL_RESY   -c "select count(*) from __drizzle_migrations;"   # ~27
@@ -226,6 +233,7 @@ pnpm db:migrate:resy    # applies new migration
 ```
 
 ### Collision test
+
 ```bash
 # Branch A: add a core table → operator generates NNNN_foo.sql, poly/resy regenerate same
 # Branch B: add a poly-local table → poly generates NNNN_bar.sql (its own history)
@@ -233,6 +241,7 @@ pnpm db:migrate:resy    # applies new migration
 ```
 
 ### Observability
+
 - Migration runs use existing Pino logging from drizzle-kit.
 - First prod migrate Job run (Phase 3) watched in Loki: expect "migrations applied: 0" on hash-match DBs or a clean 0000-0026 apply on empty DBs.
 

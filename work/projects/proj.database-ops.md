@@ -137,11 +137,11 @@ Already tracked in DATABASE_RLS_SPEC.md P1:
 
 **Goal:** Each node owns its DB schema — no cross-node table leak, no shared migration numbering.
 
-| Deliverable                                                        | Status      | Est | Work Item |
-| ------------------------------------------------------------------ | ----------- | --- | --------- |
-| Minimal drizzle split — per-node schema dirs + per-node configs    | needs_implement | 2   | task.0324 |
-| Un-no-op prod poly/resy migration Jobs (gated on DB inspection)    | needs_implement | 1   | task.0324 (Phase 3) |
-| **Future:** Atlas + GitOps migrations (declarative schema, CRD)    | needs_design    | 5   | task.0325 |
+| Deliverable                                                     | Status          | Est | Work Item           |
+| --------------------------------------------------------------- | --------------- | --- | ------------------- |
+| Minimal drizzle split — per-node schema dirs + per-node configs | needs_implement | 2   | task.0324           |
+| Un-no-op prod poly/resy migration Jobs (gated on DB inspection) | needs_implement | 1   | task.0324 (Phase 3) |
+| **Future:** Atlas + GitOps migrations (declarative schema, CRD) | needs_design    | 5   | task.0325           |
 
 task.0324 is the current-priority minimal fix (no new tooling). task.0325 preserves the Atlas adoption plan for when contributor scale or destructive-change linting warrants the investment.
 

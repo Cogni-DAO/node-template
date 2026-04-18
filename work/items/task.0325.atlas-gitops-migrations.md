@@ -134,6 +134,7 @@ resource.customizations.health.db.atlasgo.io_AtlasMigration: |
 ### Q3 — Atlas binary in CI
 
 Negligible friction:
+
 - `arigaio/atlas:latest-extended-alpine` is ~78 MB
 - Single Go binary, speaks Postgres wire protocol natively (no driver-baking)
 - Install: `curl -sSf https://atlasgo.sh | sh`, `brew install ariga/tap/atlas`, or `docker pull arigaio/atlas`
@@ -157,20 +158,20 @@ This `--baseline <ts>` flag is the killer feature that the bespoke plan (task.03
 
 ## Tradeoff matrix (reproduced for future decision)
 
-| Dimension | Atlas | drizzle-kit minimal split (task.0324 r3, current) |
-|---|---|---|
-| Lines we own | ~200 HCL + Dockerfile patch | ~30 LOC of per-node drizzle configs |
-| Baseline adoption | `--baseline <ts>` flag | Not needed — `__drizzle_migrations` already valid |
-| Schema composition | `composite_schema` (declarative) | Per-node schema re-exports core + local |
-| Drift detection | `atlas schema diff` out of box | Not in scope |
-| Destructive-change linting | 50+ analyzers out of box | Not in scope |
-| Argo CD integration | Official guide + CRD | Standard PreSync Job |
-| Argo health check | Lua snippet (mandatory, load-bearing) | Standard Job (free) |
-| Team familiarity | Zero | Drizzle (existing) |
-| Binary in image | +78 MB Go binary | None |
-| Setup cost | ~4–5d | ~1–2d |
-| Cost when core table changes | Automatic (composite_schema) | `cp` to every node's migrations dir |
-| k3s validation | Unvalidated | Already runs |
+| Dimension                    | Atlas                                 | drizzle-kit minimal split (task.0324 r3, current) |
+| ---------------------------- | ------------------------------------- | ------------------------------------------------- |
+| Lines we own                 | ~200 HCL + Dockerfile patch           | ~30 LOC of per-node drizzle configs               |
+| Baseline adoption            | `--baseline <ts>` flag                | Not needed — `__drizzle_migrations` already valid |
+| Schema composition           | `composite_schema` (declarative)      | Per-node schema re-exports core + local           |
+| Drift detection              | `atlas schema diff` out of box        | Not in scope                                      |
+| Destructive-change linting   | 50+ analyzers out of box              | Not in scope                                      |
+| Argo CD integration          | Official guide + CRD                  | Standard PreSync Job                              |
+| Argo health check            | Lua snippet (mandatory, load-bearing) | Standard Job (free)                               |
+| Team familiarity             | Zero                                  | Drizzle (existing)                                |
+| Binary in image              | +78 MB Go binary                      | None                                              |
+| Setup cost                   | ~4–5d                                 | ~1–2d                                             |
+| Cost when core table changes | Automatic (composite_schema)          | `cp` to every node's migrations dir               |
+| k3s validation               | Unvalidated                           | Already runs                                      |
 
 Atlas earns its keep when the "cost when core table changes" column becomes a real ongoing tax. At one-dev scale with infrequent core changes, it isn't. At multi-contributor scale with weekly core changes, it is.
 
@@ -227,6 +228,16 @@ Goal: prove the unverified assumption from Q1 before investing further.
 **External review (2026-04-18, after Atlas was proposed):** "The fallback is the tell. The dev's backup plan if composite_schema doesn't work cleanly with Drizzle external_schema: three independent Atlas projects with duplicated core HCL. At that point, what did Atlas buy you right now vs. later? … Atlas is what I'd do when about to onboard contributors who'll touch schema. You're at the edge of that transition, so either call is defensible. Just make sure you're signing up for strategic investment with eyes open."
 
 **User direction (2026-04-18):** scope-cut task.0324 to the minimal split; preserve Atlas intel as future task. Current priority is "get us to a working per-node db schemas + migration" not declarative-schema strategic upgrade.
+
+## Validation
+
+Deferred — validation criteria will be set when this task is activated. Phase A of the proposed adoption plan already specifies the concrete gate:
+
+**Exercise:** prove `composite_schema` + Drizzle `external_schema` composes cleanly on a `pg_dump` snapshot of candidate-a's `cogni_poly`. Concretely — the spike must produce a valid Atlas migration file unioning `@cogni/db-schema` + poly-local; the `--baseline` apply must complete without altering tables; `atlas schema diff` must report zero drift.
+
+**Observability:** Atlas Operator pod logs captured by Alloy → Loki (namespace `atlas-operator-system`). Argo surfaces `AtlasMigration` CR state in UI once the Lua health check is applied.
+
+**Ship criteria:** all three deployed DBs (operator, poly, resy) on candidate-a report Synced after one promote-and-deploy cycle with `AtlasMigration` CRs replacing PreSync Jobs. Zero unplanned DROPs.
 
 ## Review Checklist (for future activation PR)
 
