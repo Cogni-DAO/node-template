@@ -9,7 +9,7 @@ summary: Deployable services in services/ — standalone processes with their ow
 read_when: Deciding whether code belongs in a service or package, reviewing service import boundaries, or checking deployment contracts.
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-02-06
+verified: 2026-04-18
 tags: [deployment, infra]
 ---
 
