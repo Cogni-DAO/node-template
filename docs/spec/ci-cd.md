@@ -23,7 +23,7 @@ This spec defines the target CI/CD model for the repo:
 - accepted code promotes forward from `main` without rebuilds
 - deploy branches hold environment state only and are reconciled by Argo CD
 
-This document supersedes the old canary-first branch model. Existing workflows may still reflect legacy behavior during migration, but new design work should follow this spec rather than the older branch semantics.
+This document supersedes the old canary-first branch model. The branch model, deploy-state model, and axioms below are the live contract — workflows, scripts, and agent skills that diverge from it are bugs, not allowed drift.
 
 ## Core Axioms
 

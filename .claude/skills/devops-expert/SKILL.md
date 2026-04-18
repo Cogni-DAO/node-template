@@ -35,37 +35,67 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 
 ## Arsenal — know what exists before writing new code
 
-### CI scripts (`scripts/ci/`)
+> **Workflows are thin; logic lives in `scripts/ci/`.** Every non-trivial step in `.github/workflows/*.yml` is `run: bash scripts/ci/<name>.sh`. Start from the workflow to see the _shape_ of the pipeline, then open the scripts to see what actually happens. Never write new inline-YAML logic when a script exists — extend the script.
 
-| Script                             | Purpose                                                                 |
-| ---------------------------------- | ----------------------------------------------------------------------- |
-| `build.sh`                         | Build app + migrator Docker images                                      |
-| `build-service.sh`                 | Build scheduler-worker image                                            |
-| `push.sh`                          | Push images to GHCR, capture digests                                    |
-| `test-image.sh`                    | Validate container health (livez) before push                           |
-| `promote-k8s-image.sh`             | Update kustomization.yaml overlays with new digests                     |
-| `flight-preview.sh`                | Three-value lease gate (unlocked→dispatching) + dispatch preview flight |
-| `set-preview-review-state.sh`      | Write `.promote-state/review-state` on `deploy/preview` with retry      |
-| `deploy-infra.sh`                  | SSH deploy Compose infra (postgres, temporal, litellm, redis, caddy)    |
-| `deploy.sh`                        | Legacy full-stack SSH deploy (being retired)                            |
-| `validate-dsns.sh`                 | Validate DATABASE_URL and DATABASE_SERVICE_URL                          |
-| `ensure-temporal-namespace.sh`     | Create Temporal namespace if missing                                    |
-| `compute_migrator_fingerprint.sh`  | Content-hash for migrator cache                                         |
-| `check-gitops-manifests.sh`        | Validate k8s manifest correctness                                       |
-| `check-gitops-service-coverage.sh` | Ensure all services have k8s manifests                                  |
+### Workflows (`.github/workflows/`) — pipeline entry points
 
-### Workflows (`.github/workflows/`)
+| Workflow                                 | Trigger                                                             | Purpose                                                                                                                                                                                                                                                                          |
+| ---------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `pr-build.yml`                           | PR open/sync                                                        | Three-job pipeline: `detect` (affected targets) → `build` (matrix, one leg per target, parallel) → `manifest` (merge fragments → `build-manifest-pr-{N}-{sha}`)                                                                                                                  |
+| `candidate-flight.yml`                   | workflow_dispatch                                                   | **App lever** for `candidate-a`: resolve PR digests from GHCR → write overlay → Argo reconciles pods. No VM SSH for compose. (task.0314)                                                                                                                                         |
+| `candidate-flight-infra.yml`             | workflow_dispatch                                                   | **Infra lever** for `candidate-a`: rsync `infra/compose/**` from `--ref` (default `main`) + `compose up` on the VM. No digest promotion. (task.0314)                                                                                                                             |
+| `flight-preview.yml`                     | push to main; workflow_dispatch                                     | Re-tag `pr-{N}-{sha}` → `preview-{sha}` and call `flight-preview.sh` lock-gate                                                                                                                                                                                                   |
+| `build-multi-node.yml`                   | workflow_dispatch (manual fallback)                                 | All-target build: per-node matrix + sequential services (migrator, scheduler-worker). Manual-only today — nothing auto-dispatches it (the workflow's own header still claims a `promote-merged-pr.yml` dispatcher that does not exist; treat that comment as stale).             |
+| `promote-and-deploy.yml`                 | workflow_dispatch (preview or production); push `deploy/production` | 5-job graph: `promote-k8s → deploy-infra → verify → lock-preview-on-success \| unlock-preview-on-failure`. Preview is always dispatched (usually by `flight-preview.yml`); production auto-triggers when `promote-to-production.yml`'s PR merges and pushes `deploy/production`. |
+| `ci.yaml`                                | PR + push to main                                                   | Typecheck, lint, unit, component, stack tests                                                                                                                                                                                                                                    |
+| `release.yml`                            | workflow_dispatch                                                   | Cut `release/YYYYMMDD-<sha>` from `deploy/preview:.promote-state/current-sha`, open release PR into `main`                                                                                                                                                                       |
+| `promote-to-production.yml`              | workflow_dispatch                                                   | Open a `promote-prod/*` PR carrying preview's overlay digests to `deploy/production` (digest-only, no rebuild — BUILD_ONCE_PROMOTE)                                                                                                                                              |
+| `auto-merge-release-prs.yml`             | PR review                                                           | Auto-merge approved release/\* PRs; unlock preview review-state; drain queued candidate-sha                                                                                                                                                                                      |
+| `require-pinned-release-prs-to-main.yml` | PR to main                                                          | Enforce release/\* branch + SHA pinning (currently over-broad — blocks feature PRs; see proj.cicd-services-gitops blockers)                                                                                                                                                      |
 
-| Workflow                                 | Trigger                         | Purpose                                                                                      |
-| ---------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------- |
-| `pr-build.yml`                           | PR open/sync                    | Build `pr-{N}-{sha}` images for the PR head                                                  |
-| `candidate-flight.yml`                   | workflow_dispatch               | Flight a selected PR into `candidate-a` slot for pre-merge validation                        |
-| `flight-preview.yml`                     | push to main; workflow_dispatch | Re-tag `pr-{N}-{sha}` → `preview-{sha}` and call `flight-preview.sh` lock-gate               |
-| `build-multi-node.yml`                   | workflow_dispatch (fallback)    | Build all node images + services when pr-build is unavailable                                |
-| `promote-and-deploy.yml`                 | workflow_dispatch               | Commit digests to deploy branch, deploy infra, verify, E2E, drive preview review-state lease |
-| `ci.yaml`                                | PR + push to main               | Typecheck, lint, unit, component, stack tests                                                |
-| `auto-merge-release-prs.yml`             | PR review                       | Auto-merge approved release/\* PRs; unlock preview review-state; drain queued candidate-sha  |
-| `require-pinned-release-prs-to-main.yml` | PR to main                      | Enforce release/\* branch + SHA pinning                                                      |
+### CI scripts (`scripts/ci/`) — where the real logic is
+
+Canonical PR-build + promotion path (task.0321, task.0314):
+
+| Script                       | Purpose                                                                                              |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `detect-affected.sh`         | Compute affected image targets from the PR diff; emits CSV + JSON matrix for `pr-build.yml`          |
+| `build-and-push-images.sh`   | Per-target `docker buildx build --push` (invoked once per matrix leg with `TARGETS=<one>`)           |
+| `merge-build-fragments.sh`   | Merge per-leg fragment JSONs into canonical `build-images.json` (consumed by `write-build-manifest`) |
+| `write-build-manifest.sh`    | Produce the `build-manifest-pr-{N}-{sha}` artifact                                                   |
+| `resolve-pr-build-images.sh` | Resolve pushed PR image digests from GHCR (used by candidate-flight, not the PR workflow)            |
+| `promote-build-payload.sh`   | Apply resolved digests to a deploy-branch overlay                                                    |
+| `promote-k8s-image.sh`       | Lower-level overlay digest writer (legacy path; `promote-build-payload.sh` is preferred)             |
+
+Candidate / preview / production flight:
+
+| Script                        | Purpose                                                                                              |
+| ----------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `acquire-candidate-slot.sh`   | Atomic lease acquire on `deploy/candidate-a` (one PR at a time)                                      |
+| `release-candidate-slot.sh`   | Release the lease after flight success/failure                                                       |
+| `report-candidate-status.sh`  | Post commit status on the PR head for candidate-flight progress                                      |
+| `wait-for-candidate-ready.sh` | Endpoint readiness gate (HTTPS `/readyz`) — run inside the workflow                                  |
+| `wait-for-argocd.sh`          | SSH into the VM and block until every `APPS=(...)` app reports `sync.revision == SHA && Healthy`     |
+| `smoke-candidate.sh`          | Candidate HTTPS smoke (operator, poly, resy — `/readyz`, `/livez`)                                   |
+| `deploy-infra.sh`             | SSH + rsync `infra/compose/**` from a git ref, then `compose up`. `--ref <git-ref>` (default `main`) |
+| `flight-preview.sh`           | Three-value lease gate on `deploy/preview` (unlocked→dispatching) + dispatch preview flight          |
+| `set-preview-review-state.sh` | Write `.promote-state/review-state` on `deploy/preview` with retry                                   |
+| `create-release.sh`           | Cut `release/YYYYMMDD-<sha>` from preview `current-sha`, open release PR into `main`                 |
+| `promote-to-production.sh`    | Digest-only promotion from `deploy/preview` → `deploy/production` (no rebuild)                       |
+| `verify-deployment.sh`        | Post-deploy verification                                                                             |
+
+Support:
+
+| Script                                    | Purpose                                                                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `validate-dsns.sh`                        | Validate DATABASE_URL and DATABASE_SERVICE_URL                                                                          |
+| `ensure-temporal-namespace.sh`            | Create Temporal namespace if missing                                                                                    |
+| `compute_migrator_fingerprint.sh`         | Content-hash for migrator cache                                                                                         |
+| `check-gitops-manifests.sh`               | Validate k8s manifest correctness                                                                                       |
+| `check-gitops-service-coverage.sh`        | Ensure all services have k8s manifests                                                                                  |
+| `test-image.sh`                           | Container livez smoke (used ad-hoc / by legacy paths)                                                                   |
+| `build.sh`, `build-service.sh`, `push.sh` | Legacy build scripts retained as callables by `build-multi-node.yml` fallback; new work uses `build-and-push-images.sh` |
+| `deploy.sh`                               | Legacy full-stack SSH deploy; **retired** — use `deploy-infra.sh` + Argo CD reconciliation instead                      |
 
 ### Provision (`scripts/setup/`, `infra/provision/`)
 
@@ -87,7 +117,7 @@ You are a senior DevOps architect. AI agents are the primary committers in this 
 | `.local/{env}-vm-secrets.env` | Extra env vars not in `.env.{env}`     |
 
 SSH usage: `ssh -i .local/preview-vm-key root@$(cat .local/preview-vm-ip)`
-Environments provisioned: `canary` (= candidate-a, 84.32.109.160), `preview`, `production`.
+Environments provisioned: `candidate-a`, `preview`, `production`.
 
 ## Enforcement rules
 

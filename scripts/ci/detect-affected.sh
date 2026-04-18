@@ -158,8 +158,12 @@ for target in "${ALL_TARGETS[@]}"; do
 done
 
 targets_csv=""
+targets_json="[]"
 if [ ${#ordered_targets[@]} -gt 0 ]; then
   targets_csv=$(IFS=,; echo "${ordered_targets[*]}")
+  # Emit a JSON array so pr-build.yml can feed a matrix via fromJson().
+  targets_json=$(printf '%s\n' "${ordered_targets[@]}" \
+    | python3 -c 'import json,sys; print(json.dumps([line.strip() for line in sys.stdin if line.strip()]))')
 fi
 
 changed_paths_count=0
@@ -181,6 +185,7 @@ if [ -n "${GITHUB_OUTPUT:-}" ]; then
     echo "changed_paths_count=$changed_paths_count"
     echo "has_targets=$has_targets"
     echo "targets=$targets_csv"
+    echo "targets_json=$targets_json"
   } >> "$GITHUB_OUTPUT"
 fi
 

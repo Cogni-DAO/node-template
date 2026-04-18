@@ -115,11 +115,11 @@ If `state == busy`, abort and report the owner PR. If `free`, proceed.
 
 Two dispatchable workflows (see "Two Independent Levers" below). Route by what the PR changes:
 
-| PR changes                                | Command                                                                                |
-| ----------------------------------------- | -------------------------------------------------------------------------------------- |
-| App code (`nodes/`, `packages/`, `apps/`) | `gh workflow run candidate-flight.yml --repo Cogni-DAO/node-template -f pr_number=<N>` |
-| Infra only (`infra/compose/**`)           | merge PR → `gh workflow run candidate-flight-infra.yml --repo Cogni-DAO/node-template` |
-| Both                                      | App lever; infra lever follows after merge                                             |
+| PR changes                                    | Command                                                                                |
+| --------------------------------------------- | -------------------------------------------------------------------------------------- |
+| App code (`nodes/`, `packages/`, `services/`) | `gh workflow run candidate-flight.yml --repo Cogni-DAO/node-template -f pr_number=<N>` |
+| Infra only (`infra/compose/**`)               | merge PR → `gh workflow run candidate-flight-infra.yml --repo Cogni-DAO/node-template` |
+| Both                                          | App lever; infra lever follows after merge                                             |
 
 `gh run watch` the dispatched run. On success, post a sticky PR comment:
 
@@ -127,7 +127,7 @@ Two dispatchable workflows (see "Two Independent Levers" below). Route by what t
 🛩 Flighted to candidate-a (test)
 
 - SHA:        <sha>
-- Images:     pr-<N>-<sha> (operator, migrate, scheduler-worker, poly, resy)
+- Images:     pr-<N>-<sha>-* (affected subset of: operator, poly, resy, migrator, scheduler-worker)
 - Operator:   https://test.cognidao.org
 - Poly:       https://poly-test.cognidao.org
 - Resy:       https://resy-test.cognidao.org
@@ -214,7 +214,7 @@ Candidate-a deploy has two orthogonal workflows. Pick the right one for the PR:
 
 | Lever     | Workflow                     | When to use                                                                                                                                                      |
 | --------- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **App**   | `candidate-flight.yml`       | PR touches app code (nodes/, packages/, apps/). Promotes image digests to `deploy/candidate-a`; Argo CD reconciles pods. No VM SSH for compose.                  |
+| **App**   | `candidate-flight.yml`       | PR touches app code (nodes/, packages/, services/). Promotes image digests to `deploy/candidate-a`; Argo CD reconciles pods. No VM SSH for compose.              |
 | **Infra** | `candidate-flight-infra.yml` | Infra/compose-only PRs (infra/compose/\*\*, Caddy config, litellm config). Rsyncs from `main` (v0 default) and runs `compose up` on the VM. No digest promotion. |
 
 Dispatch:
