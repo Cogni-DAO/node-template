@@ -45,13 +45,13 @@ Per DATABASE_RLS_SPEC.md design decision 7: runtime app uses explicit DSNs, no U
 **Exports (barrel `@/shared/db`):**
 
 - Core platform tables from `@cogni/db-schema` (users, billingAccounts, schedules, etc.)
-- Poly-local tables from `./copy-trade`: `polyCopyTradeFills`, `polyCopyTradeConfig`, `polyCopyTradeDecisions` (task.0324 relocated these out of `@cogni/db-schema`)
+- Poly-local tables from `@cogni/poly-db-schema` (workspace package at `nodes/poly/packages/db-schema`): `polyCopyTradeFills`, `polyCopyTradeConfig`, `polyCopyTradeDecisions`. Promoted out of this directory by task.0324 so cross-process importers (scheduler-worker, Temporal worker, future graphs) can consume them without reaching into app internals.
 
 **Direct imports (not in barrel):**
 
 - `db-url.ts`: `buildDatabaseUrl`, `DbEnvInput` — tooling only (test scripts). Poly's drizzle config at `nodes/poly/drizzle.config.ts` does NOT import this — it reads `DATABASE_URL` from env directly per task.0324.
 
-**Files considered API:** index.ts (barrel), schema.ts, copy-trade.ts, db-url.ts (tooling)
+**Files considered API:** index.ts (barrel), schema.ts, db-url.ts (tooling)
 **Routes/CLI:** none
 **Env/Config keys:** none
 

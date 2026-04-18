@@ -58,9 +58,11 @@ ENV AUTH_SECRET=${AUTH_SECRET_BUILD}
 RUN --mount=type=cache,id=next-cache-poly,target=/app/nodes/poly/app/.next/cache,sharing=locked \
     pnpm --filter @cogni/poly-app build
 
-# Migrator — poly-only migration image (task.0322).
-# Carries only poly's schema + migrations + nodes/poly/drizzle.config.ts, plus shared
-# packages/db-schema/src for core tables.
+# Migrator — poly-only migration image (task.0324).
+# Carries only poly's migrations + drizzle config + core db-schema package source +
+# poly-db-schema package source (@cogni/poly-db-schema). drizzle-kit reads raw TS
+# via the config's schema glob array, so dist/ is not required. The app's
+# src/shared/db barrel is not copied — it's only for runtime adapters.
 FROM base AS migrator
 WORKDIR /app
 
@@ -68,7 +70,7 @@ COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.ya
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/nodes/poly/drizzle.config.ts ./nodes/poly/drizzle.config.ts
 COPY --from=builder /app/packages/db-schema/src ./packages/db-schema/src
-COPY --from=builder /app/nodes/poly/app/src/shared/db ./nodes/poly/app/src/shared/db
+COPY --from=builder /app/nodes/poly/packages/db-schema/src ./nodes/poly/packages/db-schema/src
 COPY --from=builder /app/nodes/poly/app/src/adapters/server/db/migrations ./nodes/poly/app/src/adapters/server/db/migrations
 
 CMD ["pnpm", "db:migrate:poly:container"]

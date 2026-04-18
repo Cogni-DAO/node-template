@@ -38,7 +38,8 @@ case "$NODE" in
         MIGRATOR_INPUTS=(
             "nodes/poly/drizzle.config.ts"
             "packages/db-schema/src"
-            "nodes/poly/app/src/shared/db"
+            "nodes/poly/packages/db-schema/src"
+            "nodes/poly/packages/db-schema/package.json"
             "nodes/poly/app/src/adapters/server/db/migrations"
             "nodes/poly/app/Dockerfile"
             "package.json"

@@ -154,13 +154,14 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 
 - **Per-node migrator images:** `IMAGE_NAME:IMAGE_TAG-{operator,poly,resy}-migrate` — one image per node, built from `nodes/<node>/app/Dockerfile` stage `migrator`.
 - **Per-node drizzle configs:** `nodes/<node>/drizzle.config.ts` (operator, poly, resy, node-template). Schema glob is core-only for operator/resy/node-template, core + local for poly. Each config requires `DATABASE_URL` from env and throws if unset — no fallback.
-- **Shared schema package:** `packages/db-schema/src/**/*.ts` — core platform tables. Poly-local tables live in `nodes/poly/app/src/shared/db/copy-trade.ts`.
+- **Core schema package:** `packages/db-schema` (`@cogni/db-schema`) — cross-node platform tables.
+- **Per-node schema packages:** `nodes/<node>/packages/db-schema` (`@cogni/<node>-db-schema`) — node-local tables. Created per-node when that node ships its first node-local table. Today only `@cogni/poly-db-schema` exists (copy-trade prototype tables). Node-local packages mirror `@cogni/db-schema`'s exports shape (root barrel + per-slice subpath exports) so any workspace consumer (app, worker, graph) can import tables without reaching into app internals.
 - **Migration history per DB:** one `drizzle.__drizzle_migrations` table per database (standard drizzle default). `0027_silent_nextwave.sql` is byte-duplicated across `nodes/{operator,poly,resy}/app/src/adapters/server/db/migrations/` because it was applied to every deployed DB before the split — READMEs in each migrations dir warn against deletion.
 - **Runner image:** Lean production image (~80MB) with no migration tooling.
 
 **Invariants:**
 
-- **NO_CROSS_NODE_TABLE_LEAK** — poly tables are defined only in `nodes/poly/app/src/shared/db/copy-trade.ts`. Adding a table to the wrong location is a review-blocking error.
+- **NO_CROSS_NODE_TABLE_LEAK** — node-local tables are defined in that node's own workspace package (e.g. poly's tables live in `@cogni/poly-db-schema` at `nodes/poly/packages/db-schema/`). Adding a node-local table to `@cogni/db-schema` is a review-blocking error.
 - **CORE_TABLES_IN_SHARED_PACKAGE** — `@cogni/db-schema` contains only tables every node needs (intersection, not union).
 - **EACH_NODE_OWNS_ITS_MIGRATIONS** — `nodes/<node>/app/src/adapters/server/db/migrations/` is that node's authoritative history. Core-table changes are copied to each node's dir manually.
 - **EXPLICIT_DATABASE_URL_NO_FALLBACK** — drizzle configs read `DATABASE_URL` from env and throw if unset. No component-piece fallback (matches runtime app invariant from §Database URL Configuration).
@@ -416,7 +417,7 @@ export default defineConfig({
 });
 ```
 
-Poly's config uses an array schema that unions core + poly-local (`./nodes/poly/app/src/shared/db/copy-trade.ts`). Resy and node-template are core-only.
+Poly's config uses an array schema that unions core + poly's per-node package source: `["./packages/db-schema/src/**/*.ts", "./nodes/poly/packages/db-schema/src/**/*.ts"]`. drizzle-kit reads raw TS via these globs — no pre-built `dist/` required for migration generation. Resy and node-template are core-only until they ship their first node-local table, at which point they gain a `nodes/<node>/packages/db-schema/` package.
 
 **Why this shape:**
 

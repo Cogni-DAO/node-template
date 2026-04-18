@@ -120,11 +120,25 @@ else
         selection_reason="workflow-build-change:${path}"
         break
         ;;
-      packages/* | \
-      nodes/*/packages/*)
+      packages/*)
         add_all_targets
         selection_reason="shared-package-change:${path}"
         break
+        ;;
+      nodes/operator/packages/*)
+        add_target operator
+        add_target operator-migrator
+        ;;
+      nodes/poly/packages/*)
+        add_target poly
+        add_target poly-migrator
+        ;;
+      nodes/resy/packages/*)
+        add_target resy
+        add_target resy-migrator
+        ;;
+      nodes/node-template/packages/*)
+        selection_reason="non-deployable-node-template-change:${path}"
         ;;
       nodes/operator/app/src/shared/db/* | \
       nodes/operator/app/src/adapters/server/db/migrations/*)
