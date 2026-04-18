@@ -349,3 +349,86 @@ Method:
 6. Rank survivors by composite score `WR × √ROI × 100 / (DD% + 10)`.
 
 Re-run: `npx tsx scripts/experiments/wallet-screen-resolved.ts` (no env needed; ~10 min).
+
+## Appendix D — Phase 2 expansion: long-tail niches + discovery methods
+
+A second research agent closed three gaps left by the initial pass:
+
+### D.1 Polymarket's category-filtered leaderboard API
+
+The initial screen used the uncategorized `/v1/leaderboard` endpoint (~500 wallets ceiling). Polymarket actually supports 8 category-filtered variants, each with its own top-N: **politics, sports, crypto, weather, culture, economics, tech, finance**. Reference: [docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings](https://docs.polymarket.com/api-reference/core/get-trader-leaderboard-rankings). Combined with `{DAY, WEEK, MONTH} × {PNL, VOL}`, that's 8 × 3 × 2 = 48 leaderboard slices, ~1000–1500 unique wallets vs. the ~150 from the uncategorized variant — roughly **10× the discovery universe**.
+
+### D.2 Long-tail niche additions
+
+Three niches the initial scorecard missed, all with plausible edge:
+
+| niche                                                          | edge source                                                    | resolution | copy-ability | verdict                                                 |
+| -------------------------------------------------------------- | -------------------------------------------------------------- | ---------- | -----------: | ------------------------------------------------------- |
+| **Daily weather** (city high-temp markets)                     | NOAA/ECMWF ensembles vs. retail book; public bot guide exists  | 24h        |            4 | ✅ **strong add** — $300–400k/day per top market        |
+| **Cricket / IPL T20**                                          | Non-US info asymmetry (local specialists vs. absent US sharps) | hours      |            4 | ✅ **strong add** — $1.8M single-match volumes          |
+| **Expanded esports** (Valorant, Overwatch, Rocket League, SC2) | Same edge thesis as LoL/CS — retail books + meta/roster info   | 1–3h       |            4 | ✅ **expand scope** — 447 active mkts across 11+ titles |
+
+Sources: [tradetheoutcome weather bot guide](https://www.tradetheoutcome.com/how-to-build-a-polymarket-weather-bot/), [polymarket.com/predictions/climate-weather](https://polymarket.com/predictions/climate-weather), [polymarket.com/sports/cricipl/games](https://polymarket.com/sports/cricipl/games), [polymarket.com/esports/live](https://polymarket.com/esports/live).
+
+### D.3 New confirmed avoids (regulatory)
+
+- **Reality TV** (Survivor, Bachelor) — pre-taped spoiler leaks drove pre-vote prices to 98% on correct contestants; Palantir+TWG surveillance deal announced. Active insider-trading controversy ([gamingamerica.com](https://gamingamerica.com/news/1050316/reality-tv-betting-insider-trading-prediction-markets)).
+- **FDA approvals, CEO/M&A timing, indictments, SCOTUS rulings** — [Schiff-Curtis "Prediction Markets are Gambling Act"](https://www.cnbc.com/2026/03/25/prediction-markets-bill-insider-trading-kalshi-polymarket-adam-schiff-john-curtis.html) + [Torres bill](https://ritchietorres.house.gov/posts/in-response-to-suspicious-polymarket-trade-preceding-maduro-operation-rep-ritchie-torres-introduces-legislation-to-crack-down-on-insider-trading-on-prediction-markets) target these categories specifically.
+- **Harvard 2026 flagged-wallet dataset** ([corpgov.law.harvard.edu](https://corpgov.law.harvard.edu/2026/03/25/from-iran-to-taylor-swift-informed-trading-in-prediction-markets/)) — 210,718 flagged (wallet, market) pairs. **Load as exclusion gate before any real-money path** — a copy-trade bot that accidentally mirrors a flagged wallet is a regulatory letter waiting to happen.
+
+### D.4 Wallet-discovery methods beyond leaderboards
+
+Ranked by leverage for long-tail copy-trade discovery:
+
+1. **Goldsky subgraphs** ([docs.polymarket.com/developers/subgraph/overview](https://docs.polymarket.com/developers/subgraph/overview)) — 8 public subgraphs (activity / positions / pnl / orderbook / …) expose every on-chain trade event. Lets us build arbitrary per-niche rankings (e.g. "wallets ≥50 trades on weather markets, sorted by realized ROI"). Unauth GraphQL. **This is the right primitive for long-tail discovery.**
+2. **Category-filtered leaderboard API** (§D.1) — simplest path; reuses existing `PolymarketDataApiClient` pattern.
+3. **Per-market "top holders" panel** on polymarket.com — the only way to find niche specialists per individual market.
+4. **Third-party analytics** ([polymarketanalytics.com](https://polymarketanalytics.com/), [polydata.pro](https://polydata.pro/traders)) — Smart Scores + Sharpe ratios + bot-detection; good cross-validation; ToS unclear on scraping.
+5. **Dune dashboards** ([dune.com/genejp999/polymarket-leaderboard](https://dune.com/genejp999/polymarket-leaderboard), [dune.com/filarm/polymarket-activity](https://dune.com/filarm/polymarket-activity)) — pre-computed aggregations; good for one-off sanity checks.
+
+### D.5 Rate-limit reality check — avoid repeating the v2-screen mistake
+
+A first attempt at a v2 screen (`scripts/experiments/wallet-screen-v2.ts`, 8 cats × 3 windows × top-30) was aborted mid-run: the trade-fetch union produced 41,696 unique markets, and the CLOB `/markets/{cid}` lookup loop saturated the per-IP Cloudflare budget even at concurrency 12. Published limit is 1,500 / 10s for `/markets/{cid}`, but real Cloudflare shaping kicks in earlier, and shared-IP contention with other egress (research scripts, dev server, mirror worker) erodes headroom further. Published rate-limit table and our usage pattern are summarized in the in-chat research record; will formalize in a separate follow-up if we keep building screening infrastructure.
+
+**Principles going forward:**
+
+- Cache market metadata on disk keyed by conditionId — `closed=true` markets are immutable, fetch once ever.
+- Shared token-bucket rate limiter across every Polymarket fetch caller in the repo.
+- For research/screening bursts: cap at ≤50 req/s even when the documented limit is higher; leaves headroom for the live mirror + dashboard.
+- Never re-set balance allowance per order (tightest bucket at 50 / 10s).
+
+### D.6 Freshly-derived final roster (synthesis of Appendix B + C + the targeted retry on Mr.Ape)
+
+Because the v2 screen aborted, the final ranking below is synthesized from:
+
+- the 140-wallet resolved-outcome screen (Appendix C),
+- the targeted deep analysis on the top 3 (30d stats + CLOB backoff retry for Mr.Ape),
+- the Phase-1 category scorecard (Appendix A),
+- the Phase-2 avoids (§D.3).
+
+**Primary v0 roster — 3 wallets, all esports:**
+
+|  rank | wallet                                       | name           | specialty                        | 30d resolved |   true WR | realized ROI |   max DD | median dur | confidence                                                                                 |
+| ----: | -------------------------------------------- | -------------- | -------------------------------- | -----------: | --------: | -----------: | -------: | ---------: | ------------------------------------------------------------------------------------------ |
+| **1** | `0xc69020e5aeef54bacdf8ad1611769e2162ee42b8` | **goodmateng** | esports (86% of trades)          |          141 | **82.3%** |   **253.6%** | **1.5%** |        39m | highest realized PnL ($1.67M / 30d) — upgrade from "high-upside flag" once n=141 confirmed |
+| **2** | `0x26f8af9d49328e5fdae2c24e62e5c523bebd3452` | **Mr.Ape**     | esports (71%)                    |      **227** |     68.7% |       201.3% |     4.1% |        31m | largest sample in shortlist — the "edge is real" pick                                      |
+| **3** | `0x161eb16874e34f545991e774b4e1ac5b65f86ef0` | **piston777**  | esports (55%) + NBA/mixed sports |          121 |     79.3% |         8.7% |    25.4% |        13m | highest frequency (16.7 t/d) + fastest turnover; lower ROI but highest activity            |
+
+**Watch list — 4 wallets (would promote if primary roster drops a candidate):**
+
+| rank | wallet                                       | name           | specialty                 | note                                                                                                         |
+| ---: | -------------------------------------------- | -------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------ |
+|    4 | `0xa5ea13a81d2b7e8e424b182bdc1db08e756bd96a` | bossoskil1     | esports                   | 60.9% WR / 69.9% ROI on 64 resolved; dethroned by the top 3 in same category                                 |
+|    5 | `0x492442eab586f242b53bda933fd5de859c8a3782` | (anon)         | NBA                       | $1.17M realized / 64% WR / 28% DD — NBA diversifier if we want to break single-category concentration        |
+|    6 | `0x32ed517a14e2f6b9e5b6e8b5d4f92b8c91a3a1e8` | sportmaster777 | NBA                       | 96 resolved (largest NBA sample), 55% WR / 28% ROI / 18% DD                                                  |
+|    7 | `0x777d9f00c2b4f7b829c9de0049ca3e707db05143` | CarlosMC       | multi-sport (UFC/MLB/NBA) | 56.9% WR / 55.2% ROI on 51 resolved; dropped from the current leaderboard snapshot but historical edge solid |
+
+**Explicit avoids (do not mirror):**
+
+- `0xb6d6e99d3bfe055874a04279f659f009fd57be17` **JPMorgan101** — BTC 5-min bucket latency arb; uncopyable
+- `0xbaa2bcb55c…` **denizz** — Iran-ceasefire specialist, Harvard-paper-flagged category
+- `0xd4f904ec…` **avenger** — $2k-volume outlier
+- Anything trading Survivor / Bachelor / reality TV markets
+- Anything trading FDA approvals, CEO transitions, indictments, SCOTUS rulings
+
+**Rule of thumb:** before mirroring any new wallet, cross-check against the Harvard flagged dataset (§D.3). Single correctness gate, zero runtime cost.
