@@ -92,13 +92,19 @@ The main lane is authoritative for promotion, not for pre-merge acceptance.
    - `release.yml` (manual dispatch) cuts a `release/*` PR from the preview
      current-sha into `main`; merging it is the code-truth gate.
    - `promote-to-production.yml` (manual dispatch) opens a review PR
-     `promote-prod/* → deploy/production` carrying preview's overlay digests
-     and base/catalog synced from `main`, plus a commit-delta + validation
-     block in the body.
-   - Merging that PR pushes `deploy/production`, which triggers
-     `promote-and-deploy.yml` via `on: push: deploy/production` for
-     deploy-infra + verify. `source_sha` is read from
-     `.promote-state/source-sha` on the deploy branch.
+     `promote-prod/* → deploy/production` carrying preview's overlay
+     digests and base/catalog synced from `main`, plus a commit-delta
+     and validation block in the body.
+   - `require-pinned-promote-prod-prs.yml` gates that PR —
+     branch name must match `promote-prod/YYYYMMDD-<8-char>`, the pin
+     must equal `.promote-state/source-sha`, that SHA must equal
+     `deploy/preview` current-sha, and the diff must touch only
+     `.promote-state/`, `infra/k8s/`, `infra/catalog/`.
+   - When the PR merges, `auto-deploy-promote-prod.yml` (on
+     `pull_request: closed`, running on `main` because `deploy/production`
+     is state-only and carries no workflows) dispatches
+     `promote-and-deploy.yml` with `environment=production` and
+     `source_sha` read from `deploy/production:.promote-state/source-sha`.
    - Argo CD reconciles production pods from `deploy/production`.
 
 If a post-merge soak lane is retained later, it must be modeled as an explicitly named environment with a distinct purpose. The term `canary` must not be reused for pre-merge acceptance.
