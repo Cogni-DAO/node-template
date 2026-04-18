@@ -21,6 +21,7 @@ import {
   polyCopyTradeDecisions,
   polyCopyTradeFills,
 } from "@cogni/db-schema/poly-copy-trade";
+import { EVENT_NAMES } from "@cogni/node-shared";
 import { and, count, desc, eq, gte, sql, sum } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Logger } from "pino";
@@ -110,7 +111,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         // FAIL_CLOSED — any error returns the fail-closed snapshot.
         log.warn(
           {
-            event: "order_ledger.snapshot_state.fail_closed",
+            event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
+            errorCode: "snapshot_fail_closed",
             target_id,
             err: err instanceof Error ? err.message : String(err),
           },

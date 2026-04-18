@@ -13,6 +13,7 @@
  */
 
 import { polyWalletBalanceOperation } from "@cogni/node-contracts";
+import { EVENT_NAMES } from "@cogni/node-shared";
 import { NextResponse } from "next/server";
 import { createPublicClient, formatUnits, http, parseAbi } from "viem";
 import { polygon } from "viem/chains";
@@ -84,7 +85,11 @@ export const GET = wrapRouteHandlerWithLogging(
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`polygon_read: ${msg}`);
       ctx.log.warn(
-        { event: "poly.wallet.balance.polygon_read_failed", err: msg },
+        {
+          event: EVENT_NAMES.POLY_WALLET_BALANCE_POLYGON_READ_FAILED,
+          errorCode: "polygon_read_failed",
+          err: msg,
+        },
         "polygon balance read failed"
       );
     }
@@ -108,7 +113,11 @@ export const GET = wrapRouteHandlerWithLogging(
       const msg = err instanceof Error ? err.message : String(err);
       errors.push(`poly_open_orders: ${msg}`);
       ctx.log.warn(
-        { event: "poly.wallet.balance.open_orders_failed", err: msg },
+        {
+          event: EVENT_NAMES.POLY_WALLET_BALANCE_OPEN_ORDERS_FAILED,
+          errorCode: "open_orders_read_failed",
+          err: msg,
+        },
         "polymarket open orders read failed"
       );
     }

@@ -33,6 +33,7 @@ import {
 import { parseMcpConfigFromEnv } from "@cogni/langgraph-graphs";
 import {
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
+  EVENT_NAMES,
   initAnalytics,
   shutdownAnalytics,
 } from "@cogni/node-shared";
@@ -691,7 +692,8 @@ function createContainer(): Container {
       } catch (err: unknown) {
         log.error(
           {
-            event: "poly.mirror.poll.boot_failed",
+            event: EVENT_NAMES.POLY_MIRROR_POLL_BOOT_FAILED,
+            errorCode: "boot_init_failed",
             err: err instanceof Error ? err.message : String(err),
           },
           "mirror poll boot failed — continuing without autonomous mirror"
@@ -701,7 +703,7 @@ function createContainer(): Container {
   } else {
     log.info(
       {
-        event: "poly.mirror.poll.skipped",
+        event: EVENT_NAMES.POLY_MIRROR_POLL_SKIPPED,
         poly_role: env.POLY_ROLE,
         has_bundle: polyTradeBundle !== undefined,
         has_target_wallet: env.COPY_TRADE_TARGET_WALLET !== undefined,

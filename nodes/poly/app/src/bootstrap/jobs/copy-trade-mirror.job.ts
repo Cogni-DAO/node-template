@@ -21,6 +21,7 @@
  */
 
 import type { LoggerPort, MetricsPort } from "@cogni/market-provider";
+import { EVENT_NAMES } from "@cogni/node-shared";
 import { v5 as uuidv5 } from "uuid";
 import {
   type MirrorCoordinatorDeps,
@@ -82,7 +83,7 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
 
   log.info(
     {
-      event: "poly.mirror.poll.singleton_claim",
+      event: EVENT_NAMES.POLY_MIRROR_POLL_SINGLETON_CLAIM,
       poll_ms: pollMs,
       initial_cursor: cursor,
       warmup_backlog_sec: WARMUP_BACKLOG_SEC,
@@ -114,7 +115,8 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
       deps.metrics.incr(MIRROR_JOB_METRICS.pollTickErrorsTotal, {});
       log.error(
         {
-          event: "poly.mirror.poll.tick_error",
+          event: EVENT_NAMES.POLY_MIRROR_POLL_TICK_ERROR,
+          errorCode: "tick_escaped_handler",
           err: err instanceof Error ? err.message : String(err),
         },
         "mirror poll: tick threw (continuing)"
@@ -132,7 +134,10 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
 
   return function stop() {
     clearInterval(handle);
-    log.info({ event: "poly.mirror.poll.stopped" }, "mirror poll stopped");
+    log.info(
+      { event: EVENT_NAMES.POLY_MIRROR_POLL_STOPPED },
+      "mirror poll stopped"
+    );
   };
 }
 

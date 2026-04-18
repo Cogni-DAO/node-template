@@ -20,6 +20,7 @@ import {
   type PolymarketDataApiClient,
   type PolymarketNormalizeSkipReason,
 } from "@cogni/market-provider/adapters/polymarket";
+import { EVENT_NAMES } from "@cogni/node-shared";
 
 /** Metric names emitted by the Polymarket activity source. */
 export const WALLET_WATCH_METRICS = {
@@ -90,12 +91,13 @@ export function createPolymarketActivitySource(
   return {
     async fetchSince(since?: number): Promise<NextFillsResult> {
       const start = Date.now();
+      // Dropped phase=start debug log — low signal, fires every ~30s/target.
+      // The phase=ok info log below is the terminal event for the fetch.
       const baseFields = {
-        event: "poly.wallet_watch.fetch",
+        event: EVENT_NAMES.POLY_WALLET_WATCH_FETCH,
         wallet: deps.wallet,
         since: since ?? null,
       };
-      log.debug({ ...baseFields, phase: "start" }, "wallet-watch fetch: start");
 
       const params: { sinceTs?: number; limit?: number } = {};
       if (since !== undefined) params.sinceTs = since;
@@ -129,9 +131,9 @@ export function createPolymarketActivitySource(
           deps.metrics.incr(WALLET_WATCH_METRICS.normalizeErrorsTotal, {});
           log.warn(
             {
-              event: "poly.wallet_watch.normalize_error",
+              event: EVENT_NAMES.POLY_WALLET_WATCH_NORMALIZE_ERROR,
+              errorCode: "normalizer_threw",
               trade_timestamp: trade.timestamp,
-              trade_tx: trade.transactionHash,
               err: err instanceof Error ? err.message : String(err),
             },
             "normalizer threw; skipping row and advancing cursor"

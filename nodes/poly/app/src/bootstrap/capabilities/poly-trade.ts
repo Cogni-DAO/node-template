@@ -33,6 +33,7 @@ import {
   type OrderIntent,
   type OrderReceipt,
 } from "@cogni/market-provider";
+import { EVENT_NAMES } from "@cogni/node-shared";
 import type { Counter, Histogram } from "prom-client";
 import client from "prom-client";
 
@@ -391,7 +392,7 @@ export function createPolyTradeCapability(
     const operator = config.operatorWalletAddress ?? TEST_MODE_OPERATOR_ADDRESS;
     config.logger.info(
       {
-        event: "poly.trade.capability.test_mode",
+        event: EVENT_NAMES.POLY_TRADE_CAPABILITY_TEST_MODE,
         operator_wallet_address: operator,
       },
       "poly-trade capability wired to FakePolymarketClobAdapter (APP_ENV=test)"
@@ -408,7 +409,7 @@ export function createPolyTradeCapability(
   if (!config.operatorWalletAddress || !config.creds || !config.privy) {
     config.logger.info(
       {
-        event: "poly.trade.capability.unavailable",
+        event: EVENT_NAMES.POLY_TRADE_CAPABILITY_UNAVAILABLE,
         has_operator_wallet: Boolean(config.operatorWalletAddress),
         has_clob_creds: Boolean(config.creds),
         has_privy: Boolean(config.privy),
@@ -430,7 +431,7 @@ export function createPolyTradeCapability(
   // line on trader pods without waiting for the first agent-initiated trade.
   config.logger.info(
     {
-      event: "poly.trade.capability.env_ok",
+      event: EVENT_NAMES.POLY_TRADE_CAPABILITY_ENV_OK,
       operator_wallet_address: operatorWalletAddress,
       host,
     },
@@ -594,7 +595,7 @@ async function buildRealAdapterMethods(
 
   deps.logger.info(
     {
-      event: "poly.trade.capability.ready",
+      event: EVENT_NAMES.POLY_TRADE_CAPABILITY_READY,
       wallet_id: walletId,
       address: deps.operatorWalletAddress,
       host: deps.host,

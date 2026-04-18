@@ -23,6 +23,7 @@ import {
   type OrderIntent,
   type OrderReceipt,
 } from "@cogni/market-provider";
+import { EVENT_NAMES } from "@cogni/node-shared";
 
 import type { OrderLedger } from "@/features/trading";
 import type { WalletActivitySource } from "@/features/wallet-watch";
@@ -87,11 +88,10 @@ export async function runOnce(deps: MirrorCoordinatorDeps): Promise<void> {
     target_wallet: deps.target.target_wallet,
   });
 
+  // Tick-start + empty-page logs intentionally dropped — low signal, high
+  // volume (1/tick × N targets). The decision + source-error events below
+  // carry the same debugging value without flooding Loki.
   const cursor = deps.getCursor();
-  log.debug(
-    { event: "poly.mirror.run_once.start", cursor },
-    "mirror coordinator: tick start"
-  );
 
   let result: {
     fills: import("@cogni/market-provider").Fill[];
@@ -104,7 +104,8 @@ export async function runOnce(deps: MirrorCoordinatorDeps): Promise<void> {
     // next tick re-tries from the same point. Do NOT halt the job.
     log.warn(
       {
-        event: "poly.mirror.run_once.source_error",
+        event: EVENT_NAMES.POLY_MIRROR_SOURCE_ERROR,
+        errorCode: "source_fetch_failed",
         cursor,
         err: err instanceof Error ? err.message : String(err),
       },
@@ -114,14 +115,6 @@ export async function runOnce(deps: MirrorCoordinatorDeps): Promise<void> {
   }
 
   deps.setCursor(result.newSince);
-
-  if (result.fills.length === 0) {
-    log.debug(
-      { event: "poly.mirror.run_once.empty", new_since: result.newSince },
-      "mirror coordinator: no new fills"
-    );
-    return;
-  }
 
   for (const fill of result.fills) {
     await processFill(fill, deps, clock, log);
@@ -169,7 +162,7 @@ async function processFill(
     });
     log.info(
       {
-        event: "poly.mirror.decision",
+        event: EVENT_NAMES.POLY_MIRROR_DECISION,
         outcome: "skipped",
         reason: decision.reason,
         source,
@@ -189,10 +182,11 @@ async function processFill(
       observed_at: new Date(fill.observed_at),
       intent: decision.intent,
     });
-  } catch (err: unknown) {
+  } catch {
     // Pending-insert failure is fatal for this fill — cannot prove
     // INSERT_BEFORE_PLACE without it. Log + record error, do not place.
-    const msg = err instanceof Error ? err.message : String(err);
+    // Raw error intentionally not logged (command rule 5); the error path
+    // is identifiable via the `errorCode: "pending_insert_failed"` below.
     emitDecisionMetric(deps.metrics, "error", "pending_insert_failed", source);
     await deps.ledger.recordDecision({
       ...decisionBase,
@@ -203,12 +197,12 @@ async function processFill(
     });
     log.error(
       {
-        event: "poly.mirror.decision",
+        event: EVENT_NAMES.POLY_MIRROR_DECISION,
         outcome: "error",
+        errorCode: "pending_insert_failed",
         reason: "pending_insert_failed",
         source,
         fill_id: fill.fill_id,
-        err: msg,
       },
       "mirror coordinator: pending insert failed; skipping placement"
     );
@@ -237,7 +231,7 @@ async function processFill(
     });
     log.info(
       {
-        event: "poly.mirror.decision",
+        event: EVENT_NAMES.POLY_MIRROR_DECISION,
         outcome: "placed",
         reason: decision.reason,
         source,
@@ -261,13 +255,13 @@ async function processFill(
     });
     log.error(
       {
-        event: "poly.mirror.decision",
+        event: EVENT_NAMES.POLY_MIRROR_DECISION,
         outcome: "error",
+        errorCode: "placement_failed",
         reason: "placement_failed",
         source,
         fill_id: fill.fill_id,
         client_order_id,
-        err: msg.length > 512 ? `${msg.slice(0, 512)}…` : msg,
       },
       "mirror coordinator: placement error"
     );

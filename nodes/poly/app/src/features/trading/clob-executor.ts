@@ -21,6 +21,7 @@ import type {
   OrderIntent,
   OrderReceipt,
 } from "@cogni/market-provider";
+import { EVENT_NAMES } from "@cogni/node-shared";
 
 /**
  * Metric names emitted by the executor. Dashboards reference these.
@@ -79,7 +80,7 @@ export function createClobExecutor(deps: ClobExecutorDeps): ClobExecutor {
   ): Promise<OrderReceipt> {
     const start = Date.now();
     const baseFields = {
-      event: "poly.copy_trade.execute",
+      event: EVENT_NAMES.POLY_COPY_TRADE_EXECUTE,
       client_order_id: intent.client_order_id,
       market_id: intent.market_id,
       side: intent.side,
