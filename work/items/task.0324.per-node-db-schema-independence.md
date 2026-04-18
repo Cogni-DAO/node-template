@@ -1,5 +1,5 @@
 ---
-id: task.0322
+id: task.0324
 type: task
 title: Per-node DB schema split (minimal — no new tooling)
 status: needs_implement
@@ -11,7 +11,7 @@ outcome: poly's tables stop leaking into resy's DB. Each node's drizzle-kit gene
 spec_refs:
   - databases-spec
   - ci-cd-spec
-assignees:
+assignees: derekg1729
 credit:
 project: proj.database-ops
 branch:
@@ -34,7 +34,7 @@ Prior revisions of this plan proposed a `packages/db-migrator` wrapper (r1) then
 
 The smallest fix: **stop sharing the schema file**. Each node points drizzle-kit at its own schema glob and its own migrations dir. Standard `__drizzle_migrations` table, standard drizzle-kit migrator, no new packages. The cost is roughly 30 seconds of `cp` when a core-table migration needs to land in every node — which happens rarely at our scale and matches the byte-identical duplicates we already have today.
 
-Atlas adoption is preserved as a future upgrade in **task.0323** — pick it up when contributor count grows or destructive-change linting becomes worth the Go binary.
+Atlas adoption is preserved as a future upgrade in **task.0325** — pick it up when contributor count grows or destructive-change linting becomes worth the Go binary.
 
 ## Context — current state (audited 2026-04-18)
 
@@ -241,14 +241,14 @@ pnpm db:migrate:resy    # applies new migration
 - **No `@cogni/db-migrator` package.** Standard drizzle-kit does the job.
 - **No bootstrap script.** Existing `__drizzle_migrations` stays valid (same table, same hashes).
 - **No second migration table per DB.** One table, the default.
-- **No Atlas.** Tracked for future in task.0323.
+- **No Atlas.** Tracked for future in task.0325.
 - **No semver on `packages/db-schema`.** Monorepo — `git pull` is the propagation.
 - **No timestamp migration IDs.** Sequential stays; rare collisions resolved by renumbering.
 - **No schema DAG linting.** Add dep-cruiser rule later if node schemas start cross-importing.
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0322` linked in PR body
+- [ ] **Work Item:** `task.0324` linked in PR body
 - [ ] **Table Classification:** committed before code moves (Step 1)
 - [ ] **No cross-node table leak:** poly tables only in poly's schema; verified by grep
 - [ ] **Standard migrations table:** no custom `migrations.table` in any drizzle config
@@ -261,19 +261,19 @@ pnpm db:migrate:resy    # applies new migration
 
 1. **Operator-local tables.** PR-time discovery: are there currently any operator-only tables (DAO formation?) distinct from core? If so, they move to `nodes/operator/app/schema/`. Addressed in Step 2.
 2. **Operator/resy harmless-orphan poly tables.** Accepted for now — `poly_copy_trade_*` remain in those DBs from migration 0027 but are unused. Follow-up cleanup task can drop them when someone cares.
-3. **Future: Atlas adoption.** See **task.0323**. Triggers: contributor count > ~3 regularly touching schema, or destructive-change linting at PR time becomes a priority.
+3. **Future: Atlas adoption.** See **task.0325**. Triggers: contributor count > ~3 regularly touching schema, or destructive-change linting at PR time becomes a priority.
 
 ## Design review history
 
 - **2026-04-18 r1** — bespoke two-phase drizzle-kit runner with `__drizzle_migrations_core` + `__drizzle_migrations_<node>` tables, a new `packages/db-migrator`, and a legacy-DB bootstrap script. Rejected as over-engineered.
-- **2026-04-18 r2** — Atlas adoption (composite_schema + AtlasMigration CRD + Argo Lua health check). Rejected as over-tooled for current scale; preserved as task.0323.
+- **2026-04-18 r2** — Atlas adoption (composite_schema + AtlasMigration CRD + Argo Lua health check). Rejected as over-tooled for current scale; preserved as task.0325.
 - **2026-04-18 r3 (current)** — minimal schema-split. Standard drizzle-kit per node, no new tooling, ~2d total. External reviewer framing: "stop sharing the schema file. Start sharing nothing."
 
 ## PR / Links
 
 - Project: [proj.database-ops.md](../projects/proj.database-ops.md)
 - Spec (to be updated): [databases.md](../../docs/spec/databases.md) § 2 Migration Strategy
-- Future upgrade: **task.0323** (Atlas + GitOps migrations)
+- Future upgrade: **task.0325** (Atlas + GitOps migrations)
 - Related: task.0260 (monorepo CI), task.0315 (poly copy-trade — the test case), task.0317 (per-node graph catalogs)
 
 ## Attribution

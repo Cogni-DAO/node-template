@@ -1,24 +1,24 @@
 ---
-id: task.0323
+id: task.0325
 type: task
 title: Atlas + GitOps migrations (future upgrade, deferred)
 status: needs_design
-priority: 4
+priority: 3
 rank: 80
 estimate: 5
 summary: Adopt Atlas (atlasgo.io) for declarative schema management + GitOps-native migrations via the AtlasMigration CRD and Argo CD integration. Deferred — current scale does not warrant the added tooling complexity.
-outcome: Declarative schema with `atlas migrate diff` replacing drizzle-kit generate; destructive-change linting at PR time; AtlasMigration CRs replacing PreSync Jobs; per-node composite_schema composition. Picks up where task.0322's minimal split leaves off.
+outcome: Declarative schema with `atlas migrate diff` replacing drizzle-kit generate; destructive-change linting at PR time; AtlasMigration CRs replacing PreSync Jobs; per-node composite_schema composition. Picks up where task.0324's minimal split leaves off.
 spec_refs:
   - databases-spec
   - ci-cd-spec
-assignees:
+assignees: derekg1729
 credit:
 project: proj.database-ops
 branch:
 pr:
 reviewer:
 revision: 0
-blocked_by: [task.0322]
+blocked_by: [task.0324]
 deploy_verified: false
 created: 2026-04-18
 updated: 2026-04-18
@@ -35,7 +35,7 @@ external_refs:
 
 ## Why this is deferred
 
-task.0322 solves the immediate problem (cross-node schema leak, shared migration numbering) with a minimal drizzle-kit split — no new tooling. Atlas adds declarative schema diffing, destructive-change linting, and an Argo-native migration CRD, but the value is forward-looking rather than fixing what's broken today.
+task.0324 solves the immediate problem (cross-node schema leak, shared migration numbering) with a minimal drizzle-kit split — no new tooling. Atlas adds declarative schema diffing, destructive-change linting, and an Argo-native migration CRD, but the value is forward-looking rather than fixing what's broken today.
 
 **Pick this up when any of:**
 
@@ -44,11 +44,11 @@ task.0322 solves the immediate problem (cross-node schema leak, shared migration
 - "Core change propagates to every node" starts happening weekly instead of monthly (Atlas's composite_schema eliminates the cp-to-every-node step)
 - Argo PreSync Jobs become a reliability problem (AtlasMigration CRD has first-class sync-wave integration)
 
-Until then, task.0322's minimal split is the correct shape.
+Until then, task.0324's minimal split is the correct shape.
 
 ## Spike evidence (collected 2026-04-18)
 
-Research done at task.0322 r2 time. Preserved below so we don't re-spike later.
+Research done at task.0324 r2 time. Preserved below so we don't re-spike later.
 
 ### Atlas + Drizzle is an official partnership (Jan 2025)
 
@@ -98,7 +98,7 @@ env "poly" {
 
 **Unverified assumption:** Drizzle `external_schema` composes cleanly INSIDE `composite_schema`. The composite_schema example in Atlas docs uses SQLAlchemy/Ent/HCL/SQL (Drizzle not shown). Both mechanisms use `external_schema`, so it should work — but this is inference, not verbatim. Phase A validation below is the gate.
 
-**Fallback if it fails:** three independent per-node Atlas projects with duplicated core HCL. Still simpler than the bespoke wrapper from task.0322 r1, but loses the composition win. At that point, honest question: is the Argo CRD + lint story worth the HCL duplication right now, or defer again?
+**Fallback if it fails:** three independent per-node Atlas projects with duplicated core HCL. Still simpler than the bespoke wrapper from task.0324 r1, but loses the composition win. At that point, honest question: is the Argo CRD + lint story worth the HCL duplication right now, or defer again?
 
 ### Q2 — Atlas Operator + Argo CD
 
@@ -153,11 +153,11 @@ Atlas replaces `drizzle-kit migrate` only. We still need Node + drizzle-kit for 
 
 Atlas maintains its own `atlas_schema_revisions` table. Legacy `__drizzle_migrations` stays in place as rollback artifact; drop in follow-up once confident.
 
-This `--baseline <ts>` flag is the killer feature that the bespoke plan (task.0322 r1) would have hand-rolled as ~300 LOC of copy-forward logic. One flag vs a subsystem.
+This `--baseline <ts>` flag is the killer feature that the bespoke plan (task.0324 r1) would have hand-rolled as ~300 LOC of copy-forward logic. One flag vs a subsystem.
 
 ## Tradeoff matrix (reproduced for future decision)
 
-| Dimension | Atlas | drizzle-kit minimal split (task.0322 r3, current) |
+| Dimension | Atlas | drizzle-kit minimal split (task.0324 r3, current) |
 |---|---|---|
 | Lines we own | ~200 HCL + Dockerfile patch | ~30 LOC of per-node drizzle configs |
 | Baseline adoption | `--baseline <ts>` flag | Not needed — `__drizzle_migrations` already valid |
@@ -210,7 +210,7 @@ Goal: prove the unverified assumption from Q1 before investing further.
 ### Phase D — Preview + Prod rollout (~1.5d)
 
 - [ ] Install Atlas Operator + Argo Lua patch on preview k3s. Baseline preview DBs.
-- [ ] Prod cutover — same three-state DB inspection gate from task.0322 Step 9.
+- [ ] Prod cutover — same three-state DB inspection gate from task.0324 Step 9.
 - [ ] Monitor first prod promote-and-deploy cycle.
 
 ### Phase E — Cleanup
@@ -226,7 +226,7 @@ Goal: prove the unverified assumption from Q1 before investing further.
 
 **External review (2026-04-18, after Atlas was proposed):** "The fallback is the tell. The dev's backup plan if composite_schema doesn't work cleanly with Drizzle external_schema: three independent Atlas projects with duplicated core HCL. At that point, what did Atlas buy you right now vs. later? … Atlas is what I'd do when about to onboard contributors who'll touch schema. You're at the edge of that transition, so either call is defensible. Just make sure you're signing up for strategic investment with eyes open."
 
-**User direction (2026-04-18):** scope-cut task.0322 to the minimal split; preserve Atlas intel as future task. Current priority is "get us to a working per-node db schemas + migration" not declarative-schema strategic upgrade.
+**User direction (2026-04-18):** scope-cut task.0324 to the minimal split; preserve Atlas intel as future task. Current priority is "get us to a working per-node db schemas + migration" not declarative-schema strategic upgrade.
 
 ## Review Checklist (for future activation PR)
 
@@ -234,12 +234,12 @@ Goal: prove the unverified assumption from Q1 before investing further.
 - [ ] **Phase A gate:** composite_schema + Drizzle external_schema proven on snapshot BEFORE operator install
 - [ ] **Argo Lua health check:** applied BEFORE any AtlasMigration CR syncs
 - [ ] **Bootstrap tested on snapshot:** never `--baseline` a live DB without snapshot rehearsal
-- [ ] **task.0322 still holds:** per-node schema dirs already separated; Atlas composes on top
+- [ ] **task.0324 still holds:** per-node schema dirs already separated; Atlas composes on top
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
 
-- Blocks on: **task.0322** (per-node schema split must land first — Atlas composes per-node; no point adopting before split exists)
+- Blocks on: **task.0324** (per-node schema split must land first — Atlas composes per-node; no point adopting before split exists)
 - Project: [proj.database-ops.md](../projects/proj.database-ops.md)
 - Related: task.0260 (monorepo CI), task.0315 (poly copy-trade — test case)
 

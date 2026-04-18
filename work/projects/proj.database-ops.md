@@ -139,11 +139,11 @@ Already tracked in DATABASE_RLS_SPEC.md P1:
 
 | Deliverable                                                        | Status      | Est | Work Item |
 | ------------------------------------------------------------------ | ----------- | --- | --------- |
-| Minimal drizzle split — per-node schema dirs + per-node configs    | needs_implement | 2   | task.0322 |
-| Un-no-op prod poly/resy migration Jobs (gated on DB inspection)    | needs_implement | 1   | task.0322 (Phase 3) |
-| **Future:** Atlas + GitOps migrations (declarative schema, CRD)    | needs_design    | 5   | task.0323 |
+| Minimal drizzle split — per-node schema dirs + per-node configs    | needs_implement | 2   | task.0324 |
+| Un-no-op prod poly/resy migration Jobs (gated on DB inspection)    | needs_implement | 1   | task.0324 (Phase 3) |
+| **Future:** Atlas + GitOps migrations (declarative schema, CRD)    | needs_design    | 5   | task.0325 |
 
-task.0322 is the current-priority minimal fix (no new tooling). task.0323 preserves the Atlas adoption plan for when contributor scale or destructive-change linting warrants the investment.
+task.0324 is the current-priority minimal fix (no new tooling). task.0325 preserves the Atlas adoption plan for when contributor scale or destructive-change linting warrants the investment.
 
 ### P3 — DSN-Only Provisioning
 
