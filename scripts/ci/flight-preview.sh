@@ -29,6 +29,14 @@ set -euo pipefail
 # --reread-lease rebases and re-reads review-state. The loser sees dispatching
 # and deterministically demotes to queue-only by setting FLIGHT_LEASE_LOST=1.
 #
+# Exit codes:
+#   0 — flight dispatched (promote-and-deploy kicked off for the given SHA)
+#   1 — hard failure (missing token, push retries exhausted, unexpected error)
+#   2 — queued-only (lease locked; candidate-sha recorded but no dispatch).
+#       Callers MUST treat this as distinct from 0; a non-dispatched run
+#       should surface as a visibly-skipped deploy in the workflow UI, not
+#       as a green success.
+#
 # Usage: flight-preview.sh <sha> <repo> <deploy-branch> <gh-token>
 
 SHA="${1:?Usage: flight-preview.sh <sha> <repo> <deploy-branch> <gh-token>}"
@@ -127,6 +135,8 @@ if [ "${WILL_DISPATCH:-0}" = "1" ] && [ "$FLIGHT_LEASE_LOST" = "0" ]; then
     -f environment=preview \
     -f source_sha="$SHA"
   echo "✅ Preview flight dispatched for ${SHORT_SHA}"
-else
-  echo "ℹ️  Queue-only: candidate-sha=${SHORT_SHA} recorded; no dispatch (review-state locked)"
+  exit 0
 fi
+
+echo "ℹ️  Queue-only: candidate-sha=${SHORT_SHA} recorded; no dispatch (review-state locked)"
+exit 2
