@@ -101,20 +101,47 @@ when you change node-specific code. This will be unified in task.0248.
 
 ## Database & Auth
 
-All nodes share one Postgres database (`cogni_template_dev`) and one set of
-migrations (from `nodes/operator/app/src/adapters/server/db/migrations/`). Standard
-setup applies:
+**Each node has its own Postgres database.** Operator → `cogni_template_dev`,
+poly → `cogni_poly`, resy → `cogni_resy`. Dev URLs live in `.env.local` as
+`DATABASE_URL`, `DATABASE_URL_POLY`, `DATABASE_URL_RESY`. Production k8s
+overlays patch the DB secret per node the same way.
+
+**Schema source (today, 2026-04):** all tables are defined in the shared
+`@cogni/db-schema` workspace package. `drizzle-kit` is driven by a single
+root `drizzle.config.ts` that writes migrations to
+`nodes/operator/app/src/adapters/server/db/migrations/`. Poly, resy, and
+node-template currently hold **byte-identical copies** of those migrations
+in their own `migrations/` dirs — there is no per-node extension mechanism
+yet. Adding a node-local table means adding it to the shared schema and
+applying it to every DB. This is a known limitation tracked in **task.0322**
+(per-node schema independence via `@cogni/db-core` + per-node extensions).
 
 ```bash
-pnpm db:setup           # provision + migrate + seed (first time)
-pnpm db:migrate:dev     # run pending migrations (after schema changes)
+pnpm db:setup           # provision cogni_template_dev + migrate + seed
+pnpm db:migrate:dev     # operator DB
+pnpm db:migrate:poly    # cogni_poly — swaps DATABASE_URL, runs same migrations
+pnpm db:migrate:resy    # cogni_resy — swaps DATABASE_URL, runs same migrations
+pnpm db:migrate:nodes   # run all three in sequence
 ```
 
-**Auth:** NextAuth sessions are shared across all apps (same DB, same JWT secret).
-The `dev:stack:*` scripts automatically set `NEXTAUTH_URL` per node so OAuth
-redirects return to the correct port. Each node can sign in independently.
+**Production migration gap:** the production k8s overlays for poly and resy
+currently ship a no-op migration Job (`exit 0` — see
+`infra/k8s/overlays/production/{poly,resy}/kustomization.yaml`). Preview
+overlays DO migrate. Production migration wiring is blocked on task.0260
+(per-node migrator images) and task.0322.
 
-**Future (task.0247):** Per-node databases for data isolation in production.
+**Auth:** Because each node has its own DB, NextAuth session rows do **not**
+transit between nodes. Signing in on poly creates a session row in
+`cogni_poly`; the same cookie on operator authenticates against
+`cogni_template_dev` separately. Shared `AUTH_SECRET` means JWT decoding
+works across ports, but DB-backed session state is per-node. OAuth redirects
+are scoped to the right port via the `NEXTAUTH_URL_*` env vars set by the
+`dev:stack:*` scripts.
+
+**Future (task.0322):** Node-local schemas live in `nodes/{name}/app/schema/`
+and compile to per-node migration dirs. Core platform tables move into
+`@cogni/db-core` (semver'd), propagated by lockfile bumps rather than
+copy-paste.
 
 ## Architecture Notes
 
@@ -122,6 +149,7 @@ redirects return to the correct port. Each node can sign in independently.
   billing, treasury) minus the DAO formation wizard
 - Node-specific features (e.g. resy's reservations) live in `app/src/features/`
 - Shared packages (`@cogni/ai-tools`, `@cogni/market-provider`, etc.) are in `packages/`
-- All nodes share one DB and one migration path for now (task.0247 adds isolation)
+- Each node has its own DB; schema is currently centralized in `@cogni/db-schema`
+  with byte-copied per-node migrations. Per-node schema independence is task.0322.
 - Future: task.0248 will extract the shared platform into `packages/node-platform`
   so nodes become thin shells instead of full copies
