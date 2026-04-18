@@ -106,3 +106,4 @@ Preferred simpler path: have `promote-to-production.sh` write a per-node `source
 - bug.0320 — flight-preview PR-lookup race (fixed, PR #915)
 - PR #917 — flight-preview hard-fail + verify-buildsha.sh (merged)
 - PR #921 — flight-preview queue-only surfaces as skipped (in review)
+- Handoff: [handoff](../handoffs/bug.0321.handoff.md)
