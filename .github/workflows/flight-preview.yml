@@ -201,11 +201,14 @@ jobs:
         if: steps.pr.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
-        run: bash scripts/ci/flight-preview.sh
-          "${{ steps.pr.outputs.head_sha }}"
-          "${{ github.repository }}"
-          "deploy/preview"
-          "$GH_TOKEN"
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          bash scripts/ci/flight-preview.sh \
+            "$HEAD_SHA" \
+            "$REPOSITORY" \
+            "deploy/preview" \
+            "$GH_TOKEN"
         continue-on-error: true
 
       - name: Propagate flight failure
