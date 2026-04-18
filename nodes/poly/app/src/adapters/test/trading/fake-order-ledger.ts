@@ -57,15 +57,17 @@ export class FakeOrderLedger implements OrderLedger {
     dayStartUtc.setUTCHours(0, 0, 0, 0);
     const oneHourAgo = new Date(now - 60 * 60 * 1000);
 
+    // Caps filter on `created_at` (intent-submission time), not `observed_at`
+    // (upstream fill time). Matches the real Drizzle adapter + CAPS_COUNT_INTENTS.
     const myRows = this.rows.filter((r) => r.target_id === target_id);
     const today_spent_usdc = myRows
-      .filter((r) => r.observed_at >= dayStartUtc)
+      .filter((r) => r.created_at >= dayStartUtc)
       .reduce((sum, r) => {
         const v = (r.attributes as Record<string, unknown> | null)?.size_usdc;
         return sum + (typeof v === "number" ? v : 0);
       }, 0);
     const fills_last_hour = myRows.filter(
-      (r) => r.observed_at >= oneHourAgo
+      (r) => r.created_at >= oneHourAgo
     ).length;
     const already_placed_ids = myRows.map((r) => r.client_order_id);
 

@@ -57,6 +57,10 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             .from(polyCopyTradeConfig)
             .where(eq(polyCopyTradeConfig.singletonId, 1))
             .limit(1),
+          // Caps are INTENT-based (CAPS_COUNT_INTENTS invariant): filter by
+          // `created_at` (when we inserted the pending row) — NOT by
+          // `observed_at` (the upstream fill time, which can be arbitrarily old
+          // for a target's historical activity). See decide.ts::INTENT_BASED_CAPS.
           deps.db
             .select({
               spent: sum(
@@ -68,7 +72,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               and(
                 eq(polyCopyTradeFills.targetId, target_id),
                 gte(
-                  polyCopyTradeFills.observedAt,
+                  polyCopyTradeFills.createdAt,
                   sql`date_trunc('day', now() at time zone 'utc') at time zone 'utc'`
                 )
               )
@@ -80,7 +84,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               and(
                 eq(polyCopyTradeFills.targetId, target_id),
                 gte(
-                  polyCopyTradeFills.observedAt,
+                  polyCopyTradeFills.createdAt,
                   sql`now() - interval '1 hour'`
                 )
               )
