@@ -28,6 +28,8 @@ export interface FakePolymarketClobConfig {
   openOrders?: OrderReceipt[];
   /** If set, `listOpenOrders` rejects with this error. */
   listRejectWith?: Error;
+  /** If set, `cancelOrder` rejects with this error. */
+  cancelRejectWith?: Error;
 }
 
 /**
@@ -50,6 +52,7 @@ const DEFAULT_RECEIPT: Omit<OrderReceipt, "client_order_id"> = {
  */
 export class FakePolymarketClobAdapter {
   public calls: OrderIntent[] = [];
+  public cancelCalls: string[] = [];
   private readonly config: FakePolymarketClobConfig;
 
   constructor(config: FakePolymarketClobConfig = {}) {
@@ -71,5 +74,10 @@ export class FakePolymarketClobAdapter {
   }): Promise<OrderReceipt[]> {
     if (this.config.listRejectWith) throw this.config.listRejectWith;
     return this.config.openOrders ?? [];
+  }
+
+  async cancelOrder(orderId: string): Promise<void> {
+    this.cancelCalls.push(orderId);
+    if (this.config.cancelRejectWith) throw this.config.cancelRejectWith;
   }
 }

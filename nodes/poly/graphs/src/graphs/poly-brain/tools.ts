@@ -13,6 +13,7 @@
 
 import {
   MARKET_LIST_NAME,
+  POLY_CANCEL_ORDER_NAME,
   POLY_LIST_ORDERS_NAME,
   POLY_PLACE_TRADE_NAME,
   WALLET_TOP_TRADERS_NAME,
@@ -27,10 +28,13 @@ import {
  *   (external_side_effect — real money; LLM should invoke only on explicit user request)
  * poly_list_orders: list currently-open Polymarket CLOB orders on the operator wallet
  *   (read_only — used to confirm state after placement)
+ * poly_cancel_order: cancel ONE open Polymarket CLOB order by id
+ *   (state_change — required before replacing a resting order, since Polymarket has no update op)
  * web_search: research events that affect market prices
  */
 export const POLY_BRAIN_TOOL_IDS = [
   MARKET_LIST_NAME,
+  POLY_CANCEL_ORDER_NAME,
   POLY_LIST_ORDERS_NAME,
   POLY_PLACE_TRADE_NAME,
   WALLET_TOP_TRADERS_NAME,

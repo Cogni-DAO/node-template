@@ -169,6 +169,19 @@ export {
   metricsQueryStubImplementation,
 } from "./tools/metrics-query";
 export {
+  createPolyCancelOrderImplementation,
+  POLY_CANCEL_ORDER_NAME,
+  type PolyCancelOrderDeps,
+  type PolyCancelOrderInput,
+  PolyCancelOrderInputSchema,
+  type PolyCancelOrderOutput,
+  PolyCancelOrderOutputSchema,
+  type PolyCancelOrderRedacted,
+  polyCancelOrderBoundTool,
+  polyCancelOrderContract,
+  polyCancelOrderStubImplementation,
+} from "./tools/poly-cancel-order";
+export {
   createPolyListOrdersImplementation,
   POLY_LIST_ORDERS_NAME,
   type PolyListOrdersDeps,

@@ -207,6 +207,8 @@ export interface CreateFromAdapterDeps {
     tokenId?: string;
     market?: string;
   }) => Promise<OrderReceipt[]>;
+  /** `cancelOrder(orderId)` — production adapter OR fake. */
+  cancelOrder: (orderId: string) => Promise<void>;
   /** Operator EOA (used for the receipt's profile_url). */
   operatorWalletAddress: `0x${string}`;
   /** Pino logger (factory wraps in a LoggerPort + adds executor child). */
@@ -295,6 +297,9 @@ export function createPolyTradeCapabilityFromAdapter(
       );
       return receipts.map(receiptToPolyOpenOrder);
     },
+    async cancelOrder(orderId: string): Promise<void> {
+      await deps.cancelOrder(orderId);
+    },
   };
 }
 
@@ -364,6 +369,7 @@ export function createPolyTradeCapability(
     return createPolyTradeCapabilityFromAdapter({
       placeOrder: fake.placeOrder.bind(fake),
       listOpenOrders: fake.listOpenOrders.bind(fake),
+      cancelOrder: fake.cancelOrder.bind(fake),
       operatorWalletAddress: operator,
       logger: config.logger,
     });
@@ -414,6 +420,7 @@ export function createPolyTradeCapability(
       tokenId?: string;
       market?: string;
     }) => Promise<OrderReceipt[]>;
+    cancelOrder: (orderId: string) => Promise<void>;
   };
   let cached: AdapterMethods | undefined;
   let initPromise: Promise<AdapterMethods> | undefined;
@@ -443,10 +450,15 @@ export function createPolyTradeCapability(
     const m = await ensureMethods();
     return m.listOpenOrders(params);
   }
+  async function lazyCancelOrder(orderId: string): Promise<void> {
+    const m = await ensureMethods();
+    return m.cancelOrder(orderId);
+  }
 
   return createPolyTradeCapabilityFromAdapter({
     placeOrder: lazyPlaceOrder,
     listOpenOrders: lazyListOpenOrders,
+    cancelOrder: lazyCancelOrder,
     operatorWalletAddress,
     logger: config.logger,
     metrics,
@@ -478,6 +490,7 @@ async function buildRealAdapterMethods(
     tokenId?: string;
     market?: string;
   }) => Promise<OrderReceipt[]>;
+  cancelOrder: (orderId: string) => Promise<void>;
 }> {
   // Dynamic imports — keep `@polymarket/clob-client` + `@privy-io/node` out of
   // bundles that don't configure the capability.
@@ -562,5 +575,6 @@ async function buildRealAdapterMethods(
   return {
     placeOrder: adapter.placeOrder.bind(adapter),
     listOpenOrders: adapter.listOpenOrders.bind(adapter),
+    cancelOrder: adapter.cancelOrder.bind(adapter),
   };
 }

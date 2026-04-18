@@ -97,6 +97,7 @@ export interface PolyListOpenOrdersRequest {
 export interface PolyTradeCapability {
   placeTrade(request: PolyPlaceTradeRequest): Promise<PolyPlaceTradeReceipt>;
   listOpenOrders(request?: PolyListOpenOrdersRequest): Promise<PolyOpenOrder[]>;
+  cancelOrder(orderId: string): Promise<void>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

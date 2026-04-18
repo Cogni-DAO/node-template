@@ -53,6 +53,8 @@ import {
   POLY_LIST_ORDERS_NAME,
   POLY_PLACE_TRADE_NAME,
   polyListOrdersStubImplementation,
+  POLY_CANCEL_ORDER_NAME,
+  polyCancelOrderStubImplementation,
   polyPlaceTradeStubImplementation,
   REPO_LIST_NAME,
   REPO_OPEN_NAME,
@@ -144,6 +146,10 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     // Poly list-orders: poly-only tool. Stub here for the same reason.
     [POLY_LIST_ORDERS_NAME]:
       polyListOrdersStubImplementation as AnyToolImplementation,
+
+    // Poly cancel-order: poly-only tool. Stub here for the same reason.
+    [POLY_CANCEL_ORDER_NAME]:
+      polyCancelOrderStubImplementation as AnyToolImplementation,
 
     [METRICS_QUERY_NAME]: createMetricsQueryImplementation({
       metricsCapability: deps.metricsCapability,
