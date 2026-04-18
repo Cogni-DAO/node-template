@@ -410,7 +410,7 @@ volumes:
 - [ ] **Add a digest resolver** in `scripts/ci/resolve-pr-build-images.sh`:
   - Same `resolve_tag` case (must mirror the build script)
 - [ ] **Add to the dispatch fallback** `.github/workflows/build-multi-node.yml` (called by `promote-merged-pr.yml` when a PR produced no images):
-  - Either add to the services block or extend the matrix, matching the pattern used by `scheduler-worker` / `migrator`.
+  - Node-scoped services go in the `build-nodes` matrix; utility services go as a step in the `build-services` job — match the pattern `scheduler-worker` / `migrator` already use.
 
 **Verify locally:** Touch a file under `services/<name>/` and run `scripts/ci/detect-affected.sh` with `TURBO_SCM_BASE=origin/main TURBO_SCM_HEAD=HEAD`. Your service should appear in the `targets` CSV and `targets_json` array.
 
@@ -429,12 +429,12 @@ Argo CD ApplicationSets are catalog-driven (task.0247). The catalog is the singl
   - `deployment.yaml`, `service.yaml`, `kustomization.yaml`
   - Reference `services/scheduler-worker` for a worker-style service
   - Apply the security context from Step 7
-- [ ] **Verify the AppSet picks it up** — the per-env ApplicationSet (`infra/k8s/argocd/candidate-a-applicationset.yaml` etc.) generates one Application per catalog entry; no per-service Application file should be added by hand.
+- [ ] **Verify the AppSet picks it up** — the per-env ApplicationSet (`infra/k8s/argocd/candidate-a-applicationset.yaml`, `preview-applicationset.yaml`, `production-applicationset.yaml`) generates one Application per catalog entry at runtime. No per-service Application file should be added by hand; if the AppSet template needs to branch on your service, extend the template, not the generated output.
 - [ ] **Add to `scripts/ci/wait-for-argocd.sh`** `APPS=(...)` list so flights wait for your service to reach Healthy before declaring success.
 
 #### 9c. Dev stack (local Docker Compose)
 
-- [ ] Add the service to `infra/compose/docker-compose.dev.yml` (check current path — layout has moved since original guide)
+- [ ] Add the service to `infra/compose/runtime/docker-compose.dev.yml` (dev stack) and `infra/compose/runtime/docker-compose.yml` (docker-compose stack used by candidate-flight-infra / preview VMs)
 - [ ] Add root `package.json` script if solo iteration helps:
   ```json
   "<name>:dev": "dotenv -e .env.local -- pnpm --filter @cogni/<name>-service dev"
@@ -449,8 +449,8 @@ Classify the service as **critical** (a flight fails if it can't reach Healthy) 
 - [ ] **Probes** — `readinessProbe` and `livenessProbe` in `infra/k8s/base/<name>/deployment.yaml` pointing at `/readyz` and `/livez`. Tune `initialDelaySeconds` and `periodSeconds` — probe ownership belongs to the manifest, never `HEALTHCHECK` in the Dockerfile.
 - [ ] **If critical** — include the service name in `scripts/ci/wait-for-argocd.sh` `APPS=(...)`. `candidate-flight.yml`, `flight-preview.yml`, and `promote-and-deploy.yml` all block until every listed app reports `sync.revision == deploy-branch SHA && health.status == Healthy`.
 - [ ] **If optional / in-flight** — keep it out of the `APPS` list so a broken optional service doesn't block the whole flight. See bug.0312 context in `proj.cicd-services-gitops.md` (openclaw placeholder image tag was exactly this failure mode).
-- [ ] **Pod Disruption Budget** (if the service has more than 1 replica or hosts stateful work) — add `poddisruptionbudget.yaml` with `minAvailable: 1` so rolling updates don't take the service fully offline.
-- [ ] **Sync-wave ordering** (if the service has a start-up dependency like a migration) — use Argo `argocd.argoproj.io/sync-wave` annotations. Migrations run in wave 0; services depending on them run in wave 1+.
+
+> **Not yet repo conventions:** HA patterns (PodDisruptionBudgets, Argo `sync-wave` ordering, multi-replica deployments) are absent from `infra/k8s/base/**` today — every app runs `replicas: 1`. Revisit when a service needs genuine HA; don't bolt on PDBs speculatively.
 
 ### 11. Documentation
 

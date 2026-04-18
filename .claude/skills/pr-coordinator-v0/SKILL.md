@@ -127,7 +127,7 @@ Two dispatchable workflows (see "Two Independent Levers" below). Route by what t
 🛩 Flighted to candidate-a (test)
 
 - SHA:        <sha>
-- Images:     pr-<N>-<sha> (operator, migrate, scheduler-worker, poly, resy)
+- Images:     pr-<N>-<sha>-* (affected subset of: operator, poly, resy, migrator, scheduler-worker)
 - Operator:   https://test.cognidao.org
 - Poly:       https://poly-test.cognidao.org
 - Resy:       https://resy-test.cognidao.org
