@@ -238,6 +238,14 @@ export interface Container {
   modelCatalog: ModelCatalogPort;
   /** Provider resolver — resolves providerKey to ModelProviderPort for runtime dispatch */
   providerResolver: ModelProviderResolverPort;
+  /**
+   * Polymarket copy-trade bundle — agent-callable capability + raw placeIntent
+   * seam + operator wallet address. Undefined when Polymarket env is incomplete.
+   * Consumed by the autonomous mirror poll AND the /api/v1/poly/* read APIs.
+   */
+  polyTradeBundle:
+    | import("@/bootstrap/capabilities/poly-trade").PolyTradeBundle
+    | undefined;
 }
 
 // Feature-specific dependency types
@@ -932,6 +940,7 @@ function createContainer(): Container {
         providerResolver: new ProviderResolver(providers),
       };
     })(),
+    polyTradeBundle,
   };
 }
 
