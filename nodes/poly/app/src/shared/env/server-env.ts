@@ -240,9 +240,22 @@ export const serverSchema = z.object({
   // Polymarket CLOB trade placement — Optional
   // Required only when `core__poly_place_trade` tool is exposed to agents.
   // Per task.0315 CP4.25: the poly-trade capability is constructed when ALL of
-  // OPERATOR_WALLET_ADDRESS + POLY_CLOB_API_KEY + POLY_CLOB_API_SECRET +
+  // POLY_PROTO_OPERATOR_ADDRESS + POLY_CLOB_API_KEY + POLY_CLOB_API_SECRET +
   // POLY_CLOB_PASSPHRASE + the Privy triple are set. Otherwise the tool is
   // registered with a stub that throws a clear error.
+  //
+  // POLY_PROTO_OPERATOR_ADDRESS is a DEDICATED Privy wallet for the prototype,
+  // NOT the production billing operator wallet (OPERATOR_WALLET_ADDRESS, used
+  // by distributeSplit / fundOpenRouterTopUp on Base). Custody isolation:
+  // billing wallet holds real funds; proto wallet holds only ~$20 USDC.e on
+  // Polygon. See work/items/task.0315 — never collapse these names.
+  // The legacy OPERATOR_WALLET_ADDRESS field below remains for backward
+  // compatibility during the CP4.25 reviewer-refactor handover and will be
+  // removed once the poly-trade capability factory reads POLY_PROTO_*.
+  POLY_PROTO_OPERATOR_ADDRESS: z
+    .string()
+    .regex(/^0x[a-fA-F0-9]{40}$/)
+    .optional(),
   OPERATOR_WALLET_ADDRESS: z
     .string()
     .regex(/^0x[a-fA-F0-9]{40}$/)
