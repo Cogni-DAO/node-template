@@ -248,9 +248,16 @@ export interface Container {
     | undefined;
   /**
    * Service-role DB client (BYPASSRLS). Exposed for read APIs against
-   * system-owned tables (`poly_copy_trade_*` — no RLS per migration 0027).
-   * Consumers that work with tenant-scoped tables MUST use `accountsForUser`
-   * / app-role patterns instead.
+   * `poly_copy_trade_*` — the v0 copy-trade prototype's three tables are
+   * system-owned (no RLS per migration 0027). This is a **deliberate v0
+   * shortcut**, not a pattern to extend.
+   *
+   * **TODO(task.0315 P2 — MUST_FIX_P2):** add RLS to the three tables +
+   * an `owner_user_id` column + mirror-coordinator writes via
+   * `withTenantScope(db, operatorUserId, ...)` + routes migrate to
+   * `getAppDb()` + session-scoped reads + this field gets REMOVED. See
+   * `packages/db-client/src/tenant-scope.ts` for the existing pattern.
+   * Any new route reaching for this field should instead gate on RLS.
    */
   serviceDb: Database;
 }
