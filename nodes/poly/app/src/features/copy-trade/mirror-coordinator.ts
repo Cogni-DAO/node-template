@@ -93,7 +93,10 @@ export async function runOnce(deps: MirrorCoordinatorDeps): Promise<void> {
     "mirror coordinator: tick start"
   );
 
-  let result: { fills: import("@cogni/market-provider").Fill[]; newSince: number };
+  let result: {
+    fills: import("@cogni/market-provider").Fill[];
+    newSince: number;
+  };
   try {
     result = await deps.source.fetchSince(cursor);
   } catch (err: unknown) {
@@ -131,10 +134,7 @@ async function processFill(
   clock: () => Date,
   log: LoggerPort
 ): Promise<void> {
-  const client_order_id = clientOrderIdFor(
-    deps.target.target_id,
-    fill.fill_id
-  );
+  const client_order_id = clientOrderIdFor(deps.target.target_id, fill.fill_id);
 
   // Snapshot is per-fill — simple, slightly more DB reads but correct when
   // caps tighten mid-tick (e.g. first fill tips over the daily cap).

@@ -30,8 +30,7 @@ import type { TargetConfig } from "@/features/copy-trade/types";
 import type { WalletActivitySource } from "@/features/wallet-watch";
 
 const TARGET_ID = "11111111-1111-1111-1111-111111111111";
-const TARGET_WALLET =
-  "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
+const TARGET_WALLET = "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
 
 const BASE_TARGET: TargetConfig = {
   target_id: TARGET_ID,

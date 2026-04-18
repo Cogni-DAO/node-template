@@ -29,6 +29,12 @@ export const WALLET_WATCH_METRICS = {
   fillsTotal: "poly_mirror_data_api_fills_total",
   /** `poly_mirror_data_api_fetch_duration_ms` — HTTP round-trip + parse. */
   fetchDurationMs: "poly_mirror_data_api_fetch_duration_ms",
+  /**
+   * `poly_mirror_data_api_normalize_error_total` — normalizer THREW (Zod
+   * parse failure or unexpected shape). Skipped row + cursor still advances,
+   * so a single malformed trade can't wedge the loop across ticks.
+   */
+  normalizeErrorsTotal: "poly_mirror_data_api_normalize_error_total",
 } as const;
 
 export interface NextFillsResult {
@@ -105,12 +111,33 @@ export function createPolymarketActivitySource(
       let newSince = since ?? 0;
       const fills: Fill[] = [];
       let skipped = 0;
-      const skipsByReason: Partial<Record<PolymarketNormalizeSkipReason, number>> =
-        {};
+      const skipsByReason: Partial<
+        Record<PolymarketNormalizeSkipReason, number>
+      > = {};
 
       for (const trade of trades) {
         if (trade.timestamp > newSince) newSince = trade.timestamp;
-        const result = normalizePolymarketDataApiFill(trade);
+        // Defense against upstream schema drift — normalizer does
+        // `FillSchema.parse(fill)` which throws on shape violation. Without
+        // this catch, a single malformed row would abort the page, leave
+        // `newSince` unchanged, and the next tick would replay + re-crash.
+        // Skip the row, advance past it, log, and let the loop breathe.
+        let result: ReturnType<typeof normalizePolymarketDataApiFill>;
+        try {
+          result = normalizePolymarketDataApiFill(trade);
+        } catch (err: unknown) {
+          deps.metrics.incr(WALLET_WATCH_METRICS.normalizeErrorsTotal, {});
+          log.warn(
+            {
+              event: "poly.wallet_watch.normalize_error",
+              trade_timestamp: trade.timestamp,
+              trade_tx: trade.transactionHash,
+              err: err instanceof Error ? err.message : String(err),
+            },
+            "normalizer threw; skipping row and advancing cursor"
+          );
+          continue;
+        }
         if (result.ok) {
           fills.push(result.fill);
           continue;

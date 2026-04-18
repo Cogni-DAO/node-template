@@ -21,6 +21,7 @@
  */
 
 import type { LoggerPort, MetricsPort } from "@cogni/market-provider";
+import { v5 as uuidv5 } from "uuid";
 import {
   type MirrorCoordinatorDeps,
   runOnce,
@@ -136,39 +137,22 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
 }
 
 /**
- * Derive a stable synthetic `target_id` (UUIDv5 shape) from the target wallet.
+ * UUIDv5 namespace for poly target wallets. Arbitrary but fixed — any future
+ * caller that needs a stable `target_id` from a wallet address uses this
+ * namespace so ids collide with ours.
+ */
+const POLY_TARGET_WALLET_NAMESPACE =
+  "e2a38b91-7b7d-5f8e-9c0d-4a1e6f8b2c3d" as const;
+
+/**
+ * Derive a stable synthetic `target_id` from the target wallet.
  * v0 single-tenant: one wallet ⇒ one id, deterministic across restarts so
  * `client_order_id = clientOrderIdFor(target_id, fill_id)` stays stable.
- *
- * Implementation: SHA-1 over the wallet address, format as UUIDv5. Avoids
- * adding a `uuid` runtime dep for a 6-line function. TODO(P2): replace with
- * a real `poly_copy_trade_targets.id` FK once the table exists.
+ * TODO(P2): replace with a real `poly_copy_trade_targets.id` FK once the
+ * table exists. Tracked at task.0315 P2.
  *
  * @public
  */
 export function targetIdFromWallet(wallet: `0x${string}`): string {
-  // UUIDv5 spec: RFC 4122 §4.3, namespace DNS = 6ba7b810-9dad-11d1-80b4-00c04fd430c8.
-  // Implemented inline (single callsite, trivial) rather than pulling `uuid`.
-  const nsBytes = [
-    0x6b, 0xa7, 0xb8, 0x10, 0x9d, 0xad, 0x11, 0xd1, 0x80, 0xb4, 0x00, 0xc0,
-    0x4f, 0xd4, 0x30, 0xc8,
-  ];
-  // Deterministic hash input: namespace bytes + wallet bytes.
-  const walletBytes = Buffer.from(wallet.slice(2).toLowerCase(), "hex");
-  const input = Buffer.concat([Buffer.from(nsBytes), walletBytes]);
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { createHash } = require("node:crypto") as typeof import("node:crypto");
-  const hash = createHash("sha1").update(input).digest();
-  // Set version (5) and variant (RFC 4122) per UUIDv5 spec.
-  const bytes = hash.slice(0, 16);
-  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x50;
-  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
-  const hex = bytes.toString("hex");
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32),
-  ].join("-");
+  return uuidv5(wallet.toLowerCase(), POLY_TARGET_WALLET_NAMESPACE);
 }

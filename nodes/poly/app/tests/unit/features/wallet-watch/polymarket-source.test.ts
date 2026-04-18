@@ -11,10 +11,7 @@
  * @internal
  */
 
-import {
-  createRecordingMetrics,
-  noopLogger,
-} from "@cogni/market-provider";
+import { createRecordingMetrics, noopLogger } from "@cogni/market-provider";
 import type {
   PolymarketDataApiClient,
   PolymarketUserTrade,
@@ -26,8 +23,7 @@ import {
   WALLET_WATCH_METRICS,
 } from "@/features/wallet-watch/polymarket-source";
 
-const TARGET_WALLET =
-  "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
+const TARGET_WALLET = "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
 
 /** Minimal stub of the Data-API client — only the methods the source calls. */
 function makeStubClient(
@@ -145,6 +141,50 @@ describe("createPolymarketActivitySource.fetchSince", () => {
     expect(newSince).toBe(42);
   });
 
+  it("normalizer throw is caught — cursor advances, counter increments, loop not wedged", async () => {
+    // Regression for B2 in review: a normalizer throw (schema drift, Zod
+    // validation failure) previously aborted the page, left the cursor
+    // unchanged, and the next tick re-crashed on the same row.
+    const stubClient = {
+      async listUserActivity() {
+        // A "good" trade + a trade that would pass normalizer skip-checks
+        // (non-empty tx, positive size/price, valid side, has asset/cond) but
+        // produces an invalid `Fill` via schema drift. We simulate that by
+        // injecting a proxyWallet that fails the `/^0x[a-fA-F0-9]{40}$/` regex
+        // on FillSchema — the normalizer's defensive `FillSchema.parse` throws.
+        return [
+          makeTrade({ timestamp: 100 }),
+          makeTrade({
+            timestamp: 200,
+            // Malformed wallet address — normalizer's `FillSchema.parse` throws.
+            proxyWallet: "not-a-wallet",
+          }),
+          makeTrade({ timestamp: 300 }),
+        ];
+      },
+    } as unknown as PolymarketDataApiClient;
+
+    const metrics = createRecordingMetrics();
+    const source = createPolymarketActivitySource({
+      client: stubClient,
+      wallet: TARGET_WALLET,
+      logger: noopLogger,
+      metrics,
+    });
+
+    const { fills, newSince } = await source.fetchSince();
+    // Two good rows normalized; one bad row skipped via catch.
+    expect(fills).toHaveLength(2);
+    // Cursor advances past ALL rows, including the crashing one — loop isn't wedged.
+    expect(newSince).toBe(300);
+    const normErr = metrics.emissions.find(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === WALLET_WATCH_METRICS.normalizeErrorsTotal
+    );
+    expect(normErr).toBeDefined();
+  });
+
   it("buckets skip reasons with bounded labels", async () => {
     const metrics = createRecordingMetrics();
     const source = createPolymarketActivitySource({
@@ -160,8 +200,7 @@ describe("createPolymarketActivitySource.fetchSince", () => {
     await source.fetchSince();
     const reasons = metrics.emissions
       .filter(
-        (c) =>
-          c.kind === "counter" && c.name === WALLET_WATCH_METRICS.skipTotal
+        (c) => c.kind === "counter" && c.name === WALLET_WATCH_METRICS.skipTotal
       )
       .map((c) => c.labels.reason);
     expect(reasons).toContain("empty_transaction_hash");
