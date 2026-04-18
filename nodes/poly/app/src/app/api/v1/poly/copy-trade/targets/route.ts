@@ -18,8 +18,8 @@ import {
 } from "@cogni/node-contracts";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { NextResponse } from "next/server";
-import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
+import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { targetIdFromWallet } from "@/bootstrap/jobs/copy-trade-mirror.job";
 import { createOrderLedger } from "@/features/trading";
@@ -47,7 +47,7 @@ export const GET = wrapRouteHandlerWithLogging(
       // is already FAIL_CLOSED on DB read failure so the dashboard surfaces
       // `enabled=false` rather than a misleading true when Postgres is down.
       const ledger = createOrderLedger({
-        db: getServiceDb() as unknown as NodePgDatabase,
+        db: getContainer().serviceDb as unknown as NodePgDatabase,
         logger: ctx.log,
       });
       const snapshot = await ledger.snapshotState(target_id);

@@ -246,6 +246,13 @@ export interface Container {
   polyTradeBundle:
     | import("@/bootstrap/capabilities/poly-trade").PolyTradeBundle
     | undefined;
+  /**
+   * Service-role DB client (BYPASSRLS). Exposed for read APIs against
+   * system-owned tables (`poly_copy_trade_*` — no RLS per migration 0027).
+   * Consumers that work with tenant-scoped tables MUST use `accountsForUser`
+   * / app-role patterns instead.
+   */
+  serviceDb: Database;
 }
 
 // Feature-specific dependency types
@@ -941,6 +948,7 @@ function createContainer(): Container {
       };
     })(),
     polyTradeBundle,
+    serviceDb,
   };
 }
 

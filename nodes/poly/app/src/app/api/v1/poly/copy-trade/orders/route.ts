@@ -18,8 +18,8 @@ import {
 } from "@cogni/node-contracts";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { NextResponse } from "next/server";
-import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { getSessionUser } from "@/app/_lib/auth/session";
+import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { createOrderLedger, type LedgerRow } from "@/features/trading";
 import { serverEnv } from "@/shared/env/server-env";
@@ -102,7 +102,7 @@ export const GET = wrapRouteHandlerWithLogging(
       });
 
       const ledger = createOrderLedger({
-        db: getServiceDb() as unknown as NodePgDatabase,
+        db: getContainer().serviceDb as unknown as NodePgDatabase,
         logger: ctx.log,
       });
       const listOpts: { limit?: number; target_id?: string } = {};
