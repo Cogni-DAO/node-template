@@ -33,6 +33,13 @@ for item in payload["targets"]:
 PY
 )
 
+# Track which apps actually had a non-empty digest and got written to the
+# overlay. Emitted as $GITHUB_OUTPUT.promoted_apps so downstream verification
+# jobs can (a) scope wait-for-argocd to only the apps that changed and
+# (b) gate at the job level — an empty promoted_apps surfaces as a visibly
+# skipped verify job instead of a silent-green skipped step.
+PROMOTED=()
+
 promote_target() {
   local target="$1"
   local digest
@@ -57,11 +64,13 @@ PY
     else
       bash "$PROMOTE_SCRIPT" --no-commit --env "$OVERLAY_ENV" --app "$target" --digest "$digest"
     fi
+    PROMOTED+=("$target")
     return 0
   fi
 
   if [ "$target" = "scheduler-worker" ]; then
     bash "$PROMOTE_SCRIPT" --no-commit --env "$OVERLAY_ENV" --app "$target" --digest "$digest"
+    PROMOTED+=("$target")
   fi
 }
 
@@ -69,3 +78,14 @@ promote_target operator
 promote_target poly
 promote_target resy
 promote_target scheduler-worker
+
+promoted_csv=""
+if [ ${#PROMOTED[@]} -gt 0 ]; then
+  promoted_csv=$(IFS=,; echo "${PROMOTED[*]}")
+fi
+
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+  echo "promoted_apps=${promoted_csv}" >> "$GITHUB_OUTPUT"
+fi
+
+echo "Promoted apps: ${promoted_csv:-none}"
