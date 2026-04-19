@@ -64,11 +64,15 @@ Two sources, two freshness classes.
 
 **Prefetch.** `TopWalletsCard` row → `onPointerEnter`, `onFocus`, `onTouchStart` (debounced 50 ms) → `queryClient.prefetchQuery` for snapshot + trades. Drawer opens already-warmed on every input modality.
 
-### Address allowlist (single policy)
+### Address policy — any 0x wallet
 
-`addr` is accepted if and only if it is in the **roster** = (snapshot table ∪ currently-tracked-wallet ∪ operator). Any other address returns `404`.
+Any 0x address is accepted. Snapshot data is `null` for unscreened wallets; live `trades` + `balance` always populated (Data-API + RPC are public). Three guardrails replace the roster gate:
 
-This deletes the prior contradiction. Forensic lookup of arbitrary off-roster addresses is out of scope; if needed later, add an explicit `POST /api/v1/poly/wallets` write that inserts a snapshot row first (gated, audited).
+- **Auth.** Route requires an authenticated session.
+- **Validation.** Zod regex `^0x[a-f0-9]{40}$` (lowercased) before any handler logic.
+- **Coalescing.** Server-side `unstable_cache` per `(slice, addr)`, 30 s TTL → at most one upstream Data-API call per (slice, addr) per 30 s, regardless of concurrent users.
+
+A future per-IP rate-limit middleware tightens this further if the surface gets abused.
 
 ### API surface (contract owns the shape)
 
@@ -107,16 +111,13 @@ flowchart LR
 - `/research/w/[addr]` — dynamic Next.js route, auth-gated server shell, client `WalletAnalysisView`.
 - Dashboard drawer — `Sheet` from `nodes/poly/app/src/components/vendor/shadcn/sheet.tsx` (already vendored). Deep-link via `?w=0x…`. Esc / click-out closes.
 
-## Rollout — 3 work items + vNext
+## Rollout — one PR with checkpoints
 
-Each part is its **own work item, own PR, own review**. They merge in order onto main. No multi-PR feature branch.
+Single work item, single PR, three commits ([task.0329](../../work/items/task.0329.wallet-analysis-component-extraction.md)):
 
-| Item   | Work item                                                                       | Scope                                                                                                                                                                                               | Gate                                                                                                                                                                                                             |
-| ------ | ------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Part 1 | [task.0329](../../work/items/task.0329.wallet-analysis-component-extraction.md) | Extract 7 molecules + `WalletAnalysisView` (page-variant only); `/research` BeefSlayer feeds it via hardcoded props                                                                                 | Playwright visual diff vs current `/research` ≤ 0.5 % pixel delta; no API/DB changes                                                                                                                             |
-| Part 2 | [task.0330](../../work/items/task.0330.wallet-analysis-data-plane.md)           | Snapshot table DDL + seed script; Zod contract; `GET /api/v1/poly/wallets/[addr]` route via `PolymarketDataApiClient`; `useWalletAnalysis` hook with three-slice fan-out; `/research/w/[addr]` page | BeefSlayer on `/research` shows API-served numbers identical to Part-1 hardcoded; off-roster address returns 404; ten concurrent requests for same addr produce one upstream Data-API call (cache-stampede test) |
-| Part 3 | [task.0331](../../work/items/task.0331.wallet-analysis-monitored-drawer.md)     | `TopWalletsCard` row click → `Sheet` drawer (`variant="drawer"`); `?w=0x…` deep-link; pointer/focus/touch prefetch                                                                                  | Drawer interactive ≤ 200 ms on prefetched roster row (desktop); same ≤ 400 ms on touch with simulated 3G                                                                                                         |
-| vNext  | (no item)                                                                       | Copy-trade CTA + Harvard-flagged-dataset gate                                                                                                                                                       | filed once gate-storage decision is made                                                                                                                                                                         |
+- **A · Extract** — molecules + `WalletAnalysisView` (page variant); `/research` re-renders BeefSlayer through it with hardcoded props. Gate: Playwright visual diff vs main ≤ 0.5 %.
+- **B · Data plane** — snapshot DDL + seed script + Zod contract + `GET /api/v1/poly/wallets/[addr]` (any 0x wallet) routed through `PolymarketDataApiClient` with `unstable_cache` + `useWalletAnalysis` hook + `/research/w/[addr]` page. Gate: BeefSlayer numbers via API match Checkpoint-A baseline; cache-stampede test passes; 401 when unauthenticated.
+- **C · Drawer** — `Sheet` from Monitored Wallets row + pointer/focus/touch prefetch + `?w=…` deep-link. Gate: drawer interactive ≤ 200 ms on prefetched row.
 
 ### vNext — Copy-trade CTA (parked, not designed)
 
