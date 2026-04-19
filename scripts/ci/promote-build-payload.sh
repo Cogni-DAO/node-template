@@ -59,6 +59,20 @@ for item in payload["targets"]:
 PY
 }
 
+# Write a per-app `app → source_sha` entry into .promote-state/source-sha-by-app.json
+# on the deploy branch. Merged, not overwritten — untouched apps retain their
+# prior source_sha. Consumed by verify-buildsha.sh in SOURCE_SHA_MAP mode for
+# cross-env/cross-PR contract verification (bug.0321 Fix 4).
+update_source_sha_map() {
+  local app="$1"
+  if [ -z "$source_sha" ]; then
+    echo "  ⚠️  source_sha missing from payload — skipping map update for ${app}" >&2
+    return 0
+  fi
+  APP="$app" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" \
+    bash "$MAP_SCRIPT"
+}
+
 promote_target() {
   local target="$1"
   local digest migrator_digest
@@ -84,20 +98,6 @@ promote_target() {
     PROMOTED+=("$target")
     update_source_sha_map "$target"
   fi
-}
-
-# Write a per-app `app → source_sha` entry into .promote-state/source-sha-by-app.json
-# on the deploy branch. Merged, not overwritten — untouched apps retain their
-# prior source_sha. Consumed by verify-buildsha.sh in SOURCE_SHA_MAP mode for
-# cross-env/cross-PR contract verification (bug.0321 Fix 4).
-update_source_sha_map() {
-  local app="$1"
-  if [ -z "$source_sha" ]; then
-    echo "  ⚠️  source_sha missing from payload — skipping map update for ${app}" >&2
-    return 0
-  fi
-  APP="$app" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" \
-    bash "$MAP_SCRIPT"
 }
 
 promote_target operator

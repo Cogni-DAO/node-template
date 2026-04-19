@@ -77,6 +77,9 @@ PY
     exit 0
   fi
 else
+  if [ -n "$SOURCE_SHA_MAP" ]; then
+    echo "ℹ️  verify-buildsha: SOURCE_SHA_MAP=${SOURCE_SHA_MAP} set but file missing — falling back to single-SHA mode"
+  fi
   # Single-SHA mode: require EXPECTED_BUILDSHA + NODES.
   EXPECTED_BUILDSHA="${EXPECTED_BUILDSHA:?EXPECTED_BUILDSHA required in single-SHA mode (or pass SOURCE_SHA_MAP)}"
   NODES="${NODES?NODES required (CSV of promoted nodes; pass \"\" to skip)}"

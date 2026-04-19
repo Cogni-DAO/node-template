@@ -1,7 +1,7 @@
 ---
 id: bug.0321
 type: bug
-title: "CICD silent-green: three remaining paths that report success without verifying deploy state"
+title: "CICD silent-green: remaining paths that report success without verifying deploy state"
 status: needs_review
 priority: 1
 rank: 1
@@ -30,7 +30,7 @@ related:
   - PR #921
 ---
 
-# bug.0321 — CICD silent-green: three remaining paths
+# bug.0321 — CICD silent-green: remaining paths
 
 ## Context
 
