@@ -8,7 +8,7 @@
  * Invariants:
  *   - READ_ONLY: no mutation buttons.
  *   - COPY_PAYLOAD_IS_AGENT_INPUT: per-row copy emits a JSON block shaped for an AI agent prompt.
- *   - LEDGER_STATUS_MAY_BE_STALE: `status` is set at placement time and is not reconciled with the CLOB. (task.0323 §2)
+ *   - LEDGER_STATUS_IS_RECONCILED: status is reconciled from CLOB every reconciler tick; synced_at + staleness_ms render a staleness dot when synced_at IS NULL or staleness > 60s. (task.0328)
  *   - VISUAL_RESTRAINT: only BUY (green) / SELL (red) carry color. Status uses a tiny dot + muted text.
  *   - NO_EOA_PROFILE_LINKS: row click points at the target's Polygon tx (authoritative on-chain proof), never at polymarket.com/profile/<operator> — that redirects to an empty Safe-proxy for EOA-direct operators. See `.claude/skills/poly-dev-expert/SKILL.md`.
  *   - NO_EXTERNAL_PROXY: market title + tx hash are read directly from the row (denormalized at write time in `decide.ts` + `order-ledger.ts`). We do NOT proxy Polymarket Gamma from the client.
@@ -64,7 +64,7 @@ function buildAgentPayload(row: PolyCopyTradeOrderRow): string {
   return JSON.stringify(
     {
       action: "paste-me-to-your-agent",
-      hint: "Inspect / cancel / reprice this Polymarket copy-trade order via core__poly_place_trade and related tools. Ledger status may be stale (task.0323 §2) — cross-check against Data-API /positions.",
+      hint: "Inspect / cancel / reprice this Polymarket copy-trade order via core__poly_place_trade and related tools. Trust row.status when staleness_ms < 60000; treat null synced_at or staleness_ms > 60000 as unverified and cross-check against Data-API /positions.",
       order: row,
       ground_truth: {
         target_wallet_positions: row.target_wallet

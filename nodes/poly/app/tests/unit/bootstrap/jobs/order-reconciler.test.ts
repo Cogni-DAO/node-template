@@ -20,7 +20,6 @@ import { describe, expect, it, vi } from "vitest";
 import { FakeOrderLedger } from "@/adapters/test/trading/fake-order-ledger";
 import {
   ORDER_RECONCILER_METRICS,
-  RECONCILER_METRICS,
   runReconcileOnce,
 } from "@/bootstrap/jobs/order-reconciler.job";
 import type { LedgerRow } from "@/features/trading";
@@ -101,7 +100,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder,
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,
@@ -125,7 +123,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder,
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,
@@ -144,7 +141,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder,
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,
@@ -188,7 +184,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder,
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics,
@@ -203,8 +198,8 @@ describe("runReconcileOnce", () => {
     expect(
       ledger.rows.find((r) => r.client_order_id === "coid-2")?.status
     ).toBe("filled");
-    expect(counts[RECONCILER_METRICS.errorsTotal]).toBe(1);
-    expect(counts[RECONCILER_METRICS.ticksTotal]).toBe(1);
+    expect(counts[ORDER_RECONCILER_METRICS.errorsTotal]).toBe(1);
+    expect(counts[ORDER_RECONCILER_METRICS.ticksTotal]).toBe(1);
   });
 
   it("status unchanged → updateStatus not called (no extra updated_at churn)", async () => {
@@ -220,7 +215,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder,
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,
@@ -239,14 +233,13 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder: vi.fn(),
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics,
       notFoundGraceMs: 900_000,
     });
 
-    expect(counts[RECONCILER_METRICS.ticksTotal]).toBe(1);
+    expect(counts[ORDER_RECONCILER_METRICS.ticksTotal]).toBe(1);
   });
 
   // ─── CP2: not_found grace-window promotion ────────────────────────────────
@@ -266,7 +259,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder: vi.fn().mockResolvedValue(NOT_FOUND),
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics,
@@ -279,7 +271,7 @@ describe("runReconcileOnce", () => {
     ).toBe("clob_not_found");
     expect(counts[ORDER_RECONCILER_METRICS.notFoundUpgradesTotal]).toBe(1);
     // ticks counter still fires
-    expect(counts[RECONCILER_METRICS.ticksTotal]).toBe(1);
+    expect(counts[ORDER_RECONCILER_METRICS.ticksTotal]).toBe(1);
   });
 
   it("not_found + fresh row (age < grace) → no updateStatus call, no counter, status unchanged", async () => {
@@ -298,7 +290,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder: vi.fn().mockResolvedValue(NOT_FOUND),
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics,
@@ -329,7 +320,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder: vi.fn().mockResolvedValue(NOT_FOUND),
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics,
@@ -384,7 +374,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder,
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,
@@ -409,7 +398,6 @@ describe("runReconcileOnce", () => {
     await runReconcileOnce({
       ledger,
       getOrder: vi.fn(),
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,

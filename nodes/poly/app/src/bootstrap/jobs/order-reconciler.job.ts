@@ -21,9 +21,7 @@
  *   - TICK_IS_SELF_HEALING — errors are caught per-row; the tick continues for
  *     remaining rows and never crashes the interval.
  *   - NO_REDEMPTION_SYNC_V0 — reconciler only syncs from `getOrder`. Position-
- *     based redemption detection is deferred.
- *     TODO(task.0323 §2): implement redemption-sync using `getOperatorPositions`
- *     once task.0323 phase-2 spec is finalized.
+ *     based redemption detection is deferred (task.0329).
  * Side-effects: starts a `setInterval`, emits logs + metrics.
  * Links: work/items/task.0323 §2, docs/spec/poly-copy-trade-phase1.md
  *
@@ -34,13 +32,13 @@
  * @internal
  */
 
+// TODO(task.0329): redemption-sync will add `getOperatorPositions` back.
 import type {
   GetOrderResult,
   LoggerPort,
   MetricsPort,
   OrderStatus,
 } from "@cogni/market-provider";
-import type { PolymarketUserPosition } from "@cogni/market-provider/adapters/polymarket";
 import { EVENT_NAMES } from "@cogni/node-shared";
 
 import type { LedgerRow, LedgerStatus, OrderLedger } from "@/features/trading";
@@ -49,22 +47,13 @@ import type { LedgerRow, LedgerStatus, OrderLedger } from "@/features/trading";
 // Metric names
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const RECONCILER_METRICS = {
+export const ORDER_RECONCILER_METRICS = {
   /** One per tick (regardless of how many rows were processed). */
   ticksTotal: "poly_mirror_reconcile_ticks_total",
   /** One per ledger row whose status was actually changed. */
   updatesTotal: "poly_mirror_reconcile_updates_total",
   /** One per `getOrder` / `updateStatus` error; tick continues for other rows. */
   errorsTotal: "poly_mirror_reconcile_errors_total",
-} as const;
-
-/**
- * Metrics exported under the canonical `ORDER_RECONCILER_METRICS` name.
- * Extends `RECONCILER_METRICS` with CP2 counters. Callers should prefer this
- * export going forward; `RECONCILER_METRICS` is kept for back-compat.
- */
-export const ORDER_RECONCILER_METRICS = {
-  ...RECONCILER_METRICS,
   /**
    * One per row promoted from open/pending → canceled because CLOB returned
    * not_found beyond the grace window. A spike here signals CLOB changed its
@@ -88,11 +77,6 @@ export interface OrderReconcilerDeps {
    * GETORDER_NEVER_NULL invariant (task.0328 CP1): null is never returned.
    */
   getOrder: (orderId: string) => Promise<GetOrderResult>;
-  /**
-   * `PolyTradeBundle.getOperatorPositions` — fetched once per tick for future
-   * redemption-sync. Currently unused beyond the TODO below.
-   */
-  getOperatorPositions: () => Promise<PolymarketUserPosition[]>;
   operatorWalletAddress: `0x${string}`;
   logger: LoggerPort;
   metrics: MetricsPort;
@@ -232,7 +216,7 @@ export async function runReconcileOnce(
         filled_size_usdc: receipt.filled_size_usdc ?? undefined,
       });
 
-      deps.metrics.incr(RECONCILER_METRICS.updatesTotal, {
+      deps.metrics.incr(ORDER_RECONCILER_METRICS.updatesTotal, {
         from: row.status,
         to: newStatus,
       });
@@ -248,7 +232,7 @@ export async function runReconcileOnce(
       );
     } catch (err: unknown) {
       // getOrder threw — do NOT add to syncedIds; row staleness grows.
-      deps.metrics.incr(RECONCILER_METRICS.errorsTotal, {});
+      deps.metrics.incr(ORDER_RECONCILER_METRICS.errorsTotal, {});
       log.error(
         {
           event: EVENT_NAMES.POLY_MIRROR_RECONCILE_TICK_ERROR,
@@ -266,14 +250,7 @@ export async function runReconcileOnce(
   // One UPDATE vs N — correct and efficient.
   await deps.ledger.markSynced(syncedIds);
 
-  // TODO(task.0323 §2): redemption-sync — call getOperatorPositions once per
-  // tick and mark filled rows as redeemed when the operator no longer holds
-  // the asset. Deferred: need to distinguish a sold position (canceled) from a
-  // market-resolved redemption (still "filled") without ambiguity.
-  // For now `getOperatorPositions` is accepted in deps but not called, keeping
-  // the interface stable for the follow-up PR.
-
-  deps.metrics.incr(RECONCILER_METRICS.ticksTotal, {});
+  deps.metrics.incr(ORDER_RECONCILER_METRICS.ticksTotal, {});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -316,7 +293,7 @@ export function startOrderReconciler(
     } catch (err: unknown) {
       // Belt-and-suspenders: `runReconcileOnce` already catches per-row errors.
       // Anything escaping here is a structural bug (e.g. ledger query threw).
-      deps.metrics.incr(RECONCILER_METRICS.errorsTotal, {});
+      deps.metrics.incr(ORDER_RECONCILER_METRICS.errorsTotal, {});
       log.error(
         {
           event: EVENT_NAMES.POLY_MIRROR_RECONCILE_TICK_ERROR,

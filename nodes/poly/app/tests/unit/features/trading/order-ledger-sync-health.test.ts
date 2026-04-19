@@ -37,7 +37,7 @@ describe("FakeOrderLedger.syncHealthSummary", () => {
   it("empty table → all zeros and null", async () => {
     const ledger = new FakeOrderLedger({ initial: [] });
     const result = await ledger.syncHealthSummary();
-    expect(result.oldest_unsynced_row_age_ms).toBeNull();
+    expect(result.oldest_synced_row_age_ms).toBeNull();
     expect(result.rows_stale_over_60s).toBe(0);
     expect(result.rows_never_synced).toBe(0);
   });
@@ -50,7 +50,7 @@ describe("FakeOrderLedger.syncHealthSummary", () => {
     });
     const ledger = new FakeOrderLedger({ initial: [row] });
     const result = await ledger.syncHealthSummary();
-    expect(result.oldest_unsynced_row_age_ms).toBeNull();
+    expect(result.oldest_synced_row_age_ms).toBeNull();
     expect(result.rows_never_synced).toBe(1);
     expect(result.rows_stale_over_60s).toBe(0);
   });
@@ -64,8 +64,8 @@ describe("FakeOrderLedger.syncHealthSummary", () => {
     });
     const ledger = new FakeOrderLedger({ initial: [row] });
     const result = await ledger.syncHealthSummary();
-    expect(result.oldest_unsynced_row_age_ms).not.toBeNull();
-    expect(result.oldest_unsynced_row_age_ms).toBeGreaterThanOrEqual(0);
+    expect(result.oldest_synced_row_age_ms).not.toBeNull();
+    expect(result.oldest_synced_row_age_ms).toBeGreaterThanOrEqual(0);
     expect(result.rows_stale_over_60s).toBe(0);
     expect(result.rows_never_synced).toBe(0);
   });
@@ -118,11 +118,11 @@ describe("FakeOrderLedger.syncHealthSummary", () => {
     // One never-synced
     expect(result.rows_never_synced).toBe(1);
     // oldest_ms = age of the oldest synced row (rowStale2 at ~200s)
-    expect(result.oldest_unsynced_row_age_ms).not.toBeNull();
-    expect(result.oldest_unsynced_row_age_ms).toBeGreaterThanOrEqual(190_000);
+    expect(result.oldest_synced_row_age_ms).not.toBeNull();
+    expect(result.oldest_synced_row_age_ms).toBeGreaterThanOrEqual(190_000);
   });
 
-  it("oldest_unsynced_row_age_ms reflects the MIN synced_at (least recent)", async () => {
+  it("oldest_synced_row_age_ms reflects the MIN synced_at (least recent)", async () => {
     // Two synced rows; the older one should determine oldest_ms.
     const older = new Date(Date.now() - 300_000); // 5 min ago
     const newer = new Date(Date.now() - 30_000); // 30s ago
@@ -142,6 +142,6 @@ describe("FakeOrderLedger.syncHealthSummary", () => {
     const result = await ledger.syncHealthSummary();
 
     // oldest_ms must be >= age of the older row (>=270s after test clock drift)
-    expect(result.oldest_unsynced_row_age_ms).toBeGreaterThanOrEqual(270_000);
+    expect(result.oldest_synced_row_age_ms).toBeGreaterThanOrEqual(270_000);
   });
 });

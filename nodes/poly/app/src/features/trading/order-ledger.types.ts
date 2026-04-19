@@ -114,14 +114,14 @@ export interface UpdateStatusInput {
  * Aggregate freshness stats returned by `syncHealthSummary`.
  * Used by GET /api/v1/poly/internal/sync-health.
  *
- * `oldest_unsynced_row_age_ms` — age in ms of the least-recently-synced row
+ * `oldest_synced_row_age_ms` — age in ms of the least-recently-synced row
  *   that HAS a non-null `synced_at`. Null when no row has ever been synced.
  *   Never-synced rows are counted in `rows_never_synced` instead.
  *
  * SYNC_HEALTH_IS_PUBLIC invariant (task.0328 CP4).
  */
 export interface SyncHealthSummary {
-  oldest_unsynced_row_age_ms: number | null;
+  oldest_synced_row_age_ms: number | null;
   rows_stale_over_60s: number;
   rows_never_synced: number;
 }

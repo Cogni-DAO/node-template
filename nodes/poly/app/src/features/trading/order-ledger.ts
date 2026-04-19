@@ -276,7 +276,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         .where(
           and(
             sql`${polyCopyTradeFills.status} IN ('pending','open')`,
-            sql`${polyCopyTradeFills.createdAt} < now() - interval '${sql.raw(String(olderThanMs))} milliseconds'`
+            sql`${polyCopyTradeFills.createdAt} < now() - make_interval(secs => ${olderThanMs} / 1000.0)`
           )
         )
         .orderBy(polyCopyTradeFills.createdAt)
@@ -348,7 +348,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               EXTRACT(EPOCH FROM (now() - MIN(${polyCopyTradeFills.syncedAt})))
               * 1000
               AS bigint
-            ) FILTER (WHERE ${polyCopyTradeFills.syncedAt} IS NOT NULL) AS oldest_ms,
+            ) AS oldest_ms,
             COUNT(*) FILTER (
               WHERE ${polyCopyTradeFills.syncedAt} IS NOT NULL
                 AND ${polyCopyTradeFills.syncedAt} < now() - interval '60 seconds'
@@ -365,7 +365,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         | undefined;
 
       return {
-        oldest_unsynced_row_age_ms:
+        oldest_synced_row_age_ms:
           row?.oldest_ms != null ? Number(row.oldest_ms) : null,
         rows_stale_over_60s: Number(row?.stale_60s ?? 0),
         rows_never_synced: Number(row?.never_synced ?? 0),

@@ -16,12 +16,11 @@ import {
   type PolyCopyTradeOrderRow,
   polyCopyTradeOrdersOperation,
 } from "@cogni/node-contracts";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { createOrderLedger, type LedgerRow } from "@/features/trading";
+import type { LedgerRow } from "@/features/trading";
 import { serverEnv } from "@/shared/env/server-env";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
@@ -109,10 +108,7 @@ export const GET = wrapRouteHandlerWithLogging(
         ...(targetIdRaw !== null ? { target_id: targetIdRaw } : {}),
       });
 
-      const ledger = createOrderLedger({
-        db: getContainer().serviceDb as unknown as NodePgDatabase,
-        logger: ctx.log,
-      });
+      const ledger = getContainer().orderLedger;
       const listOpts: { limit?: number; target_id?: string } = {};
       if (input.limit !== undefined) listOpts.limit = input.limit;
       if (input.target_id !== undefined) listOpts.target_id = input.target_id;

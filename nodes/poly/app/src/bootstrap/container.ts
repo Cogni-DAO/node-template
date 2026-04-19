@@ -124,6 +124,7 @@ import {
   startOrderReconciler,
 } from "@/bootstrap/jobs/order-reconciler.job";
 import { startProcessHealthPublisher } from "@/bootstrap/publishers";
+import { createOrderLedger, type OrderLedger } from "@/features/trading";
 import type {
   AccountService,
   AiTelemetryPort,
@@ -248,6 +249,13 @@ export interface Container {
   polyTradeBundle:
     | import("@/bootstrap/capabilities/poly-trade").PolyTradeBundle
     | undefined;
+  /**
+   * Memoized `OrderLedger` singleton scoped to `serviceDb`. Routes must use
+   * this instead of building per-request with `createOrderLedger(...)`.
+   * The singleton is safe: `createOrderLedger` is stateless (no per-call
+   * caches or request-bound state).
+   */
+  orderLedger: OrderLedger;
   /**
    * Service-role DB client (BYPASSRLS). Exposed for read APIs against
    * `poly_copy_trade_*` — the v0 copy-trade prototype's three tables are
@@ -544,6 +552,14 @@ function createContainer(): Container {
 
   // Service DB (BYPASSRLS) for worker adapters
   const serviceDb = getServiceDb();
+
+  // Memoized OrderLedger singleton — routes use container.orderLedger instead
+  // of building per-request. createOrderLedger is stateless so this is safe.
+  const orderLedger = createOrderLedger({
+    db: serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
+    logger: log,
+  });
+
   const paymentAttemptServiceRepository =
     new ServiceDrizzlePaymentAttemptRepository(serviceDb);
 
@@ -663,7 +679,6 @@ function createContainer(): Container {
     // client, Drizzle queries) don't run on pods without Polymarket creds.
     void (async () => {
       try {
-        const { createOrderLedger } = await import("@/features/trading");
         const { createPolymarketActivitySource } = await import(
           "@/features/wallet-watch"
         );
@@ -689,14 +704,10 @@ function createContainer(): Container {
           logger: mirrorLogger,
           metrics: noopMetrics,
         });
-        const ledger = createOrderLedger({
-          db: getServiceDb() as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
-          logger: log,
-        });
         startMirrorPoll({
           target,
           source,
-          ledger,
+          ledger: orderLedger,
           placeIntent: polyTradeBundle.placeIntent,
           closePosition: polyTradeBundle.closePosition,
           getOperatorPositions: polyTradeBundle.getOperatorPositions,
@@ -707,9 +718,8 @@ function createContainer(): Container {
         // Ledger reconciler — syncs open/pending rows from CLOB getOrder
         // (task.0323 §2, @scaffolding, Deleted-in-phase: 4)
         _reconcilerHandle = startOrderReconciler({
-          ledger,
+          ledger: orderLedger,
           getOrder: polyTradeBundle.getOrder,
-          getOperatorPositions: polyTradeBundle.getOperatorPositions,
           operatorWalletAddress: polyTradeBundle.operatorWalletAddress,
           logger: mirrorLogger,
           metrics: noopMetrics,
@@ -982,6 +992,7 @@ function createContainer(): Container {
       };
     })(),
     polyTradeBundle,
+    orderLedger,
     serviceDb,
     reconcilerLastTickAt() {
       return _reconcilerHandle?.getLastTickAt() ?? null;

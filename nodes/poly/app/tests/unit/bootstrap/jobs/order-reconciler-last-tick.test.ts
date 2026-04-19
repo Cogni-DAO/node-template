@@ -46,7 +46,6 @@ describe("startOrderReconciler — getLastTickAt", () => {
     const handle = startOrderReconciler({
       ledger,
       getOrder: vi.fn(),
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,
@@ -68,7 +67,6 @@ describe("startOrderReconciler — getLastTickAt", () => {
     const handle = startOrderReconciler({
       ledger,
       getOrder: vi.fn(),
-      getOperatorPositions: async () => [],
       operatorWalletAddress: OPERATOR,
       logger: LOGGER,
       metrics: noopMetrics,

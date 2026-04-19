@@ -215,14 +215,14 @@ export class FakeOrderLedger implements OrderLedger {
     const now = Date.now();
     const staleThreshold = now - 60_000;
 
-    // oldest_unsynced_row_age_ms: age of the least-recently-synced row.
+    // oldest_synced_row_age_ms: age of the least-recently-synced row.
     // Only consider rows with non-null synced_at (never-synced rows use
     // rows_never_synced).
     const syncedDates = this.rows
       .map((r) => r.synced_at?.getTime())
       .filter((t): t is number => t !== undefined && t !== null);
 
-    const oldest_unsynced_row_age_ms =
+    const oldest_synced_row_age_ms =
       syncedDates.length > 0 ? now - Math.min(...syncedDates) : null;
 
     const rows_stale_over_60s = this.rows.filter(
@@ -234,7 +234,7 @@ export class FakeOrderLedger implements OrderLedger {
     ).length;
 
     return {
-      oldest_unsynced_row_age_ms,
+      oldest_synced_row_age_ms,
       rows_stale_over_60s,
       rows_never_synced,
     };
