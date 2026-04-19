@@ -174,6 +174,9 @@
 | 2 | 5 | 5 | needs_implement | task.0315 | Poly copy-trade prototype — v0 top-wallet scoreboard, v0.1 shadow 1-wallet mirror | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 5 | 3 | needs_design | task.0317 | Per-node LangGraph catalogs — factory library + node-owned catalog registry |  |  |
 | 2 | 5 | 5 | needs_design | task.0318 | Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables | Cogni Poly | proj.poly-prediction-bot |
+| 2 | 5 | 2 | needs_design | task.0329 | Wallet analysis Part 1 — extract reusable components from /research | Cogni Poly | proj.poly-prediction-bot |
+| 2 | 5 | 3 | needs_design | task.0330 | Wallet analysis Part 2 — snapshot table + API route + dynamic /research/w/[addr] | Cogni Poly | proj.poly-prediction-bot |
+| 2 | 5 | 2 | needs_design | task.0331 | Wallet analysis Part 3 — Monitored Wallets row → drawer with prefetch | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 8 | 1 | needs_design | task.0064 | OpenClaw preflight cost estimate 10x audit — real token consumption | Reliability & Uptime | proj.reliability |
 | 2 | 9 | 2 | needs_design | task.0039 | Billing reconciler — LiteLLM spend/logs polling in scheduler worker | Unified Graph Launch | proj.unified-graph-launch |
 | 2 | 10 | 2 | needs_triage | task.0055 | Dedicated DB migrator role — separate DDL from runtime DML | Database Operations | proj.database-ops |
