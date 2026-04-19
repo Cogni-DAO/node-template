@@ -201,6 +201,18 @@ temp-dir overlay tree and stub PROMOTE_SCRIPT:
   interpolation into the script body. Low-risk today (app names are
   validated), but the pattern applies repo-wide.
 
+## Bundled Fix — bug.0326 (2026-04-19)
+
+While flighting PR #918 through the new 4-job workflow, the _next_ link
+in the verify-candidate chain tripped: wait-for-argocd reported green
+but the resy pod still served the prior BUILD_SHA, so verify-buildsha
+caught the stale rollout and failed red. That's bug.0326 (vacuous
+Argo green) realized live — same silent-green class as this bug,
+adjacent layer. Fix bundled in the same PR: extend wait-for-argocd.sh
+with a `kubectl rollout status` check after the Argo Application-level
+Healthy signal. See `work/items/bug.0326.wait-for-argocd-vacuous-green.md`
+§Closure for the live-repro evidence and design notes.
+
 ## Review Notes (2026-04-19, claude-code)
 
 Approved without blocking issues. Non-blocking suggestions captured as
