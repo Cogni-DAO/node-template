@@ -66,10 +66,17 @@ export const GET = wrapRouteHandlerWithLogging(
     const errors: string[] = [];
 
     // ── Polygon reads (USDC.e + POL) ─────────────────────────────────────────
+    // Transport uses POLYGON_RPC_URL (Alchemy/QuickNode/Ankr). Falls back to
+    // viem's default public polygon-rpc.com only when unset — that default is
+    // rate-limited / tenant-revoked in practice and will surface as
+    // stale=true + error_reason in the response. See task.0315 handoff.
     let usdc_available = 0;
     let pol_gas = 0;
     try {
-      const client = createPublicClient({ chain: polygon, transport: http() });
+      const client = createPublicClient({
+        chain: polygon,
+        transport: http(env.POLYGON_RPC_URL),
+      });
       const [usdcRaw, polRaw] = await Promise.all([
         client.readContract({
           address: USDC_E_POLYGON,
