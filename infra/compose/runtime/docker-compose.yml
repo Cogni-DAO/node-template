@@ -329,7 +329,14 @@ services:
     # drizzle-kit migrate runs natively against Doltgres 0.56.0+ — creates the
     # drizzle schema + __drizzle_migrations tracking table. Tests against the
     # local doltgres service confirmed end-to-end success.
-    image: ${POLY_MIGRATOR_IMAGE?POLY_MIGRATOR_IMAGE is required for doltgres-migrate-poly}
+    #
+    # Placeholder-default on the image var so `docker compose config` succeeds
+    # when POLY_MIGRATOR_IMAGE is unset (mirrors the MIGRATOR_IMAGE pattern on
+    # the db-migrate service). deploy-infra.sh L797 gates the actual
+    # `run --rm` invocation on the real var being set, so the placeholder image
+    # is never pulled or started. Using `?error` breaks the upstream presence
+    # check via config.
+    image: ${POLY_MIGRATOR_IMAGE:-unused-by-infra-deploy}
     profiles:
       - bootstrap
     restart: "no"

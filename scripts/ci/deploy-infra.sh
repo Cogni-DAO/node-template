@@ -805,7 +805,7 @@ if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
     # itself. For manual dev seeding: pnpm db:seed:doltgres:poly.
     log_info "[$(date -u +%H:%M:%S)] Doltgres provision + migrate + commit complete (clean slate, no seeds)"
   else
-    log_warn "POLY_MIGRATOR_IMAGE not set — skipping Doltgres migrate/commit/seed. Doltgres is up but schema is not applied."
+    log_warn "POLY_MIGRATOR_IMAGE not set — skipping Doltgres migrate + commit. Doltgres is up + provisioned but schema is not applied. Set POLY_MIGRATOR_IMAGE in the caller env (flight-infra workflow) to complete the bring-up."
   fi
 else
   log_info "Doltgres not present in compose config — skipping knowledge plane bootstrap"

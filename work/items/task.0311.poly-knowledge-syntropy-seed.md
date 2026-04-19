@@ -162,12 +162,13 @@ The DB name (`/knowledge_poly`) routes to the right Dolt repo. Password derived 
 
 ## Out of Scope / Follow-ups
 
-1. **Brain-authored knowledge loop** — `core__knowledge_write` + promotion gate so the brain accumulates observations at 10–30% confidence and graduates as evidence compounds. This is the actual product of the store.
-2. **DoltHub delivery path** (spike.0318 → task.0319) — replace local-dev seed machinery with `dolt_clone` from per-node DoltHub remotes.
-3. **Promote Doltgres migration to k8s PreSync Job pattern** — today it runs in compose alongside doltgres provisioning. Promote when (a) operator and resy adopt Doltgres, or (b) k8s-side migration plumbing (post-task.0324) gets a Doltgres invocation.
-4. **Align `DOLTGRES_URL` → `DOLTGRES_URL_{OPERATOR,RESY}`** for per-node consistency with poly. Today operator/resy read generic `DOLTGRES_URL`; poly reads `DOLTGRES_URL_POLY`. Minor inconsistency, not a blocker.
-5. **Backups** — follow Postgres WAL-G pattern once `proj.database-ops` lands.
-6. **@cogni/{operator,resy}-doltgres-schema packages** — create when those nodes adopt Doltgres (fork `@cogni/poly-doltgres-schema` structure).
+1. **Thread `POLY_MIGRATOR_IMAGE` through `candidate-flight-infra.yml` + `promote-and-deploy.yml`** — deploy-infra.sh reads it from env but no workflow sets it today. Until that edit lands, both pre-merge AND post-merge flights need a manual `POLY_MIGRATOR_IMAGE=<tag>` in the VM's `.env` to run migrate+commit; without it, doltgres comes up + provisions but the schema is not applied (warn-and-continue). Simplest fix: self-resolve in deploy-infra.sh from `COGNI_REPO_REF` (mirror the LITELLM_IMAGE pattern at line 547) OR add as a workflow input. This is the last gap to full hands-off.
+2. **Brain-authored knowledge loop** — `core__knowledge_write` + promotion gate so the brain accumulates observations at 10–30% confidence and graduates as evidence compounds. This is the actual product of the store.
+3. **DoltHub delivery path** (spike.0318 → task.0319) — replace local-dev seed machinery with `dolt_clone` from per-node DoltHub remotes.
+4. **Promote Doltgres migration to k8s PreSync Job pattern** — today it runs in compose alongside doltgres provisioning. Promote when (a) operator and resy adopt Doltgres, or (b) k8s-side migration plumbing (post-task.0324) gets a Doltgres invocation.
+5. **Align `DOLTGRES_URL` → `DOLTGRES_URL_{OPERATOR,RESY}`** for per-node consistency with poly. Today operator/resy read generic `DOLTGRES_URL`; poly reads `DOLTGRES_URL_POLY`. Minor inconsistency, not a blocker.
+6. **Backups** — follow Postgres WAL-G pattern once `proj.database-ops` lands.
+7. **@cogni/{operator,resy}-doltgres-schema packages** — create when those nodes adopt Doltgres (fork `@cogni/poly-doltgres-schema` structure).
 
 ## Related
 
