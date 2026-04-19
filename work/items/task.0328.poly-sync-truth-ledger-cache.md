@@ -2,8 +2,8 @@
 id: task.0328
 type: task
 title: "Poly sync-truth — DB as CLOB cache (first slice: typed not_found, grace window, synced_at, sync-health)"
-status: needs_implement
-revision: 1
+status: needs_review
+revision: 2
 priority: 1
 rank: 50
 estimate: 1
@@ -187,3 +187,31 @@ This task is done when:
 - Deployed to canary, the stuck `0xb79e…` row (or any like it) transitions to `canceled` within one grace window
 - Dashboard shows a staleness indicator for rows older than 60s
 - `/api/v1/poly/internal/sync-health` returns accurate aggregates
+
+## Revision 1 — what changed (2026-04-19)
+
+All 11 items from the /review-implementation blocking + non-blocking feedback addressed in
+commit `8cb598690`.
+
+**Blocking fixes:**
+
+- Migration 0028 regenerated via drizzle-kit; manually constructed missing `0027_snapshot.json`
+  so drizzle-kit diffs correctly (produces ALTER TABLE, not CREATE TABLE). Old hand-authored
+  `0028_synced_at_column.sql` deleted. New file: `0028_small_doomsday.sql`.
+- `sql.raw(String(olderThanMs))` → `sql\`now() - make_interval(secs => ${olderThanMs} / 1000.0)\``
+- `/sync-health` now uses `wrapRouteHandlerWithLogging`; error logs via `ctx.log.error` and
+  returns only `{ error: "sync_health_error" }` — no `err.message` leak.
+- `oldest_unsynced_row_age_ms` → `oldest_synced_row_age_ms` in contract, types, impl, fake, tests.
+
+**Non-blocking fixes:**
+
+- `LEDGER_STATUS_MAY_BE_STALE` → `LEDGER_STATUS_IS_RECONCILED` in OrderActivityCard.tsx.
+- Dropped `RECONCILER_METRICS` alias; single canonical `ORDER_RECONCILER_METRICS` export.
+- Removed `getOperatorPositions` from `OrderReconcilerDeps` (never called); added
+  `TODO(task.0329)` at file top.
+- `!("found" in result)` kept — `result.status === "not_found"` does not type-check because
+  `{ found: OrderReceipt }` has no `status` property.
+- `orderLedger` singleton exposed on `Container`; both `/sync-health` and `/orders` routes
+  use `getContainer().orderLedger`.
+- Removed redundant `FILTER (WHERE synced_at IS NOT NULL)` from `MIN(synced_at)` aggregate.
+- `/sync-health` covered by `wrapRouteHandlerWithLogging` (fix 3 + 11 combined).
