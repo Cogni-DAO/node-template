@@ -185,11 +185,14 @@ jobs:
             fi
           }
 
-          retag_if_built "operator"         ""                  ""
-          retag_if_built "poly"             "-poly"             "-poly"
-          retag_if_built "resy"             "-resy"             "-resy"
-          retag_if_built "migrator"         "-migrate"          "-migrate"
-          retag_if_built "scheduler-worker" "-scheduler-worker" "-scheduler-worker"
+          retag_if_built "operator"          ""                   ""
+          retag_if_built "poly"              "-poly"              "-poly"
+          retag_if_built "resy"              "-resy"              "-resy"
+          # Per-node migrators (task.0324 split) — each built as <sha>-<node>-migrate
+          retag_if_built "operator-migrator" "-operator-migrate"  "-operator-migrate"
+          retag_if_built "poly-migrator"     "-poly-migrate"      "-poly-migrate"
+          retag_if_built "resy-migrator"     "-resy-migrate"      "-resy-migrate"
+          retag_if_built "scheduler-worker"  "-scheduler-worker"  "-scheduler-worker"
 
           echo "✅ Re-tag complete for preview-${HEAD_SHA:0:8}"
 
