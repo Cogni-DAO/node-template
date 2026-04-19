@@ -21,6 +21,7 @@ external_refs:
   - work/items/task.0315.poly-copy-trade-prototype.md
   - packages/db-schema/src/connections.ts
   - packages/db-schema/src/scheduling.ts
+pr: https://github.com/Cogni-DAO/node-template/pull/925
 ---
 
 # Poly Wallet Multi-Tenant Auth
