@@ -164,6 +164,159 @@ The DB name (`/knowledge_poly`) routes to the right Dolt repo. Password derived 
 ✅ biome overrides + root-layout + check:docs + packages:build all green locally
 ```
 
+## Pre-merge candidate-a runbook
+
+Pre-merge, `gh workflow run candidate-flight-infra.yml` uses MAIN's `deploy-infra.sh` + MAIN's kustomize overlays — neither knows about Doltgres yet. So the infra flight only gets the branch's compose FILES onto the VM (via rsync). Everything else is manual from the laptop, executable by an agent with `.local/canary-vm-key` SSH access.
+
+The sequence below is verbatim what this branch's `deploy-infra.sh` + Argo WOULD do post-merge, performed manually pre-merge. VM = `84.32.109.160`; k8s namespace = `cogni-candidate-a`.
+
+### Step 1 — Dispatch flight-infra against the branch
+
+```bash
+gh workflow run candidate-flight-infra.yml -f ref=feat/poly-knowledge-seeds-slim
+gh run watch
+```
+
+Rsyncs `infra/compose/**` from branch → VM. Main's `deploy-infra.sh` runs; doltgres compose services are present but NOT started (main's script doesn't know about them).
+
+### Step 2 — SSH to VM, derive secrets, bring up doltgres + provision DBs
+
+```bash
+ssh -i .local/canary-vm-key root@84.32.109.160
+cd /opt/cogni-template-runtime
+
+# Derive 3 doltgres passwords from POSTGRES_ROOT_PASSWORD (mirrors deploy-infra.sh:derive_secret)
+export POSTGRES_ROOT_PASSWORD=$(grep '^POSTGRES_ROOT_PASSWORD=' .env | cut -d= -f2-)
+derive() { printf '%s:%s' "$1" "$POSTGRES_ROOT_PASSWORD" \
+  | openssl dgst -sha256 -hex | awk '{print $NF}' | cut -c1-32; }
+
+# Idempotent: remove any prior DOLTGRES_* lines before appending
+sed -i.bak '/^DOLTGRES_\(PASSWORD\|READER_PASSWORD\|WRITER_PASSWORD\)=/d' .env
+cat >> .env <<EOF
+DOLTGRES_PASSWORD=$(derive doltgres-root)
+DOLTGRES_READER_PASSWORD=$(derive doltgres-reader)
+DOLTGRES_WRITER_PASSWORD=$(derive doltgres-writer)
+EOF
+
+docker compose up -d doltgres
+docker compose --profile bootstrap run --rm doltgres-provision
+docker compose ps doltgres   # expect Up (healthy)
+```
+
+### Step 3 — Patch poly k8s secret with `DOLTGRES_URL_POLY`
+
+Still on VM (k3s kubectl):
+
+```bash
+HOST_IP=$(hostname -I | awk '{print $1}')
+DOLTGRES_WRITER_PW=$(grep '^DOLTGRES_WRITER_PASSWORD=' .env | cut -d= -f2-)
+DOLTGRES_URL_POLY="postgresql://knowledge_writer:${DOLTGRES_WRITER_PW}@${HOST_IP}:5435/knowledge_poly?sslmode=disable"
+
+kubectl -n cogni-candidate-a get secret poly-node-app-secrets -o json \
+  | jq --arg val "$(echo -n "$DOLTGRES_URL_POLY" | base64 -w0)" \
+       '.data.DOLTGRES_URL_POLY = $val' \
+  | kubectl apply -f -
+```
+
+### Step 4 — Apply branch's k8s overlay to cluster
+
+Either from VM (clone branch to `/tmp`):
+
+```bash
+ssh -i .local/canary-vm-key root@84.32.109.160 \
+  'cd /tmp && rm -rf cogni-slim && git clone --depth=1 --branch=feat/poly-knowledge-seeds-slim https://github.com/Cogni-DAO/node-template.git cogni-slim && kubectl apply -k cogni-slim/infra/k8s/overlays/candidate-a/poly'
+```
+
+Applies: `doltgres-external` Service + EndpointSlice (→ VM 84.32.109.160:5435), `migrate-poly-doltgres` PreSync Job, rolls `poly-node-app` deployment to pick up the new secret.
+
+### Step 5 — Wait for Job + rollout
+
+```bash
+ssh -i .local/canary-vm-key root@84.32.109.160 '
+  kubectl -n cogni-candidate-a wait --for=condition=complete job/poly-migrate-poly-doltgres --timeout=300s
+  kubectl -n cogni-candidate-a rollout status deployment/poly-node-app --timeout=300s
+'
+```
+
+### Validation V1 — Infra proof
+
+```bash
+ssh -i .local/canary-vm-key root@84.32.109.160 '
+  echo "=== migration Job logs ===";
+  kubectl -n cogni-candidate-a logs job/poly-migrate-poly-doltgres
+  echo "=== poly pod env ===";
+  kubectl -n cogni-candidate-a exec deploy/poly-node-app -- env | grep DOLTGRES_URL_POLY
+  echo "=== dolt_log ===";
+  kubectl -n cogni-candidate-a exec deploy/poly-node-app -- node -e "
+    const postgres = require(\"postgres\");
+    const sql = postgres(process.env.DOLTGRES_URL_POLY, {fetch_types:false,max:1});
+    (async () => {
+      const l = await sql.unsafe(\"SELECT message, date FROM dolt_log ORDER BY date DESC LIMIT 5\");
+      console.log(l);
+      const r = await sql.unsafe(\"SELECT id, title FROM knowledge LIMIT 5\");
+      console.log(\"knowledge rows:\", r.length);
+      await sql.end();
+    })().catch(e=>console.error(e.message));"
+'
+```
+
+**Pass criteria:** Job logs show `[✓] migrations applied successfully` + `[stamp-commit] ok: <hash>`. Pod env has `DOLTGRES_URL_POLY`. `dolt_log` contains `migration: drizzle-kit batch`. `knowledge` table exists with 0 rows.
+
+### Validation V2 — Agent API proof (poly brain uses the knowledge tool)
+
+Per [agent-api-validation guide](../../docs/guides/agent-api-validation.md):
+
+```bash
+BASE=https://poly-test.cognidao.org
+
+# Register machine actor (no wallet needed; platform routes via graph_name)
+CREDS=$(curl -s -X POST $BASE/api/v1/agent/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"task.0311-validation"}')
+API_KEY=$(echo "$CREDS" | jq -r .apiKey)
+
+# Turn 1: brain writes a knowledge row via core__knowledge_write
+curl -s -X POST $BASE/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "model":"gpt-4o-mini",
+    "graph_name":"brain",
+    "messages":[{"role":"user","content":"Record this fact for future reference: Polymarket settles binary-outcome trades in USDC on Polygon via a hybrid CLOB. Tag it protocol/clob. Source: polymarket.com docs."}]
+  }' | tee /tmp/v2-turn1.json | jq -r '.choices[0].message.content'
+
+# Turn 2: fresh session — brain should find it via core__knowledge_search
+curl -s -X POST $BASE/api/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $API_KEY" \
+  -d '{
+    "model":"gpt-4o-mini",
+    "graph_name":"brain",
+    "messages":[{"role":"user","content":"What do you know about how Polymarket settles trades?"}]
+  }' | tee /tmp/v2-turn2.json | jq -r '.choices[0].message.content'
+```
+
+**Pass criteria:** Turn 1 confirms the write (brain references invoking the knowledge tool). Turn 2 retrieves and cites the content with the polymarket.com source. `dolt_log` query from V1 gains a second entry between turns.
+
+### Rollback
+
+If anything between Steps 2–5 fails:
+
+```bash
+ssh -i .local/canary-vm-key root@84.32.109.160 '
+  kubectl -n cogni-candidate-a delete job/poly-migrate-poly-doltgres --ignore-not-found
+  kubectl -n cogni-candidate-a patch secret poly-node-app-secrets \
+    --type=json -p="[{\"op\":\"remove\",\"path\":\"/data/DOLTGRES_URL_POLY\"}]" 2>/dev/null || true
+  kubectl -n cogni-candidate-a rollout restart deployment/poly-node-app
+  cd /opt/cogni-template-runtime
+  docker compose stop doltgres
+  # Destructive: only if data corrupted
+  # docker volume rm doltgres_data
+'
+```
+
+Leaves Postgres, LiteLLM, Temporal, Redis untouched. Poly pod's Zod schema treats `DOLTGRES_URL_POLY` as optional → knowledge tools go dark → no crashloop.
+
 ## Out of Scope / Follow-ups
 
 1. **Brain-authored knowledge loop** — `core__knowledge_write` + promotion gate so the brain accumulates observations at 10–30% confidence and graduates as evidence compounds. This is the actual product of the store.
