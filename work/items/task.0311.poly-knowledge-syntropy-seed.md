@@ -2,7 +2,7 @@
 id: task.0311
 type: task
 title: "Poly Knowledge Plane v0 — Candidate-a Wiring + Upsert Bug Fix (Clean-Slate Nodes)"
-status: needs_merge
+status: done
 priority: 1
 rank: 2
 estimate: 2
@@ -15,6 +15,7 @@ spec_refs:
   - databases
 assignees: derekg1729
 project: proj.poly-prediction-bot
+reviewer: "self-review per /review-implementation 2026-04-19 — APPROVE"
 created: 2026-04-15
 updated: 2026-04-19
 pr: https://github.com/Cogni-DAO/node-template/pull/894
