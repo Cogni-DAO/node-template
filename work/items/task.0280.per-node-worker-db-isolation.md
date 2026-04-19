@@ -2,7 +2,7 @@
 id: task.0280
 type: task
 title: "Worker HTTP delegation: scheduler-worker drops direct-DB access for runs/grants"
-status: needs_merge
+status: done
 priority: 1
 rank: 1
 estimate: 3
@@ -26,7 +26,7 @@ related:
   - bug.0322
   - task.0324
 created: 2026-04-03
-updated: 2026-04-19
+updated: 2026-04-20
 labels:
   - ai-graphs
   - multi-node

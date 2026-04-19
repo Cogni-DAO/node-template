@@ -60,7 +60,7 @@ export const workerInfo = new client.Gauge({
  * Per task.0280 phase 2 (QUEUE_PER_NODE_ISOLATION).
  */
 export const schedulerWorkerNodeReachable = new client.Gauge({
-  name: "scheduler_worker_node_reachable",
+  name: "scheduler_worker_node_reachable_at_boot",
   help: "1 if node-app /readyz responded 2xx at worker boot, 0 otherwise",
   labelNames: ["node_id"] as const,
   registers: [metricsRegistry],

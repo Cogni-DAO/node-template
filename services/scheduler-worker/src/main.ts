@@ -45,13 +45,12 @@ function probeNodeReachability(
     if (!nodeId || !url) continue;
 
     (async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 3000);
         const response = await fetch(`${url.replace(/\/$/, "")}/readyz`, {
           signal: controller.signal,
         });
-        clearTimeout(timeout);
         if (response.ok) {
           schedulerWorkerNodeReachable.set({ node_id: nodeId }, 1);
         } else {
@@ -67,6 +66,8 @@ function probeNodeReachability(
           { nodeId, url, err: (err as Error).message },
           "Node /readyz unreachable at worker boot (non-blocking)"
         );
+      } finally {
+        clearTimeout(timeout);
       }
     })();
   }
