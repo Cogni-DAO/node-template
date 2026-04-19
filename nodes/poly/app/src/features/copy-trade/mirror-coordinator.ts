@@ -282,7 +282,7 @@ async function processSellFill(args: {
   // Query operator positions for the token.
   let positions: OperatorPosition[];
   try {
-    positions = await deps.getOperatorPositions();
+    positions = await getOperatorPositions();
   } catch {
     // Position-query failure: skip safely, do not open a short.
     emitDecisionMetric(
