@@ -2,6 +2,7 @@ import type { NodeAppConfig } from "@cogni/node-app/extensions";
 import {
   Briefcase,
   CreditCard,
+  FlaskConical,
   Github,
   LayoutDashboard,
   Vote,
@@ -12,6 +13,7 @@ export const nodeConfig: NodeAppConfig = {
   logo: { src: "/TransparentBrainOnly.png", alt: "Poly", href: "/chat" },
   navItems: [
     { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/research", label: "Research", icon: FlaskConical },
     { href: "/work", label: "Work", icon: Briefcase },
     { href: "/gov", label: "Gov", icon: Vote },
     { href: "/credits", label: "Credits", icon: CreditCard },
