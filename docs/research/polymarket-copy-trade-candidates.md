@@ -406,7 +406,23 @@ Because the v2 screen aborted, the final ranking below is synthesized from:
 - the Phase-1 category scorecard (Appendix A),
 - the Phase-2 avoids (§D.3).
 
-**Primary v0 roster — 3 wallets, all esports:**
+**2026-04-18 v3 update — cross-category screen supersedes the esports-only answer.** Fresh 8-category screen (160 wallets, 5281 closed markets resolved via disk-cached CLOB) produced 11 survivors, **none of them esports**. Tech / weather / finance dominate once the universe isn't biased toward esports-heavy sports leaderboards. See `docs/research/fixtures/poly-wallet-screen-v3-ranking.md`. Revised top 5 across all categories:
+
+| rank | wallet        | name             | category |    WR |    ROI |       PnL |    DD% | med dur |
+| ---: | ------------- | ---------------- | -------- | ----: | -----: | --------: | -----: | ------: |
+|    1 | `0xc6dd7225…` | tourists         | tech     | 85.7% |  47.9% |     $193k | **0%** |    0.1h |
+|    2 | `0x22e4248b…` | ProfessionalPunt | tech     | 83.8% |  97.4% |     $148k |   5.6% |   1.08h |
+|    3 | `0x00425c69…` | 99problems123    | tech     | 58.8% | 101.1% | **$262k** |   2.2% |   1.41h |
+|    4 | `0x331bf91c…` | BeefSlayer       | weather  | 78.0% |  27.3% |       $5k |  10.7% |   0.48h |
+|    5 | `0xff30ac5b…` | aldynspeedruns   | finance  | 63.9% |  50.8% |     $109k |   8.8% |   0.91h |
+
+The earlier "esports is the winner" finding was a sampling artifact — the original 140-wallet universe used the uncategorized leaderboard which over-represents sports categories. With category-balanced sampling (top-10 per category × 8 categories), tech wallets trading tech-prediction + geopolitical-adjacent markets outrank esports on every axis.
+
+**Original esports v0 roster — kept as reference below for historical comparison.** The Mr.Ape/goodmateng/piston777 findings remain valid _within esports_, but not the category-agnostic best picks.
+
+---
+
+**Esports v0 roster (historical; superseded):**
 
 |  rank | wallet                                       | name           | specialty                        | 30d resolved |   true WR | realized ROI |   max DD | median dur | confidence                                                                                 |
 | ----: | -------------------------------------------- | -------------- | -------------------------------- | -----------: | --------: | -----------: | -------: | ---------: | ------------------------------------------------------------------------------------------ |
