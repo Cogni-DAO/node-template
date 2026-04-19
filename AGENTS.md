@@ -10,39 +10,47 @@ A reproducible, open-source foundation for autonomous AI-powered organizations:
 - All accounting and payments via DAO-controlled crypto wallets
 - Strict reproducibility and code discipline across all Cogni repos
 
+## How Agents Work Here — In One Paragraph
+
+**Think briefly, then ship to candidate-a and learn from real behavior.** Plan enough to know what you're building and how you'll prove it works — no more. Prototype the smallest thing that produces a real signal. Push it to a PR, flight it to `candidate-a`, then _interact with your own feature on the deployed build_ and _watch your own request land in Loki_. Iterate against what the running system actually does, not what you assumed it would. Your work is not "done" until you have personally driven a real interaction through the deployed candidate-a build and confirmed the observability signal of your own action. The lifecycle commands (`/triage → /design → /implement → /closeout → /review-implementation`) are scaffolding around that loop, not a substitute for it.
+
 ## Definition of Done
 
-Your work is **not done** when tests pass locally, and it is **not done** when your PR merges to `main`. It is done when the full lifecycle completes and the feature is proven running on a real environment. All of the following must hold:
+You are done when **all** of the following are true — not before:
 
-1. **Lifecycle completed** — the work item moved through [`/triage` → (`/design`) → `/implement` → `/closeout` → `/review-implementation`](docs/spec/development-lifecycle.md). Every `needs_*` status maps to exactly one `/command`. No ambiguity, no status rot.
-2. **Validation block committed** — the task/bug has a `## Validation` section with `exercise:` + `observability:` before `/closeout` creates the PR. (Invariant `VALIDATION_REQUIRED`.)
-3. **Code gate green** — PR merged to `main`. `status: done`. This is the _code_ gate only.
-4. **Flight gate green** — PR promoted to [`candidate-a`](docs/spec/ci-cd.md#environment-model) via flight. Argo reconciled `Healthy`, `kubectl rollout` clean, `/readyz.version == source-sha-map[app]`.
-5. **Feature gate green** — qa-agent exercises the specific feature (not generic `/readyz`), confirms the observability signal lands in Loki at the deployed SHA, and sets `deploy_verified: true` on the work item. (Invariants `DEPLOY_VERIFIED_SEPARATE`, `FEATURE_SMOKE_SCOPED`.)
+1. **Lifecycle completed** — work item moved through the [`/triage → (/design) → /implement → /closeout → /review-implementation`](docs/spec/development-lifecycle.md) flow. Every `needs_*` status maps to exactly one `/command`.
+2. **Validation block committed** — `## Validation` section with `exercise:` + `observability:` is on the work item before `/closeout` creates the PR. (Invariant `VALIDATION_REQUIRED`.)
+3. **Code gate green** — PR merged to `main`. `status: done`. _This is only the code gate._
+4. **Flight gate green** — promoted to [`candidate-a`](docs/spec/ci-cd.md#environment-model) via flight. Argo `Healthy`, rollout clean, `/readyz.version` matches the source-sha map.
+5. **Feature gate green — by your own hand** — you (or qa-agent) have hit the real candidate-a URL with the `exercise:` from your validation block, got the expected response, and queried Loki for the observability signal at the deployed SHA and seen _your own request_ in the logs. Then set `deploy_verified: true` on the work item.
 
-Reference validation patterns:
+`status: done` = code gate. `deploy_verified: true` = real gate. Never conflate.
 
-- HTTP/API features → [Agent-First API Validation](docs/guides/agent-api-validation.md)
-- Other surfaces (CLI, graph, scheduler, infra) → the analog outlined in [Development Lifecycle § Feature Validation Contract](docs/spec/development-lifecycle.md#feature-validation-contract)
+Reference interaction patterns:
 
-`status: done` is the code gate. `deploy_verified: true` is the real gate. Never conflate them.
+- HTTP / API surfaces → [Agent-First API Validation](docs/guides/agent-api-validation.md) (discover → register → auth → execute → list → stream, no browser session)
+- Other surfaces (CLI, graph, scheduler, infra) → [Development Lifecycle § Feature Validation Contract](docs/spec/development-lifecycle.md#feature-validation-contract)
 
 ## Workflow Guiding Principles
 
-- **Think before coding.** State assumptions explicitly. Surface ambiguity. Push back when the prompt implies over-scope or a simpler path exists.
-- **Simplicity first.** Write the minimum code that solves the problem. No speculative abstractions. No error handling for impossible cases. Rewrite if complexity exceeds necessity.
-- **Surgical changes.** Edit only what the task demands. Match existing style. Mention unrelated issues — don't fix them in the same PR.
-- **Goal-driven execution.** Convert every task into a verifiable `## Validation` block and loop to green. The `exercise:` + `observability:` pair _is_ your success criterion.
-- **Spec first.** Write the plan before code. Confirm with the user when intent is unclear.
-- **Port, don't rewrite.** When refactoring, copy working logic verbatim and change only the boundary. Business logic rewritten from scratch reintroduces bugs the original already solved.
+- **Bias for action.** Think until you know what to build and how you'll prove it — then go. Long plans on paper don't beat a running prototype on candidate-a.
+- **Prototype against reality.** Your first goal after planning is a real interaction with a deployed build. Code that only runs locally has not yet earned trust.
+- **Close your own loop.** Drive the feature yourself on candidate-a and confirm the observability signal of your own call in Loki. Don't hand the loop off and call it done.
+- **Goal-driven execution.** Convert every task into a verifiable `## Validation` block. The `exercise:` + `observability:` pair _is_ your success criterion — loop to green.
+- **Think before coding.** State assumptions. Surface ambiguity. Push back when the prompt implies over-scope or a simpler path exists. _Then ship._
+- **Simplicity first.** Write the minimum code that solves the problem. No speculative abstractions. No error handling for impossible cases.
+- **Surgical changes.** Edit only what the task demands. Match existing style. Mention drive-by issues — don't fix them in the same PR.
+- **Port, don't rewrite.** When refactoring, copy working logic verbatim and change only the boundary. Rewrites reintroduce bugs the original already solved.
 - **Prune aggressively.** Delete noise; keep signal. Summarize after each step. Keep context <40% of the window.
 
 ## Verification Loop
 
-- **During iteration:** `pnpm check:fast` — typecheck + lint/format auto-fix + unit tests. Run targeted tests for what you changed.
-- **Pre-commit:** `pnpm check` — once per session, never repeated. This is the full static gate.
+Each stage is a real signal, not a ceremony. Skipping a stage does not save time — it just moves the failure later.
+
+- **During iteration:** `pnpm check:fast` — typecheck + lint/format auto-fix + unit. Run targeted tests for what you changed.
+- **Pre-commit:** `pnpm check` — once per session, never repeated. The full static gate.
 - **Pre-merge (CI):** `pnpm check:full` (~20 min). Stack-test success is the required CI gate. Check PR status after push.
-- **Post-merge:** candidate-a flight + qa-agent exercise + Loki confirmation → `deploy_verified: true`. This closes the Definition-of-Done loop.
+- **Post-merge:** flight to `candidate-a` → exercise the feature on the live URL → read your own request back out of Loki → `deploy_verified: true`. This is the gate that actually proves the feature exists.
 
 ## Agent Behavior
 
@@ -64,16 +72,16 @@ Reference validation patterns:
 - **Framework:** Next.js (TypeScript, App Router)
 - **Infra:** Docker + OpenTofu → k3s / Spheron (managed Akash). Argo CD reconciles from `deploy/*` branches.
 - **Toolchain:** pnpm, Biome, ESLint, Prettier, Vitest, Playwright, SonarQube
-- **Observability:** Pino JSON → Alloy → local Loki (dev) or Grafana Cloud (preview/prod)
+- **Observability:** Pino JSON → Alloy → local Loki (dev) or Grafana Cloud (preview/prod). Agents query Loki via the `grafana` MCP or `scripts/` helpers to read back their own requests at the deployed SHA.
 - **Node layout:** sovereign node code lives under `nodes/{node}/` (`app/`, `graphs/`, `.cogni/`)
 
 ## Pointers
 
-**Lifecycle & CI/CD** (read these before starting non-trivial work)
+**Lifecycle, CI/CD, and validation** — read before starting non-trivial work.
 
 - [Development Lifecycle](docs/spec/development-lifecycle.md) — status-driven flow, `/command` dispatch, invariants
-- [CI/CD Pipeline](docs/spec/ci-cd.md) — trunk-based model, candidate-a flight, promotion
-- [Agent-First API Validation](docs/guides/agent-api-validation.md) — reference validation flow for API features
+- [CI/CD Pipeline](docs/spec/ci-cd.md) — trunk-based model, candidate-a flight, promotion, source-sha map
+- [Agent-First API Validation](docs/guides/agent-api-validation.md) — reference interaction flow for API features
 
 **Architecture & development**
 
