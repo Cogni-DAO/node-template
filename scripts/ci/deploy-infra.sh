@@ -582,9 +582,6 @@ POSTHOG_HOST=${POSTHOG_HOST}
 # Use placeholder values; k8s/Argo manages the real images.
 APP_IMAGE=${APP_IMAGE:-cogni-template-local}
 MIGRATOR_IMAGE=${MIGRATOR_IMAGE:-unused-by-infra-deploy}
-# POLY_MIGRATOR_IMAGE is consumed by the doltgres-migrate-poly compose service.
-# Empty default triggers a skip of the Doltgres migrate/commit/seed steps in Step 6a.
-POLY_MIGRATOR_IMAGE=${POLY_MIGRATOR_IMAGE-}
 SCHEDULER_WORKER_IMAGE=${SCHEDULER_WORKER_IMAGE:-unused-by-infra-deploy}
 # LiteLLM image — set above from GHCR content-hash tag.
 LITELLM_IMAGE=${LITELLM_IMAGE}
@@ -780,9 +777,13 @@ emit_deployment_event "infra_deployment.db_provision_started" "in_progress" "Pro
 $RUNTIME_COMPOSE --profile bootstrap run --rm db-provision
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# Step 6a: Bring up Doltgres + provision DBs + apply drizzle migrations + seed
+# Step 6a: Bring up Doltgres + provision DBs + roles
 # Parallel to postgres/db-provision above, but for the knowledge data plane.
-# Guarded on presence — tolerates envs where doltgres is not in the compose file.
+# Schema migration itself is NOT run here — it's a k8s PreSync Job
+# (infra/k8s/base/poly-doltgres/doltgres-migration-job.yaml) that Argo CD
+# runs before the poly Deployment syncs. Same pattern as the Postgres
+# migrator Job (infra/k8s/base/node-app/migration-job.yaml).
+# Guarded on compose presence — tolerates envs where doltgres is not in the compose file.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
   log_info "[$(date -u +%H:%M:%S)] Bringing up doltgres..."
@@ -791,22 +792,7 @@ if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
   log_info "[$(date -u +%H:%M:%S)] Provisioning Doltgres DBs + roles..."
   $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-provision
 
-  # drizzle-kit native migrator inside the poly migrator image. Requires
-  # POLY_MIGRATOR_IMAGE to be set (flight-infra derives it from the promoted
-  # image manifest; local dev uses the locally-built image tag).
-  if [ -n "${POLY_MIGRATOR_IMAGE-}" ]; then
-    log_info "[$(date -u +%H:%M:%S)] Applying drizzle-kit migrations to knowledge_poly..."
-    $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-migrate-poly
-
-    log_info "[$(date -u +%H:%M:%S)] Stamping Dolt commit for migration batch..."
-    $RUNTIME_COMPOSE --profile bootstrap run --rm doltgres-commit-poly
-
-    # No deploy-time seeding. Nodes boot clean; the brain accumulates knowledge
-    # itself. For manual dev seeding: pnpm db:seed:doltgres:poly.
-    log_info "[$(date -u +%H:%M:%S)] Doltgres provision + migrate + commit complete (clean slate, no seeds)"
-  else
-    log_warn "POLY_MIGRATOR_IMAGE not set — skipping Doltgres migrate + commit. Doltgres is up + provisioned but schema is not applied. Set POLY_MIGRATOR_IMAGE in the caller env (flight-infra workflow) to complete the bring-up."
-  fi
+  log_info "[$(date -u +%H:%M:%S)] Doltgres up + DBs provisioned. Schema migration runs as k8s PreSync Job."
 else
   log_info "Doltgres not present in compose config — skipping knowledge plane bootstrap"
 fi

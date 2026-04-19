@@ -69,17 +69,21 @@ An earlier draft of this task proposed a psql-based migrator citing Doltgres's i
 - **`nodes/poly/drizzle.doltgres.config.ts`** (NEW) — per-node drizzle-kit config. Schema glob targets ONLY `nodes/poly/packages/doltgres-schema/src/**/*.ts`, preserving dialect separation from `nodes/poly/drizzle.config.ts` (Postgres).
 - **`nodes/poly/app/src/adapters/server/db/doltgres-migrations/0000_init_knowledge.sql`** — generated, checked in.
 
-### Migrator flow (mirrors Postgres pattern + one Dolt add-on)
+### Migrator flow — k8s PreSync Job, Postgres-aligned
 
-Three compose bootstrap services run in dependency order:
+The Doltgres migration is a **k8s PreSync Job** (`infra/k8s/base/poly-doltgres/doltgres-migration-job.yaml`), identical in shape to the Postgres Job at `infra/k8s/base/node-app/migration-job.yaml`. Argo CD runs it on every env (candidate-a, preview, production) before the poly Deployment syncs. Kustomize overlays patch the image digest per-env, same machinery as the Postgres migrator. **Zero workflow env-plumbing** — no `POLY_MIGRATOR_IMAGE` variable.
 
-1. **`doltgres-provision`** — creates `knowledge_<node>` DBs + reader/writer roles. No schema (drizzle-kit owns that).
-2. **`doltgres-migrate-poly`** — runs the poly migrator Docker image (`${POLY_MIGRATOR_IMAGE}`), invokes `pnpm db:migrate:poly:doltgres:container` which is `drizzle-kit migrate --config=nodes/poly/drizzle.doltgres.config.ts`. Creates `drizzle.__drizzle_migrations` + `public.knowledge`.
-3. **`doltgres-commit-poly`** (postgres:15, psql) — one-shot `SELECT dolt_commit('-Am', 'migration: drizzle-kit batch')` to capture DDL into `dolt_log`. Tolerates only `nothing to commit` on idempotent re-runs.
+Steps per env:
+
+1. **Compose (VM side)**: `doltgres` server + `doltgres-provision` (creates `knowledge_<node>` DBs + roles). `deploy-infra.sh` runs these. **No compose-side migration.**
+2. **k8s PreSync Job `migrate-poly-doltgres`**: runs the poly migrator image (`ghcr.io/cogni-dao/cogni-template-migrate@sha256:...`, patched by overlay). Command: `pnpm db:migrate:poly:doltgres:container` which chains:
+   - `drizzle-kit migrate --config=nodes/poly/drizzle.doltgres.config.ts` (creates `drizzle.__drizzle_migrations` + `public.knowledge`)
+   - `node nodes/poly/packages/doltgres-schema/stamp-commit.mjs` (trailing `SELECT dolt_commit('-Am', 'migration: drizzle-kit batch')` — captures DDL into `dolt_log` per [dolt#4843](https://github.com/dolthub/dolt/issues/4843))
+3. **DATABASE_URL**: sourced from the poly k8s secret's `DOLTGRES_URL_POLY` key (Job maps it to the generic env name drizzle-kit expects). `deploy-infra.sh` writes this key into `poly-node-app-secrets` using the same derive-from-POSTGRES_ROOT_PASSWORD logic as Postgres app creds.
 
 No seed step. Nodes boot clean.
 
-The poly migrator Docker image (`nodes/poly/app/Dockerfile AS migrator`) carries both the Postgres AND Doltgres migration inputs: per-dialect drizzle config, schema package sources, and the generated SQL files.
+The poly migrator Docker image (`nodes/poly/app/Dockerfile AS migrator`) carries both the Postgres AND Doltgres migration inputs: per-dialect drizzle config, schema package sources, generated SQL files, and the `stamp-commit.mjs` post-migrate hook.
 
 ### Clean-slate seeding policy
 
@@ -162,13 +166,12 @@ The DB name (`/knowledge_poly`) routes to the right Dolt repo. Password derived 
 
 ## Out of Scope / Follow-ups
 
-1. **Thread `POLY_MIGRATOR_IMAGE` through `candidate-flight-infra.yml` + `promote-and-deploy.yml`** — deploy-infra.sh reads it from env but no workflow sets it today. Until that edit lands, both pre-merge AND post-merge flights need a manual `POLY_MIGRATOR_IMAGE=<tag>` in the VM's `.env` to run migrate+commit; without it, doltgres comes up + provisions but the schema is not applied (warn-and-continue). Simplest fix: self-resolve in deploy-infra.sh from `COGNI_REPO_REF` (mirror the LITELLM_IMAGE pattern at line 547) OR add as a workflow input. This is the last gap to full hands-off.
-2. **Brain-authored knowledge loop** — `core__knowledge_write` + promotion gate so the brain accumulates observations at 10–30% confidence and graduates as evidence compounds. This is the actual product of the store.
-3. **DoltHub delivery path** (spike.0318 → task.0319) — replace local-dev seed machinery with `dolt_clone` from per-node DoltHub remotes.
-4. **Promote Doltgres migration to k8s PreSync Job pattern** — today it runs in compose alongside doltgres provisioning. Promote when (a) operator and resy adopt Doltgres, or (b) k8s-side migration plumbing (post-task.0324) gets a Doltgres invocation.
-5. **Align `DOLTGRES_URL` → `DOLTGRES_URL_{OPERATOR,RESY}`** for per-node consistency with poly. Today operator/resy read generic `DOLTGRES_URL`; poly reads `DOLTGRES_URL_POLY`. Minor inconsistency, not a blocker.
-6. **Backups** — follow Postgres WAL-G pattern once `proj.database-ops` lands.
-7. **@cogni/{operator,resy}-doltgres-schema packages** — create when those nodes adopt Doltgres (fork `@cogni/poly-doltgres-schema` structure).
+1. **Brain-authored knowledge loop** — `core__knowledge_write` + promotion gate so the brain accumulates observations at 10–30% confidence and graduates as evidence compounds. This is the actual product of the store.
+2. **DoltHub delivery path** (spike.0318 → task.0319) — replace local-dev seed machinery with `dolt_clone` from per-node DoltHub remotes.
+3. **Align `DOLTGRES_URL` → `DOLTGRES_URL_{OPERATOR,RESY}`** for per-node consistency with poly. Today operator/resy read generic `DOLTGRES_URL`; poly reads `DOLTGRES_URL_POLY`. Minor inconsistency, not a blocker.
+4. **Backups** — follow Postgres WAL-G pattern once `proj.database-ops` lands.
+5. **@cogni/{operator,resy}-doltgres-schema packages** — create when those nodes adopt Doltgres (fork `@cogni/poly-doltgres-schema` structure + add per-node PreSync Job under `infra/k8s/base/<node>-doltgres/`).
+6. **Production overlay** — explicitly deferred. Production adoption of Doltgres is a separate, gated decision (prod VM provisioning, backups, rollback rehearsal, etc.).
 
 ## Related
 

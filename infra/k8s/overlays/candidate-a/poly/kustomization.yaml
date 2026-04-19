@@ -7,6 +7,7 @@ namespace: cogni-candidate-a
 
 resources:
   - ../../../base/node-app
+  - ../../../base/poly-doltgres
 
 namePrefix: poly-
 
@@ -79,6 +80,13 @@ patches:
   - target:
       kind: Job
       name: migrate-node-app
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
+        value: "poly-node-app-secrets"
+  - target:
+      kind: Job
+      name: migrate-poly-doltgres
     patch: |
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name

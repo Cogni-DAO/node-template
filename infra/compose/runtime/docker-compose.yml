@@ -323,66 +323,12 @@ services:
       doltgres:
         condition: service_healthy
 
-  doltgres-migrate-poly:
-    # Reuses the per-node poly migrator image built from nodes/poly/app/Dockerfile
-    # AS migrator (same image used for the Postgres k8s PreSync migration Job).
-    # drizzle-kit migrate runs natively against Doltgres 0.56.0+ — creates the
-    # drizzle schema + __drizzle_migrations tracking table. Tests against the
-    # local doltgres service confirmed end-to-end success.
-    #
-    # Placeholder-default on the image var so `docker compose config` succeeds
-    # when POLY_MIGRATOR_IMAGE is unset (mirrors the MIGRATOR_IMAGE pattern on
-    # the db-migrate service). deploy-infra.sh L797 gates the actual
-    # `run --rm` invocation on the real var being set, so the placeholder image
-    # is never pulled or started. Using `?error` breaks the upstream presence
-    # check via config.
-    image: ${POLY_MIGRATOR_IMAGE:-unused-by-infra-deploy}
-    profiles:
-      - bootstrap
-    restart: "no"
-    networks:
-      - internal
-    environment:
-      DATABASE_URL: postgresql://postgres:${DOLTGRES_PASSWORD:-doltgres}@doltgres:5432/knowledge_poly
-    command: ["pnpm", "db:migrate:poly:doltgres:container"]
-    depends_on:
-      doltgres-provision:
-        condition: service_completed_successfully
-
-  doltgres-commit-poly:
-    # After drizzle-kit migrate creates the tables, stamp a named Dolt commit
-    # so dolt_log is an auditable migration trail. Required because DDL in Dolt
-    # does not auto-commit to the working set per dolthub/dolt#4843. This is the
-    # only Dolt-specific add-on over the Postgres migrator flow.
-    image: postgres:15
-    profiles:
-      - bootstrap
-    restart: "no"
-    networks:
-      - internal
-    environment:
-      PGPASSWORD: ${DOLTGRES_PASSWORD:-doltgres}
-    entrypoint:
-      - "/bin/bash"
-      - "-c"
-      - |
-        set -euo pipefail
-        LOG=$$(mktemp)
-        if psql -h doltgres -p 5432 -U postgres -d knowledge_poly \
-               -v ON_ERROR_STOP=1 \
-               -c "SELECT dolt_commit('-Am', 'migration: drizzle-kit batch')" \
-               >$$LOG 2>&1; then
-          cat $$LOG
-        elif grep -qi "nothing to commit" $$LOG; then
-          echo "(dolt_commit: nothing to commit — idempotent re-run)"
-        else
-          cat $$LOG
-          echo "❌ dolt_commit failed"
-          exit 1
-        fi
-    depends_on:
-      doltgres-migrate-poly:
-        condition: service_completed_successfully
+  # Doltgres schema migration is a k8s PreSync Job (infra/k8s/base/poly-doltgres/
+  # doltgres-migration-job.yaml), NOT a compose service. Argo CD runs it on every
+  # env before the poly Deployment syncs, using the poly migrator image that
+  # kustomize overlays patch by digest — identical shape to the Postgres migrator.
+  # This keeps the env var / image-plumbing 1:1 with Postgres and removes the
+  # need for POLY_MIGRATOR_IMAGE in workflow env blocks.
 
   # No doltgres-seed-poly: nodes boot clean. The drizzle-kit migration IS the
   # starter state (table exists, zero rows). The brain accumulates its own
