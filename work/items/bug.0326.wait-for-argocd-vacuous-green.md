@@ -2,7 +2,7 @@
 id: bug.0326
 type: bug
 title: wait-for-argocd.sh reports green when promoted digests never reach pods
-status: needs_merge
+status: done
 priority: 2
 rank: 60
 estimate: 2
