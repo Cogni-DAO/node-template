@@ -10,4 +10,15 @@ Rules:
 - If a handoff already exists, archive the old one to `work/handoffs/archive/{workItemId}/{datetime}.md` first (datetime format: YYYY-MM-DDTHH-MM-SS)
 - After writing the handoff, append a link to the work item's `## PR / Links` section: `- Handoff: [handoff](../handoffs/{workItemId}.handoff.md)`
 
+## Final output to the user
+
+End with a fenced block the incoming developer can paste or read cold — no prose summary above it, no decorative headings. The block is the handoff. Include, in this order:
+
+1. **Worktree** — absolute path (`pwd` output).
+2. **Branch** — current branch (`git branch --show-current`) and upstream (`git rev-parse --abbrev-ref @{u}` if it exists).
+3. **Handoff doc** — path to the file you just wrote.
+4. **Immediate next action** — one concrete command or file to open. Not "review the handoff." Something like `gh pr view 931 --web` or `open src/features/foo/bar.ts` or `pnpm test:stack:dev tests/stack/foo.test.ts`. If the next action is blocked, say what is blocking it and who can unblock.
+
+This is the high-leverage surface of the handoff — the incoming agent should know where they are and what to do within the first 10 seconds.
+
 ARGUMENTS: $ARGUMENTS
