@@ -324,10 +324,14 @@ export async function getTemporalWorkflowClient(): Promise<{
   client: WorkflowClient;
   taskQueue: string;
 }> {
+  // Per QUEUE_PER_NODE_ISOLATION (task.0280): submit to a per-node task queue
+  // keyed on this node's UUID. The worker runs one Temporal Worker per node,
+  // so one node's queue backlog does not starve the others.
+  const perNodeTaskQueue = `${serverEnv().TEMPORAL_TASK_QUEUE}-${getNodeId()}`;
   if (_workflowClient) {
     return {
       client: _workflowClient,
-      taskQueue: serverEnv().TEMPORAL_TASK_QUEUE,
+      taskQueue: perNodeTaskQueue,
     };
   }
   if (!_workflowClientPromise) {
@@ -342,7 +346,7 @@ export async function getTemporalWorkflowClient(): Promise<{
       });
       _temporalConnection = connection;
       _workflowClient = temporalClient.workflow;
-      return { client: _workflowClient, taskQueue: env.TEMPORAL_TASK_QUEUE };
+      return { client: _workflowClient, taskQueue: perNodeTaskQueue };
     })();
   }
   return _workflowClientPromise;
@@ -512,11 +516,14 @@ function createContainer(): Container {
         "Start Temporal with: pnpm dev:infra"
     );
   }
+  // Per QUEUE_PER_NODE_ISOLATION: Schedules submit to this node's per-node
+  // queue. Existing schedules on the legacy queue keep firing until their
+  // next update (drain Worker in scheduler-worker still polls the base name).
   const scheduleControl: ScheduleControlPort =
     new TemporalScheduleControlAdapter({
       address: env.TEMPORAL_ADDRESS,
       namespace: env.TEMPORAL_NAMESPACE,
-      taskQueue: env.TEMPORAL_TASK_QUEUE,
+      taskQueue: `${env.TEMPORAL_TASK_QUEUE}-${getNodeId()}`,
     });
 
   // Service DB (BYPASSRLS) for worker adapters

@@ -4,14 +4,16 @@
 /**
  * Module: `@cogni/scheduler-worker-service/activities`
  * Purpose: Temporal Activities for graph execution and run lifecycle.
- * Scope: Plain async functions that perform I/O (DB, HTTP). Called by Workflow.
+ * Scope: Plain async functions that perform HTTP I/O against the owning node's internal API. Called by Workflow.
  * Invariants:
  *   - Per ACTIVITY_IDEMPOTENCY: All activities must be idempotent or rely on downstream idempotency
  *   - Per EXECUTION_VIA_SERVICE_API: executeGraphActivity calls internal API, never imports graph code
+ *   - Per SHARED_COMPUTE_HOLDS_NO_DB_CREDS (task.0280): createGraphRun / updateGraphRun / validateGrant are HTTP-delegated to the owning node (POST/PATCH /api/internal/graph-runs, POST /api/internal/grants/:id/validate). Worker holds no DB credentials on this path.
  *   - Per GRANT_VALIDATED_TWICE: Worker validates grant before calling API (fail-fast, scheduled runs only)
- *   - Per SINGLE_RUN_LEDGER: all run records written to graph_runs table
+ *   - Per SINGLE_RUN_LEDGER: all run records written to graph_runs table (owned by each node's DB)
+ *   - 4xx retry semantics: permanent 4xx (400/401/403/422) → ApplicationFailure.nonRetryable; transient 4xx (404/408/409/429) + 5xx → bubble for Temporal retry. Grant errors (expired / revoked / scope mismatch / not found) always nonRetryable.
  *   - SCHEDULER_API_TOKEN treated as secret (never logged)
- * Side-effects: IO (database, HTTP to internal API)
+ * Side-effects: IO (HTTP to node internal API via GraphRunHttpWriter / ExecutionGrantHttpValidator)
  * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md, docs/spec/unified-graph-launch.md
  * @internal
  */
@@ -26,18 +28,49 @@ import {
   WORKER_EVENT_NAMES,
 } from "../observability/index.js";
 import type { Logger } from "../observability/logger.js";
-import type {
-  ExecutionGrantWorkerPort,
-  GraphRunRepository,
+import {
+  type ExecutionGrantHttpValidator,
+  GrantExpiredError,
+  GrantNotFoundError,
+  GrantRevokedError,
+  GrantScopeMismatchError,
+  type GraphRunHttpWriter,
+  RunHttpClientError,
 } from "../ports/index.js";
+
+/**
+ * Translate HTTP-adapter errors into Temporal ApplicationFailures with the
+ * right retry semantics. 4xx (bad request, not-found, auth) = non-retryable;
+ * grant errors (expired / revoked / scope mismatch / not found) = non-retryable
+ * (the grant state won't change on retry). 5xx & network errors bubble as-is
+ * so Temporal applies its retry policy.
+ */
+function translateHttpError(err: unknown, where: string): never {
+  if (
+    err instanceof GrantNotFoundError ||
+    err instanceof GrantExpiredError ||
+    err instanceof GrantRevokedError ||
+    err instanceof GrantScopeMismatchError
+  ) {
+    throw ApplicationFailure.nonRetryable(`${where}: ${err.message}`, err.code);
+  }
+  if (err instanceof RunHttpClientError && !err.retryable) {
+    throw ApplicationFailure.nonRetryable(
+      `${where}: ${err.message}`,
+      "HttpClientError",
+      { status: err.status }
+    );
+  }
+  throw err;
+}
 
 /**
  * Dependencies injected into activities at worker creation.
  * Activities are created as closures over these deps.
  */
 export interface ActivityDeps {
-  grantAdapter: ExecutionGrantWorkerPort;
-  runAdapter: GraphRunRepository;
+  grantAdapter: ExecutionGrantHttpValidator;
+  runAdapter: GraphRunHttpWriter;
   config: {
     nodeEndpoints: Map<string, string>;
     schedulerApiToken: string;
@@ -49,6 +82,7 @@ export interface ActivityDeps {
  * Input for validateGrantActivity.
  */
 export interface ValidateGrantInput {
+  nodeId: string;
   grantId: string;
   graphId: string;
 }
@@ -58,6 +92,7 @@ export interface ValidateGrantInput {
  * Per SINGLE_RUN_LEDGER: supports both scheduled and non-scheduled runs.
  */
 export interface CreateGraphRunInput {
+  nodeId: string;
   runId: string;
   graphId?: string;
   runKind?: GraphRunKind;
@@ -103,6 +138,7 @@ export interface ExecuteGraphOutput {
  * Input for updateGraphRunActivity.
  */
 export interface UpdateGraphRunInput {
+  nodeId: string;
   runId: string;
   status: "running" | "success" | "error" | "skipped" | "cancelled";
   traceId?: string | null;
@@ -140,19 +176,25 @@ export function createActivities(deps: ActivityDeps) {
   async function validateGrantActivity(
     input: ValidateGrantInput
   ): Promise<void> {
-    const { grantId, graphId } = input;
+    const { nodeId, grantId, graphId } = input;
     const correlation = getWorkflowCorrelation();
     const start = performance.now();
 
     logWorkerEvent(logger, WORKER_EVENT_NAMES.ACTIVITY_GRANT_VALIDATED, {
       ...correlation,
+      nodeId,
       grantId,
       graphId,
       phase: "start",
     });
 
     try {
-      await grantAdapter.validateGrantForGraph(SYSTEM_ACTOR, grantId, graphId);
+      await grantAdapter.validateGrantForGraph(
+        SYSTEM_ACTOR,
+        nodeId,
+        grantId,
+        graphId
+      );
 
       const durationMs = performance.now() - start;
       activityDurationMs
@@ -167,13 +209,22 @@ export function createActivities(deps: ActivityDeps) {
       });
     } catch (err) {
       const durationMs = performance.now() - start;
+      const isNonRetryable =
+        err instanceof GrantNotFoundError ||
+        err instanceof GrantExpiredError ||
+        err instanceof GrantRevokedError ||
+        err instanceof GrantScopeMismatchError ||
+        (err instanceof RunHttpClientError && !err.retryable);
       activityDurationMs
         .labels({ activity: "validateGrant", status: "error" })
         .observe(durationMs);
       activityErrorsTotal
-        .labels({ activity: "validateGrant", error_type: "unknown" })
+        .labels({
+          activity: "validateGrant",
+          error_type: isNonRetryable ? "non_retryable" : "retryable",
+        })
         .inc();
-      throw err;
+      translateHttpError(err, "validateGrantActivity");
     }
   }
 
@@ -185,12 +236,13 @@ export function createActivities(deps: ActivityDeps) {
   async function createGraphRunActivity(
     input: CreateGraphRunInput
   ): Promise<void> {
-    const { runId, dbScheduleId, scheduledFor } = input;
+    const { nodeId, runId, dbScheduleId, scheduledFor } = input;
     const correlation = getWorkflowCorrelation();
     const start = performance.now();
 
     logWorkerEvent(logger, WORKER_EVENT_NAMES.ACTIVITY_RUN_CREATED, {
       ...correlation,
+      nodeId,
       dbScheduleId,
       runId,
       scheduledFor,
@@ -198,16 +250,22 @@ export function createActivities(deps: ActivityDeps) {
     });
 
     try {
-      await runAdapter.createRun(SYSTEM_ACTOR, {
+      await runAdapter.createRun(SYSTEM_ACTOR, nodeId, {
         runId,
-        graphId: input.graphId,
-        runKind: input.runKind,
-        triggerSource: input.triggerSource,
-        triggerRef: input.triggerRef,
-        requestedBy: input.requestedBy,
-        scheduleId: dbScheduleId,
-        scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
-        stateKey: input.stateKey,
+        ...(input.graphId !== undefined && { graphId: input.graphId }),
+        ...(input.runKind !== undefined && { runKind: input.runKind }),
+        ...(input.triggerSource !== undefined && {
+          triggerSource: input.triggerSource,
+        }),
+        ...(input.triggerRef !== undefined && { triggerRef: input.triggerRef }),
+        ...(input.requestedBy !== undefined && {
+          requestedBy: input.requestedBy,
+        }),
+        ...(dbScheduleId !== undefined && { scheduleId: dbScheduleId }),
+        ...(scheduledFor !== undefined && {
+          scheduledFor: new Date(scheduledFor),
+        }),
+        ...(input.stateKey !== undefined && { stateKey: input.stateKey }),
       });
 
       const durationMs = performance.now() - start;
@@ -222,13 +280,18 @@ export function createActivities(deps: ActivityDeps) {
       });
     } catch (err) {
       const durationMs = performance.now() - start;
+      const isNonRetryable =
+        err instanceof RunHttpClientError && !err.retryable;
       activityDurationMs
         .labels({ activity: "createGraphRun", status: "error" })
         .observe(durationMs);
       activityErrorsTotal
-        .labels({ activity: "createGraphRun", error_type: "unknown" })
+        .labels({
+          activity: "createGraphRun",
+          error_type: isNonRetryable ? "non_retryable" : "retryable",
+        })
         .inc();
-      throw err;
+      translateHttpError(err, "createGraphRunActivity");
     }
   }
 
@@ -378,12 +441,13 @@ export function createActivities(deps: ActivityDeps) {
   async function updateGraphRunActivity(
     input: UpdateGraphRunInput
   ): Promise<void> {
-    const { runId, status, traceId, errorMessage, errorCode } = input;
+    const { nodeId, runId, status, traceId, errorMessage, errorCode } = input;
     const correlation = getWorkflowCorrelation();
     const start = performance.now();
 
     logWorkerEvent(logger, WORKER_EVENT_NAMES.ACTIVITY_RUN_UPDATED, {
       ...correlation,
+      nodeId,
       runId,
       status,
       phase: "start",
@@ -393,12 +457,14 @@ export function createActivities(deps: ActivityDeps) {
       if (status === "running") {
         await runAdapter.markRunStarted(
           SYSTEM_ACTOR,
+          nodeId,
           runId,
           traceId ?? undefined
         );
       } else {
         await runAdapter.markRunCompleted(
           SYSTEM_ACTOR,
+          nodeId,
           runId,
           status,
           errorMessage,
@@ -419,13 +485,18 @@ export function createActivities(deps: ActivityDeps) {
       });
     } catch (err) {
       const durationMs = performance.now() - start;
+      const isNonRetryable =
+        err instanceof RunHttpClientError && !err.retryable;
       activityDurationMs
         .labels({ activity: "updateGraphRun", status: "error" })
         .observe(durationMs);
       activityErrorsTotal
-        .labels({ activity: "updateGraphRun", error_type: "unknown" })
+        .labels({
+          activity: "updateGraphRun",
+          error_type: isNonRetryable ? "non_retryable" : "retryable",
+        })
         .inc();
-      throw err;
+      translateHttpError(err, "updateGraphRunActivity");
     }
   }
 

@@ -6,7 +6,7 @@
  * Purpose: Environment configuration with Zod validation and lazy singleton.
  * Scope: Config parsing only — no client construction, no side-effects beyond process.env read.
  * Invariants:
- * - DATABASE_URL required for DB activities
+ * - DATABASE_URL optional: only the attribution/ledger container consumes it. The scheduler (runs + grants) path is HTTP-delegated to the owning node per task.0280 and holds no DB credentials.
  * - TEMPORAL_* vars required for Temporal connection
  * - SCHEDULER_API_TOKEN required for internal API calls (treat as secret)
  * - Fails fast with clear errors on invalid config
@@ -18,8 +18,12 @@
 import { z } from "zod";
 
 const EnvSchema = z.object({
-  /** PostgreSQL connection string (required for DB activities) */
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  /** PostgreSQL connection string. Optional — consumed ONLY by the attribution/ledger container (a shared ledger, not per-node). The scheduler path (runs + grants) holds no DB credentials; writes go through each node's internal HTTP API. Follow-up: rename to LEDGER_DATABASE_URL and drop the generic name. */
+  DATABASE_URL: z
+    .string()
+    .min(1)
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
 
   /** Temporal server address (required) */
   TEMPORAL_ADDRESS: z.string().min(1, "TEMPORAL_ADDRESS is required"),

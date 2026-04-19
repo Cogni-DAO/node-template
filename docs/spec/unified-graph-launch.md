@@ -333,14 +333,15 @@ Redis 7 is available in all runtime stacks (dev, test, prod) via Docker Compose.
 
 **Implemented (task.0176):**
 
-| File                                                                | Purpose                                                               |
-| ------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| `packages/db-schema/src/scheduling.ts`                              | `graph_runs` table (promoted from `schedule_runs`), `GRAPH_RUN_KINDS` |
-| `packages/scheduler-core/src/types.ts`                              | `GraphRun`, `GraphRunKind`, `GraphRunStatus` domain types             |
-| `packages/scheduler-core/src/ports/schedule-run.port.ts`            | `GraphRunRepository` port interface                                   |
-| `packages/db-client/src/adapters/drizzle-run.adapter.ts`            | `DrizzleGraphRunAdapter` (scheduled + non-scheduled paths)            |
-| `services/scheduler-worker/src/activities/index.ts`                 | `createGraphRunActivity`, `updateGraphRunActivity` activities         |
-| `services/scheduler-worker/src/workflows/scheduled-run.workflow.ts` | Passes trigger provenance to `graph_runs`                             |
+| File                                                              | Purpose                                                                                                                                    |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `packages/db-schema/src/scheduling.ts`                            | `graph_runs` table (promoted from `schedule_runs`), `GRAPH_RUN_KINDS`                                                                      |
+| `packages/scheduler-core/src/types.ts`                            | `GraphRun`, `GraphRunKind`, `GraphRunStatus` domain types                                                                                  |
+| `packages/scheduler-core/src/ports/schedule-run.port.ts`          | `GraphRunRepository` port interface                                                                                                        |
+| `packages/db-client/src/adapters/drizzle-run.adapter.ts`          | `DrizzleGraphRunAdapter` — used by node-apps; worker does not import it per task.0280 (SHARED_COMPUTE_HOLDS_NO_DB_CREDS)                   |
+| `services/scheduler-worker/src/adapters/run-http.ts`              | `HttpGraphRunWriter`, `HttpExecutionGrantValidator` — worker's sole persistence path (task.0280)                                           |
+| `services/scheduler-worker/src/activities/index.ts`               | `createGraphRunActivity`, `updateGraphRunActivity`, `validateGrantActivity` — all HTTP-delegated; each input includes `nodeId` for routing |
+| `packages/temporal-workflows/src/workflows/graph-run.workflow.ts` | Passes trigger provenance + `nodeId` to every activity                                                                                     |
 
 **Implemented (task.0179):**
 

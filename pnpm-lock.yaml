@@ -2199,6 +2199,9 @@ importers:
       '@cogni/ingestion-core':
         specifier: workspace:*
         version: link:../../packages/ingestion-core
+      '@cogni/node-contracts':
+        specifier: workspace:*
+        version: link:../../packages/node-contracts
       '@cogni/repo-spec':
         specifier: workspace:*
         version: link:../../packages/repo-spec

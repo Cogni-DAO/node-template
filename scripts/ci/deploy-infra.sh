@@ -935,17 +935,22 @@ SECEOF
   # ── Rolling restart — pods must restart to pick up changed secrets ──────────
   # This happens AFTER compose infra is up (Step 6.6) and dependency reachability
   # is confirmed (Step 6.8), so pods boot into a healthy environment.
+  #
+  # Per task.0280: node-apps MUST roll before scheduler-worker. The worker
+  # delegates graph_runs/grants persistence to each node's internal API; a
+  # post-deploy worker hitting a pre-deploy node app would 404 on the new
+  # /api/internal/graph-runs and /api/internal/grants/*/validate routes.
+  # Rolling the node-apps first, waiting, then rolling the worker guarantees
+  # the new endpoints exist before the worker can call them.
   kubectl -n "${K8S_NS}" rollout restart \
     deployment/operator-node-app \
     deployment/poly-node-app \
-    deployment/resy-node-app \
-    deployment/scheduler-worker 2>/dev/null || true
-  log_info "[$(date -u +%H:%M:%S)] Pods restarting..."
+    deployment/resy-node-app 2>/dev/null || true
+  log_info "[$(date -u +%H:%M:%S)] Node-app pods restarting (scheduler-worker waits)..."
 
-  # ── Wait for rollouts to complete — don't exit until pods are Running ──────
-  # Parallel wait: all 4 rollouts run concurrently, total timeout = max(individual), not sum.
+  # ── Wait for node-app rollouts first ───────────────────────────────────────
   ROLLOUT_PIDS=""
-  for deploy in operator-node-app poly-node-app resy-node-app scheduler-worker; do
+  for deploy in operator-node-app poly-node-app resy-node-app; do
     kubectl -n "${K8S_NS}" rollout status "deployment/${deploy}" --timeout=300s 2>/dev/null &
     ROLLOUT_PIDS="$ROLLOUT_PIDS $!"
   done
@@ -956,7 +961,15 @@ SECEOF
     fi
   done
   if [ $ROLLOUT_FAILED -ne 0 ]; then
-    log_warn "One or more rollouts did not complete within 300s"
+    log_warn "One or more node-app rollouts did not complete within 300s"
+  fi
+  log_info "[$(date -u +%H:%M:%S)] Node-apps ready — rolling scheduler-worker"
+
+  # ── Roll scheduler-worker only after node-apps are ready ───────────────────
+  kubectl -n "${K8S_NS}" rollout restart deployment/scheduler-worker 2>/dev/null || true
+  if ! kubectl -n "${K8S_NS}" rollout status deployment/scheduler-worker --timeout=300s 2>/dev/null; then
+    log_warn "scheduler-worker rollout did not complete within 300s"
+    ROLLOUT_FAILED=1
   fi
   log_info "[$(date -u +%H:%M:%S)] All rollouts complete"
   emit_deployment_event "infra_deployment.rollouts_complete" "success" "All k8s deployments rolled out"

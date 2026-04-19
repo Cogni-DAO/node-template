@@ -4,14 +4,15 @@
 /**
  * Module: `@cogni/scheduler-worker-service/worker`
  * Purpose: Temporal Worker bootstrap and lifecycle management.
- * Scope: Creates Temporal Worker with activities and workflows. Does not contain business logic.
+ * Scope: Creates one Temporal Worker per node (plus a legacy-queue drain Worker) in a single pod. Does not contain business logic.
  * Invariants:
  *   - Per WORKER_NEVER_CONTROLS_SCHEDULES: Does NOT depend on ScheduleControlPort
  *   - Per TEMPORAL_DETERMINISM: Workflows are bundled separately from activities
+ *   - Per QUEUE_PER_NODE_ISOLATION (task.0280 phase 2): one Temporal Worker per nodeId polling `scheduler-tasks-${nodeId}`. A failing node's queue growing does not starve other nodes.
  *   - All dependencies injected via ServiceContainer from bootstrap/container.ts
  *   - No concrete adapter imports — uses container for wiring
- * Side-effects: IO (connects to Temporal, starts worker)
- * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md
+ * Side-effects: IO (connects to Temporal, starts workers)
+ * Links: docs/spec/scheduler.md, docs/spec/temporal-patterns.md, docs/spec/multi-node-tenancy.md
  * @internal
  */
 
@@ -39,8 +40,35 @@ export interface SchedulerWorkerConfig {
 }
 
 /**
- * Starts the Temporal scheduler worker with injected configuration.
- * Returns a cleanup function to stop the worker gracefully.
+ * Per-node queue naming. Must match what node-app submitters use
+ * (nodes/*\/app/src/bootstrap/container.ts::getTemporalWorkflowClient).
+ * Derived from the legacy queue name so "scheduler-tasks" → "scheduler-tasks-<nodeId>".
+ */
+export function nodeTaskQueueName(basePrefix: string, nodeId: string): string {
+  return `${basePrefix}-${nodeId}`;
+}
+
+/**
+ * `repo-spec.node_id` is a UUID; node-app submitters call
+ * `getNodeId()` which returns that UUID. `COGNI_NODE_ENDPOINTS` registers
+ * both the UUID and a human slug (e.g. "poly") pointing at the same URL —
+ * the slug is a convenience alias for the map, not a submitter identity.
+ * Workers must therefore poll queues keyed by UUID to match submitters;
+ * slug entries are skipped.
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export function isCanonicalNodeId(nodeId: string): boolean {
+  return UUID_RE.test(nodeId);
+}
+
+/**
+ * Starts one Temporal Worker per canonical nodeId in COGNI_NODE_ENDPOINTS,
+ * plus one drain Worker on the legacy `env.TEMPORAL_TASK_QUEUE` for any
+ * schedules that have not yet been rewritten to a per-node queue.
+ *
+ * Failure of any individual Worker is logged but does not tear down the
+ * others: a flapping poly queue must not starve operator or resy traffic.
  */
 export async function startSchedulerWorker(
   config: SchedulerWorkerConfig
@@ -50,19 +78,16 @@ export async function startSchedulerWorker(
   logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
     temporalAddress: env.TEMPORAL_ADDRESS,
     namespace: env.TEMPORAL_NAMESPACE,
-    taskQueue: env.TEMPORAL_TASK_QUEUE,
+    legacyTaskQueue: env.TEMPORAL_TASK_QUEUE,
     phase: "temporal_connect",
   });
 
-  // Create Temporal connection
   const connection = await NativeConnection.connect({
     address: env.TEMPORAL_ADDRESS,
   });
 
-  // Build service container (all concrete adapter wiring)
   const container = createContainer(env, logger);
 
-  // Create activities with injected deps (typed against ports)
   const graphActivities = createActivities({
     grantAdapter: container.grantAdapter,
     runAdapter: container.runAdapter,
@@ -71,7 +96,6 @@ export async function startSchedulerWorker(
       container.logger.child?.({ component: "activities" }) ?? container.logger,
   });
 
-  // Create review activities (GitHub API for PR review workflow)
   const reviewActivities =
     env.GH_REVIEW_APP_ID && env.GH_REVIEW_APP_PRIVATE_KEY_BASE64
       ? createReviewActivities({
@@ -86,8 +110,7 @@ export async function startSchedulerWorker(
         })
       : {};
 
-  // Create sweep activities (queue-sweeping agent roles)
-  // Sweeps are operator-only; extract operator URL from node endpoints.
+  // Sweep activities need the operator URL; same as before.
   const operatorBaseUrl = container.config.nodeEndpoints.get("operator");
   if (!operatorBaseUrl) {
     throw new Error(
@@ -104,44 +127,99 @@ export async function startSchedulerWorker(
       container.logger,
   });
 
-  // Create Temporal Worker
-  const worker = await Worker.create({
-    connection,
-    namespace: env.TEMPORAL_NAMESPACE,
-    taskQueue: env.TEMPORAL_TASK_QUEUE,
-    workflowsPath: require.resolve("@cogni/temporal-workflows/scheduler"),
-    activities: { ...graphActivities, ...reviewActivities, ...sweepActivities },
-  });
+  const allActivities = {
+    ...graphActivities,
+    ...reviewActivities,
+    ...sweepActivities,
+  };
+  const workflowsPath = require.resolve("@cogni/temporal-workflows/scheduler");
 
-  logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
-    namespace: env.TEMPORAL_NAMESPACE,
-    taskQueue: env.TEMPORAL_TASK_QUEUE,
-    phase: "worker_created",
-  });
-
-  // Start the worker (runs in background)
-  const runPromise = worker.run();
-
-  // Handle worker errors
-  runPromise.catch((err) => {
+  // Per QUEUE_PER_NODE_ISOLATION: build the nodeId set from the endpoint map
+  // (filtering to UUIDs, which are canonical; slug entries are convenience
+  // aliases for URL lookup), create one Worker per node, and always include
+  // the legacy queue as a drain until all Schedules are rewritten.
+  const nodeIds = [...container.config.nodeEndpoints.keys()].filter(
+    isCanonicalNodeId
+  );
+  const legacyQueue = env.TEMPORAL_TASK_QUEUE;
+  if (nodeIds.length === 0) {
+    // Fail-loud config drift check: node-app submitters use repo-spec UUIDs
+    // as the nodeId, so a worker with no UUID endpoints will starve every
+    // per-node queue. k8s overlays and compose files MUST register UUID
+    // aliases alongside slug aliases. See docs/spec/multi-node-tenancy.md
+    // QUEUE_PER_NODE_ISOLATION.
     logger.error(
-      { event: WORKER_EVENT_NAMES.LIFECYCLE_FATAL, err },
-      WORKER_EVENT_NAMES.LIFECYCLE_FATAL
+      {
+        endpointKeys: [...container.config.nodeEndpoints.keys()],
+      },
+      "COGNI_NODE_ENDPOINTS has no UUID nodeId entries — worker will only poll the legacy drain queue and all new per-node submissions will starve. Add repo-spec UUID aliases to COGNI_NODE_ENDPOINTS."
     );
-  });
+  }
+  const queues = new Set<string>([
+    ...nodeIds.map((id) => nodeTaskQueueName(legacyQueue, id)),
+    legacyQueue,
+  ]);
+
+  type StartedWorker = {
+    taskQueue: string;
+    worker: Worker;
+    run: Promise<void>;
+  };
+  const started: StartedWorker[] = [];
+  for (const taskQueue of queues) {
+    try {
+      const worker = await Worker.create({
+        connection,
+        namespace: env.TEMPORAL_NAMESPACE,
+        taskQueue,
+        workflowsPath,
+        activities: allActivities,
+      });
+      const run = worker.run();
+      // Per-worker isolation: log the failure, do NOT let it reject the
+      // composite shutdown promise.
+      run.catch((err) => {
+        logger.error(
+          { event: WORKER_EVENT_NAMES.LIFECYCLE_FATAL, taskQueue, err },
+          `${WORKER_EVENT_NAMES.LIFECYCLE_FATAL}: taskQueue=${taskQueue}`
+        );
+      });
+      started.push({ taskQueue, worker, run });
+      logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
+        namespace: env.TEMPORAL_NAMESPACE,
+        taskQueue,
+        isLegacyDrain: taskQueue === legacyQueue,
+        phase: "worker_created",
+      });
+    } catch (err) {
+      logger.error(
+        { taskQueue, err },
+        "Failed to start Temporal Worker for queue — continuing with remaining queues"
+      );
+    }
+  }
+
+  if (started.length === 0) {
+    throw new Error(
+      "No Temporal Workers started — all queue creations failed. Check Temporal reachability."
+    );
+  }
 
   logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_STARTING, {
     phase: "polling",
+    queues: started.map((s) => s.taskQueue),
   });
 
-  // Return shutdown function
   return {
     shutdown: async () => {
       logWorkerEvent(logger, WORKER_EVENT_NAMES.LIFECYCLE_SHUTDOWN, {
         phase: "temporal_worker",
+        queueCount: started.length,
       });
-      worker.shutdown();
-      await runPromise;
+      for (const s of started) s.worker.shutdown();
+      // Wait for all workers in parallel; swallow individual errors so one
+      // stuck queue can't block overall shutdown.
+      await Promise.allSettled(started.map((s) => s.run));
       await connection.close();
       logWorkerEvent(
         logger,

@@ -23,10 +23,55 @@ import {
   flushLogger,
   logWorkerEvent,
   makeLogger,
+  schedulerWorkerNodeReachable,
   WORKER_EVENT_NAMES,
   workerInfo,
 } from "./observability/index.js";
 import { startSchedulerWorker } from "./worker.js";
+
+/**
+ * Per task.0280 phase 2: fire-and-forget reachability probe for every node in
+ * COGNI_NODE_ENDPOINTS. Never blocks boot. The worker's only hard startup
+ * dependency is Temporal. Per-node unreachability becomes a metric + log.
+ */
+function probeNodeReachability(
+  nodeEndpointsRaw: string,
+  logger: ReturnType<typeof makeLogger>
+): void {
+  for (const pair of nodeEndpointsRaw.split(",")) {
+    const [rawNodeId, ...rest] = pair.trim().split("=");
+    const nodeId = rawNodeId?.trim();
+    const url = rest.join("=").trim();
+    if (!nodeId || !url) continue;
+
+    (async () => {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        const response = await fetch(`${url.replace(/\/$/, "")}/readyz`, {
+          signal: controller.signal,
+        });
+        if (response.ok) {
+          schedulerWorkerNodeReachable.set({ node_id: nodeId }, 1);
+        } else {
+          schedulerWorkerNodeReachable.set({ node_id: nodeId }, 0);
+          logger.warn(
+            { nodeId, url, status: response.status },
+            "Node /readyz returned non-2xx at worker boot (non-blocking)"
+          );
+        }
+      } catch (err) {
+        schedulerWorkerNodeReachable.set({ node_id: nodeId }, 0);
+        logger.warn(
+          { nodeId, url, err: (err as Error).message },
+          "Node /readyz unreachable at worker boot (non-blocking)"
+        );
+      } finally {
+        clearTimeout(timeout);
+      }
+    })();
+  }
+}
 
 async function main(): Promise<void> {
   // Load and validate env
@@ -49,6 +94,9 @@ async function main(): Promise<void> {
 
   // Shutdown handles for all workers
   const shutdownHandles: Array<{ shutdown: () => Promise<void> }> = [];
+
+  // Kick off reachability probes in parallel with worker start — never block.
+  probeNodeReachability(config.COGNI_NODE_ENDPOINTS, logger);
 
   // Start scheduler worker (always)
   const schedulerWorker = await startSchedulerWorker({ env: config, logger });

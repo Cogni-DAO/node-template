@@ -43,11 +43,11 @@ tags: [scheduler]
 
 9a. **SCHEDULE_CREATION_REJECTS_IF_CURRENTLY_UNPAYABLE**: `POST /api/v1/schedules` performs a coarse credit gate before creating the schedule. Paid model + balance ≤ 0 → 402. Free models and requests without a model field bypass the check. This is a creation-time guard only; the `PreflightCreditCheckDecorator` enforces at execution time (per CREDITS_ENFORCED_AT_EXECUTION_PORT).
 
-9. **RUN_OWNERSHIP_BOUNDARY**: Worker owns scheduler-originated `graph_runs` entries. Execution service owns graph execution + billing (`charge_receipts`). Correlation via `runId` and `langfuseTraceId`.
+9. **RUN_OWNERSHIP_BOUNDARY**: Each node-app owns its own `graph_runs` rows in its own database. The worker is HTTP-only (per SHARED_COMPUTE_HOLDS_NO_DB_CREDS, task.0280): `createGraphRunActivity` / `updateGraphRunActivity` / `validateGrantActivity` all POST/PATCH against `{nodeUrl}/api/internal/graph-runs...` and `{nodeUrl}/api/internal/grants/:id/validate`, authenticated by `SCHEDULER_API_TOKEN`. Execution service owns graph execution + billing (`charge_receipts`). Correlation via `runId` and `langfuseTraceId`.
 
 ### Temporal-Specific Invariants
 
-10. **NAMESPACE_PER_ENV**: Temporal namespace = `cogni-{APP_ENV}` (cogni-test, cogni-production). Single `scheduler-tasks` task queue per namespace.
+10. **NAMESPACE_PER_ENV + QUEUE_PER_NODE_ISOLATION**: Temporal namespace = `cogni-{APP_ENV}` (cogni-test, cogni-production). Per task.0280 phase 2, each namespace runs **one task queue per node**: node apps submit to `${TEMPORAL_TASK_QUEUE}-${getNodeId()}`; the scheduler-worker pod spins up one Temporal `Worker` per canonical nodeId in `COGNI_NODE_ENDPOINTS` (UUIDs) plus one drain Worker on the legacy `${TEMPORAL_TASK_QUEUE}` queue. A failing node grows its own queue without starving siblings.
 
 11. **WORKER_NEVER_CONTROLS_SCHEDULES**: `scheduler-worker` must not depend on `ScheduleControlPort` or call Temporal schedule APIs. CRUD routes are the single authority. Enforce via dep-cruiser.
 
@@ -124,12 +124,14 @@ tags: [scheduler]
 │                                                                             │
 │  Temporal Cloud (or self-hosted)                                            │
 │    • Namespace: cogni-{APP_ENV}                                             │
-│    • TaskQueue: scheduler-tasks                                             │
+│    • TaskQueues (one per node): scheduler-tasks-<nodeUuid>                  │
+│                    (+ legacy "scheduler-tasks" drain queue)                 │
 │    • Schedules: overlap=SKIP, catchupWindow=0                               │
 │                                                                             │
-│  services/scheduler-worker/                                                 │
-│    • Connects to Temporal, registers taskQueue                              │
-│    • Hosts GovernanceScheduledRunWorkflow + Activities                      │
+│  services/scheduler-worker/ (one pod, N+1 Temporal Workers)                 │
+│    • One Worker per canonical nodeId (UUID) in COGNI_NODE_ENDPOINTS         │
+│    • Plus one drain Worker on the legacy queue (task.0327 migration)        │
+│    • Activities HTTP-delegate runs+grants to each node's /api/internal      │
 │    • Does NOT create/update/delete schedules (CRUD is authority)            │
 │                                                                             │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -265,23 +267,27 @@ tags: [scheduler]
 
 ### Current (Implemented)
 
-| File                                                                   | Purpose                                              |
-| ---------------------------------------------------------------------- | ---------------------------------------------------- |
-| `packages/scheduler-core/src/types.ts`                                 | `ExecutionGrant`, `ScheduleSpec`, `GraphRun` types   |
-| `packages/db-schema/src/scheduling.ts`                                 | `execution_grants`, `schedules`, `graph_runs` tables |
-| `packages/scheduler-core/src/ports/execution-grant.port.ts`            | `ExecutionGrantPort` + error classes                 |
-| `packages/scheduler-core/src/ports/execution-request.port.ts`          | `ExecutionRequestPort` for idempotency               |
-| `packages/scheduler-core/src/ports/schedule-manager.port.ts`           | `ScheduleManagerPort` interface                      |
-| `packages/scheduler-core/src/ports/schedule-run.port.ts`               | `ScheduleRunRepository` interface                    |
-| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`             | `DrizzleExecutionGrantAdapter`                       |
-| `packages/db-client/src/adapters/drizzle-execution-request.adapter.ts` | `DrizzleExecutionRequestAdapter`                     |
-| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts`          | `DrizzleScheduleManagerAdapter`                      |
-| `packages/db-client/src/adapters/drizzle-run.adapter.ts`               | `DrizzleGraphRunAdapter`                             |
-| `apps/operator/src/contracts/schedules.*.v1.contract.ts`               | Schedule CRUD contracts (4 files)                    |
-| `apps/operator/src/app/api/v1/schedules/route.ts`                      | POST (create with credit gate), GET (list)           |
-| `apps/operator/src/app/api/v1/schedules/[scheduleId]/route.ts`         | PATCH (update), DELETE                               |
-| `apps/operator/src/bootstrap/container.ts`                             | Wire scheduling ports                                |
-| `packages/scheduler-core/src/payloads.ts`                              | Zod payload schemas                                  |
+| File                                                                    | Purpose                                                                                         |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `packages/scheduler-core/src/types.ts`                                  | `ExecutionGrant`, `ScheduleSpec`, `GraphRun` types                                              |
+| `packages/db-schema/src/scheduling.ts`                                  | `execution_grants`, `schedules`, `graph_runs` tables                                            |
+| `packages/scheduler-core/src/ports/execution-grant.port.ts`             | `ExecutionGrantPort` + error classes                                                            |
+| `packages/scheduler-core/src/ports/execution-request.port.ts`           | `ExecutionRequestPort` for idempotency                                                          |
+| `packages/scheduler-core/src/ports/schedule-manager.port.ts`            | `ScheduleManagerPort` interface                                                                 |
+| `packages/scheduler-core/src/ports/schedule-run.port.ts`                | `ScheduleRunRepository` interface                                                               |
+| `packages/db-client/src/adapters/drizzle-grant.adapter.ts`              | `DrizzleExecutionGrantAdapter`                                                                  |
+| `packages/db-client/src/adapters/drizzle-execution-request.adapter.ts`  | `DrizzleExecutionRequestAdapter`                                                                |
+| `packages/db-client/src/adapters/drizzle-schedule.adapter.ts`           | `DrizzleScheduleManagerAdapter`                                                                 |
+| `packages/db-client/src/adapters/drizzle-run.adapter.ts`                | `DrizzleGraphRunAdapter` (node-app only; not used by worker)                                    |
+| `services/scheduler-worker/src/adapters/run-http.ts`                    | `HttpGraphRunWriter`, `HttpExecutionGrantValidator` (worker's only persistence path, task.0280) |
+| `packages/node-contracts/src/graph-runs.create.internal.v1.contract.ts` | `POST /api/internal/graph-runs` wire shape (task.0280)                                          |
+| `packages/node-contracts/src/graph-runs.update.internal.v1.contract.ts` | `PATCH /api/internal/graph-runs/{runId}` wire shape (task.0280)                                 |
+| `packages/node-contracts/src/grants.validate.internal.v1.contract.ts`   | `POST /api/internal/grants/{grantId}/validate` wire shape (task.0280)                           |
+| `apps/operator/src/contracts/schedules.*.v1.contract.ts`                | Schedule CRUD contracts (4 files)                                                               |
+| `apps/operator/src/app/api/v1/schedules/route.ts`                       | POST (create with credit gate), GET (list)                                                      |
+| `apps/operator/src/app/api/v1/schedules/[scheduleId]/route.ts`          | PATCH (update), DELETE                                                                          |
+| `apps/operator/src/bootstrap/container.ts`                              | Wire scheduling ports                                                                           |
+| `packages/scheduler-core/src/payloads.ts`                               | Zod payload schemas                                                                             |
 
 ### Implemented (Temporal Migration)
 
@@ -297,10 +303,13 @@ tags: [scheduler]
 
 ### Implemented (P0)
 
-| File                                                                | Purpose                     |
-| ------------------------------------------------------------------- | --------------------------- |
-| `apps/operator/src/app/api/internal/graphs/[graphId]/runs/route.ts` | Internal execution endpoint |
-| `apps/operator/src/contracts/graphs.run.internal.v1.contract.ts`    | Internal execution contract |
+| File                                                                  | Purpose                                     |
+| --------------------------------------------------------------------- | ------------------------------------------- |
+| `nodes/*/app/src/app/api/internal/graphs/[graphId]/runs/route.ts`     | Internal execution endpoint (per-node)      |
+| `nodes/*/app/src/app/api/internal/graph-runs/route.ts`                | Create graph_runs row (task.0280, per-node) |
+| `nodes/*/app/src/app/api/internal/graph-runs/[runId]/route.ts`        | Update graph_runs row (task.0280, per-node) |
+| `nodes/*/app/src/app/api/internal/grants/[grantId]/validate/route.ts` | Validate grant (task.0280, per-node)        |
+| `packages/node-contracts/src/graphs.run.internal.v1.contract.ts`      | Internal execution contract                 |
 
 ---
 

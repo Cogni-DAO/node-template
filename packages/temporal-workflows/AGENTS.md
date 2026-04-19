@@ -68,9 +68,9 @@ src/
 ## Public Surface
 
 - **Types:** `GraphRunResult`, `GraphRunWorkflowInput`, `PrReviewWorkflowInput`, `FinalizeEpochWorkflowInput`, `AttributionIngestRunV1`, `CollectSourcesInput`, `EnrichAndAllocateInput`
-- **Activity interfaces:** `SchedulerActivities`, `ReviewActivities`, `LedgerActivities`, `EnrichmentActivities`
+- **Activity interfaces:** `SchedulerActivities`, `ReviewActivities`, `LedgerActivities`, `EnrichmentActivities`. Per task.0280, `validateGrantActivity` / `createGraphRunActivity` / `updateGraphRunActivity` inputs include `nodeId: string` so the worker can route each HTTP call to the owning node's internal API.
 - **Domain exports:** `evaluateCriteria`, `aggregateGateStatuses`, `formatCheckRunSummary`, `formatPrComment`, `buildReviewUserMessage`, `findRequirement`, `formatThreshold`
-- **Config:** `STANDARD_ACTIVITY_OPTIONS`, `EXTERNAL_API_ACTIVITY_OPTIONS`, `GRAPH_EXECUTION_ACTIVITY_OPTIONS`
+- **Config:** `STANDARD_ACTIVITY_OPTIONS`, `EXTERNAL_API_ACTIVITY_OPTIONS`, `GRAPH_EXECUTION_ACTIVITY_OPTIONS`. Metadata activities (grant + run CRUD) use `maximumAttempts: 6` (~2 min budget) to absorb parallel-rollout race windows.
 
 ## Responsibilities
 

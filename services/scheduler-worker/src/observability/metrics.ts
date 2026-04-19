@@ -51,3 +51,17 @@ export const workerInfo = new client.Gauge({
   labelNames: ["task_queue"] as const,
   registers: [metricsRegistry],
 });
+
+/**
+ * Gauge: Per-node HTTP reachability from the worker (1 = /readyz responded 2xx).
+ * Sampled at boot. Absent or 0 = the node was not reachable at boot time — the
+ * worker still starts and will attempt HTTP calls per-activity. Alert on this
+ * gauge at the Prometheus layer, do NOT gate worker boot on it.
+ * Per task.0280 phase 2 (QUEUE_PER_NODE_ISOLATION).
+ */
+export const schedulerWorkerNodeReachable = new client.Gauge({
+  name: "scheduler_worker_node_reachable_at_boot",
+  help: "1 if node-app /readyz responded 2xx at worker boot, 0 otherwise",
+  labelNames: ["node_id"] as const,
+  registers: [metricsRegistry],
+});

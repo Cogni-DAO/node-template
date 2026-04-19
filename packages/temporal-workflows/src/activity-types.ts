@@ -22,11 +22,13 @@
 /** Formerly `Activities` — renamed for clarity. Same shape as ReturnType<typeof createActivities>. */
 export interface SchedulerActivities {
   validateGrantActivity(input: {
+    nodeId: string;
     grantId: string;
     graphId: string;
   }): Promise<void>;
 
   createGraphRunActivity(input: {
+    nodeId: string;
     runId: string;
     graphId?: string;
     runKind?: string;
@@ -55,6 +57,7 @@ export interface SchedulerActivities {
   }>;
 
   updateGraphRunActivity(input: {
+    nodeId: string;
     runId: string;
     status: "running" | "success" | "error" | "skipped" | "cancelled";
     traceId?: string | null;

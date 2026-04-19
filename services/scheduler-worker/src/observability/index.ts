@@ -14,6 +14,7 @@ export {
   activityDurationMs,
   activityErrorsTotal,
   metricsRegistry,
+  schedulerWorkerNodeReachable,
   workerInfo,
 } from "./metrics.js";
 export { REDACT_PATHS } from "./redact.js";

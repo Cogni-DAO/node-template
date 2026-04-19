@@ -3,15 +3,16 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/bootstrap/container`
- * Purpose: Composition root — wires concrete adapters to port interfaces via DataSourceRegistration.
+ * Purpose: Composition root — wires HTTP adapters (runs/grants) and optional Drizzle adapters (ledger only) to port interfaces.
  * Scope: All adapter construction lives here. Returns typed container against port interfaces. Does not export identity constants.
  * Invariants:
- * - Only file that imports concrete adapter packages (@cogni/db-client, @cogni/repo-spec, @cogni/attribution-pipeline-plugins)
+ * - Per SHARED_COMPUTE_HOLDS_NO_DB_CREDS (task.0280): scheduler path holds no DB credentials. createContainer() never touches DATABASE_URL; HttpGraphRunWriter + HttpExecutionGrantValidator route every call through the owning node's internal API.
+ * - Only file that imports concrete adapter packages (@cogni/db-client for ledger only, @cogni/repo-spec, @cogni/attribution-pipeline-plugins)
  * - activities/ and workflows/ import ports only, never this module
  * - REPO_SPEC_AUTHORITY: identity (node_id, scope_id, chain_id) read from @cogni/repo-spec at bootstrap
  * - SOURCE_ADAPTER_COVERAGE: cross-checks repo-spec activity_sources against registered adapters; logs CONFIG_SOURCE_NO_ADAPTER at error level for each configured source missing an adapter
  * - CAPABILITY_REQUIRED: every DataSourceRegistration must have at least one of poll or webhook (throws at bootstrap)
- * Side-effects: Creates DB connection pool; reads .cogni/repo-spec.yaml from disk
+ * Side-effects: createContainer() — none (HTTP clients, no DB). createAttributionContainer() — creates DB client when DATABASE_URL set; reads .cogni/repo-spec.yaml from disk.
  * Links: services/scheduler-worker/src/ports/index.ts, packages/repo-spec/
  * @internal
  */
@@ -24,11 +25,7 @@ import {
   createDefaultRegistries,
   type DefaultRegistries,
 } from "@cogni/attribution-pipeline-plugins";
-import {
-  DrizzleAttributionAdapter,
-  DrizzleExecutionGrantWorkerAdapter,
-  DrizzleGraphRunAdapter,
-} from "@cogni/db-client";
+import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import { createServiceDbClient } from "@cogni/db-client/service";
 import {
   extractChainId,
@@ -37,19 +34,22 @@ import {
   extractScopeId,
   parseRepoSpec,
 } from "@cogni/repo-spec";
-
 import {
   GitHubAppTokenProvider,
   GitHubSourceAdapter,
 } from "../adapters/ingestion/index.js";
+import {
+  createHttpExecutionGrantValidator,
+  createHttpGraphRunWriter,
+} from "../adapters/run-http.js";
 import { logWorkerEvent, WORKER_EVENT_NAMES } from "../observability/index.js";
 import type { Logger } from "../observability/logger.js";
 
 import type {
   AttributionStore,
   DataSourceRegistration,
-  ExecutionGrantWorkerPort,
-  GraphRunRepository,
+  ExecutionGrantHttpValidator,
+  GraphRunHttpWriter,
 } from "../ports/index.js";
 import type { Env } from "./env.js";
 
@@ -58,8 +58,8 @@ import type { Env } from "./env.js";
  * Passed to createActivities() and any future consumers.
  */
 export interface ServiceContainer {
-  grantAdapter: ExecutionGrantWorkerPort;
-  runAdapter: GraphRunRepository;
+  grantAdapter: ExecutionGrantHttpValidator;
+  runAdapter: GraphRunHttpWriter;
   config: {
     nodeEndpoints: Map<string, string>;
     schedulerApiToken: string;
@@ -158,19 +158,21 @@ export interface AttributionContainer {
  * This is the only place that instantiates concrete adapters.
  */
 export function createContainer(config: Env, logger: Logger): ServiceContainer {
-  const db = createServiceDbClient(config.DATABASE_URL);
-
+  // Per task.0280: the scheduler path holds no DB credentials. Grant validation,
+  // graph_runs create/update all flow through the owning node's internal API,
+  // authenticated by SCHEDULER_API_TOKEN. nodeId → nodeUrl lookup via the
+  // COGNI_NODE_ENDPOINTS map, same one executeGraphActivity already uses.
+  const nodeEndpoints = parseNodeEndpoints(config.COGNI_NODE_ENDPOINTS);
+  const deps = {
+    nodeEndpoints,
+    schedulerApiToken: config.SCHEDULER_API_TOKEN,
+    logger: logger.child?.({ component: "run-http" }) ?? logger,
+  };
   return {
-    grantAdapter: new DrizzleExecutionGrantWorkerAdapter(
-      db,
-      logger.child?.({ component: "grant-adapter" }) ?? logger
-    ),
-    runAdapter: new DrizzleGraphRunAdapter(
-      db,
-      logger.child?.({ component: "run-adapter" }) ?? logger
-    ),
+    grantAdapter: createHttpExecutionGrantValidator(deps),
+    runAdapter: createHttpGraphRunWriter(deps),
     config: {
-      nodeEndpoints: parseNodeEndpoints(config.COGNI_NODE_ENDPOINTS),
+      nodeEndpoints,
       schedulerApiToken: config.SCHEDULER_API_TOKEN,
     },
     logger,
@@ -185,6 +187,14 @@ export function createAttributionContainer(
   config: Env,
   logger: Logger
 ): AttributionContainer | null {
+  if (!config.DATABASE_URL) {
+    logger.info(
+      { reason: "no_database_url" },
+      "Attribution/ledger container disabled — DATABASE_URL not set. This is the normal scheduler-only configuration per task.0280. Set DATABASE_URL only when this worker also runs the attribution pipeline."
+    );
+    return null;
+  }
+
   const { nodeId, scopeId, chainId, configuredSources, excludedLogins } =
     loadRepoSpecIdentity();
 
