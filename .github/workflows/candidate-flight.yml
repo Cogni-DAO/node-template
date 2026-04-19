@@ -263,6 +263,13 @@ jobs:
           ref: ${{ needs.flight.outputs.head_sha }}
           path: app-src
 
+      - name: Checkout deploy/candidate-a (for .promote-state/source-sha-by-app.json)
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: deploy/candidate-a
+          path: deploy-branch
+          token: ${{ github.token }}
+
       - name: Setup SSH to candidate-a VM
         id: ssh-setup
         env:
@@ -284,6 +291,10 @@ jobs:
       # by the flight job, NOT the source PR head SHA. See the header of
       # scripts/ci/wait-for-argocd.sh — passing the wrong SHA silently times
       # out because Argo tracks the deploy branch, not main.
+      #
+      # On success wait-for-argocd.sh writes ARGOCD_SYNC_VERIFIED=true to
+      # $GITHUB_ENV — wait-for-candidate-ready refuses to run without it
+      # (gate-ordering invariant, bug.0321 Fix 4).
       - name: Wait for ArgoCD sync on candidate-a
         if: steps.ssh-setup.outputs.has_vm == 'true'
         env:
@@ -295,6 +306,7 @@ jobs:
         run: bash app-src/scripts/ci/wait-for-argocd.sh
 
       - name: Wait for candidate readiness
+        if: steps.ssh-setup.outputs.has_vm == 'true'
         env:
           DOMAIN: ${{ vars.DOMAIN }}
         run: bash app-src/scripts/ci/wait-for-candidate-ready.sh
@@ -307,12 +319,24 @@ jobs:
         run: bash app-src/scripts/ci/wait-for-in-cluster-services.sh
 
       - name: Run candidate smoke checks
+        if: steps.ssh-setup.outputs.has_vm == 'true'
         env:
           DOMAIN: ${{ vars.DOMAIN }}
         run: bash app-src/scripts/ci/smoke-candidate.sh
 
-      # NOTE: verify-buildsha wiring here is Fix 4 of bug.0321 (per-app
-      # SOURCE_SHA_MAP mode). Lands in a subsequent commit on this branch.
+      # Authoritative contract probe: promoted pods serve the SHA that built
+      # their overlay digest. SOURCE_SHA_MAP mode (bug.0321 Fix 4) reads
+      # deploy-branch/.promote-state/source-sha-by-app.json written by
+      # promote-build-payload.sh and asserts each node's /readyz.version.
+      # Falls back to EXPECTED_BUILDSHA + NODES if the map is absent.
+      - name: Verify buildSha on endpoints
+        if: steps.ssh-setup.outputs.has_vm == 'true'
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+          SOURCE_SHA_MAP: deploy-branch/.promote-state/source-sha-by-app.json
+          EXPECTED_BUILDSHA: ${{ needs.flight.outputs.head_sha }}
+          NODES: ${{ needs.flight.outputs.promoted_apps }}
+        run: bash app-src/scripts/ci/verify-buildsha.sh
 
   # ── Release + report — always() on flight acquisition. Decides lease
   # STATE and commit status from verify-candidate.result. Skipped entirely

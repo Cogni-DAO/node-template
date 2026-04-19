@@ -152,3 +152,11 @@ rm -f "$REMOTE_SCRIPT"
 # shellcheck disable=SC2086
 ssh $SSH_OPTS root@"$VM_HOST" \
   "bash /tmp/wait-for-argocd-remote.sh '$DEPLOY_ENVIRONMENT' '$EXPECTED_SHA' '$ARGOCD_TIMEOUT' '$ACTIVE_SYNC_AFTER' ${APPS[*]}; RC=\$?; rm -f /tmp/wait-for-argocd-remote.sh; exit \$RC"
+
+# Gate-ordering invariant (bug.0321 Fix 4): signal downstream steps in the
+# same job that Argo sync was verified at EXPECTED_SHA. wait-for-candidate-ready.sh
+# refuses to run without this marker so /readyz probes can never silently
+# accept a 200 from old pods while Argo is still reconciling.
+if [ -n "${GITHUB_ENV:-}" ]; then
+  echo "ARGOCD_SYNC_VERIFIED=true" >> "$GITHUB_ENV"
+fi

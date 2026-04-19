@@ -10,6 +10,11 @@ set -euo pipefail
 PAYLOAD_FILE=${PAYLOAD_FILE:-}
 OVERLAY_ENV=${OVERLAY_ENV:-}
 PROMOTE_SCRIPT=${PROMOTE_SCRIPT:-../app-src/scripts/ci/promote-k8s-image.sh}
+# Per-app source-SHA map writer (bug.0321 Fix 4). Same relative path
+# convention as PROMOTE_SCRIPT: callers run from the deploy-branch
+# checkout, scripts live under ../app-src/.
+MAP_SCRIPT=${MAP_SCRIPT:-../app-src/scripts/ci/update-source-sha-map.sh}
+MAP_FILE=${MAP_FILE:-.promote-state/source-sha-by-app.json}
 
 if [ -z "$PAYLOAD_FILE" ] || [ ! -f "$PAYLOAD_FILE" ]; then
   echo "[ERROR] PAYLOAD_FILE is required and must exist" >&2
@@ -30,6 +35,17 @@ for item in payload["targets"]:
     if item["target"] == "migrator":
         print(item["digest"])
         break
+PY
+)
+
+# Top-level source_sha from the payload envelope (written by
+# resolve-pr-build-images.sh). Required for the source-sha-by-app map.
+source_sha=$(python3 - "$PAYLOAD_FILE" <<'PY'
+import json
+import sys
+with open(sys.argv[1], "r", encoding="utf-8") as handle:
+    payload = json.load(handle)
+print(payload.get("source_sha", ""))
 PY
 )
 
@@ -65,13 +81,29 @@ PY
       bash "$PROMOTE_SCRIPT" --no-commit --env "$OVERLAY_ENV" --app "$target" --digest "$digest"
     fi
     PROMOTED+=("$target")
+    update_source_sha_map "$target"
     return 0
   fi
 
   if [ "$target" = "scheduler-worker" ]; then
     bash "$PROMOTE_SCRIPT" --no-commit --env "$OVERLAY_ENV" --app "$target" --digest "$digest"
     PROMOTED+=("$target")
+    update_source_sha_map "$target"
   fi
+}
+
+# Write a per-app `app → source_sha` entry into .promote-state/source-sha-by-app.json
+# on the deploy branch. Merged, not overwritten — untouched apps retain their
+# prior source_sha. Consumed by verify-buildsha.sh in SOURCE_SHA_MAP mode for
+# cross-env/cross-PR contract verification (bug.0321 Fix 4).
+update_source_sha_map() {
+  local app="$1"
+  if [ -z "$source_sha" ]; then
+    echo "  ⚠️  source_sha missing from payload — skipping map update for ${app}" >&2
+    return 0
+  fi
+  APP="$app" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" \
+    bash "$MAP_SCRIPT"
 }
 
 promote_target operator

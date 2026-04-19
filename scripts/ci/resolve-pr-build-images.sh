@@ -9,12 +9,23 @@ set -euo pipefail
 
 IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-template}
 IMAGE_TAG=${IMAGE_TAG:-}
+SOURCE_SHA=${SOURCE_SHA:-}
 OUTPUT_FILE=${OUTPUT_FILE:-${RUNNER_TEMP:-/tmp}/resolved-pr-images.json}
 ALL_TARGETS=(operator migrator poly resy scheduler-worker)
 
 if [ -z "$IMAGE_TAG" ]; then
   echo "[ERROR] IMAGE_TAG is required" >&2
   exit 1
+fi
+
+# SOURCE_SHA is the PR head SHA baked into every image via pr-build.yml
+# (BUILD_SHA label / /readyz.version). Flows into the payload envelope so
+# promote-build-payload.sh can write .promote-state/source-sha-by-app.json
+# for cross-env contract verification (bug.0321 Fix 4). Fall back to
+# parsing the IMAGE_TAG (`pr-{N}-{sha}` convention) when the caller
+# didn't pass it explicitly.
+if [ -z "$SOURCE_SHA" ]; then
+  SOURCE_SHA=$(printf '%s' "$IMAGE_TAG" | sed -E 's/^pr-[0-9]+-//')
 fi
 
 if ! command -v docker >/dev/null 2>&1; then
@@ -77,6 +88,7 @@ cat > "$OUTPUT_FILE" <<EOF
 {
   "image_name": "${IMAGE_NAME}",
   "image_tag": "${IMAGE_TAG}",
+  "source_sha": "${SOURCE_SHA}",
   "targets": [
 ${json_body}
   ]
