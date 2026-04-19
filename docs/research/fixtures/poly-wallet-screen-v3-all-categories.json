@@ -1,0 +1,3611 @@
+{
+  "collectedAt": "2026-04-19T00:00:48.876Z",
+  "universe": 160,
+  "cids": 7232,
+  "closed": 5281,
+  "scores": [
+    {
+      "wallet": "0xbaa2bcb5439e985ce4ccf815b4700027d1b92c73",
+      "name": "denizz",
+      "cats": [
+        "politics"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 5,
+      "wins": 2,
+      "losses": 3,
+      "wr": 40,
+      "pnl": -158,
+      "cap": 886,
+      "roi": -17.8,
+      "dd": 519,
+      "ddPct": 143.8,
+      "medH": 3.12,
+      "top": [
+        "Strait of Hormuz traffic returns to normal by end of April?",
+        "US obtains Iranian enriched uranium by May 31?",
+        "US x Iran permanent peace deal by April 22, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xde7be6d489bce070a959e0cb813128ae659b5f4b",
+      "name": "wan123",
+      "cats": [
+        "politics"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 22,
+      "wins": 10,
+      "losses": 12,
+      "wr": 45.5,
+      "pnl": -52797,
+      "cap": 182499,
+      "roi": -28.9,
+      "dd": 77711,
+      "ddPct": 2003.5,
+      "medH": 24.17,
+      "top": [
+        "Will the next Prime Minister of Hungary be Viktor Orbán?",
+        "US obtains Iranian enriched uranium by May 31?",
+        "Strait of Hormuz traffic returns to normal by end of April?"
+      ]
+    },
+    {
+      "wallet": "0x0c0e270cf879583d6a0142fc817e05b768d0434e",
+      "name": "The Spirit of Ukraine>UMA",
+      "cats": [
+        "politics"
+      ],
+      "t30": 5.37,
+      "days": 0.2,
+      "resolved": 39,
+      "wins": 36,
+      "losses": 0,
+      "wr": 92.3,
+      "pnl": 3651,
+      "cap": 324466,
+      "roi": 1.1,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 24.88,
+      "top": [
+        "Russia x Ukraine ceasefire by March 31, 2026?",
+        "Russia x Ukraine ceasefire by April 30, 2026?",
+        "Kharg Island no longer under Iranian control by April 15?"
+      ]
+    },
+    {
+      "wallet": "0xc6587b11a2209e46dfe3928b31c5514a8e33b784",
+      "name": "Erasmus.",
+      "cats": [
+        "politics"
+      ],
+      "t30": 4.37,
+      "days": 0.2,
+      "resolved": 25,
+      "wins": 18,
+      "losses": 7,
+      "wr": 72,
+      "pnl": 646257,
+      "cap": 1221619,
+      "roi": 52.9,
+      "dd": 18242,
+      "ddPct": 2.8,
+      "medH": 241.62,
+      "top": [
+        "Will the Iranian regime fall by April 30?",
+        "Will the Iranian regime fall by March 31?",
+        "Will Trump nominate Judy Shelton as the next Fed chair?"
+      ]
+    },
+    {
+      "wallet": "0x8c80d213c0cbad777d06ee3f58f6ca4bc03102c3",
+      "name": "SecondWindCapital",
+      "cats": [
+        "politics"
+      ],
+      "t30": 2.2,
+      "days": 2.3,
+      "resolved": 45,
+      "wins": 19,
+      "losses": 26,
+      "wr": 42.2,
+      "pnl": 1522445,
+      "cap": 1783872,
+      "roi": 85.3,
+      "dd": 106623,
+      "ddPct": 6.7,
+      "medH": 41.17,
+      "top": [
+        "US forces enter Iran by December 31?",
+        "UFC 326: Charles Oliveira vs. Max Holloway (Lightweight, Main Card)",
+        "US strikes Iran by March 31, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x1cc16713196d456f86fa9c7387dd326a7f73b8df",
+      "name": "Wickier",
+      "cats": [
+        "politics"
+      ],
+      "t30": 2.4,
+      "days": 0.5,
+      "resolved": 69,
+      "wins": 50,
+      "losses": 18,
+      "wr": 72.5,
+      "pnl": 181440,
+      "cap": 621884,
+      "roi": 29.2,
+      "dd": 28796,
+      "ddPct": 14.5,
+      "medH": 52.47,
+      "top": [
+        "Will the Iranian regime fall by April 30?",
+        "Starmer out by February 28, 2026?",
+        "Will Trump create Bitcoin reserve in first 100 days?"
+      ]
+    },
+    {
+      "wallet": "0xd7375270e4769d3cc31885773070a5f12d5bbe95",
+      "name": "Fernandoinfante",
+      "cats": [
+        "politics"
+      ],
+      "t30": 5.1,
+      "days": 0.3,
+      "resolved": 29,
+      "wins": 4,
+      "losses": 23,
+      "wr": 13.8,
+      "pnl": 438898,
+      "cap": 96598,
+      "roi": 454.4,
+      "dd": 17890,
+      "ddPct": 3.9,
+      "medH": 42.46,
+      "top": [
+        "Strait of Hormuz traffic returns to normal by end of April?",
+        "Will WTI Crude Oil (WTI) hit (HIGH) $120 in April?",
+        "US x Iran permanent peace deal by April 22, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xffa6b3c90514d7b861c87d7e51cc35fff34530fe",
+      "name": "CypherCapital",
+      "cats": [
+        "politics"
+      ],
+      "t30": 0.2,
+      "days": 11.6,
+      "resolved": 4,
+      "wins": 4,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 35068,
+      "cap": 7958,
+      "roi": 440.7,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 112.66,
+      "top": [
+        "US x Iran ceasefire by April 15?",
+        "US x Iran ceasefire by April 30?",
+        "US x Iran ceasefire by April 7?"
+      ]
+    },
+    {
+      "wallet": "0xd5196bdf50199e195c58a6aff2114cc0e455932c",
+      "name": "UpDownUpDown",
+      "cats": [
+        "politics"
+      ],
+      "t30": 0.3,
+      "days": 10.9,
+      "resolved": 147,
+      "wins": 25,
+      "losses": 118,
+      "wr": 17,
+      "pnl": 138596,
+      "cap": 30476,
+      "roi": 454.8,
+      "dd": 6831,
+      "ddPct": 4.9,
+      "medH": 0.2,
+      "top": [
+        "Will Mojtaba Khamenei be the next Supreme Leader of Iran?",
+        "Will UAE strike Iran by March 31?",
+        "Will the price of Bitcoin be above $108,000 on October 27?"
+      ]
+    },
+    {
+      "wallet": "0xf0d9af9effd0b4a039899901ba19a05ea1a3e4ee",
+      "name": "polywog",
+      "cats": [
+        "politics"
+      ],
+      "t30": 0.57,
+      "days": 9.2,
+      "resolved": 68,
+      "wins": 53,
+      "losses": 15,
+      "wr": 77.9,
+      "pnl": 393893,
+      "cap": 1229387,
+      "roi": 32,
+      "dd": 16952,
+      "ddPct": 4.3,
+      "medH": 101.31,
+      "top": [
+        "US x Iran ceasefire by April 7?",
+        "Will Zelenskyy wear a suit before July?",
+        "Will Donald Trump be TIME's Person of the Year for 2025?"
+      ]
+    },
+    {
+      "wallet": "0x6480542954b70a674a74bd1a6015dec362dc8dc5",
+      "name": "tripping",
+      "cats": [
+        "politics",
+        "economics"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 11,
+      "wins": 5,
+      "losses": 6,
+      "wr": 45.5,
+      "pnl": -8753,
+      "cap": 11430,
+      "roi": -76.6,
+      "dd": 8991,
+      "ddPct": 6262.3,
+      "medH": 7.8,
+      "top": [
+        "Military action against Iran ends by April 17, 2026?",
+        "Israel x Hezbollah ceasefire by April 18, 2026?",
+        "US forces enter Iran by March 31?"
+      ]
+    },
+    {
+      "wallet": "0x2785e7022dc20757108204b13c08cea8613b70ae",
+      "name": "poorsob",
+      "cats": [
+        "politics",
+        "economics"
+      ],
+      "t30": 1.67,
+      "days": 0.1,
+      "resolved": 92,
+      "wins": 84,
+      "losses": 3,
+      "wr": 91.3,
+      "pnl": 1346515,
+      "cap": 16203163,
+      "roi": 8.3,
+      "dd": 22657,
+      "ddPct": 1.7,
+      "medH": 7.71,
+      "top": [
+        "Israel x Hezbollah ceasefire by April 18, 2026?",
+        "US x Iran ceasefire by April 7?",
+        "Military action against Iran ends by April 17, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xc21ea96be762bb55041529af6e386e7c53b80215",
+      "name": "Just2SeeULaugh",
+      "cats": [
+        "politics",
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 1.1,
+      "resolved": 76,
+      "wins": 18,
+      "losses": 3,
+      "wr": 23.7,
+      "pnl": 510,
+      "cap": 9933,
+      "roi": 5.1,
+      "dd": 407,
+      "ddPct": 44.4,
+      "medH": 0.66,
+      "top": [
+        "US forces enter Iran by December 31?",
+        "Will Isack Hadjar be the 2026 F1 Drivers' Champion?",
+        "US x Iran ceasefire by April 7?"
+      ]
+    },
+    {
+      "wallet": "0xccc1afdec8b8a8d7770eeabc0041b610c621889d",
+      "name": "66601",
+      "cats": [
+        "politics"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 26,
+      "wins": 9,
+      "losses": 15,
+      "wr": 34.6,
+      "pnl": -248,
+      "cap": 3500,
+      "roi": -7.1,
+      "dd": 1643,
+      "ddPct": 177.7,
+      "medH": 0.01,
+      "top": [
+        "Will Tulsi Gabbard win the 2028 US Presidential Election?",
+        "Will John Fetterman win the 2028 Democratic presidential nomination?",
+        "Blues vs. Utah"
+      ]
+    },
+    {
+      "wallet": "0xc8ab97a9089a9ff7e6ef0688e6e591a066946418",
+      "name": "ArmageddonRewardsBilly",
+      "cats": [
+        "politics",
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 60,
+      "wins": 35,
+      "losses": 2,
+      "wr": 58.3,
+      "pnl": 1036,
+      "cap": 102563,
+      "roi": 1,
+      "dd": 27,
+      "ddPct": 2.6,
+      "medH": 16.18,
+      "top": [
+        "Israel x Hezbollah ceasefire by June 30, 2026?",
+        "Israel x Hezbollah ceasefire by April 30, 2026?",
+        "Israel x Hezbollah ceasefire by April 18, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x5d189e816b4149be00977c1a3c8840374aec4972",
+      "name": "gloriafoster",
+      "cats": [
+        "politics"
+      ],
+      "t30": 1.43,
+      "days": 0.6,
+      "resolved": 35,
+      "wins": 10,
+      "losses": 21,
+      "wr": 28.6,
+      "pnl": -11817,
+      "cap": 101170,
+      "roi": -11.7,
+      "dd": 33521,
+      "ddPct": 154.4,
+      "medH": 24.64,
+      "top": [
+        "Nuggets vs. Grizzlies",
+        "Will Liz Cheney win the 2028 Democratic presidential nomination?",
+        "UFC 325: Dan Hooker vs. Benoit Saint Denis (Lightweight, Main Card)"
+      ]
+    },
+    {
+      "wallet": "0x511653479dbf3a4557d8a2359595d429b90dc5b8",
+      "name": "CAR-AyatollahVersion",
+      "cats": [
+        "politics"
+      ],
+      "t30": 0.53,
+      "days": 1.3,
+      "resolved": 9,
+      "wins": 9,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 711806,
+      "cap": 6889749,
+      "roi": 10.3,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 42.91,
+      "top": [
+        "US forces enter Iran by March 31?",
+        "Will Israel launch a major ground offensive in Lebanon by March 31?",
+        "US forces enter Iran by April 30?"
+      ]
+    },
+    {
+      "wallet": "0x2663daca3cecf3767ca1c3b126002a8578a8ed1f",
+      "name": "Q96s3kwozynxpau",
+      "cats": [
+        "politics"
+      ],
+      "t30": 0.6,
+      "days": 5,
+      "resolved": 29,
+      "wins": 26,
+      "losses": 3,
+      "wr": 89.7,
+      "pnl": 17951,
+      "cap": 1802,
+      "roi": 995.9,
+      "dd": 713,
+      "ddPct": 4,
+      "medH": 0.01,
+      "top": [
+        "Counter-Strike: Natus Vincere vs TheMongolz (BO3) - PGL Cluj-Napoca Group Stage",
+        "Will Claude 5 be released by February 28, 2026?",
+        "SpaceX IPO closing market cap above $1.4T?"
+      ]
+    },
+    {
+      "wallet": "0xd1c769317bd15de7768a70d0214cf0bbcc531d2b",
+      "name": "033033033",
+      "cats": [
+        "politics"
+      ],
+      "t30": 2.03,
+      "days": 5.1,
+      "resolved": 75,
+      "wins": 71,
+      "losses": 0,
+      "wr": 94.7,
+      "pnl": 11963,
+      "cap": 6003750,
+      "roi": 0.2,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 17.38,
+      "top": [
+        "US x Iran ceasefire by April 7?",
+        "US forces enter Iran by April 30?",
+        "Will Iran close the Strait of Hormuz by March 31?"
+      ]
+    },
+    {
+      "wallet": "0xbefa95c276ee8ef6ff3ef43d1c1c454f52bc300d",
+      "name": "BabyGroot",
+      "cats": [
+        "politics",
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 104,
+      "wins": 46,
+      "losses": 58,
+      "wr": 44.2,
+      "pnl": 1092,
+      "cap": 6999,
+      "roi": 15.6,
+      "dd": 842,
+      "ddPct": 43.5,
+      "medH": 0.06,
+      "top": [
+        "Bitcoin Up or Down - April 16, 4:25AM-4:30AM ET",
+        "Bitcoin Up or Down - April 18, 3:25PM-3:30PM ET",
+        "Bitcoin Up or Down - April 18, 3:10AM-3:15AM ET"
+      ]
+    },
+    {
+      "wallet": "0x9e9c8b080659b08c3474ea761790a20982e26421",
+      "name": "meetgoodlife",
+      "cats": [
+        "politics",
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 19,
+      "wins": 7,
+      "losses": 9,
+      "wr": 36.8,
+      "pnl": -12844,
+      "cap": 25357,
+      "roi": -50.7,
+      "dd": 16854,
+      "ddPct": 4525.5,
+      "medH": 11.36,
+      "top": [
+        "US forces enter Iran by April 30?",
+        "US x Iran ceasefire by April 7?",
+        "Will Eduardo Leite win the 2026 Brazilian presidential election?"
+      ]
+    },
+    {
+      "wallet": "0xd99f3bec8e060ada0aef0c4057695dd5bc22fcdc",
+      "name": "BakerMcKenzie",
+      "cats": [
+        "politics"
+      ],
+      "t30": 1.33,
+      "days": 0.6,
+      "resolved": 5,
+      "wins": 4,
+      "losses": 1,
+      "wr": 80,
+      "pnl": 4985,
+      "cap": 5670821,
+      "roi": 0.1,
+      "dd": 501,
+      "ddPct": 10.1,
+      "medH": 5.21,
+      "top": [
+        "Netanyahu out by March 31?",
+        "Will the Iranian regime fall by April 30?",
+        "US forces enter Iran by April 30?"
+      ]
+    },
+    {
+      "wallet": "0x5d05b1f588780423488a09d9aefeb64df54d6320",
+      "name": "SP888",
+      "cats": [
+        "politics"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 17,
+      "wins": 15,
+      "losses": 2,
+      "wr": 88.2,
+      "pnl": 4901,
+      "cap": 6060,
+      "roi": 80.9,
+      "dd": 36,
+      "ddPct": 0.7,
+      "medH": 17.79,
+      "top": [
+        "Will Donald Trump announce that the United States blockade of the Strait of Hormuz has been lifted by April 15, 2026?",
+        "Will Donald Trump announce that the United States blockade of the Strait of Hormuz has been lifted by April 17, 2026?",
+        "Trump announces end of military operations against Iran by April 15th?"
+      ]
+    },
+    {
+      "wallet": "0x43e98f912cd6ddadaad88d3297e78c0648e688e5",
+      "name": "ashash111",
+      "cats": [
+        "politics",
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.4,
+      "resolved": 7,
+      "wins": 6,
+      "losses": 1,
+      "wr": 85.7,
+      "pnl": 5238,
+      "cap": 2498,
+      "roi": 209.7,
+      "dd": 101,
+      "ddPct": 1.9,
+      "medH": 19.43,
+      "top": [
+        "Will Cape Verde win the 2026 FIFA World Cup?",
+        "Will Valtteri Bottas be the 2026 F1 Drivers' Champion?",
+        "Will Liam Lawson be the 2026 F1 Drivers' Champion?"
+      ]
+    },
+    {
+      "wallet": "0x492442eab586f242b53bda933fd5de859c8a3782",
+      "name": "0x492442EaB586F242B53bDa933fD5dE859c8A3782-1766317541188",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 2.9,
+      "resolved": 62,
+      "wins": 34,
+      "losses": 28,
+      "wr": 54.8,
+      "pnl": 697392,
+      "cap": 4114208,
+      "roi": 17,
+      "dd": 655676,
+      "ddPct": 94,
+      "medH": 0.1,
+      "top": [
+        "Lightning vs. Senators: O/U 6.5",
+        "Spread: Nuggets (-7.5)",
+        "Bucks vs. Nets"
+      ]
+    },
+    {
+      "wallet": "0x02227b8f5a9636e895607edd3185ed6ee5598ff7",
+      "name": "HorizonSplendidView",
+      "cats": [
+        "sports"
+      ],
+      "t30": 0,
+      "days": 38.2,
+      "resolved": 20,
+      "wins": 10,
+      "losses": 10,
+      "wr": 50,
+      "pnl": 1474887,
+      "cap": 7388739,
+      "roi": 20,
+      "dd": 2402801,
+      "ddPct": 162.9,
+      "medH": 0.17,
+      "top": [
+        "Will Paris Saint-Germain FC win on 2026-03-11?",
+        "Will Manchester City FC win on 2026-02-21?",
+        "Will Manchester City FC win on 2026-03-04?"
+      ]
+    },
+    {
+      "wallet": "0xefbc5fec8d7b0acdc8911bdd9a98d6964308f9a2",
+      "name": "reachingthesky",
+      "cats": [
+        "sports"
+      ],
+      "t30": 0,
+      "days": 31.2,
+      "resolved": 9,
+      "wins": 4,
+      "losses": 5,
+      "wr": 44.4,
+      "pnl": 2935192,
+      "cap": 3904625,
+      "roi": 75.2,
+      "dd": 504625,
+      "ddPct": 14.7,
+      "medH": 0.39,
+      "top": [
+        "Will Paris Saint-Germain FC win on 2026-03-17?",
+        "Will Rayo Vallecano de Madrid win on 2026-03-16?",
+        "Will Chelsea FC win on 2026-03-17?"
+      ]
+    },
+    {
+      "wallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "name": "beachboy4",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 6,
+      "resolved": 35,
+      "wins": 16,
+      "losses": 18,
+      "wr": 45.7,
+      "pnl": -1397268,
+      "cap": 7759726,
+      "roi": -18,
+      "dd": 1704373,
+      "ddPct": 555,
+      "medH": 0.2,
+      "top": [
+        "Spread: Pistons (-3.5)",
+        "Cavaliers vs. Lakers",
+        "Spread: Warriors (-14.5)"
+      ]
+    },
+    {
+      "wallet": "0x2a2c53bd278c04da9962fcf96490e17f3dfb9bc1",
+      "name": "0x2a2C53bD278c04DA9962Fcf96490E17F3DfB9Bc1-1772479215461",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 75,
+      "wins": 36,
+      "losses": 39,
+      "wr": 48,
+      "pnl": -281790,
+      "cap": 2286061,
+      "roi": -12.3,
+      "dd": 565749,
+      "ddPct": 472.6,
+      "medH": 0.74,
+      "top": [
+        "Wuning 2: Sergey Fomin vs Moerani Bouzige",
+        "Will Eastleigh FC win on 2026-04-18?",
+        "Busan: August Holmgren vs Liam Broady"
+      ]
+    },
+    {
+      "wallet": "0x2005d16a84ceefa912d4e380cd32e7ff827875ea",
+      "name": "RN1",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 2,
+      "wins": 1,
+      "losses": 1,
+      "wr": 50,
+      "pnl": 347,
+      "cap": 8108,
+      "roi": 4.3,
+      "dd": 439,
+      "ddPct": 126.4,
+      "medH": 0.21,
+      "top": [
+        "Timberwolves vs. Nuggets",
+        "Hawks vs. Knicks",
+        "Hawks vs. Knicks"
+      ]
+    },
+    {
+      "wallet": "0xee613b3fc183ee44f9da9c05f53e2da107e3debf",
+      "name": "sovereign2013",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 73,
+      "wins": 35,
+      "losses": 35,
+      "wr": 47.9,
+      "pnl": -3193,
+      "cap": 100172,
+      "roi": -3.2,
+      "dd": 11106,
+      "ddPct": 305.3,
+      "medH": 0.39,
+      "top": [
+        "Porsche Tennis Grand Prix: Elena Rybakina vs Mirra Andreeva",
+        "Barcelona Open: Andrey Rublev vs Hamad Medjedovic",
+        "Kansas City Royals vs. New York Yankees"
+      ]
+    },
+    {
+      "wallet": "0xa5ea13a81d2b7e8e424b182bdc1db08e756bd96a",
+      "name": "bossoskil1",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 101,
+      "wins": 51,
+      "losses": 50,
+      "wr": 50.5,
+      "pnl": 288208,
+      "cap": 2190661,
+      "roi": 13.2,
+      "dd": 215773,
+      "ddPct": 53.2,
+      "medH": 0.08,
+      "top": [
+        "LoL: Dplus KIA vs T1 (BO3) - LCK Rounds 1-2",
+        "Warriors vs. Suns",
+        "Dota 2: BetBoom Team vs Virtus.pro - Game 1 Winner"
+      ]
+    },
+    {
+      "wallet": "0xf195721ad850377c96cd634457c70cd9e8308057",
+      "name": "lo34567Taipe",
+      "cats": [
+        "sports"
+      ],
+      "t30": 2.27,
+      "days": 11.8,
+      "resolved": 43,
+      "wins": 23,
+      "losses": 20,
+      "wr": 53.5,
+      "pnl": 331000,
+      "cap": 3250706,
+      "roi": 10.2,
+      "dd": 502676,
+      "ddPct": 82.5,
+      "medH": 0.24,
+      "top": [
+        "Predators vs. Jets",
+        "Sharks vs. Flames",
+        "Sharks vs. Oilers"
+      ]
+    },
+    {
+      "wallet": "0x5d58e38cd0a7e6f5fa67b7f9c2f70dd70df09a15",
+      "name": "Dhdhsjsj",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 38,
+      "wins": 16,
+      "losses": 22,
+      "wr": 42.1,
+      "pnl": 1917916,
+      "cap": 3986942,
+      "roi": 48.1,
+      "dd": 599671,
+      "ddPct": 28,
+      "medH": 0.54,
+      "top": [
+        "Dota 2: Xtreme Gaming vs Natus Vincere (BO3) - PGL Wallachia Group Stage",
+        "Warriors vs. Clippers",
+        "Texas Rangers vs. Seattle Mariners"
+      ]
+    },
+    {
+      "wallet": "0x507e52ef684ca2dd91f90a9d26d149dd3288beae",
+      "name": "GamblingIsAllYouNeed",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 14,
+      "wins": 10,
+      "losses": 4,
+      "wr": 71.4,
+      "pnl": 724,
+      "cap": 6762,
+      "roi": 10.7,
+      "dd": 395,
+      "ddPct": 54.5,
+      "medH": 0.03,
+      "top": [
+        "Will Club Atlético de Madrid win on 2026-04-18?",
+        "LoL: Disguised vs Cloud9 (BO3) - LCS Regular Season",
+        "LoL: Disguised vs Cloud9 - Game 2 Winner"
+      ]
+    },
+    {
+      "wallet": "0xfe787d2da716d60e8acff57fb87eb13cd4d10319",
+      "name": "ferrariChampions2026",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 16,
+      "wins": 9,
+      "losses": 7,
+      "wr": 56.3,
+      "pnl": 24237,
+      "cap": 106055,
+      "roi": 22.9,
+      "dd": 9816,
+      "ddPct": 40.5,
+      "medH": 0.39,
+      "top": [
+        "Timberwolves vs. Nuggets",
+        "Spread: Nuggets (-6.5)",
+        "CR Vasco da Gama vs. São Paulo FC: O/U 1.5"
+      ]
+    },
+    {
+      "wallet": "0x63a51cbb37341837b873bc29d05f482bc2988e33",
+      "name": "noMoohyun523",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0.9,
+      "resolved": 46,
+      "wins": 16,
+      "losses": 30,
+      "wr": 34.8,
+      "pnl": -1124615,
+      "cap": 7550678,
+      "roi": -14.9,
+      "dd": 1510389,
+      "ddPct": 0,
+      "medH": 0.48,
+      "top": [
+        "Counter-Strike: Vitality vs G2 (BO3) - IEM Rio Group A",
+        "Jazz vs. Lakers: O/U 236.5",
+        "Washington Nationals vs. Pittsburgh Pirates"
+      ]
+    },
+    {
+      "wallet": "0x37c1874a60d348903594a96703e0507c518fc53a",
+      "name": "CemeterySun",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 5,
+      "wins": 4,
+      "losses": 1,
+      "wr": 80,
+      "pnl": -6293,
+      "cap": 14932,
+      "roi": -42.1,
+      "dd": 10263,
+      "ddPct": 258.5,
+      "medH": 0.33,
+      "top": [
+        "Spread: Rockets (-5.5)",
+        "Will Columbus Crew win on 2026-04-18?",
+        "Spread: Rockets (-4.5)"
+      ]
+    },
+    {
+      "wallet": "0x3b5c629f114098b0dee345fb78b7a3a013c7126e",
+      "name": "SMCAOMCRL",
+      "cats": [
+        "sports"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 77,
+      "wins": 16,
+      "losses": 6,
+      "wr": 20.8,
+      "pnl": 34184,
+      "cap": 249087,
+      "roi": 13.7,
+      "dd": 13025,
+      "ddPct": 29.3,
+      "medH": 0.47,
+      "top": [
+        "Dota 2: Team Spirit vs Vici Gaming - Game 2 Winner",
+        "Raptors vs. Cavaliers",
+        "BMW Open: Denis Shapovalov vs Alex Molcan"
+      ]
+    },
+    {
+      "wallet": "0x019782cab5d844f02bafb71f512758be78579f3c",
+      "name": "majorexploiter",
+      "cats": [
+        "sports"
+      ],
+      "t30": 0,
+      "days": 48.3,
+      "resolved": 3,
+      "wins": 3,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 2576407,
+      "cap": 3907552,
+      "roi": 65.9,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0.2,
+      "top": [
+        "Will Arsenal FC win on 2026-03-01?",
+        "Will Stade Rennais FC 1901 win on 2026-02-28?",
+        "Will Liverpool FC win on 2026-02-28?"
+      ]
+    },
+    {
+      "wallet": "0xdc876e6873772d38716fda7f2452a78d426d7ab6",
+      "name": "432614799197",
+      "cats": [
+        "sports"
+      ],
+      "t30": 0,
+      "days": 40.2,
+      "resolved": 61,
+      "wins": 39,
+      "losses": 22,
+      "wr": 63.9,
+      "pnl": -193308,
+      "cap": 826076,
+      "roi": -23.4,
+      "dd": 474052,
+      "ddPct": 0,
+      "medH": 0.38,
+      "top": [
+        "Will Olympique Lyonnais win on 2026-03-08?",
+        "Hornets vs. Suns",
+        "Bruins vs. Penguins: O/U 6.5"
+      ]
+    },
+    {
+      "wallet": "0xde17f7144fbd0eddb2679132c10ff5e74b120988",
+      "name": "0xdE17f7144fbD0eddb2679132C10ff5e74B120988-1772205225932",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 19.5,
+      "resolved": 54,
+      "wins": 32,
+      "losses": 21,
+      "wr": 59.3,
+      "pnl": -2855,
+      "cap": 41624,
+      "roi": -6.9,
+      "dd": 5892,
+      "ddPct": 486.5,
+      "medH": 0.03,
+      "top": [
+        "Will Bitcoin reach $76,000 March 30-April 5?",
+        "Will Bitcoin reach $74,000 March 30-April 5?",
+        "Will the price of Bitcoin be above $66,000 on March 31?"
+      ]
+    },
+    {
+      "wallet": "0xd84c2b6d65dc596f49c7b6aadd6d74ca91e407b9",
+      "name": "BoneReader",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 13.7,
+      "resolved": 168,
+      "wins": 80,
+      "losses": 64,
+      "wr": 47.6,
+      "pnl": 304,
+      "cap": 41270,
+      "roi": 0.7,
+      "dd": 107,
+      "ddPct": 34.2,
+      "medH": 0.04,
+      "top": [
+        "Bitcoin Up or Down - April 4, 10:15PM-10:30PM ET",
+        "Bitcoin Up or Down - April 4, 9:55PM-10:00PM ET",
+        "Bitcoin Up or Down - April 4, 9:45PM-9:50PM ET"
+      ]
+    },
+    {
+      "wallet": "0xe1d6b51521bd4365769199f392f9818661bd907c",
+      "name": "0xe1D6b51521Bd4365769199f392F9818661BD907",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 15,
+      "wins": 7,
+      "losses": 7,
+      "wr": 46.7,
+      "pnl": 202,
+      "cap": 4557,
+      "roi": 4.4,
+      "dd": 1026,
+      "ddPct": 140.8,
+      "medH": 0.1,
+      "top": [
+        "Bitcoin Up or Down - April 18, 7:00PM-7:15PM ET",
+        "Bitcoin Up or Down - April 18, 7:00PM-7:15PM ET",
+        "Ethereum Up or Down - April 18, 7:00PM-7:15PM ET"
+      ]
+    },
+    {
+      "wallet": "0xd0d6053c3c37e727402d84c14069780d360993aa",
+      "name": "k9Q2mX4L8A7ZP3R",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 12.5,
+      "resolved": 22,
+      "wins": 11,
+      "losses": 11,
+      "wr": 50,
+      "pnl": 213,
+      "cap": 3631,
+      "roi": 5.9,
+      "dd": 681,
+      "ddPct": 170.6,
+      "medH": 0.04,
+      "top": [
+        "Bitcoin Up or Down - March 24, 8AM ET",
+        "Bitcoin Up or Down - March 24, 7AM ET",
+        "Bitcoin Up or Down - March 24, 7AM ET"
+      ]
+    },
+    {
+      "wallet": "0x63ce342161250d705dc0b16df89036c8e5f9ba9a",
+      "name": "0x8dxd",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 25.5,
+      "resolved": 22,
+      "wins": 12,
+      "losses": 10,
+      "wr": 54.5,
+      "pnl": -556,
+      "cap": 4498,
+      "roi": -12.4,
+      "dd": 1452,
+      "ddPct": 162.1,
+      "medH": 0.04,
+      "top": [
+        "Bitcoin Up or Down - March 24, 7AM ET",
+        "Bitcoin Up or Down - March 24, 7AM ET",
+        "Ethereum Up or Down - March 24, 7AM ET"
+      ]
+    },
+    {
+      "wallet": "0xb27bc932bf8110d8f78e55da7d5f0497a18b5b82",
+      "name": "0xB27BC932bf8110D8F78e55da7d5f0497A18B5b82-1772569391020",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 97,
+      "wins": 60,
+      "losses": 37,
+      "wr": 61.9,
+      "pnl": 2502,
+      "cap": 18499,
+      "roi": 13.5,
+      "dd": 839,
+      "ddPct": 28.6,
+      "medH": 0.01,
+      "top": [
+        "Bitcoin Up or Down - April 16, 8:55PM-9:00PM ET",
+        "Bitcoin Up or Down - April 16, 9:00PM-9:05PM ET",
+        "Bitcoin Up or Down - April 16, 4:00PM-4:05PM ET"
+      ]
+    },
+    {
+      "wallet": "0xeebde7a0e019a63e6b476eb425505b7b3e6eba30",
+      "name": "Bonereaper",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 12,
+      "wins": 7,
+      "losses": 5,
+      "wr": 58.3,
+      "pnl": 200,
+      "cap": 7015,
+      "roi": 2.8,
+      "dd": 74,
+      "ddPct": 37,
+      "medH": 0.07,
+      "top": [
+        "Bitcoin Up or Down - April 18, 7:35PM-7:40PM ET",
+        "Bitcoin Up or Down - April 18, 7:40PM-7:45PM ET",
+        "Bitcoin Up or Down - April 18, 7:30PM-7:35PM ET"
+      ]
+    },
+    {
+      "wallet": "0x2d8b401d2f0e6937afebf18e19e11ca568a5260a",
+      "name": "vidarx",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 2.1,
+      "resolved": 19,
+      "wins": 10,
+      "losses": 9,
+      "wr": 52.6,
+      "pnl": 295,
+      "cap": 2934,
+      "roi": 10,
+      "dd": 400,
+      "ddPct": 82.7,
+      "medH": 0.05,
+      "top": [
+        "Bitcoin Up or Down - April 16, 5:15PM-5:20PM ET",
+        "Bitcoin Up or Down - April 16, 5:15PM-5:20PM ET",
+        "Bitcoin Up or Down - April 16, 5:25PM-5:30PM ET"
+      ]
+    },
+    {
+      "wallet": "0x1f0ebc543b2d411f66947041625c0aa1ce61cf86",
+      "name": "0x1f0ebc543B2d411f66947041625c0Aa1ce61CF86-1772205597930",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 25.2,
+      "resolved": 15,
+      "wins": 8,
+      "losses": 7,
+      "wr": 53.3,
+      "pnl": 845,
+      "cap": 4665,
+      "roi": 18.1,
+      "dd": 608,
+      "ddPct": 71.9,
+      "medH": 0.08,
+      "top": [
+        "Bitcoin Up or Down - March 24, 2:00PM-2:15PM ET",
+        "Ethereum Up or Down - March 24, 2:00PM-2:15PM ET",
+        "Bitcoin Up or Down - March 24, 2PM ET"
+      ]
+    },
+    {
+      "wallet": "0x04283f2fef49d70d8c55ab240450d17a65bf85b1",
+      "name": "0x04283f2Fef49d70D8C55ab240450D17A65bF85b",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 36,
+      "wins": 18,
+      "losses": 18,
+      "wr": 50,
+      "pnl": -250,
+      "cap": 6104,
+      "roi": -4.1,
+      "dd": 1200,
+      "ddPct": 243.2,
+      "medH": 0.06,
+      "top": [
+        "Bitcoin Up or Down - April 18, 7:15PM-7:20PM ET",
+        "Bitcoin Up or Down - April 18, 7:15PM-7:20PM ET",
+        "Bitcoin Up or Down - April 18, 7:20PM-7:25PM ET"
+      ]
+    },
+    {
+      "wallet": "0xdeca32428d5cf4b1c4d7266a950e20791676ddd5",
+      "name": "durrrrrrrr",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 147,
+      "wins": 69,
+      "losses": 48,
+      "wr": 46.9,
+      "pnl": -319,
+      "cap": 41253,
+      "roi": -0.8,
+      "dd": 1579,
+      "ddPct": 471,
+      "medH": 0.01,
+      "top": [
+        "Solana Up or Down - April 18, 5:00PM-5:15PM ET",
+        "Bitcoin Up or Down - April 18, 7:15PM-7:30PM ET",
+        "Bitcoin Up or Down - April 18, 6:00PM-6:05PM ET"
+      ]
+    },
+    {
+      "wallet": "0x04b6d7e930cf9e493c5e6ef24b496294f95594c8",
+      "name": "0x04b6D7E930cf9e493c5E6eF24B496294F95594C8-1774448369789",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 1.2,
+      "resolved": 41,
+      "wins": 21,
+      "losses": 20,
+      "wr": 51.2,
+      "pnl": -719,
+      "cap": 5753,
+      "roi": -12.5,
+      "dd": 888,
+      "ddPct": 0,
+      "medH": 0.03,
+      "top": [
+        "Bitcoin Up or Down - April 17, 3PM ET",
+        "Bitcoin Up or Down - April 17, 3:30PM-3:45PM ET",
+        "Ethereum Up or Down - April 17, 3PM ET"
+      ]
+    },
+    {
+      "wallet": "0xee65685de42f8de9a03b4c53ee77d56a20d2cfc9",
+      "name": "0x50f7",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 143,
+      "wins": 69,
+      "losses": 51,
+      "wr": 48.3,
+      "pnl": -747,
+      "cap": 44243,
+      "roi": -1.7,
+      "dd": 1525,
+      "ddPct": 1405.6,
+      "medH": 0.01,
+      "top": [
+        "Solana Up or Down - April 18, 5:00PM-5:15PM ET",
+        "Bitcoin Up or Down - April 18, 6:00PM-6:05PM ET",
+        "Bitcoin Up or Down - April 18, 3:20PM-3:25PM ET"
+      ]
+    },
+    {
+      "wallet": "0xdf0d2ccfe3d7c2ef120395534e43afe283509f79",
+      "name": "0xdf0D2CcfE3d7C2EF120395534e43Afe283509F79-1774320078733",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 175,
+      "wins": 140,
+      "losses": 4,
+      "wr": 80,
+      "pnl": -2693,
+      "cap": 102023,
+      "roi": -2.6,
+      "dd": 3779,
+      "ddPct": 1107.9,
+      "medH": 0.01,
+      "top": [
+        "Bitcoin Up or Down - April 18, 6:00PM-6:05PM ET",
+        "Bitcoin Up or Down - April 18, 7:20PM-7:25PM ET",
+        "Bitcoin Up or Down - April 18, 4:45PM-4:50PM ET"
+      ]
+    },
+    {
+      "wallet": "0x3a847382ad6fff9be1db4e073fd9b869f6884d44",
+      "name": "0x3A847382ad6FfF9be1db4e073FD9b869f6884D4",
+      "cats": [
+        "crypto"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 14,
+      "wins": 7,
+      "losses": 7,
+      "wr": 50,
+      "pnl": 212,
+      "cap": 3409,
+      "roi": 6.2,
+      "dd": 464,
+      "ddPct": 123.5,
+      "medH": 0.13,
+      "top": [
+        "Bitcoin Up or Down - April 18, 7:00PM-7:15PM ET",
+        "Ethereum Up or Down - April 18, 7:00PM-7:15PM ET",
+        "Ethereum Up or Down - April 18, 7:00PM-7:15PM ET"
+      ]
+    },
+    {
+      "wallet": "0x05e70727a2e2dcd079baa2ef1c0b88af06bb9641",
+      "name": "Handsanitizer23",
+      "cats": [
+        "weather"
+      ],
+      "t30": 0.63,
+      "days": 1.5,
+      "resolved": 35,
+      "wins": 20,
+      "losses": 14,
+      "wr": 57.1,
+      "pnl": 66583,
+      "cap": 389890,
+      "roi": 17.1,
+      "dd": 6095,
+      "ddPct": 9.1,
+      "medH": 0.01,
+      "top": [
+        "Will the highest temperature in Munich be 7°C on March 27?",
+        "Will the highest temperature in Shenzhen be 27°C on March 22?",
+        "Will the highest temperature in Lucknow be 31°C or below on March 23?"
+      ]
+    },
+    {
+      "wallet": "0x594edb9112f526fa6a80b8f858a6379c8a2c1c11",
+      "name": "ColdMath",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 24,
+      "wins": 8,
+      "losses": 14,
+      "wr": 33.3,
+      "pnl": 150,
+      "cap": 4009,
+      "roi": 3.8,
+      "dd": 107,
+      "ddPct": 41.6,
+      "medH": 0.01,
+      "top": [
+        "Will the highest temperature in Chicago be between 62-63°F on April 18?",
+        "Will the highest temperature in Dallas be between 74-75°F on April 18?",
+        "Will the highest temperature in Austin be between 72-73°F on April 18?"
+      ]
+    },
+    {
+      "wallet": "0x15ceffed7bf820cd2d90f90ea24ae9909f5cd5fa",
+      "name": "HondaCivic",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 181,
+      "wins": 104,
+      "losses": 4,
+      "wr": 57.5,
+      "pnl": 3820,
+      "cap": 162900,
+      "roi": 2.3,
+      "dd": 9,
+      "ddPct": 0.2,
+      "medH": 0.1,
+      "top": [
+        "Will the highest temperature in Paris be 18°C on April 16?",
+        "Will the highest temperature in Buenos Aires be 21°C on April 16?",
+        "Will the highest temperature in Ankara be 14°C on April 14?"
+      ]
+    },
+    {
+      "wallet": "0x1f66796b45581868376365aef54b51eb84184c8d",
+      "name": "Maskache2",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 81,
+      "wins": 36,
+      "losses": 43,
+      "wr": 44.4,
+      "pnl": 601,
+      "cap": 9858,
+      "roi": 6.1,
+      "dd": 2722,
+      "ddPct": 81.9,
+      "medH": 1.61,
+      "top": [
+        "Will the highest temperature in New York City be between 58-59°F on April 18?",
+        "Will the highest temperature in Seoul be 24°C or higher on April 16?",
+        "Will the highest temperature in New York City be between 60-61°F on April 18?"
+      ]
+    },
+    {
+      "wallet": "0x331bf91c132af9d921e1908ca0979363fc47193f",
+      "name": "BeefSlayer",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 118,
+      "wins": 92,
+      "losses": 21,
+      "wr": 78,
+      "pnl": 5388,
+      "cap": 19706,
+      "roi": 27.3,
+      "dd": 646,
+      "ddPct": 10.7,
+      "medH": 0.48,
+      "top": [
+        "Will the highest temperature in Austin be between 78-79°F on April 4?",
+        "Will the highest temperature in San Francisco be between 74-75°F on March 29?",
+        "Will the highest temperature in New York City be between 60-61°F on April 18?"
+      ]
+    },
+    {
+      "wallet": "0x8093017f08d8492927eb3b43c8b87aeffe38b208",
+      "name": "Shoemaker34",
+      "cats": [
+        "weather"
+      ],
+      "t30": 0.27,
+      "days": 16.5,
+      "resolved": 33,
+      "wins": 14,
+      "losses": 16,
+      "wr": 42.4,
+      "pnl": 20695,
+      "cap": 215952,
+      "roi": 9.6,
+      "dd": 6908,
+      "ddPct": 33.2,
+      "medH": 0.01,
+      "top": [
+        "Will the highest temperature in San Francisco be between 64-65°F on March 25?",
+        "Will the highest temperature in Toronto be 13°C on March 22?",
+        "Will the highest temperature in Tokyo be 16°C on March 20?"
+      ]
+    },
+    {
+      "wallet": "0x34eccd57d85a42273ea46d8699a2666ac600b7cf",
+      "name": "Junhoo2",
+      "cats": [
+        "weather"
+      ],
+      "t30": 0.33,
+      "days": 10.5,
+      "resolved": 32,
+      "wins": 19,
+      "losses": 13,
+      "wr": 59.4,
+      "pnl": 50212,
+      "cap": 162776,
+      "roi": 30.8,
+      "dd": 13499,
+      "ddPct": 26.9,
+      "medH": 0.01,
+      "top": [
+        "Will Elon Musk post 115-139 tweets from March 9 to March 11, 2026?",
+        "Will the highest temperature in Chicago be between 42-43°F on March 12?",
+        "Will the highest temperature in Chicago be between 60-61°F on March 10?"
+      ]
+    },
+    {
+      "wallet": "0xb40e89677d59665d5188541ad860450a6e2a7cc9",
+      "name": "Poligarch",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 3,
+      "wins": 1,
+      "losses": 2,
+      "wr": 33.3,
+      "pnl": -47,
+      "cap": 80,
+      "roi": -59.6,
+      "dd": 52,
+      "ddPct": 0,
+      "medH": 0,
+      "top": [
+        "Will the highest temperature in New York City be between 62-63°F on April 18?",
+        "Will the highest temperature in New York City be between 60-61°F on April 18?",
+        "US x Iran diplomatic meeting by April 21, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x1c0f3e4c90a48e4dd93d0abcdf719a5a5f1599d0",
+      "name": "208208",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 34,
+      "wins": 12,
+      "losses": 19,
+      "wr": 35.3,
+      "pnl": -1107,
+      "cap": 2433,
+      "roi": -45.5,
+      "dd": 1264,
+      "ddPct": 806.8,
+      "medH": 0.7,
+      "top": [
+        "Will the highest temperature in Seoul be 20°C on April 18?",
+        "Will the highest temperature in Seoul be 21°C or higher on April 18?",
+        "Will the highest temperature in Istanbul be 12°C on April 17?"
+      ]
+    },
+    {
+      "wallet": "0x1cdd071bb612de6d66d0c882b676c663697de595",
+      "name": "Lavincey",
+      "cats": [
+        "weather"
+      ],
+      "t30": 0.53,
+      "days": 5.8,
+      "resolved": 61,
+      "wins": 38,
+      "losses": 23,
+      "wr": 62.3,
+      "pnl": -209,
+      "cap": 5170,
+      "roi": -4,
+      "dd": 428,
+      "ddPct": 429.4,
+      "medH": 0.04,
+      "top": [
+        "Bitcoin Up or Down - March 7, 7:45PM-8:00PM ET",
+        "Bitcoin Up or Down - March 7, 8:30PM-8:45PM ET",
+        "Bitcoin Up or Down - March 8, 6:00AM-6:15AM ET"
+      ]
+    },
+    {
+      "wallet": "0xd25b8718f61fb64a754356ad8cf16b5579f59f3d",
+      "name": "OraculumNobius",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 117,
+      "wins": 32,
+      "losses": 0,
+      "wr": 27.4,
+      "pnl": 71,
+      "cap": 54310,
+      "roi": 0.1,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0,
+      "top": [
+        "Will Tisza win the national list vote in the 2026 Hungarian Parliamentary election by 9%+?",
+        "Will Tisza win the national list vote in the 2026 Hungarian Parliamentary election by 12-15%?",
+        "Will the highest temperature in Lagos be 31°C on April 18?"
+      ]
+    },
+    {
+      "wallet": "0x8b761995bbde7278a2f536b415fb5f60815fc036",
+      "name": "IsabelaEstrellaPaz",
+      "cats": [
+        "weather"
+      ],
+      "t30": 4.77,
+      "days": 0.9,
+      "resolved": 160,
+      "wins": 27,
+      "losses": 69,
+      "wr": 16.9,
+      "pnl": -35,
+      "cap": 103,
+      "roi": -34,
+      "dd": 55,
+      "ddPct": 656.5,
+      "medH": 0.29,
+      "top": [
+        "Will Elon Musk post 460-479 tweets in April 2026?",
+        "Will Elon Musk post 460-479 tweets from March 27 to April 3, 2026?",
+        "Will Ethereum dip to $1,400 in March?"
+      ]
+    },
+    {
+      "wallet": "0x5f211a24da4c005d9438a1ea269673b85ed0b376",
+      "name": "dpnd",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 74,
+      "wins": 15,
+      "losses": 33,
+      "wr": 20.3,
+      "pnl": 26,
+      "cap": 125,
+      "roi": 20.5,
+      "dd": 26,
+      "ddPct": 50.1,
+      "medH": 2.51,
+      "top": [
+        "Major meteor strike (10kt+) in 2026?",
+        "Elon Musk trillionaire before 2027?",
+        "Will the highest temperature in Seattle be 62°F or higher on April 20?"
+      ]
+    },
+    {
+      "wallet": "0x6049761986af66cd8e78997c940766bd69c7f14f",
+      "name": "shcc",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 195,
+      "wins": 53,
+      "losses": 0,
+      "wr": 27.2,
+      "pnl": 461,
+      "cap": 252641,
+      "roi": 0.2,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0.05,
+      "top": [
+        "Will Israel take military action in Gaza on April 10, 2026?",
+        "Will the lowest temperature in New York City be 78°F or higher on April 15?",
+        "WTI Crude Oil (WTI) closes above $87 on April 17?"
+      ]
+    },
+    {
+      "wallet": "0xc34f6b088bb9172625ee1ea2ee8da9ac4f037d2e",
+      "name": "StayFreshCheeseBags",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 2,
+      "wins": 2,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 172,
+      "cap": 0,
+      "roi": 0,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0,
+      "top": [
+        "Will the highest temperature in Taipei be 27°C on April 19?",
+        "Will the highest temperature in Shanghai be 21°C on April 19?",
+        "Will the highest temperature in Tokyo be 26°C or higher on April 19?"
+      ]
+    },
+    {
+      "wallet": "0x7bff96579b20fe3530e140d6a3c223c9f2127cd6",
+      "name": "KingZeManel",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 91,
+      "wins": 51,
+      "losses": 0,
+      "wr": 56,
+      "pnl": 1204,
+      "cap": 72718,
+      "roi": 1.7,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 3.65,
+      "top": [
+        "Will the highest temperature in Istanbul be 15°C on April 16?",
+        "Will the highest temperature in Miami be between 80-81°F on April 16?",
+        "Will the highest temperature in Paris be 22°C on April 15?"
+      ]
+    },
+    {
+      "wallet": "0x84571f1bf97a5c710cbe51daff2dd4556cc887fd",
+      "name": "ZhangMuZhi..",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 57,
+      "wins": 19,
+      "losses": 6,
+      "wr": 33.3,
+      "pnl": 81204,
+      "cap": 275362,
+      "roi": 29.5,
+      "dd": 5428,
+      "ddPct": 6.7,
+      "medH": 0.09,
+      "top": [
+        "Will Atletico Madrid win the 2025–26 La Liga?",
+        "Will the lowest temperature in New York City be 78°F or higher on April 15?",
+        "Will turnout in the 2025 Honduran general election be less than 56%?"
+      ]
+    },
+    {
+      "wallet": "0xa3c2ec158f222f3f4f5f4f57b113d761a4d3df3d",
+      "name": "0xA3c2EC158F222F3F4f5F4f57b113d761a4D3df3d-1774679893278",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 20,
+      "wins": 18,
+      "losses": 0,
+      "wr": 90,
+      "pnl": 136,
+      "cap": 0,
+      "roi": 0,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0,
+      "top": [
+        "Will the highest temperature in Helsinki be 12°C on April 19?",
+        "Will the highest temperature in Houston be between 80-81°F on April 19?",
+        "Will the highest temperature in Shenzhen be 32°C or higher on April 20?"
+      ]
+    },
+    {
+      "wallet": "0xfbb7fc19f80b26152fc5886b5eafa7d437f26f27",
+      "name": "Snake123",
+      "cats": [
+        "weather"
+      ],
+      "t30": 1.63,
+      "days": 3.7,
+      "resolved": 161,
+      "wins": 38,
+      "losses": 93,
+      "wr": 23.6,
+      "pnl": 891,
+      "cap": 2607,
+      "roi": 34.2,
+      "dd": 260,
+      "ddPct": 26.7,
+      "medH": 0.06,
+      "top": [
+        "Will the highest temperature in New York City be 74°F or higher on March 31?",
+        "Will the highest temperature in Lucknow be 36°C on April 3?",
+        "Will the highest temperature in Wellington be 20°C on April 2?"
+      ]
+    },
+    {
+      "wallet": "0x095704be156ec4e353110a82cc584b1173a25db6",
+      "name": "holdr",
+      "cats": [
+        "weather"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 193,
+      "wins": 109,
+      "losses": 1,
+      "wr": 56.5,
+      "pnl": -1972,
+      "cap": 199157,
+      "roi": -1,
+      "dd": 2732,
+      "ddPct": 771.7,
+      "medH": 0.15,
+      "top": [
+        "Will the highest temperature in Sao Paulo be 25°C or below on April 7?",
+        "Will the highest temperature in Beijing be 11°C on April 9?",
+        "Will the highest temperature in Wuhan be 19°C on April 16?"
+      ]
+    },
+    {
+      "wallet": "0x689ae12e11aa489adb3605afd8f39040ff52779e",
+      "name": "Annica",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 11,
+      "wins": 7,
+      "losses": 4,
+      "wr": 63.6,
+      "pnl": 284,
+      "cap": 33749,
+      "roi": 0.8,
+      "dd": 785,
+      "ddPct": 73.4,
+      "medH": 6.93,
+      "top": [
+        "Will Elon Musk post 160-179 tweets from April 14 to April 21, 2026?",
+        "Will Elon Musk post 300-319 tweets from April 10 to April 17, 2026?",
+        "Will Elon Musk post 140-159 tweets from April 14 to April 21, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xacbca1cf43bd198e734089f198f3725281577cc3",
+      "name": "TROLLSK",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 42,
+      "wins": 15,
+      "losses": 27,
+      "wr": 35.7,
+      "pnl": 46122,
+      "cap": 37362,
+      "roi": 123.4,
+      "dd": 3739,
+      "ddPct": 7.5,
+      "medH": 11.07,
+      "top": [
+        "Will Elon Musk post 240-259 tweets from April 7 to April 14, 2026?",
+        "Will Elon Musk post 115-139 tweets from April 11 to April 13, 2026?",
+        "Will Elon Musk post 280-299 tweets from April 7 to April 14, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xc4d1a863e9cc45d02ba22d3a1ae9ba7822018ce8",
+      "name": "rdba",
+      "cats": [
+        "culture"
+      ],
+      "t30": 1.47,
+      "days": 10.7,
+      "resolved": 65,
+      "wins": 50,
+      "losses": 15,
+      "wr": 76.9,
+      "pnl": 481733,
+      "cap": 3806165,
+      "roi": 12.7,
+      "dd": 38381,
+      "ddPct": 7.4,
+      "medH": 2.52,
+      "top": [
+        "Khamenei out as Supreme Leader of Iran by February 28?",
+        "Will Eleven die in \"Stranger Things: Season 5\"?",
+        "US x Iran ceasefire by April 7?"
+      ]
+    },
+    {
+      "wallet": "0x75253f58071564ba95f36258fcfb1e918552cde1",
+      "name": "cynical.reason",
+      "cats": [
+        "culture"
+      ],
+      "t30": 0.23,
+      "days": 25.2,
+      "resolved": 54,
+      "wins": 32,
+      "losses": 22,
+      "wr": 59.3,
+      "pnl": 90134,
+      "cap": 777252,
+      "roi": 11.6,
+      "dd": 43106,
+      "ddPct": 45,
+      "medH": 11.74,
+      "top": [
+        "Will Trump nominate Judy Shelton as the next Fed chair?",
+        "Will Trump nominate Kevin Warsh as the next Fed chair?",
+        "Will Iran close the Strait of Hormuz by March 31?"
+      ]
+    },
+    {
+      "wallet": "0xc4d5a24a240ec9f52669e3251e0473fd0c5687cf",
+      "name": "bipbipbop",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 8,
+      "wins": 6,
+      "losses": 2,
+      "wr": 75,
+      "pnl": 459,
+      "cap": 9024,
+      "roi": 5.1,
+      "dd": 9,
+      "ddPct": 2,
+      "medH": 5.32,
+      "top": [
+        "Will Elon Musk post 90-114 tweets from April 16 to April 18, 2026?",
+        "Will Elon Musk post 115-139 tweets from April 16 to April 18, 2026?",
+        "Will Elon Musk post 240-259 tweets from April 14 to April 21, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xa8fac068d32639c40188563c83c206b320e57dda",
+      "name": "0xA8fAC068d32639c40188563C83c206b320E57Dda-1773425391498",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 34,
+      "wins": 27,
+      "losses": 6,
+      "wr": 79.4,
+      "pnl": 42132,
+      "cap": 127232,
+      "roi": 33.1,
+      "dd": 757,
+      "ddPct": 1.8,
+      "medH": 6.38,
+      "top": [
+        "Will MrBeast's next video get between 58 and 60 million views on day 3?",
+        "Will MrBeast's latest video get between 65 and 66 million views on day 4?",
+        "Will MrBeast's next video get between 60 and 62 million views on day 3?"
+      ]
+    },
+    {
+      "wallet": "0xafbacaeeda63f31202759eff7f8126e49adfe61b",
+      "name": "SammySledge",
+      "cats": [
+        "culture"
+      ],
+      "t30": 0.53,
+      "days": 1,
+      "resolved": 112,
+      "wins": 58,
+      "losses": 54,
+      "wr": 51.8,
+      "pnl": -371654,
+      "cap": 3398500,
+      "roi": -10.9,
+      "dd": 1026189,
+      "ddPct": 190.6,
+      "medH": 2.49,
+      "top": [
+        "UFC Fight Night: Sean Strickland vs. Anthony Hernandez (Middleweight, Main Card)",
+        "Spurs vs. Thunder",
+        "Nuggets vs. Thunder"
+      ]
+    },
+    {
+      "wallet": "0x9c610b56c486b9909427456d1adbea5a10665f42",
+      "name": "0x9C610b56C486B9909427456D1AdBEa5A10665f42-1773386306587",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.7,
+      "resolved": 73,
+      "wins": 50,
+      "losses": 19,
+      "wr": 68.5,
+      "pnl": 28414,
+      "cap": 143594,
+      "roi": 19.8,
+      "dd": 2043,
+      "ddPct": 7.1,
+      "medH": 7.6,
+      "top": [
+        "Will MrBeast hit 474 Million subscribers by March 31?",
+        "Will MrBeast's next video get between 82 and 83 million views on week 1?",
+        "Will MrBeast's next video get between 60 and 62 million views on day 3?"
+      ]
+    },
+    {
+      "wallet": "0x5095e97281f28d4d8549fd3834802c24cbb793ee",
+      "name": "0x5095e97281f28d4d8549fd3834802c24cbb793e",
+      "cats": [
+        "culture"
+      ],
+      "t30": 3.47,
+      "days": 0,
+      "resolved": 80,
+      "wins": 54,
+      "losses": 24,
+      "wr": 67.5,
+      "pnl": 20782,
+      "cap": 54307,
+      "roi": 38.3,
+      "dd": 6333,
+      "ddPct": 30.5,
+      "medH": 25.76,
+      "top": [
+        "Will \"Project Hail Mary\" Opening Weekend Box Office be between 80m and 85m?",
+        "Will \"Hoppers\" Opening Weekend Box Office be between 38m and 42m?",
+        "Will \"Undertone\" Opening Weekend Box Office be greater than 10m?"
+      ]
+    },
+    {
+      "wallet": "0xf3b1d0920ee98e080865f957dc9eb3b899909ca4",
+      "name": "timeone",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 12.5,
+      "resolved": 27,
+      "wins": 8,
+      "losses": 18,
+      "wr": 29.6,
+      "pnl": -205,
+      "cap": 665,
+      "roi": -30.8,
+      "dd": 250,
+      "ddPct": 0,
+      "medH": 4.26,
+      "top": [
+        "Will Elon Musk post 300-319 tweets from March 27 to April 3, 2026?",
+        "Will Elon Musk post 300-319 tweets from March 31 to April 7, 2026?",
+        "Will Elon Musk post 320-339 tweets from March 31 to April 7, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xb886580698ede4b18de3e446b2d8da8bcedd81b3",
+      "name": "0xB886580698eDE4b18DE3E446b2D8Da8bCEdd81B3-1767532547794",
+      "cats": [
+        "culture"
+      ],
+      "t30": 3.3,
+      "days": 0.3,
+      "resolved": 62,
+      "wins": 39,
+      "losses": 12,
+      "wr": 62.9,
+      "pnl": 9988,
+      "cap": 12502,
+      "roi": 79.9,
+      "dd": 1741,
+      "ddPct": 17.4,
+      "medH": 0.43,
+      "top": [
+        "Russia x Ukraine ceasefire by end of 2026?",
+        "Kharg Island no longer under Iranian control by April 30?",
+        "Iran x Israel/US conflict ends by April 7?"
+      ]
+    },
+    {
+      "wallet": "0x7312212aa96bf8441a1a77cc6412b14f2fbaa168",
+      "name": "WhiteHotIce",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 11,
+      "wins": 4,
+      "losses": 6,
+      "wr": 36.4,
+      "pnl": -19,
+      "cap": 45,
+      "roi": -41.3,
+      "dd": 44,
+      "ddPct": 174.1,
+      "medH": 0.03,
+      "top": [
+        "Will Elon Musk post 1160-1199 tweets in April 2026?",
+        "Will Elon Musk post 1240-1279 tweets in April 2026?",
+        "Will Elon Musk post 1200-1239 tweets in April 2026?"
+      ]
+    },
+    {
+      "wallet": "0x849ccb5907938ce8be18ed5dbf583288e2da4009",
+      "name": "Ondra",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 8,
+      "wins": 4,
+      "losses": 4,
+      "wr": 50,
+      "pnl": -222,
+      "cap": 1018,
+      "roi": -21.8,
+      "dd": 309,
+      "ddPct": 356.5,
+      "medH": 13.92,
+      "top": [
+        "Will Elon Musk post 90-114 tweets from April 16 to April 18, 2026?",
+        "Will Elon Musk post 65-89 tweets from April 16 to April 18, 2026?",
+        "Will Elon Musk post 65-89 tweets from April 18 to April 20, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x45b39e1f71e47fd4afe4b988ffad690b644735bc",
+      "name": "onekey09",
+      "cats": [
+        "culture"
+      ],
+      "t30": 3.8,
+      "days": 0.3,
+      "resolved": 110,
+      "wins": 100,
+      "losses": 1,
+      "wr": 90.9,
+      "pnl": 9849,
+      "cap": 4575206,
+      "roi": 0.2,
+      "dd": 591,
+      "ddPct": 6,
+      "medH": 9.71,
+      "top": [
+        "US forces enter Iran by April 30?",
+        "US x Iran ceasefire by April 7?",
+        "US forces enter Iran by March 31?"
+      ]
+    },
+    {
+      "wallet": "0x832d435e0db7b4520bcf892b60ed8fa38a446ec5",
+      "name": "metapvpg",
+      "cats": [
+        "culture"
+      ],
+      "t30": 3.5,
+      "days": 0.1,
+      "resolved": 58,
+      "wins": 8,
+      "losses": 44,
+      "wr": 13.8,
+      "pnl": -924,
+      "cap": 1534,
+      "roi": -60.3,
+      "dd": 924,
+      "ddPct": 0,
+      "medH": 13.16,
+      "top": [
+        "Will Elon Musk post 280-299 tweets from April 7 to April 14, 2026?",
+        "Will Elon Musk post 220-239 tweets from March 31 to April 7, 2026?",
+        "Will Elon Musk post 340-359 tweets from April 7 to April 14, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xabf76c2dc824f576442946a9308a0acc502e9820",
+      "name": "robotsir",
+      "cats": [
+        "culture"
+      ],
+      "t30": 5.47,
+      "days": 1.3,
+      "resolved": 33,
+      "wins": 12,
+      "losses": 21,
+      "wr": 36.4,
+      "pnl": 12881,
+      "cap": 40797,
+      "roi": 31.6,
+      "dd": 11731,
+      "ddPct": 91.1,
+      "medH": 0.57,
+      "top": [
+        "Will Jon Rahm win the 2026 Masters tournament?",
+        "US forces enter Iran by March 31?",
+        "Will Cameron Young win the 2026 Masters tournament?"
+      ]
+    },
+    {
+      "wallet": "0xd8c4d45000b7976d897ab79c21780e46faaa848d",
+      "name": "0xa8C4d45000b7976d897Ab79c21780E46faAA848",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.4,
+      "resolved": 31,
+      "wins": 14,
+      "losses": 17,
+      "wr": 45.2,
+      "pnl": 7309,
+      "cap": 2396,
+      "roi": 305,
+      "dd": 534,
+      "ddPct": 7.2,
+      "medH": 23.37,
+      "top": [
+        "Will Elon Musk post 300-319 tweets from April 7 to April 14, 2026?",
+        "Will Elon Musk post 90-114 tweets from April 13 to April 15, 2026?",
+        "Will Elon Musk post 320-339 tweets from April 10 to April 17, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x9c667a1d1c1337c6dca9d93241d386e4ed346b66",
+      "name": "InfiniteCrypt0",
+      "cats": [
+        "culture"
+      ],
+      "t30": 2.3,
+      "days": 1.8,
+      "resolved": 39,
+      "wins": 35,
+      "losses": 4,
+      "wr": 89.7,
+      "pnl": 6970,
+      "cap": 1482,
+      "roi": 470.3,
+      "dd": 358,
+      "ddPct": 5.1,
+      "medH": 286.24,
+      "top": [
+        "Will Georgia win Eurovision 2026?",
+        "Will Albania win Eurovision 2026?",
+        "Will the Charlotte Hornets win the 2026 NBA Finals?"
+      ]
+    },
+    {
+      "wallet": "0x02b4401ae7ead14477e944f79e9db07ce9ab7092",
+      "name": "alohaa",
+      "cats": [
+        "culture"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 117,
+      "wins": 115,
+      "losses": 2,
+      "wr": 98.3,
+      "pnl": 2300,
+      "cap": 188,
+      "roi": 1225.1,
+      "dd": 73,
+      "ddPct": 3.2,
+      "medH": 3.24,
+      "top": [
+        "Will Elon Musk post 380-399 tweets from April 7 to April 14, 2026?",
+        "Will Elon Musk post 165-189 tweets from April 2 to April 4, 2026?",
+        "Will Elon Musk post 380-399 tweets from April 10 to April 17, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xed107a85a4585a381e48c7f7ca4144909e7dd2e5",
+      "name": "bobe2",
+      "cats": [
+        "economics"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 81,
+      "wins": 66,
+      "losses": 11,
+      "wr": 81.5,
+      "pnl": 648799,
+      "cap": 1616168,
+      "roi": 40.1,
+      "dd": 18667,
+      "ddPct": 2.9,
+      "medH": 37.28,
+      "top": [
+        "US x Iran ceasefire by April 7?",
+        "Israel x Hezbollah ceasefire by April 18, 2026?",
+        "Will Trump visit China by April 30?"
+      ]
+    },
+    {
+      "wallet": "0x12d6cccfc7470a3f4bafc53599a4779cbf2cf2a8",
+      "name": "classified",
+      "cats": [
+        "economics"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 20,
+      "wins": 14,
+      "losses": 6,
+      "wr": 70,
+      "pnl": 2804,
+      "cap": 85261,
+      "roi": 3.3,
+      "dd": 1094,
+      "ddPct": 36.9,
+      "medH": 1.32,
+      "top": [
+        "Israel x Hezbollah ceasefire by June 30, 2026?",
+        "US forces enter Iran by December 31?",
+        "Israel x Hezbollah ceasefire by April 18, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x034475def048324ad32d87c5fd90e99f0f7b2538",
+      "name": "Yeueu",
+      "cats": [
+        "economics"
+      ],
+      "t30": 0.63,
+      "days": 0.9,
+      "resolved": 46,
+      "wins": 35,
+      "losses": 8,
+      "wr": 76.1,
+      "pnl": 152607,
+      "cap": 1542726,
+      "roi": 9.9,
+      "dd": 41428,
+      "ddPct": 27.1,
+      "medH": 22.95,
+      "top": [
+        "Will Trump nominate Judy Shelton as the next Fed chair?",
+        "US x Iran ceasefire by April 7?",
+        "Will Trump launch a coin before the election?"
+      ]
+    },
+    {
+      "wallet": "0x9d84ce0306f8551e02efef1680475fc0f1dc1344",
+      "name": "ImJustKen",
+      "cats": [
+        "economics"
+      ],
+      "t30": 2.23,
+      "days": 3.1,
+      "resolved": 70,
+      "wins": 36,
+      "losses": 34,
+      "wr": 51.4,
+      "pnl": 810291,
+      "cap": 1072677,
+      "roi": 75.5,
+      "dd": 30411,
+      "ddPct": 3.7,
+      "medH": 21.73,
+      "top": [
+        "Will Trump nominate Rick Rieder as the next Fed chair?",
+        "Will Trump nominate Judy Shelton as the next Fed chair?",
+        "Netanyahu out by March 31?"
+      ]
+    },
+    {
+      "wallet": "0x29d683970afb6f722ea1f9d4417c7ee7057cd57f",
+      "name": "Labtrador",
+      "cats": [
+        "economics"
+      ],
+      "t30": 0,
+      "days": 34.5,
+      "resolved": 32,
+      "wins": 23,
+      "losses": 9,
+      "wr": 71.9,
+      "pnl": 86820,
+      "cap": 2165221,
+      "roi": 4,
+      "dd": 118710,
+      "ddPct": 61.6,
+      "medH": 6.96,
+      "top": [
+        "Khamenei out as Supreme Leader of Iran by January 31?",
+        "Will Trump nominate Judy Shelton as the next Fed chair?",
+        "US government shutdown Saturday?"
+      ]
+    },
+    {
+      "wallet": "0xdc4f08727c65afc4731b75cf1ed265666b7b4652",
+      "name": "third-eye",
+      "cats": [
+        "economics"
+      ],
+      "t30": 0.93,
+      "days": 7.4,
+      "resolved": 93,
+      "wins": 67,
+      "losses": 25,
+      "wr": 72,
+      "pnl": 537775,
+      "cap": 1566079,
+      "roi": 34.3,
+      "dd": 8754,
+      "ddPct": 1.6,
+      "medH": 4.59,
+      "top": [
+        "Will Silver (SI) hit (HIGH) $110 by end of January?",
+        "Will Trump nominate Judy Shelton as the next Fed chair?",
+        "Will Kevin Warsh be confirmed as Fed Chair?"
+      ]
+    },
+    {
+      "wallet": "0x5bffcf561bcae83af680ad600cb99f1184d6ffbe",
+      "name": "YatSen",
+      "cats": [
+        "economics"
+      ],
+      "t30": 4.03,
+      "days": 0.5,
+      "resolved": 81,
+      "wins": 60,
+      "losses": 21,
+      "wr": 74.1,
+      "pnl": -9800,
+      "cap": 2147448,
+      "roi": -0.5,
+      "dd": 155853,
+      "ddPct": 167.8,
+      "medH": 14.96,
+      "top": [
+        "US forces enter Iran by April 30?",
+        "Will there be no change in Fed interest rates after the March 2026 meeting?",
+        "Will China invade Taiwan by end of 2026?"
+      ]
+    },
+    {
+      "wallet": "0x0e5bd76779e74304d08e759072abf126d87da593",
+      "name": "JAHODA",
+      "cats": [
+        "economics"
+      ],
+      "t30": 2.93,
+      "days": 0.2,
+      "resolved": 35,
+      "wins": 31,
+      "losses": 2,
+      "wr": 88.6,
+      "pnl": 1628812,
+      "cap": 3127453,
+      "roi": 52.1,
+      "dd": 7061,
+      "ddPct": 0.4,
+      "medH": 44.15,
+      "top": [
+        "Will there be no change in Fed interest rates after the March 2026 meeting?",
+        "Will Eleven die in \"Stranger Things: Season 5\"?",
+        "MicroStrategy sells any Bitcoin in 2025?"
+      ]
+    },
+    {
+      "wallet": "0x71edffd0d70a1da823ff07a3c6fc81457294d338",
+      "name": "pako",
+      "cats": [
+        "economics"
+      ],
+      "t30": 5.8,
+      "days": 0.5,
+      "resolved": 35,
+      "wins": 26,
+      "losses": 9,
+      "wr": 74.3,
+      "pnl": -64172,
+      "cap": 446479,
+      "roi": -14.4,
+      "dd": 105038,
+      "ddPct": 257,
+      "medH": 72.71,
+      "top": [
+        "US x Iran ceasefire by March 31?",
+        "US x Iran ceasefire by April 7?",
+        "Will there be no change in Fed interest rates after the June 2026 meeting?"
+      ]
+    },
+    {
+      "wallet": "0x4c2966a198cd7ac982110d0219b037afa9997570",
+      "name": "0x4c2966a198cd7ac982110d0219b037afa9997570",
+      "cats": [
+        "economics"
+      ],
+      "t30": 2.27,
+      "days": 2.2,
+      "resolved": 94,
+      "wins": 12,
+      "losses": 23,
+      "wr": 12.8,
+      "pnl": -10663,
+      "cap": 26191,
+      "roi": -40.7,
+      "dd": 16612,
+      "ddPct": 279.2,
+      "medH": 75.8,
+      "top": [
+        "Will the Fed increase interest rates by 25+ bps after the March 2026 meeting?",
+        "Will the Fed decrease interest rates by 50+ bps after the March 2026 meeting?",
+        "US x Iran ceasefire by April 7?"
+      ]
+    },
+    {
+      "wallet": "0xa61ef8773ec2e821962306ca87d4b57e39ff0abd",
+      "name": "risk-manager",
+      "cats": [
+        "economics"
+      ],
+      "t30": 1.97,
+      "days": 0.3,
+      "resolved": 47,
+      "wins": 43,
+      "losses": 4,
+      "wr": 91.5,
+      "pnl": 99912,
+      "cap": 38064,
+      "roi": 262.5,
+      "dd": 25209,
+      "ddPct": 25.2,
+      "medH": 178.45,
+      "top": [
+        "Will there be no change in Fed interest rates after the March 2026 meeting?",
+        "Will the Fed decrease interest rates by 25 bps after the March 2026 meeting?",
+        "Will bitcoin hit $1m before GTA VI?"
+      ]
+    },
+    {
+      "wallet": "0xb4f2f0c858566fef705edf8efc1a5e9fba307862",
+      "name": "Desy-1725192185234",
+      "cats": [
+        "economics"
+      ],
+      "t30": 2.2,
+      "days": 0.1,
+      "resolved": 32,
+      "wins": 30,
+      "losses": 2,
+      "wr": 93.8,
+      "pnl": 26592,
+      "cap": 8449,
+      "roi": 314.7,
+      "dd": 127,
+      "ddPct": 0.5,
+      "medH": 382.69,
+      "top": [
+        "Will the New York Jets win Super Bowl 2026?",
+        "Will Satoshi move any Bitcoin in 2025?",
+        "Will Franco Colapinto be the 2026 F1 Drivers' Champion?"
+      ]
+    },
+    {
+      "wallet": "0xfdc07e182e6f959256295567e450a8727272fa79",
+      "name": "FedWillWin",
+      "cats": [
+        "economics"
+      ],
+      "t30": 0.47,
+      "days": 3.6,
+      "resolved": 10,
+      "wins": 10,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 215972,
+      "cap": 2982650,
+      "roi": 7.2,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 36.13,
+      "top": [
+        "Will the Fed decrease interest rates by 50+ bps after the April 2026 meeting?",
+        "Will the Fed increase interest rates by 25+ bps after the March 2026 meeting?",
+        "Netanyahu out by March 31?"
+      ]
+    },
+    {
+      "wallet": "0x241f846866c2de4fb67cdb0ca6b963d85e56ef50",
+      "name": "Pestle",
+      "cats": [
+        "economics"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 2,
+      "wins": 1,
+      "losses": 1,
+      "wr": 50,
+      "pnl": 4,
+      "cap": 995,
+      "roi": 0.4,
+      "dd": 2,
+      "ddPct": 30.6,
+      "medH": 21.99,
+      "top": [
+        "Will the Fed decrease interest rates by 50+ bps after the April 2026 meeting?",
+        "Will the Fed increase interest rates by 25+ bps after the April 2026 meeting?",
+        "Will the Fed decrease interest rates by 25 bps after the April 2026 meeting?"
+      ]
+    },
+    {
+      "wallet": "0x216509be5332c6037105b4f871966eb97240f598",
+      "name": "HotChili",
+      "cats": [
+        "economics"
+      ],
+      "t30": 0.6,
+      "days": 4.2,
+      "resolved": 101,
+      "wins": 65,
+      "losses": 33,
+      "wr": 64.4,
+      "pnl": 9634,
+      "cap": 12771,
+      "roi": 75.4,
+      "dd": 1047,
+      "ddPct": 10.9,
+      "medH": 82.33,
+      "top": [
+        "Spread: Bulls (-2.5)",
+        "Spread: Pelicans (-1.5)",
+        "Will Yulia Navalnaya win the Nobel Peace Prize in 2026?"
+      ]
+    },
+    {
+      "wallet": "0x45df5d2106f30b8824bad4541eaab96da5c45b27",
+      "name": "qiyana",
+      "cats": [
+        "economics"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 18,
+      "wins": 10,
+      "losses": 0,
+      "wr": 55.6,
+      "pnl": 46,
+      "cap": 0,
+      "roi": 0,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0,
+      "top": [
+        "Will the Los Angeles Kings win the 2026 NHL Stanley Cup?",
+        "Will the Fed increase interest rates by 25+ bps after the April 2026 meeting?",
+        "Will the Golden State Warriors win the 2026 NBA Finals?"
+      ]
+    },
+    {
+      "wallet": "0xd46be610a32e5c6ee094977e3caf9ab89c525dab",
+      "name": "Kingofhenorth1",
+      "cats": [
+        "economics"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 36,
+      "wins": 22,
+      "losses": 14,
+      "wr": 61.1,
+      "pnl": 59844,
+      "cap": 79518,
+      "roi": 75.3,
+      "dd": 1157,
+      "ddPct": 1.9,
+      "medH": 52.27,
+      "top": [
+        "US x Iran ceasefire by April 30?",
+        "US x Iran permanent peace deal by April 22, 2026?",
+        "US x Iran permanent peace deal by April 30, 2026?"
+      ]
+    },
+    {
+      "wallet": "0xa58d4f278d7953cd38eeb929f7e242bfc7c0b9b8",
+      "name": "AiBird",
+      "cats": [
+        "economics"
+      ],
+      "t30": 6.67,
+      "days": 0.4,
+      "resolved": 35,
+      "wins": 23,
+      "losses": 12,
+      "wr": 65.7,
+      "pnl": 1331,
+      "cap": 7336,
+      "roi": 18.2,
+      "dd": 1503,
+      "ddPct": 112.9,
+      "medH": 4.73,
+      "top": [
+        "EWY (EWY) Up or Down on April 15?",
+        "Starmer out by May 15, 2026?",
+        "SPY (SPY) Up or Down on April 13?"
+      ]
+    },
+    {
+      "wallet": "0x96489abcb9f583d6835c8ef95ffc923d05a86825",
+      "name": "anoin123",
+      "cats": [
+        "tech"
+      ],
+      "t30": 5.73,
+      "days": 1.8,
+      "resolved": 39,
+      "wins": 23,
+      "losses": 12,
+      "wr": 59,
+      "pnl": 532689,
+      "cap": 105515,
+      "roi": 504.8,
+      "dd": 8788,
+      "ddPct": 1.6,
+      "medH": 138.45,
+      "top": [
+        "US x Iran ceasefire by April 7?",
+        "Trump announces end of military operations against Iran by April 7th?",
+        "Iran x Israel/US conflict ends by April 7?"
+      ]
+    },
+    {
+      "wallet": "0x0b7a6030507efe5db145fbb57a25ba0c5f9d86cf",
+      "name": "0x0B7A6030507efE5DB145FBB57a25Ba0C5f9d86cF-1770564924062",
+      "cats": [
+        "tech"
+      ],
+      "t30": 1.27,
+      "days": 0.1,
+      "resolved": 30,
+      "wins": 13,
+      "losses": 16,
+      "wr": 43.3,
+      "pnl": 17096,
+      "cap": 24695,
+      "roi": 69.2,
+      "dd": 660,
+      "ddPct": 3.9,
+      "medH": 241.65,
+      "top": [
+        "DeepSeek V4 released by March 31?",
+        "DeepSeek V4 released by March 15?",
+        "DeepSeek V4 released by March 21?"
+      ]
+    },
+    {
+      "wallet": "0xaa91e0555348cf683b542ddb55ac22a5c5d9b2f0",
+      "name": "0xAA91E0555348cF683b542DDB55AC22a5c5d9B2f0-1772373143083",
+      "cats": [
+        "tech"
+      ],
+      "t30": 0,
+      "days": 37.6,
+      "resolved": 1,
+      "wins": 1,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 4143,
+      "cap": 16064,
+      "roi": 25.8,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 141.55,
+      "top": [
+        "DeepSeek V4 released by March 15?"
+      ]
+    },
+    {
+      "wallet": "0x2ce69d54f4d4a2602ca378d71b59ebe9a927e378",
+      "name": "gaojinxiaodao",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 2.5,
+      "resolved": 66,
+      "wins": 40,
+      "losses": 24,
+      "wr": 60.6,
+      "pnl": -79,
+      "cap": 7804,
+      "roi": -1,
+      "dd": 938,
+      "ddPct": 3389.8,
+      "medH": 0.07,
+      "top": [
+        "Clippers vs. Trail Blazers",
+        "Will Brighton & Hove Albion FC win on 2026-04-11?",
+        "Will AFC Bournemouth win on 2026-04-11?"
+      ]
+    },
+    {
+      "wallet": "0x0fe9a395a0be3a7c8337a135a5c469d5f985d372",
+      "name": "vodzjP",
+      "cats": [
+        "tech"
+      ],
+      "t30": 0.03,
+      "days": 4.6,
+      "resolved": 2,
+      "wins": 2,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 2913,
+      "cap": 11025,
+      "roi": 26.4,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 359.31,
+      "top": [
+        "DeepSeek V4 released by March 31?",
+        "DeepSeek V4 released by March 15?",
+        "DeepSeek V4 released by April 30?"
+      ]
+    },
+    {
+      "wallet": "0x8ace6b1016214876667444d2b3055065da996069",
+      "name": "wastrel",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 0.2,
+      "resolved": 19,
+      "wins": 12,
+      "losses": 7,
+      "wr": 63.2,
+      "pnl": 7386,
+      "cap": 2981,
+      "roi": 247.8,
+      "dd": 295,
+      "ddPct": 3.9,
+      "medH": 50.72,
+      "top": [
+        "Will Dune 3 or Avengers: Doomsday gross more on their opening weekend?",
+        "DeepSeek V4 released by April 30?",
+        "US x Iran ceasefire by April 30?"
+      ]
+    },
+    {
+      "wallet": "0x22e4248bdb066f65c9f11cd66cdd3719a28eef1c",
+      "name": "ProfessionalPunter",
+      "cats": [
+        "tech"
+      ],
+      "t30": 3.13,
+      "days": 0,
+      "resolved": 37,
+      "wins": 31,
+      "losses": 5,
+      "wr": 83.8,
+      "pnl": 147516,
+      "cap": 151402,
+      "roi": 97.4,
+      "dd": 8325,
+      "ddPct": 5.6,
+      "medH": 1.08,
+      "top": [
+        "Will the next Prime Minister of Hungary be Péter Magyar?",
+        "US forces enter Iran by April 30?",
+        "Netanyahu out by end of 2026?"
+      ]
+    },
+    {
+      "wallet": "0x6bab66c4bb24c96ed14dcca0f0979b38a6830fe5",
+      "name": "0x6bAB66c4BB24c96Ed14dccA0f0979B38a6830FE5-1760703674960",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 23,
+      "wins": 14,
+      "losses": 9,
+      "wr": 60.9,
+      "pnl": 9489,
+      "cap": 38579,
+      "roi": 24.6,
+      "dd": 11113,
+      "ddPct": 66.7,
+      "medH": 29,
+      "top": [
+        "Bab el-Mandeb Strait effectively closed by April 30?",
+        "Israel x Hezbollah ceasefire by April 30, 2026?",
+        "Will the United Kingdom send warships through the Strait of Hormuz by April 30, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x2af01ed18869d9b35f9a7de71c7a565d806fb2a8",
+      "name": "0x2af01Ed18869D9b35F9a7dE71C7A565D806FB2A8-1772538025690",
+      "cats": [
+        "tech"
+      ],
+      "t30": 0.07,
+      "days": 11.2,
+      "resolved": 4,
+      "wins": 4,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 688,
+      "cap": 5743,
+      "roi": 12,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 219.37,
+      "top": [
+        "DeepSeek V4 released by March 15?",
+        "DeepSeek V4 released by April 7?",
+        "DeepSeek V4 released by March 31?"
+      ]
+    },
+    {
+      "wallet": "0x38390d45f459a7c4b413eb6e78bd57dbf8e7e2ee",
+      "name": "testscctest",
+      "cats": [
+        "tech"
+      ],
+      "t30": 3.23,
+      "days": 0.8,
+      "resolved": 117,
+      "wins": 46,
+      "losses": 68,
+      "wr": 39.3,
+      "pnl": 518,
+      "cap": 6523,
+      "roi": 7.9,
+      "dd": 737,
+      "ddPct": 98,
+      "medH": 2.75,
+      "top": [
+        "US x Iran permanent peace deal by April 22, 2026?",
+        "Strait of Hormuz traffic returns to normal by end of May?",
+        "Heat vs. Raptors"
+      ]
+    },
+    {
+      "wallet": "0xbad745ecadcd52516ce0bd2bb10e74173bd0b732",
+      "name": "0xBad745eCadCd52516Ce0BD2BB10E74173bD0b732-1771154296564",
+      "cats": [
+        "tech"
+      ],
+      "t30": 4.4,
+      "days": 0.1,
+      "resolved": 9,
+      "wins": 3,
+      "losses": 6,
+      "wr": 33.3,
+      "pnl": 3278,
+      "cap": 2971,
+      "roi": 110.3,
+      "dd": 76,
+      "ddPct": 2.3,
+      "medH": 329.25,
+      "top": [
+        "DeepSeek V4 released by April 30?",
+        "DeepSeek V4 released by April 15?",
+        "Will Xi Jinping meet with Cheng Li-wun by June 30?"
+      ]
+    },
+    {
+      "wallet": "0xb10047d6a254b2ebb306d7a7d13bf59171ab6461",
+      "name": "Parz1vaI",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 11,
+      "wins": 7,
+      "losses": 2,
+      "wr": 63.6,
+      "pnl": 2572,
+      "cap": 28336,
+      "roi": 9.1,
+      "dd": 3508,
+      "ddPct": 76.8,
+      "medH": 11.7,
+      "top": [
+        "Will Donald Trump announce that the United States blockade of the Strait of Hormuz has been lifted by April 17, 2026?",
+        "US x Iran permanent peace deal by May 31, 2026?",
+        "Strait of Hormuz traffic returns to normal by end of June?"
+      ]
+    },
+    {
+      "wallet": "0xee6712ea09d6a9c86793bb6dde10ea59040e67a6",
+      "name": "0xee6712ea09d6a9c86793bb6dde10ea59040e67a6",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 2,
+      "wins": 1,
+      "losses": 1,
+      "wr": 50,
+      "pnl": 0,
+      "cap": 2,
+      "roi": -14.9,
+      "dd": 2,
+      "ddPct": 117.5,
+      "medH": 5.14,
+      "top": [
+        "Will Meituan have the top AI model at the end of June 2026?",
+        "Will Elon Musk post 480-499 tweets from April 17 to April 24, 2026?",
+        "Will Donald Trump be the leader of Venezuela end of 2026?"
+      ]
+    },
+    {
+      "wallet": "0x9ac5c8496bc84f642bac181499bf64405a5c6a3d",
+      "name": "JuniorB",
+      "cats": [
+        "tech"
+      ],
+      "t30": 3.63,
+      "days": 0.2,
+      "resolved": 57,
+      "wins": 43,
+      "losses": 12,
+      "wr": 75.4,
+      "pnl": 24090,
+      "cap": 61529,
+      "roi": 39.2,
+      "dd": 2665,
+      "ddPct": 11.1,
+      "medH": 24.48,
+      "top": [
+        "Will the Iranian regime fall by March 31?",
+        "Kharg Island no longer under Iranian control by March 31?",
+        "Will Paris Saint-Germain FC win on 2026-04-08?"
+      ]
+    },
+    {
+      "wallet": "0x01f91d5171bc9a3dab250a90988b6718cc274323",
+      "name": "lucas-99",
+      "cats": [
+        "tech"
+      ],
+      "t30": 0.57,
+      "days": 2.3,
+      "resolved": 1,
+      "wins": 1,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 57,
+      "cap": 209,
+      "roi": 27,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0.02,
+      "top": [
+        "Will Claude 5 be released by April 30, 2026?",
+        "Claude 4.7 released by April 17?"
+      ]
+    },
+    {
+      "wallet": "0x423549e0ef0a9e9611fe176393107e5a82363574",
+      "name": "0x423549E0Ef0A9E9611fe176393107E5a82363574-1764231829272",
+      "cats": [
+        "tech"
+      ],
+      "t30": 0.1,
+      "days": 2.8,
+      "resolved": 17,
+      "wins": 15,
+      "losses": 2,
+      "wr": 88.2,
+      "pnl": 38253,
+      "cap": 390265,
+      "roi": 9.8,
+      "dd": 2254,
+      "ddPct": 5.9,
+      "medH": 15.72,
+      "top": [
+        "Will lighter perform an airdrop by December 31? ",
+        "Gemini 3.0 Flash released by December 17?",
+        "Will Gemini 3.0 be released on November 18 2025?"
+      ]
+    },
+    {
+      "wallet": "0xf4d6c7051a856fbaa3396f4a895f071575458e16",
+      "name": "BigBrainnn",
+      "cats": [
+        "tech"
+      ],
+      "t30": 0,
+      "days": 37.8,
+      "resolved": 2,
+      "wins": 2,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 5657,
+      "cap": 6967,
+      "roi": 81.2,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 98.62,
+      "top": [
+        "DeepSeek V4 released by March 31?",
+        "DeepSeek V4 released by March 15?"
+      ]
+    },
+    {
+      "wallet": "0x00425c692a667981118f679ef68fdc775257321e",
+      "name": "99problems123",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 17,
+      "wins": 10,
+      "losses": 7,
+      "wr": 58.8,
+      "pnl": 261791,
+      "cap": 259050,
+      "roi": 101.1,
+      "dd": 5932,
+      "ddPct": 2.2,
+      "medH": 1.41,
+      "top": [
+        "US x Iran ceasefire by April 7?",
+        "US forces enter Iran by April 30?",
+        "Billionaire one-time wealth tax passes in California election 2026?"
+      ]
+    },
+    {
+      "wallet": "0xc6dd722558dbfbd8fa780efcbe819ed8c6604b9f",
+      "name": "tourists",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 1.2,
+      "resolved": 14,
+      "wins": 12,
+      "losses": 2,
+      "wr": 85.7,
+      "pnl": 192759,
+      "cap": 402590,
+      "roi": 47.9,
+      "dd": 15,
+      "ddPct": 0,
+      "medH": 0.1,
+      "top": [
+        "US x Iran ceasefire by April 7?",
+        "US x Iran ceasefire by April 30?",
+        "Israel x Hezbollah ceasefire by April 18, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x0e65acd3fccbdf60e7ac42afaad32bf1c940e33f",
+      "name": "lEGLeGDaNDAnYah.",
+      "cats": [
+        "tech"
+      ],
+      "t30": 3.1,
+      "days": 3.9,
+      "resolved": 33,
+      "wins": 20,
+      "losses": 13,
+      "wr": 60.6,
+      "pnl": 1378,
+      "cap": 18942,
+      "roi": 7.3,
+      "dd": 2870,
+      "ddPct": 77.3,
+      "medH": 9.8,
+      "top": [
+        "US strikes Iran by February 28, 2026?",
+        "Will Claude 5 be released by April 30, 2026?",
+        "Will Claude 5 be released by May 31, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x21ffd2b7a212a6f277ed3eca1a9f8efcbca90d71",
+      "name": "Haradwaith",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 11,
+      "wins": 11,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 524,
+      "cap": 350,
+      "roi": 149.9,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0,
+      "top": [
+        "Will the Iranian regime fall by May 31?",
+        "Will Gavin Newsom win the 2028 Democratic presidential nomination?",
+        "Will China invade Taiwan by June 30, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x048215305cbcf7cc790735bf00119551d75c6b0a",
+      "name": "dumbfuqLIQUIDITYprovider",
+      "cats": [
+        "tech"
+      ],
+      "t30": 6.67,
+      "days": 0.1,
+      "resolved": 23,
+      "wins": 16,
+      "losses": 7,
+      "wr": 69.6,
+      "pnl": 2318,
+      "cap": 10305,
+      "roi": 22.5,
+      "dd": 464,
+      "ddPct": 20,
+      "medH": 1.43,
+      "top": [
+        "Will Anthropic have the #3 AI model at the end of April 2026 (Style Control On)?",
+        "Will Claude Opus 4.7 by Anthropic debut at a score of at least 1500?",
+        "US obtains Iranian enriched uranium by May 31?"
+      ]
+    },
+    {
+      "wallet": "0xa80e3fe5e7a445fa047fe6de1e27f9a15217b94b",
+      "name": "bin8888",
+      "cats": [
+        "finance"
+      ],
+      "t30": 3.63,
+      "days": 0.4,
+      "resolved": 9,
+      "wins": 4,
+      "losses": 5,
+      "wr": 44.4,
+      "pnl": 16784,
+      "cap": 33863,
+      "roi": 49.6,
+      "dd": 15030,
+      "ddPct": 61.2,
+      "medH": 404.2,
+      "top": [
+        "Will WTI Crude Oil (WTI) hit (HIGH) $120 in April?",
+        "Will WTI Crude Oil (WTI) hit (HIGH) $140 in April?",
+        "Will WTI Crude Oil (WTI) hit (HIGH) $110 in April?"
+      ]
+    },
+    {
+      "wallet": "0x32b484581fc5606de9c1e43af4636b6be9bc8b21",
+      "name": "0x32b484581fc5606dE9C1e43AF4636b6Be9BC8B21-1774274303653",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 0.3,
+      "resolved": 3,
+      "wins": 2,
+      "losses": 1,
+      "wr": 66.7,
+      "pnl": 18007,
+      "cap": 207061,
+      "roi": 8.7,
+      "dd": 195,
+      "ddPct": 1.1,
+      "medH": 0.37,
+      "top": [
+        "Will WTI Crude Oil (WTI) hit (LOW) $80 in April?",
+        "Will WTI Crude Oil (WTI) hit (HIGH) $100 in April?",
+        "Will WTI Crude Oil (WTI) hit (LOW) $75 in April?"
+      ]
+    },
+    {
+      "wallet": "0xe734e7bf7cfb9e464681f71822f6c2f6be514f0c",
+      "name": "boyau",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 0,
+      "resolved": 7,
+      "wins": 5,
+      "losses": 2,
+      "wr": 71.4,
+      "pnl": 28806,
+      "cap": 55868,
+      "roi": 51.6,
+      "dd": 7043,
+      "ddPct": 20.3,
+      "medH": 39.39,
+      "top": [
+        "Will WTI Crude Oil (WTI) hit (HIGH) $100 in April?",
+        "Will WTI Crude Oil (WTI) hit (HIGH) $110 in April?",
+        "Will WTI Crude Oil (WTI) hit (HIGH) $115 in April?"
+      ]
+    },
+    {
+      "wallet": "0x17559efac103ac7f361be37ec0b93888d4c55aac",
+      "name": "CamelUp",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 1.2,
+      "resolved": 52,
+      "wins": 23,
+      "losses": 26,
+      "wr": 44.2,
+      "pnl": -542,
+      "cap": 17460,
+      "roi": -3.1,
+      "dd": 1131,
+      "ddPct": 191.9,
+      "medH": 2.54,
+      "top": [
+        "S&P 500 (SPX) Up or Down on April 17?",
+        "Opendoor (OPEN) Up or Down on April 17?",
+        "NVIDIA (NVDA) Up or Down on April 17?"
+      ]
+    },
+    {
+      "wallet": "0x6adcccb0ea0b93a66e67f0d7b2b625b135a8beba",
+      "name": "pikachusplace",
+      "cats": [
+        "finance"
+      ],
+      "t30": 5.93,
+      "days": 0.2,
+      "resolved": 44,
+      "wins": 18,
+      "losses": 26,
+      "wr": 40.9,
+      "pnl": -200333,
+      "cap": 432208,
+      "roi": -46.4,
+      "dd": 226897,
+      "ddPct": 872.8,
+      "medH": 1.63,
+      "top": [
+        "Celtics vs. Bucks",
+        "Counter-Strike: PARIVISION vs Legacy (BO3) - ESL Pro League Stage 1",
+        "Will WTI Crude Oil (WTI) hit (HIGH) $130 in April?"
+      ]
+    },
+    {
+      "wallet": "0x1a29b75d4bfb5d62b343e4abdd10b60c0ce19b2e",
+      "name": "Casablanca10",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 1.3,
+      "resolved": 10,
+      "wins": 8,
+      "losses": 1,
+      "wr": 80,
+      "pnl": 121550,
+      "cap": 190125,
+      "roi": 63.9,
+      "dd": 604,
+      "ddPct": 0.5,
+      "medH": 139.57,
+      "top": [
+        "Will Crude Oil (CL) hit (HIGH) $120 by end of March?",
+        "Will Crude Oil (CL) hit (HIGH) $105 by end of March?",
+        "Will WTI Crude Oil (WTI) hit (LOW) $80 in April?"
+      ]
+    },
+    {
+      "wallet": "0x90c23cb846d4c78b59096bae855161d92ea28c24",
+      "name": "cryptothan",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 0.4,
+      "resolved": 24,
+      "wins": 11,
+      "losses": 11,
+      "wr": 45.8,
+      "pnl": -257,
+      "cap": 28207,
+      "roi": -0.9,
+      "dd": 5648,
+      "ddPct": 104.8,
+      "medH": 2.42,
+      "top": [
+        "S&P 500 (SPX) Opens Up or Down on April 10?",
+        "S&P 500 (SPX) Up or Down on April 10?",
+        "S&P 500 (SPX) Opens Up or Down on April 9?"
+      ]
+    },
+    {
+      "wallet": "0xd44e1d167666040a39a8eb58b6676ab027463212",
+      "name": "ArmageddonRewardsBillyBoy",
+      "cats": [
+        "finance"
+      ],
+      "t30": 0,
+      "days": 38.3,
+      "resolved": 22,
+      "wins": 17,
+      "losses": 2,
+      "wr": 77.3,
+      "pnl": 35525,
+      "cap": 36208,
+      "roi": 98.1,
+      "dd": 3,
+      "ddPct": 0,
+      "medH": 23.79,
+      "top": [
+        "Will Big AI be out as #1 Free App in the US Apple Store by March 8?",
+        "Will Claude be out as the #1 Free App in the US Apple Store by March 8?",
+        "Will Vertiv Holdings (VRT) be added to the S&P 500 by March 31, 2026?"
+      ]
+    },
+    {
+      "wallet": "0x969fae0a3a93778adc42178f72c612ed8c4e4d55",
+      "name": "superstonksbro",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 1.2,
+      "resolved": 71,
+      "wins": 33,
+      "losses": 29,
+      "wr": 46.5,
+      "pnl": -1924,
+      "cap": 14226,
+      "roi": -13.5,
+      "dd": 2533,
+      "ddPct": 2598.2,
+      "medH": 1.8,
+      "top": [
+        "Will Apple (AAPL) close above $270 on April 16?",
+        "Amazon (AMZN) Up or Down on April 16?",
+        "Amazon (AMZN) Up or Down on April 15?"
+      ]
+    },
+    {
+      "wallet": "0xff30ac5b2cb4822a1b15604ac90659ef71314a37",
+      "name": "aldynspeedruns",
+      "cats": [
+        "finance"
+      ],
+      "t30": 1.07,
+      "days": 1.3,
+      "resolved": 72,
+      "wins": 46,
+      "losses": 22,
+      "wr": 63.9,
+      "pnl": 108553,
+      "cap": 213724,
+      "roi": 50.8,
+      "dd": 9588,
+      "ddPct": 8.8,
+      "medH": 0.91,
+      "top": [
+        "US government shutdown Saturday?",
+        "No change in Fed interest rates after October 2025 meeting?",
+        "Will Ethereum dip to $2,400 in January?"
+      ]
+    },
+    {
+      "wallet": "0x4bac379da2f29d87c01ff737843e396a2cec02b1",
+      "name": "LuckyNFT444",
+      "cats": [
+        "finance"
+      ],
+      "t30": 2.17,
+      "days": 0.3,
+      "resolved": 43,
+      "wins": 38,
+      "losses": 2,
+      "wr": 88.4,
+      "pnl": 5197,
+      "cap": 144,
+      "roi": 3617.1,
+      "dd": 12,
+      "ddPct": 0.2,
+      "medH": 25.18,
+      "top": [
+        "Will Sergio Pérez be the 2026 F1 Drivers' Champion?",
+        "Will Lance Stroll be the 2026 F1 Drivers' Champion?",
+        "Will Pierre Gasly be the 2026 F1 Drivers' Champion?"
+      ]
+    },
+    {
+      "wallet": "0xa445c59c0531d28a13550f29d734b33520530286",
+      "name": "AnimalEater",
+      "cats": [
+        "finance"
+      ],
+      "t30": 0.73,
+      "days": 0,
+      "resolved": 101,
+      "wins": 52,
+      "losses": 33,
+      "wr": 51.5,
+      "pnl": 10088,
+      "cap": 287,
+      "roi": 3513.9,
+      "dd": 53,
+      "ddPct": 0.5,
+      "medH": 391.99,
+      "top": [
+        "Will Alibaba have the top AI model on August 31?",
+        "Will OpenAi have the top AI model on August 31?",
+        "Will xAI have the top AI model on August 31?"
+      ]
+    },
+    {
+      "wallet": "0xd0bd69c97d346fc7a4b9ee9e024f73ce48ace598",
+      "name": "JordanBelfortion",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.33,
+      "days": 1.4,
+      "resolved": 29,
+      "wins": 9,
+      "losses": 19,
+      "wr": 31,
+      "pnl": -523,
+      "cap": 3985,
+      "roi": -13.1,
+      "dd": 1085,
+      "ddPct": 289.4,
+      "medH": 10.51,
+      "top": [
+        "Will WTI Crude Oil (WTI) hit (LOW) $95 in April?",
+        "Trump announces end of military operations against Iran by April 15th?",
+        "US forces enter Iran by April 30?"
+      ]
+    },
+    {
+      "wallet": "0x0489b5c2a15eb47bc5cd1e8970bae4819a62722b",
+      "name": "forker-",
+      "cats": [
+        "finance"
+      ],
+      "t30": 0.13,
+      "days": 4,
+      "resolved": 3,
+      "wins": 3,
+      "losses": 0,
+      "wr": 100,
+      "pnl": 321,
+      "cap": 216544,
+      "roi": 0.1,
+      "dd": 0,
+      "ddPct": 0,
+      "medH": 0.23,
+      "top": [
+        "Will WTI Crude Oil (WTI) hit (LOW) $95 in April?",
+        "Will Crude Oil (CL) hit (HIGH) $90 by end of March?",
+        "Will WTI Crude Oil (WTI) hit (LOW) $90 in April?"
+      ]
+    },
+    {
+      "wallet": "0x4bbe10ba5b7f6df147c0dae17b46c44a6e562cf3",
+      "name": "How.Dare.You",
+      "cats": [
+        "finance"
+      ],
+      "t30": 6.67,
+      "days": 0.8,
+      "resolved": 26,
+      "wins": 20,
+      "losses": 6,
+      "wr": 76.9,
+      "pnl": 70802,
+      "cap": 259626,
+      "roi": 27.3,
+      "dd": 33372,
+      "ddPct": 32,
+      "medH": 11.31,
+      "top": [
+        "Will Crude Oil (CL) hit (LOW) $80 by end of March?",
+        "US strike on Cuba by March 31?",
+        "US forces enter Iran by March 31?"
+      ]
+    }
+  ]
+}

@@ -145,6 +145,7 @@
 | 1 | 25 | 5 | needs_triage | story.0081 | Work receipts, transparency log, and deterministic epoch payouts | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 25 | 3 | needs_implement | task.0130 | Tokenomics Crawl: Budget Policy + kill Score UI | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 25 | 2 | needs_closeout | task.0165 | Live money e2e test — full OpenRouter top-up chain on Base mainnet | AI Operator Wallet | proj.ai-operator-wallet |
+| 1 | 40 | 3 | needs_triage | bug.0322 | Runs made on poly are visible via operator's /api/v1/agent/runs (cross-node data pollution) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 99 | 3 | needs_triage | story.0089 | Discord Bot Conversation Evals |  |  |
 | 1 | 99 | 5 | needs_triage | story.0091 | Clawdbot as High-Level Manager Agent |  |  |
 | 1 | 99 | 4 | needs_design | story.0116 | DAO Gateway MVP — multi-tenant AI billing gateway for external projects | Operator Plane | proj.operator-plane |
@@ -186,6 +187,8 @@
 | 2 | 20 | 3 | needs_design | task.0211 | BYO-AI ChatGPT — auth manager + Codex CLI in Docker image | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 2 | 30 | 1 | needs_implement | bug.0168 | App container uses seccomp=unconfined for TigerBeetle io_uring — replace with targeted profile | AI Operator Wallet | proj.ai-operator-wallet |
 | 2 | 50 | 2 | needs_implement | task.0134 | EIP-4824 daoURI v0 — lightweight DAOstar metadata endpoint | Financial Ledger | proj.financial-ledger |
+| 2 | 50 | 2 | needs_merge | task.0324 | Per-node DB schema split (minimal — no new tooling) | Database Operations | proj.database-ops |
+| 2 | 60 | 2 | needs_triage | bug.0321 | wait-for-argocd.sh reports green when promoted digests never reach pods | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 99 | 1 | needs_design | bug.0093 | Ownership facade N+1 — sequential DB queries per epoch | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 99 | 2 | needs_design | task.0104 | Ledger production hardening — upsert batching, connection pooling, activity tests | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 99 | 3 | needs_design | task.0105 | Allocation algorithm expansion — multi-source credit estimate algos + per-source weight derivation | Transparent Credit Payouts | proj.transparent-credit-payouts |
@@ -202,6 +205,7 @@
 | 3 | 20 | 2 | needs_design | task.0274 | Wire NodeAppConfig into sidebar + layout components | Operator Plane | proj.operator-plane |
 | 3 | 30 | 3 | needs_merge | task.0207 | Run: BYO-AI hosted OSS provider — user connects their OpenAI-compatible endpoint | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 3 | 80 | 3 | needs_design | task.0146 | Extract payments application orchestration + billing ports into packages | AI Operator Wallet | proj.ai-operator-wallet |
+| 3 | 80 | 5 | needs_design | task.0325 | Atlas + GitOps migrations (future upgrade, deferred) | Database Operations | proj.database-ops |
 | 3 | 99 | 1 | needs_triage | task.0098 | Temporal retry workflow for failed identity bindings + scheduled backstop | User Identity Bindings + DID Readiness | proj.decentralized-identity |
 | 3 | 99 | 1 | needs_triage | bug.0150 | getAllReceipts query is unbounded — will degrade at scale |  |  |
 | 3 | 99 | 2 | needs_triage | spike.0239 | Three.js agent observatory — prototype + performance budget | Premium Frontend UX | proj.premium-frontend-ux |
@@ -341,6 +345,7 @@
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |
 | 2 | spike.0314 | Research: copy-trading existing Polymarket wallets from the poly node | Cogni Poly | proj.poly-prediction-bot |
+| 2 | spike.0323 | Research: Polymarket copy-trade candidate identification | Cogni Poly | proj.poly-prediction-bot |
 | 3 | bug.0193 | scheduler-worker houses workflow definitions — should be thin composition root | Unified Graph Launch | proj.unified-graph-launch |
 | 3 | bug.0194 | Internal graph API conflates stateKey with runId — headless runs create phantom threads | Unified Graph Launch | proj.unified-graph-launch |
 

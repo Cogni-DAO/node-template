@@ -11,7 +11,7 @@ IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-template}
 IMAGE_TAG=${IMAGE_TAG:-}
 SOURCE_SHA=${SOURCE_SHA:-}
 OUTPUT_FILE=${OUTPUT_FILE:-${RUNNER_TEMP:-/tmp}/resolved-pr-images.json}
-ALL_TARGETS=(operator migrator poly resy scheduler-worker)
+ALL_TARGETS=(operator operator-migrator poly poly-migrator resy resy-migrator scheduler-worker)
 
 if [ -z "$IMAGE_TAG" ]; then
   echo "[ERROR] IMAGE_TAG is required" >&2
@@ -45,7 +45,9 @@ resolve_tag() {
     operator) printf '%s:%s' "$IMAGE_NAME" "$IMAGE_TAG" ;;
     poly) printf '%s:%s-poly' "$IMAGE_NAME" "$IMAGE_TAG" ;;
     resy) printf '%s:%s-resy' "$IMAGE_NAME" "$IMAGE_TAG" ;;
-    migrator) printf '%s:%s-migrate' "$IMAGE_NAME" "$IMAGE_TAG" ;;
+    operator-migrator) printf '%s:%s-operator-migrate' "$IMAGE_NAME" "$IMAGE_TAG" ;;
+    poly-migrator) printf '%s:%s-poly-migrate' "$IMAGE_NAME" "$IMAGE_TAG" ;;
+    resy-migrator) printf '%s:%s-resy-migrate' "$IMAGE_NAME" "$IMAGE_TAG" ;;
     scheduler-worker) printf '%s:%s-scheduler-worker' "$IMAGE_NAME" "$IMAGE_TAG" ;;
     *)
       echo "[ERROR] Unknown target: $target" >&2
