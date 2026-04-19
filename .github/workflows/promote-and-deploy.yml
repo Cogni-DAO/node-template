@@ -8,9 +8,9 @@ name: Promote and Deploy
 #
 # Job graph (bug.0321):
 #
-#   promote-k8s ─┬─► deploy-infra ──┐
-#                └─► verify-deploy ─┴─► verify + e2e ─► lock-on-success
-#                                                     └► unlock-on-failure
+#   promote-k8s ─► deploy-infra ─┬─► verify-deploy ─┐
+#                                └─► verify         ┴─► e2e ─┬─► lock-on-success
+#                                                            └─► unlock-on-failure
 #
 # verify-deploy is job-level gated on promote-k8s.outputs.promoted_apps != ''
 # (Axiom 11). Empty-promotion runs visibly skip it → e2e skipped →

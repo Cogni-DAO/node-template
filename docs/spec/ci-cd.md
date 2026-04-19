@@ -210,14 +210,14 @@ Candidate-a deploy has two orthogonal levers; either can be dispatched independe
 For `promote-and-deploy.yml` (preview/prod merge path), the job graph is:
 
 ```text
-promote-k8s ─┬─► deploy-infra ──┐
-             └─► verify-deploy ─┴─► verify + e2e ─► lock-preview-on-success
-                                                 └► unlock-preview-on-failure
+promote-k8s ─► deploy-infra ─┬─► verify-deploy ─┐
+                             └─► verify         ┴─► e2e ─┬─► lock-preview-on-success
+                                                         └─► unlock-preview-on-failure
 ```
 
-- `verify-deploy` is job-level gated `if: promote-k8s.outputs.promoted_apps != ''` (Axiom 11). Runs `wait-for-argocd` → `wait-for-in-cluster-services` → `verify-buildsha` (`SOURCE_SHA_MAP` mode).
+- `verify-deploy` is job-level gated `if: promote-k8s.outputs.promoted_apps != ''` (Axiom 11). Runs `wait-for-argocd` → `wait-for-in-cluster-services` → `verify-buildsha` (`SOURCE_SHA_MAP` mode). Depends on `deploy-infra` so secrets-restart completes before the contract probes run.
+- `verify` and `verify-deploy` run in parallel from the `deploy-infra` fan-out; `verify` is the always-on DOMAIN probe, `verify-deploy` is the gated contract probe.
 - Empty-promotion runs (infra-only, docs-only, queue-only) → `verify-deploy` skipped → `e2e` skipped → `lock-preview-on-success` skipped → `unlock-preview-on-failure` fires (Axiom 11 + Axiom 12).
-- `deploy-infra` runs in parallel with `verify-deploy` from the `promote-k8s` fan-out; it's independent of app promotion (rsync+compose up handles infra-only changes).
 - The `candidate-flight.yml` workflow mirrors this with a `flight → verify-candidate → release-slot` graph (plus `report-no-acquire-failure` for pre-acquire failures). `verify-candidate` uses the same `wait-for-argocd → readiness → verify-buildsha` chain and the same `if: promoted_apps != ''` job-level gate.
 
 ### Source-SHA Map Provenance
