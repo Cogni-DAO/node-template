@@ -125,10 +125,10 @@ jobs:
           HEAD_SHA: ${{ steps.env.outputs.head_sha }}
         run: |
           # Canonical target catalog + tag-suffix mapping (bug.0327
-          # architectural follow-up). Every consumer of the target list now
-          # sources one file; adding a new node is a one-line edit.
+          # architectural follow-up). Checkout step places the repo under
+          # `app-src/` (see `path: app-src` above), so the lib lives there.
           # shellcheck source=../../scripts/ci/lib/image-tags.sh
-          . scripts/ci/lib/image-tags.sh
+          . app-src/scripts/ci/lib/image-tags.sh
 
           IMAGE_NAME="ghcr.io/cogni-dao/cogni-template"
           TAG="preview-${HEAD_SHA}"
@@ -152,17 +152,21 @@ jobs:
             echo "${IMAGE_NAME}@${digest}"
           }
 
-          # Emit one output per target — `target` stays canonical (dashes,
-          # "migrator" spelling), so downstream steps read it verbatim from
-          # ALL_TARGETS. No more hand-maintained mapping here (bug.0327).
+          # Resolve every target and emit a single JSON blob the promote step
+          # iterates — keeps the "one edit to add a node" promise: lib/image-tags.sh
+          # is the only file that knows the target list. GHA outputs with dashes
+          # are accessible only via bracket notation in `${{ }}`; JSON via jq is
+          # uniform and matches the underscore-key pattern used elsewhere.
           echo "Resolved digests:"
+          DIGESTS_JSON="{}"
           for target in "${ALL_TARGETS[@]}"; do
             full_tag=$(image_tag_for_target "$IMAGE_NAME" "$TAG" "$target")
             digest=$(resolve_optional "$full_tag")
-            # Emit GITHUB_OUTPUT key as target name (dash-preserving).
-            echo "${target}=${digest}" >> "$GITHUB_OUTPUT"
+            DIGESTS_JSON=$(printf '%s' "$DIGESTS_JSON" | jq -c --arg k "$target" --arg v "$digest" '. + {($k): $v}')
             printf '  %-18s %s\n' "${target}:" "${digest:-"(not built)"}"
           done
+          # Single compact-JSON output consumed by the promote step.
+          echo "digests_json=${DIGESTS_JSON}" >> "$GITHUB_OUTPUT"
 
       # Checkout the deploy branch — promote-k8s-image.sh runs HERE, not on app-src.
       # This preserves env-specific state (EndpointSlice IPs) written by provision.
@@ -226,13 +230,21 @@ jobs:
 
           # Per-node migrator pairing (task.0324): each node is promoted with
           # its own `<node>-migrator` digest, not a shared single one. Closes
-          # the half that PR #923 flagged — the resolve step above emits one
-          # output per canonical target name. Bracket accessor is required
-          # because GHA parses `-` as minus in dot syntax.
-          promote_app operator         "${{ steps.digests.outputs.operator }}"                    "${{ steps.digests.outputs['operator-migrator'] }}"
-          promote_app poly             "${{ steps.digests.outputs.poly }}"                        "${{ steps.digests.outputs['poly-migrator'] }}"
-          promote_app resy             "${{ steps.digests.outputs.resy }}"                        "${{ steps.digests.outputs['resy-migrator'] }}"
-          promote_app scheduler-worker "${{ steps.digests.outputs['scheduler-worker'] }}"         ""
+          # the half that PR #923 flagged. Iterates NODE_TARGETS from the lib
+          # so adding a new node `mynode` is a one-line lib edit — no change
+          # to this step.
+          # shellcheck source=../../scripts/ci/lib/image-tags.sh
+          . ../app-src/scripts/ci/lib/image-tags.sh
+          DIGESTS='${{ steps.digests.outputs.digests_json }}'
+
+          for node in "${NODE_TARGETS[@]}"; do
+            app_digest=$(printf '%s' "$DIGESTS" | jq -r --arg k "$node" '.[$k] // ""')
+            mig_digest=$(printf '%s' "$DIGESTS" | jq -r --arg k "${node}-migrator" '.[$k] // ""')
+            promote_app "$node" "$app_digest" "$mig_digest"
+          done
+          # scheduler-worker has no migrator pairing.
+          sw_digest=$(printf '%s' "$DIGESTS" | jq -r '."scheduler-worker" // ""')
+          promote_app scheduler-worker "$sw_digest" ""
 
           # Export for deploy-push step
           echo "PROMOTED_CSV=$(IFS=,; echo "${PROMOTED[*]}")" >> $GITHUB_ENV
