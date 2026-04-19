@@ -52,6 +52,19 @@ Each stage is a real signal, not a ceremony. Skipping a stage does not save time
 - **Pre-merge (CI):** `pnpm check:full` (~20 min). Stack-test success is the required CI gate. Check PR status after push.
 - **Post-merge:** flight to `candidate-a` → exercise the feature on the live URL → read your own request back out of Loki → `deploy_verified: true`. This is the gate that actually proves the feature exists.
 
+## Pull Request Discipline
+
+PRs are the durable artifact of a work item — write them like one. The `/closeout` command (or [`/pull-request`](.claude/commands/pull-request.md) for manual flows) is the authoritative entry point; both need upgrading to enforce the checklist below. Until they do, you are responsible for it manually.
+
+Every PR body must answer, explicitly:
+
+- **TLDR** — what changed, in 1–2 lines.
+- **Deployment impact** — does this need a `candidate-flight-infra` run? Does it add or rotate secrets? Does it change `deploy/*` surface area? If any answer is yes, say so and link the affected workflow.
+- **E2E validation plan** — the `exercise:` + `observability:` pair from the work item's `## Validation` block, verbatim. What you will run against candidate-a and what telemetry will prove it worked.
+- **Validation result (post-flight comment)** — once flighted, comment on the PR with the real `exercise:` response + the Loki log line (or equivalent) that confirms your own request hit the deployed SHA. This is what flips `deploy_verified: true`.
+
+If `/closeout` / `/pull-request` do not yet prompt for these, add them manually and file a follow-up to upgrade the commands. Do not ship PRs without this checklist — it _is_ the Definition of Done, written down.
+
 ## Agent Behavior
 
 - Follow this file as primary instruction. Subdir `AGENTS.md` may extend but may not override core principles.
@@ -72,7 +85,7 @@ Each stage is a real signal, not a ceremony. Skipping a stage does not save time
 - **Framework:** Next.js (TypeScript, App Router)
 - **Infra:** Docker + OpenTofu → k3s / Spheron (managed Akash). Argo CD reconciles from `deploy/*` branches.
 - **Toolchain:** pnpm, Biome, ESLint, Prettier, Vitest, Playwright, SonarQube
-- **Observability:** Pino JSON → Alloy → local Loki (dev) or Grafana Cloud (preview/prod). Agents query Loki via the `grafana` MCP or `scripts/` helpers to read back their own requests at the deployed SHA.
+- **Observability:** Pino JSON → Alloy → local Loki (dev) or Grafana Cloud (preview/prod). Agents query Loki via the `grafana` MCP to read back their own requests at the deployed SHA. **New MCP / metrics tools will be wired in as validation matures** — Langfuse is the v2 target for AI-call traces. Tool-specific usage details belong in the validation guides, not here.
 - **Node layout:** sovereign node code lives under `nodes/{node}/` (`app/`, `graphs/`, `.cogni/`)
 
 ## Pointers
