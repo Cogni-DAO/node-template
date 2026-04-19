@@ -5,7 +5,7 @@ title: "ENGINEERING Charter"
 state: Active
 summary: ENGINEERING governance charter scaffold for recurring heartbeat runs.
 created: 2026-02-15
-updated: 2026-02-15
+updated: 2026-04-19
 ---
 
 # ENGINEERING Charter
@@ -33,6 +33,30 @@ _Updated by governance skills - shows what work other charters need from ENGINEE
 - **Maximize OSS**: Prefer open-source tools and dependencies over proprietary/vendor solutions
 - **Test-first reliability**: Code only works if tested end-to-end and aligned with spec invariants
 - **Workflow discipline**: Follow the [status-driven lifecycle](../../docs/spec/development-lifecycle.md) — every `needs_*` status maps to one `/command`, dispatched deterministically
+
+## Workflow Health Matrix
+
+> Assessed 2026-04-19. No self-review cycle exists yet — grades are the author's best estimate and should be considered pessimistic defaults. Columns: what a solo agent needs, what exists today, the gap, and a traffic-light health grade. 🔴 poor · 🟡 partial · 🟢 good.
+
+| Workflow stage                    | What a solo agent needs to ship `deploy_verified: true`                         | What exists today                                                                        | Gap                                                                         | Health |
+| --------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- | ------ |
+| Intake (`/idea`, `/bug`)          | A rubric for a good work item: scope, acceptance criteria, owner                | Commands + `work/README.md` overview                                                     | No authoring rubric; agents produce uneven work items                       | 🟡     |
+| Triage (`/triage`)                | Deterministic routing by type + invariants                                      | Lifecycle spec + command                                                                 | Covered                                                                     | 🟢     |
+| Design (`/design`, `/spec`)       | "As-built spec" authoring guide (per `SPEC_NO_EXEC_PLAN`)                       | Commands + existing specs as examples                                                    | No authoring guide — agents still slip roadmap/phases into specs            | 🔴     |
+| Implement (`/implement`)          | Architecture + feature + testing guides; API-contract rule                      | `architecture.md`, `feature-development.md`, `create-service.md`, `testing.md`           | Covered                                                                     | 🟢     |
+| `## Validation` block authoring   | Exercise + observability recipe per surface (API, graph, scheduler, CLI, infra) | `agent-api-validation.md` (API only)                                                     | No recipes for non-API surfaces → most work items can't write a valid block | 🔴     |
+| Closeout / PR (`/closeout`)       | PR body with TLDR · deploy impact · E2E plan · post-flight validation result    | `/closeout` command + `pr-management-playbook.md`                                        | Neither enforces the 4-field checklist; playbook predates `deploy_verified` | 🔴     |
+| Flight to `candidate-a`           | Clear app-lever vs infra-lever decision tree + trigger steps                    | `candidate-flight-v0.md`, `ci-cd.md`                                                     | No decision tree; `candidate-flight-infra` has no agent-facing guide        | 🟡     |
+| Self-exercise on `candidate-a`    | Canonical URL map + auth flow per env + interaction recipes per surface         | `agent-api-validation.md` (API)                                                          | No URL map, no non-API recipes                                              | 🔴     |
+| Loki self-lookup                  | "Find my own request at the deployed SHA" — LogQL + grafana MCP recipe          | `alloy-loki-setup.md` (setup only); task.0308 adds startup-SHA + smoke-check log signals | No recipe; SHA-in-logs signal is proposed, not landed                       | 🔴     |
+| Finalize `deploy_verified: true`  | One-pager: flip field, update index, spawn follow-ups                           | Lifecycle spec defines the invariant                                                     | No authoring guide; field routinely missed                                  | 🔴     |
+| Review (`/review-implementation`) | Critical review + revision loop with loop limit                                 | Command + `revision` field + `LOOP_LIMIT` invariant                                      | Covered                                                                     | 🟢     |
+| Secrets across lanes (cross-cut)  | Agent-facing playbook for dev → candidate-a → preview → prod                    | `SECRET_ROTATION.md` (incident-only)                                                     | No proactive-add playbook; agents improvise                                 | 🔴     |
+| IaC capture (cross-cut)           | "You did X by hand — here's the 5 files to commit" guide                        | `DEPLOYMENT_ARCHITECTURE.md`                                                             | No capture recipe → ad-hoc ops rot out of git                               | 🔴     |
+| Dolt memory ops (cross-cut)       | How to write/read memory deterministically                                      | Principle stated, no guide                                                               | Referenced but undocumented                                                 | 🔴     |
+| Self-review cycle (meta)          | Scheduled review of this matrix + the lifecycle itself                          | None                                                                                     | No cadence, no owner — this matrix will rot without one                     | 🔴     |
+
+**Rollup**: 3 🟢 / 2 🟡 / 10 🔴. Critical-path reds (block a solo agent from reaching `deploy_verified`): Validation-block authoring, Closeout/PR discipline, Self-exercise, Loki self-lookup, Finalize. The first ENGINEERING project should land these five.
 
 ## Key References
 
