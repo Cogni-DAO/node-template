@@ -4,11 +4,11 @@
 /**
  * Module: `@app/api/v1/poly/copy-trade/orders`
  * Purpose: HTTP GET — recent rows from the order ledger (copy-trade placements from the autonomous mirror poll). v0 orders are not yet user-scoped.
- * Scope: Thin validator — parses query params, reads via `createOrderLedger().listRecent`, maps to contract response shape.
+ * Scope: Thin validator — parses query params, reads via `container.orderLedger.listRecent`, maps to contract response shape including `synced_at` (ISO-8601 or null) and `staleness_ms` (derived server-side as `now - synced_at`).
  * Invariants: Response shape is contract-defined; ordering is `observed_at DESC`; agent-tool placements are NOT in the ledger in v0 (follow-up).
  * Side-effects: IO (one DB SELECT via service-role client).
  * Notes: Authenticated via session. HARDCODED_USER — response is not user-scoped in v0.
- * Links: docs/spec/poly-copy-trade-phase1.md
+ * Links: docs/spec/poly-copy-trade-phase1.md, work/items/task.0328.poly-sync-truth-ledger-cache.md (CP3)
  * @public
  */
 
@@ -16,12 +16,11 @@ import {
   type PolyCopyTradeOrderRow,
   polyCopyTradeOrdersOperation,
 } from "@cogni/node-contracts";
-import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { createOrderLedger, type LedgerRow } from "@/features/trading";
+import type { LedgerRow } from "@/features/trading";
 import { serverEnv } from "@/shared/env/server-env";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
@@ -60,6 +59,10 @@ function toContractRow(
       ? `https://polymarket.com/profile/${operatorAddress.toLowerCase()}/trade/${r.order_id}`
       : null;
 
+  const syncedAt = r.synced_at ?? null;
+  const staleness_ms =
+    syncedAt !== null ? Date.now() - syncedAt.getTime() : null;
+
   return {
     target_id: r.target_id,
     target_wallet: readStr("target_wallet"),
@@ -80,6 +83,8 @@ function toContractRow(
     created_at: r.created_at.toISOString(),
     updated_at: r.updated_at.toISOString(),
     polymarket_profile_url: profile,
+    synced_at: syncedAt?.toISOString() ?? null,
+    staleness_ms,
   };
 }
 
@@ -103,10 +108,7 @@ export const GET = wrapRouteHandlerWithLogging(
         ...(targetIdRaw !== null ? { target_id: targetIdRaw } : {}),
       });
 
-      const ledger = createOrderLedger({
-        db: getContainer().serviceDb as unknown as NodePgDatabase,
-        logger: ctx.log,
-      });
+      const ledger = getContainer().orderLedger;
       const listOpts: { limit?: number; target_id?: string } = {};
       if (input.limit !== undefined) listOpts.limit = input.limit;
       if (input.target_id !== undefined) listOpts.target_id = input.target_id;

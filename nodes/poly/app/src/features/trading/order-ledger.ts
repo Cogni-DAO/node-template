@@ -11,8 +11,9 @@
  *   - INSERT_IS_IDEMPOTENT — `insertPending` uses `ON CONFLICT (target_id, fill_id) DO NOTHING`, so repeat inserts are silent no-ops. Ordering guarantee lives in the caller, not here.
  *   - STATUS_ENUM_PINNED — the `status` CHECK in migration 0027 rejects any writer that tries to store an unknown value; that + `LedgerStatus` keep the runtime + schema in sync.
  *   - CAPS_COUNT_INTENTS — `today_spent_usdc` + `fills_last_hour` count every row whose `observed_at` falls in the window, regardless of terminal status. Matches `decide.ts::INTENT_BASED_CAPS`.
+ *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` sets `synced_at = now()` for every row for which the reconciler received a typed CLOB response (found OR not_found). Rows never checked show `synced_at IS NULL`. (task.0328 CP3)
  * Side-effects: IO (Postgres reads + writes).
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), docs/spec/poly-copy-trade-phase1.md
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-copy-trade-phase1.md
  * @public
  */
 
@@ -22,7 +23,7 @@ import {
   polyCopyTradeDecisions,
   polyCopyTradeFills,
 } from "@cogni/poly-db-schema/copy-trade";
-import { and, count, desc, eq, gte, sql, sum } from "drizzle-orm";
+import { and, count, desc, eq, gte, inArray, sql, sum } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { Logger } from "pino";
 
@@ -34,6 +35,7 @@ import type {
   OrderLedger,
   RecordDecisionInput,
   StateSnapshot,
+  SyncHealthSummary,
   UpdateStatusInput,
 } from "./order-ledger.types";
 
@@ -257,6 +259,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         // Schema CHECK enforces the set; cast is safe at the type boundary.
         status: r.status as LedgerRow["status"],
         attributes: (r.attributes as Record<string, unknown> | null) ?? null,
+        synced_at: r.syncedAt,
         created_at: r.createdAt,
         updated_at: r.updatedAt,
       }));
@@ -274,7 +277,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         .where(
           and(
             sql`${polyCopyTradeFills.status} IN ('pending','open')`,
-            sql`${polyCopyTradeFills.createdAt} < now() - interval '${sql.raw(String(olderThanMs))} milliseconds'`
+            sql`${polyCopyTradeFills.createdAt} < now() - make_interval(secs => ${olderThanMs} / 1000.0)`
           )
         )
         .orderBy(polyCopyTradeFills.createdAt)
@@ -288,6 +291,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         order_id: r.orderId,
         status: r.status as LedgerRow["status"],
         attributes: (r.attributes as Record<string, unknown> | null) ?? null,
+        synced_at: r.syncedAt,
         created_at: r.createdAt,
         updated_at: r.updatedAt,
       }));
@@ -298,6 +302,9 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       const patch: Record<string, unknown> = {};
       if (input.filled_size_usdc !== undefined) {
         patch.filled_size_usdc = input.filled_size_usdc;
+      }
+      if (input.reason !== undefined) {
+        patch.reason = input.reason;
       }
 
       await deps.db
@@ -313,6 +320,57 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             : {}),
         })
         .where(eq(polyCopyTradeFills.clientOrderId, input.client_order_id));
+    },
+
+    async markSynced(client_order_ids: string[]): Promise<void> {
+      // No-op on empty array — avoids a vacuous UPDATE that touches no rows.
+      if (client_order_ids.length === 0) return;
+      await deps.db
+        .update(polyCopyTradeFills)
+        .set({ syncedAt: sql`now()` })
+        .where(inArray(polyCopyTradeFills.clientOrderId, client_order_ids));
+    },
+
+    async syncHealthSummary(): Promise<SyncHealthSummary> {
+      // Single round-trip: three filtered aggregates in one SELECT.
+      // oldest_ms — age of least-recently-synced row that HAS synced_at.
+      //   Only rows with non-null synced_at qualify; never-synced rows are
+      //   counted separately in never_synced.
+      // stale_60s — rows whose synced_at is older than 60 seconds.
+      // never_synced — rows with NULL synced_at.
+      const rows = await deps.db.execute(
+        sql<{
+          oldest_ms: string | null;
+          stale_60s: string;
+          never_synced: string;
+        }>`
+          SELECT
+            CAST(
+              EXTRACT(EPOCH FROM (now() - MIN(${polyCopyTradeFills.syncedAt})))
+              * 1000
+              AS bigint
+            ) AS oldest_ms,
+            COUNT(*) FILTER (
+              WHERE ${polyCopyTradeFills.syncedAt} IS NOT NULL
+                AND ${polyCopyTradeFills.syncedAt} < now() - interval '60 seconds'
+            ) AS stale_60s,
+            COUNT(*) FILTER (
+              WHERE ${polyCopyTradeFills.syncedAt} IS NULL
+            ) AS never_synced
+          FROM ${polyCopyTradeFills}
+        `
+      );
+
+      const row = rows.rows[0] as
+        | { oldest_ms: string | null; stale_60s: string; never_synced: string }
+        | undefined;
+
+      return {
+        oldest_synced_row_age_ms:
+          row?.oldest_ms != null ? Number(row.oldest_ms) : null,
+        rows_stale_over_60s: Number(row?.stale_60s ?? 0),
+        rows_never_synced: Number(row?.never_synced ?? 0),
+      };
     },
   };
 }
