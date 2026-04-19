@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@app/(app)/dashboard/_api/fetchMarketTitles`
+ * Purpose: Batch-resolve Polymarket condition IDs to human-readable market titles + slugs via the public Gamma API.
+ * Scope: Data fetching only. No auth. No caching beyond React Query on the caller side.
+ * Side-effects: IO (HTTPS fetch to gamma-api.polymarket.com)
+ * @public
+ */
+
+export interface MarketTitle {
+  conditionId: string;
+  question: string;
+  slug: string;
+}
+
+/** Map of conditionId (lowercased) → { question, slug }. Missing IDs are omitted. */
+export type MarketTitleMap = Record<string, { question: string; slug: string }>;
+
+/**
+ * Fetches market titles for up to ~50 condition IDs in one call.
+ * The caller should dedupe + chunk if it has more than that.
+ *
+ * Returns an empty map on network / parse failure (graceful degrade — the
+ * card falls back to rendering the truncated condition id).
+ */
+export async function fetchMarketTitles(
+  conditionIds: readonly string[]
+): Promise<MarketTitleMap> {
+  if (conditionIds.length === 0) return {};
+
+  const unique = Array.from(new Set(conditionIds.map((c) => c.toLowerCase())));
+  const qs = new URLSearchParams({ condition_ids: unique.join(",") });
+
+  try {
+    const res = await fetch(
+      `https://gamma-api.polymarket.com/markets?${qs.toString()}`
+    );
+    if (!res.ok) return {};
+    const rows = (await res.json()) as MarketTitle[];
+    const out: MarketTitleMap = {};
+    for (const r of rows) {
+      if (!r.conditionId) continue;
+      out[r.conditionId.toLowerCase()] = {
+        question: r.question ?? "",
+        slug: r.slug ?? "",
+      };
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}

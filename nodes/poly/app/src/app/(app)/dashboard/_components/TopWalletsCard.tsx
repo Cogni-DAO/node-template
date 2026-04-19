@@ -91,16 +91,9 @@ export function TopWalletsCard(): ReactElement {
     <Card>
       <CardHeader className="px-5 py-3">
         <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <CardTitle className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
-              Monitored Wallets
-            </CardTitle>
-            <p className="text-muted-foreground/70 text-xs">
-              Top Polymarket wallets by PnL — click the{" "}
-              <Plus className="inline size-3" /> to track one for mirror-trading
-              (coming in Phase 2).
-            </p>
-          </div>
+          <CardTitle className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+            Monitored Wallets
+          </CardTitle>
           <ToggleGroup
             type="single"
             value={timePeriod}
