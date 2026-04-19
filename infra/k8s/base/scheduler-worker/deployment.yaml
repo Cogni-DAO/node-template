@@ -19,6 +19,13 @@ spec:
         app.kubernetes.io/part-of: cogni
     spec:
       terminationGracePeriodSeconds: 30
+      # Per QUEUE_PER_NODE_ISOLATION (task.0280 phase 2): the worker runs one
+      # Temporal Worker per node in a single pod. Failure of any single node
+      # must NOT keep the worker from starting — it would starve every other
+      # node's workflow execution, turning isolated data into coupled liveness.
+      # Boot readiness is Temporal-reachability only (the sole hard dep).
+      # Per-node HTTP reachability is emitted as a boot-time warn log +
+      # Prometheus gauge (scheduler_worker_node_reachable), not gated.
       containers:
         - name: scheduler-worker
           image: ghcr.io/cogni-dao/cogni-template:placeholder

@@ -19,6 +19,7 @@
     "@cogni/graph-execution-core": "workspace:*",
     "@cogni/ids": "workspace:*",
     "@cogni/ingestion-core": "workspace:*",
+    "@cogni/node-contracts": "workspace:*",
     "@cogni/repo-spec": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
     "@cogni/temporal-workflows": "workspace:*",

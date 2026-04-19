@@ -38,6 +38,15 @@ Shared Zod route contracts and HTTP router definitions for all node apps. PURE_L
 
 All contract files re-exported via `src/index.ts`. Selective re-export for `ai.chat.v1.contract` to avoid `ChatMessage` name collision with `ai.completions.v1.contract`.
 
+**Internal scheduler-worker → node-app contracts (task.0280):**
+
+- `graphs.run.internal.v1.contract` — `POST /api/internal/graphs/{graphId}/runs` (executeGraphActivity)
+- `graph-runs.create.internal.v1.contract` — `POST /api/internal/graph-runs` (createGraphRunActivity)
+- `graph-runs.update.internal.v1.contract` — `PATCH /api/internal/graph-runs/{runId}` (updateGraphRunActivity)
+- `grants.validate.internal.v1.contract` — `POST /api/internal/grants/{grantId}/validate` (validateGrantActivity)
+
+All require `Authorization: Bearer ${SCHEDULER_API_TOKEN}`.
+
 ## Responsibilities
 
 - This directory **does**: Define Zod schemas for API request/response shapes, HTTP router contracts, OpenAPI specs

@@ -100,8 +100,10 @@ Service config that varies per environment (routing tables, feature flags, endpo
 
 Concrete rule for `scheduler-worker`:
 
-- `COGNI_NODE_ENDPOINTS` lives in `infra/k8s/overlays/<env>/scheduler-worker/kustomization.yaml` under `/data/COGNI_NODE_ENDPOINTS` with the named-key format (`operator=<url>,poly=<url>,resy=<url>,...`) that the service's boot check requires.
+- `COGNI_NODE_ENDPOINTS` lives in `infra/k8s/overlays/<env>/scheduler-worker/kustomization.yaml` under `/data/COGNI_NODE_ENDPOINTS` with both slug and UUID aliases (`operator=<url>,poly=<url>,resy=<url>,<opUuid>=<url>,<polyUuid>=<url>,<resyUuid>=<url>`). Per `QUEUE_PER_NODE_ISOLATION` (task.0280), the worker polls queues keyed on UUIDs; slug entries are convenience aliases for URL lookup. A UUID-free map will log an error and starve every per-node queue. Compose dev defaults in `infra/compose/runtime/docker-compose{,.dev}.yml` include UUID aliases matching `.cogni/repo-spec.yaml`.
 - `deploy-infra.sh` must **not** write `COGNI_NODE_ENDPOINTS` into `scheduler-worker-secrets`. k8s `envFrom` applies secrets after configmaps (later-wins), so a secret-side override silently wins over the ConfigMap.
+- `deploy-infra.sh` rolls `*-node-app` deployments to completion **before** restarting `scheduler-worker`, so new `/api/internal/graph-runs` and `/api/internal/grants/:id/validate` routes (task.0280) exist before the worker calls them.
+- The scheduler-worker Pod has **no `initContainer`** gating startup on node readiness. Per `QUEUE_PER_NODE_ISOLATION`, liveness is decoupled from node health: failure of one node grows only its own Temporal queue. Boot-time per-node reachability is emitted as `scheduler_worker_node_reachable{node_id}` gauge + warn log — never a gate.
 - The GH-Actions env-level secret also named `COGNI_NODE_ENDPOINTS` is LiteLLM-flavored (UUID → billing-ingest URL) and is consumed only by Compose LiteLLM via `deploy-infra.sh`'s runtime-env file. Do not reuse that value elsewhere; rename upstream if/when the collision is worth unpicking.
 
 Same rule applies to any future in-cluster service: non-secret routing config goes in the overlay ConfigMap, gated into the flight by a kubectl rollout check (`scripts/ci/wait-for-in-cluster-services.sh`).

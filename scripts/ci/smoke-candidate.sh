@@ -27,3 +27,58 @@ check_livez() {
 check_livez operator "https://${DOMAIN}"
 check_livez poly "https://poly-${DOMAIN}"
 check_livez resy "https://resy-${DOMAIN}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# bug.0322 cross-node run-isolation regression check.
+# Registers a machine agent on poly, runs a chat completion on poly, asserts
+# the run is visible on poly's /agent/runs AND absent from operator's. Locks
+# task.0280 (worker HTTP delegation) closed from the outside.
+# Skips when jq is unavailable — CI images have jq; laptop flights may not.
+# ─────────────────────────────────────────────────────────────────────────────
+if command -v jq >/dev/null 2>&1; then
+  echo "[bug.0322] cross-node isolation check"
+  POLY_BASE="https://poly-${DOMAIN}"
+  OP_BASE="https://${DOMAIN}"
+
+  creds=$(curl -sk -X POST "${POLY_BASE}/api/v1/agent/register" \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"smoke-bug0322"}')
+  api_key=$(printf '%s' "$creds" | jq -r '.apiKey // empty')
+  if [ -z "$api_key" ]; then
+    echo "[ERROR] poly /agent/register did not return apiKey: $creds" >&2
+    exit 1
+  fi
+
+  chat=$(curl -sk -X POST "${POLY_BASE}/api/v1/chat/completions" \
+    -H "Authorization: Bearer $api_key" -H 'Content-Type: application/json' \
+    -d '{"model":"gpt-4o-mini","graph_name":"poet","messages":[{"role":"user","content":"hi"}]}')
+  run_id=$(printf '%s' "$chat" | jq -r '.id // empty' | sed 's/^chatcmpl-//')
+  if [ -z "$run_id" ]; then
+    echo "[ERROR] poly chat/completions did not return an id: $chat" >&2
+    exit 1
+  fi
+  echo "  seeded runId=$run_id via poly"
+
+  # Give the worker a beat to finalize the run row.
+  sleep 3
+
+  poly_runs=$(curl -sk -H "Authorization: Bearer $api_key" "${POLY_BASE}/api/v1/agent/runs")
+  op_runs=$(curl -sk -H "Authorization: Bearer $api_key" "${OP_BASE}/api/v1/agent/runs")
+
+  poly_has=$(printf '%s' "$poly_runs" | jq --arg id "$run_id" '[.runs[]? | select(.runId == $id)] | length')
+  op_has=$(printf '%s' "$op_runs" | jq --arg id "$run_id" '[.runs[]? | select(.runId == $id)] | length')
+
+  if [ "$poly_has" != "1" ]; then
+    echo "[FAIL bug.0322] run $run_id not visible on poly (expected 1, got $poly_has)" >&2
+    echo "  poly body: $poly_runs" >&2
+    exit 1
+  fi
+  if [ "$op_has" != "0" ]; then
+    echo "[FAIL bug.0322] run $run_id LEAKED to operator (expected 0, got $op_has)" >&2
+    echo "  operator body: $op_runs" >&2
+    exit 1
+  fi
+  echo "  poly_has=$poly_has operator_has=$op_has ✓"
+else
+  echo "[skip] bug.0322 regression check — jq not installed"
+fi

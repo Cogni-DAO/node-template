@@ -12,4 +12,5 @@
  * @public
  */
 export * from "./link-intent-store";
+export * from "./scheduler-token";
 export * from "./session";

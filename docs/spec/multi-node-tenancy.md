@@ -10,7 +10,7 @@ read_when: Working on auth across nodes, per-node database provisioning, billing
 implements: []
 owner: derekg1729
 created: 2026-04-01
-verified: 2026-04-01
+verified: 2026-04-19
 tags: [multi-node, auth, tenancy, data-isolation, metering]
 ---
 
@@ -73,6 +73,9 @@ All invariants are detailed in their respective sections below. Summary:
 | OPERATOR_AGGREGATES_ARE_DERIVED   | Data Isolation           |
 | MISSING_NODE_ID_DEFAULTS_OPERATOR | Data Isolation           |
 | CALLBACK_IS_ADAPTER_GLUE          | Data Isolation           |
+| RUN_VISIBILITY_FOLLOWS_ORIGIN     | Data Isolation           |
+| SHARED_COMPUTE_HOLDS_NO_DB_CREDS  | Data Isolation           |
+| QUEUE_PER_NODE_ISOLATION          | Data Isolation           |
 | NO_CROSS_IMPORTS                  | Inter-Node Communication |
 | NODE_TO_OPERATOR_READ_ONLY        | Inter-Node Communication |
 | OPERATOR_READS_NODE_VIA_VCS       | Inter-Node Communication |
@@ -119,15 +122,18 @@ All invariants are detailed in their respective sections below. Summary:
 
 ### Data invariants
 
-| Invariant                         | Rule                                                                                                                                                                                                                                        |
-| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| DB_PER_NODE                       | 1 Postgres server, 1 database per node. Each node has its own database, its own migrations, its own schema version.                                                                                                                         |
-| DB_IS_BOUNDARY                    | The database itself is the node boundary. No `node_id` columns needed in node-local tables — the DB already scopes to this node. User/account-scoped RLS within the node is still legitimate and expected.                                  |
-| NODE_LOCAL_METERING_PRIMARY       | Each node's local billing/metering data is authoritative. Operator aggregation is derived, never the source of truth. If operator aggregate diverges from node-local, **node-local wins**.                                                  |
-| MISSING_NODE_ID_DEFAULTS_OPERATOR | If `node_id` is absent from callback metadata (e.g., direct LiteLLM call, legacy client), the custom callback defaults to the operator node and logs a warning. This prevents silent data loss while making misrouted callbacks detectable. |
-| CALLBACK_IS_ADAPTER_GLUE          | The LiteLLM custom callback class (`cogni_callbacks.py`) is adapter glue only: extract routing metadata, validate it, forward the canonical callback POST, fail loudly. No pricing logic, no policy logic, no reconciliation logic.         |
-| NO_CROSS_NODE_QUERIES             | Nodes never query each other's database. The operator never queries a node's database directly.                                                                                                                                             |
-| OPERATOR_AGGREGATES_ARE_DERIVED   | Cross-node views are read-only projections from node-local data, not independent records. They may lag, they may be incomplete, they are never primary.                                                                                     |
+| Invariant                         | Rule                                                                                                                                                                                                                                                                                                                                                                                                                               |
+| --------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DB_PER_NODE                       | 1 Postgres server, 1 database per node. Each node has its own database, its own migrations, its own schema version.                                                                                                                                                                                                                                                                                                                |
+| DB_IS_BOUNDARY                    | The database itself is the node boundary. No `node_id` columns needed in node-local tables — the DB already scopes to this node. User/account-scoped RLS within the node is still legitimate and expected.                                                                                                                                                                                                                         |
+| NODE_LOCAL_METERING_PRIMARY       | Each node's local billing/metering data is authoritative. Operator aggregation is derived, never the source of truth. If operator aggregate diverges from node-local, **node-local wins**.                                                                                                                                                                                                                                         |
+| MISSING_NODE_ID_DEFAULTS_OPERATOR | If `node_id` is absent from callback metadata (e.g., direct LiteLLM call, legacy client), the custom callback defaults to the operator node and logs a warning. This prevents silent data loss while making misrouted callbacks detectable.                                                                                                                                                                                        |
+| CALLBACK_IS_ADAPTER_GLUE          | The LiteLLM custom callback class (`cogni_callbacks.py`) is adapter glue only: extract routing metadata, validate it, forward the canonical callback POST, fail loudly. No pricing logic, no policy logic, no reconciliation logic.                                                                                                                                                                                                |
+| NO_CROSS_NODE_QUERIES             | Nodes never query each other's database. The operator never queries a node's database directly.                                                                                                                                                                                                                                                                                                                                    |
+| OPERATOR_AGGREGATES_ARE_DERIVED   | Cross-node views are read-only projections from node-local data, not independent records. They may lag, they may be incomplete, they are never primary.                                                                                                                                                                                                                                                                            |
+| RUN_VISIBILITY_FOLLOWS_ORIGIN     | A graph run originated on node X is persisted in node X's database and is never retrievable from another node's API, regardless of bearer origin. Run-record placement is the source of truth; there is no cross-node filter/scope.                                                                                                                                                                                                |
+| SHARED_COMPUTE_HOLDS_NO_DB_CREDS  | Shared compute services (scheduler-worker, future attribution/ledger workers) hold no per-node DB credentials. All node-owned state is mutated through the owning node's internal HTTP API (SCHEDULER_API_TOKEN-authenticated). Data-plane isolation follows from data placement, not from application-level filtering.                                                                                                            |
+| QUEUE_PER_NODE_ISOLATION          | Each node submits Temporal workflows to a per-node task queue (`${TEMPORAL_TASK_QUEUE}-${nodeId}`). The shared scheduler-worker pod runs one Temporal Worker per node, polling each queue independently. A flapping or offline node grows its own queue without starving healthy nodes. Worker boot depends only on Temporal reachability; per-node HTTP reachability is a metric (`scheduler_worker_node_reachable`), not a gate. |
 
 ### Architecture
 

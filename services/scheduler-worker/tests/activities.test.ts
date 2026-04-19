@@ -97,12 +97,14 @@ describe("validateGrantActivity", () => {
     });
 
     await activities.validateGrantActivity({
+      nodeId: "operator",
       grantId: FIXED_IDS.grantId,
       graphId: FIXED_IDS.graphId,
     });
 
     expect(mockGrantAdapter.validateGrantForGraph).toHaveBeenCalledWith(
       SYSTEM_ACTOR,
+      "operator",
       FIXED_IDS.grantId,
       FIXED_IDS.graphId
     );
@@ -127,6 +129,7 @@ describe("validateGrantActivity", () => {
 
     await expect(
       activities.validateGrantActivity({
+        nodeId: "operator",
         grantId: FIXED_IDS.grantId,
         graphId: FIXED_IDS.graphId,
       })
@@ -157,6 +160,7 @@ describe("createGraphRunActivity", () => {
     const scheduledFor = "2025-01-15T10:00:00.000Z";
 
     await activities.createGraphRunActivity({
+      nodeId: "operator",
       dbScheduleId: FIXED_IDS.scheduleId,
       runId: FIXED_IDS.runId,
       scheduledFor,
@@ -165,16 +169,18 @@ describe("createGraphRunActivity", () => {
       triggerSource: "temporal_schedule",
     });
 
-    expect(mockRunAdapter.createRun).toHaveBeenCalledWith(SYSTEM_ACTOR, {
-      runId: FIXED_IDS.runId,
-      graphId: FIXED_IDS.graphId,
-      runKind: "system_scheduled",
-      triggerSource: "temporal_schedule",
-      triggerRef: undefined,
-      requestedBy: undefined,
-      scheduleId: FIXED_IDS.scheduleId,
-      scheduledFor: new Date(scheduledFor),
-    });
+    expect(mockRunAdapter.createRun).toHaveBeenCalledWith(
+      SYSTEM_ACTOR,
+      "operator",
+      {
+        runId: FIXED_IDS.runId,
+        graphId: FIXED_IDS.graphId,
+        runKind: "system_scheduled",
+        triggerSource: "temporal_schedule",
+        scheduleId: FIXED_IDS.scheduleId,
+        scheduledFor: new Date(scheduledFor),
+      }
+    );
   });
 });
 
@@ -199,6 +205,7 @@ describe("updateGraphRunActivity", () => {
     });
 
     await activities.updateGraphRunActivity({
+      nodeId: "operator",
       runId: FIXED_IDS.runId,
       status: "running",
       traceId: "trace-123",
@@ -206,6 +213,7 @@ describe("updateGraphRunActivity", () => {
 
     expect(mockRunAdapter.markRunStarted).toHaveBeenCalledWith(
       SYSTEM_ACTOR,
+      "operator",
       FIXED_IDS.runId,
       "trace-123"
     );
@@ -231,12 +239,14 @@ describe("updateGraphRunActivity", () => {
     });
 
     await activities.updateGraphRunActivity({
+      nodeId: "operator",
       runId: FIXED_IDS.runId,
       status: "success",
     });
 
     expect(mockRunAdapter.markRunCompleted).toHaveBeenCalledWith(
       SYSTEM_ACTOR,
+      "operator",
       FIXED_IDS.runId,
       "success",
       undefined,
@@ -264,6 +274,7 @@ describe("updateGraphRunActivity", () => {
     });
 
     await activities.updateGraphRunActivity({
+      nodeId: "operator",
       runId: FIXED_IDS.runId,
       status: "error",
       errorMessage: "Something went wrong",
@@ -271,11 +282,101 @@ describe("updateGraphRunActivity", () => {
 
     expect(mockRunAdapter.markRunCompleted).toHaveBeenCalledWith(
       SYSTEM_ACTOR,
+      "operator",
       FIXED_IDS.runId,
       "error",
       "Something went wrong",
       undefined
     );
+  });
+});
+
+describe("HTTP error translation (task.0280 phase 2)", () => {
+  it("validateGrantActivity wraps GrantExpiredError as nonRetryable", async () => {
+    const { GrantExpiredError } = await import("../src/ports/index.js");
+    const mockGrantAdapter = {
+      validateGrantForGraph: vi
+        .fn()
+        .mockRejectedValue(new GrantExpiredError("g-1")),
+    } as unknown as Parameters<typeof createActivities>[0]["grantAdapter"];
+
+    const activities = createActivities({
+      grantAdapter: mockGrantAdapter,
+      runAdapter: {} as Parameters<typeof createActivities>[0]["runAdapter"],
+      config: {
+        nodeEndpoints: new Map([["operator", "http://localhost:3000"]]),
+        schedulerApiToken: "test-token-min-32-characters-long",
+      },
+      logger: mockLogger,
+    });
+
+    await expect(
+      activities.validateGrantActivity({
+        nodeId: "operator",
+        grantId: FIXED_IDS.grantId,
+        graphId: FIXED_IDS.graphId,
+      })
+    ).rejects.toMatchObject({ type: "grant_expired" });
+  });
+
+  it("createGraphRunActivity wraps non-retryable RunHttpClientError as nonRetryable", async () => {
+    const { RunHttpClientError } = await import("../src/ports/index.js");
+    const mockRunAdapter = {
+      createRun: vi
+        .fn()
+        .mockRejectedValue(new RunHttpClientError("bad", 400, false)),
+      markRunStarted: vi.fn(),
+      markRunCompleted: vi.fn(),
+    } as unknown as Parameters<typeof createActivities>[0]["runAdapter"];
+
+    const activities = createActivities({
+      grantAdapter: {} as Parameters<
+        typeof createActivities
+      >[0]["grantAdapter"],
+      runAdapter: mockRunAdapter,
+      config: {
+        nodeEndpoints: new Map([["operator", "http://localhost:3000"]]),
+        schedulerApiToken: "test-token-min-32-characters-long",
+      },
+      logger: mockLogger,
+    });
+
+    await expect(
+      activities.createGraphRunActivity({
+        nodeId: "operator",
+        runId: FIXED_IDS.runId,
+      })
+    ).rejects.toMatchObject({ type: "HttpClientError" });
+  });
+
+  it("createGraphRunActivity lets retryable RunHttpClientError bubble for Temporal retry", async () => {
+    const { RunHttpClientError } = await import("../src/ports/index.js");
+    const mockRunAdapter = {
+      createRun: vi
+        .fn()
+        .mockRejectedValue(new RunHttpClientError("boom", 503, true)),
+      markRunStarted: vi.fn(),
+      markRunCompleted: vi.fn(),
+    } as unknown as Parameters<typeof createActivities>[0]["runAdapter"];
+
+    const activities = createActivities({
+      grantAdapter: {} as Parameters<
+        typeof createActivities
+      >[0]["grantAdapter"],
+      runAdapter: mockRunAdapter,
+      config: {
+        nodeEndpoints: new Map([["operator", "http://localhost:3000"]]),
+        schedulerApiToken: "test-token-min-32-characters-long",
+      },
+      logger: mockLogger,
+    });
+
+    await expect(
+      activities.createGraphRunActivity({
+        nodeId: "operator",
+        runId: FIXED_IDS.runId,
+      })
+    ).rejects.toMatchObject({ name: "RunHttpClientError", retryable: true });
   });
 });
 

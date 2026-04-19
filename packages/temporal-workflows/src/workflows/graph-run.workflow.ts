@@ -36,6 +36,11 @@ export interface GraphRunResult {
 }
 
 // Short timeout for metadata activities (grant validation, run record CRUD).
+// Per task.0280: these activities HTTP-call the owning node. Retry budget
+// must cover a rollout window where the new worker rolls ahead of the
+// target node-app (→ 404 on new internal routes). 6 attempts × max 30s
+// backoff = up to ~2 minutes of tolerance, which comfortably absorbs an
+// Argo parallel rollout window for a single node.
 const {
   validateGrantActivity,
   createGraphRunActivity,
@@ -46,7 +51,7 @@ const {
     initialInterval: "1 second",
     maximumInterval: "30 seconds",
     backoffCoefficient: 2,
-    maximumAttempts: 3,
+    maximumAttempts: 6,
   },
 });
 
@@ -145,10 +150,15 @@ export async function GraphRunWorkflow(
   // API-triggered runs skip grant validation; billing/preflight decorators enforce auth/credits.
   if (executionGrantId) {
     try {
-      await validateGrantActivity({ grantId: executionGrantId, graphId });
+      await validateGrantActivity({
+        nodeId,
+        grantId: executionGrantId,
+        graphId,
+      });
     } catch {
       // Grant invalid — create record and mark skipped (CONVERGED_FINALIZE)
       await createGraphRunActivity({
+        nodeId,
         runId,
         graphId,
         runKind,
@@ -160,6 +170,7 @@ export async function GraphRunWorkflow(
         stateKey,
       });
       await updateGraphRunActivity({
+        nodeId,
         runId,
         status: "skipped",
         errorMessage: "Grant validation failed",
@@ -170,6 +181,7 @@ export async function GraphRunWorkflow(
 
   // 2. Create graph_runs record — ALWAYS (per SINGLE_RUN_LEDGER, no dbScheduleId gate)
   await createGraphRunActivity({
+    nodeId,
     runId,
     graphId,
     runKind,
@@ -182,7 +194,7 @@ export async function GraphRunWorkflow(
   });
 
   // 3. Mark run as started
-  await updateGraphRunActivity({ runId, status: "running" });
+  await updateGraphRunActivity({ nodeId, runId, status: "running" });
 
   // 4. Execute graph via internal API
   try {
@@ -199,6 +211,7 @@ export async function GraphRunWorkflow(
     // 5. CONVERGED_FINALIZE: mark success or error
     if (result.ok) {
       await updateGraphRunActivity({
+        nodeId,
         runId,
         status: "success",
         traceId: result.traceId,
@@ -212,6 +225,7 @@ export async function GraphRunWorkflow(
       };
     } else {
       await updateGraphRunActivity({
+        nodeId,
         runId,
         status: "error",
         traceId: result.traceId,
@@ -225,6 +239,7 @@ export async function GraphRunWorkflow(
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error during execution";
     await updateGraphRunActivity({
+      nodeId,
       runId,
       status: "error",
       errorMessage,

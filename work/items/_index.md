@@ -66,6 +66,7 @@
 | 1 | 1 | 3 | needs_design | spike.0229 | Knowledge Aggregation — KnowledgeCapability Port | OSS Research AI Node | proj.oss-research-node |
 | 1 | 1 | 2 | needs_design | task.0235 | Chat activity status line — consume StatusEvent in thread UI | Premium Frontend UX | proj.premium-frontend-ux |
 | 1 | 1 | 3 | needs_merge | task.0241 | Schedule Management AI Tools + Planner UI | Scheduler Evolution | proj.scheduler-evolution |
+| 1 | 1 | 3 | needs_merge | task.0280 | Worker HTTP delegation: scheduler-worker drops direct-DB access for runs/grants | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | 1 | 1 | needs_implement | bug.0313 | pr-build bakes BUILD_SHA from ephemeral pull_request merge commit — /readyz version ≠ image tag | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_merge | bug.0315 | deploy-infra.sh silently overrides overlay ConfigMap COGNI_NODE_ENDPOINTS with LiteLLM-flavored value — scheduler-worker crashloops on every rebuild | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_merge | bug.0316 | candidate-flight reports green while node-app pods still serve old image — /readyz is served by any running pod, no rollout verification | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -171,7 +172,6 @@
 | 2 | 5 | 3 | needs_design | task.0317 | Per-node LangGraph catalogs — factory library + node-owned catalog registry |  |  |
 | 2 | 5 | 5 | needs_design | task.0318 | Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 8 | 1 | needs_design | task.0064 | OpenClaw preflight cost estimate 10x audit — real token consumption | Reliability & Uptime | proj.reliability |
-| 2 | 8 | 2 | needs_design | task.0280 | Per-node DB isolation for worker activities — evaluate approach | Unified Graph Launch | proj.unified-graph-launch |
 | 2 | 9 | 2 | needs_design | task.0039 | Billing reconciler — LiteLLM spend/logs polling in scheduler worker | Unified Graph Launch | proj.unified-graph-launch |
 | 2 | 10 | 2 | needs_triage | task.0055 | Dedicated DB migrator role — separate DDL from runtime DML | Database Operations | proj.database-ops |
 | 2 | 10 | 2 | needs_design | bug.0198 | Single Privy app shared across preview and production — no env isolation | Reliability & Uptime | proj.reliability |
@@ -199,7 +199,9 @@
 | 2 | 99 | 5 | needs_triage | bug.0319 | Split @cogni/ai-tools into per-node packages; kill the shared TOOL_CATALOG stub dance | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 99 | 5 | needs_design | task.0322 | Poly copy-trade Phase 4 design prep — dual-path ingestion, hot signer, target ranker, counterfactual baseline | Cogni Poly | proj.poly-prediction-bot |
 | 3 | 5 | 5 | needs_design | story.0248 | Dolt Branching CI/CD — experiment branches, A/B evaluation, confidence-gated promotion to main | Cogni Poly | proj.poly-prediction-bot |
+| 3 | 6 | 2 | needs_design | task.0326 | Ledger/attribution worker: rename DATABASE_URL and enforce no-DB-creds invariant on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |
 | 3 | 7 | 2 | needs_triage | bug.0034 | Secrets redaction uses regex on serialized JSON — adopt fast-redact for structured fields |  |  |
+| 3 | 7 | 2 | needs_design | task.0327 | Drain legacy Temporal queue + add HTTP circuit breaker on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |
 | 3 | 10 | 2 | needs_design | bug.0262 | Operator Postgres env vars lack _OPERATOR suffix — inconsistent with multi-node pattern | Cogni Poly | proj.poly-prediction-bot |
 | 3 | 20 | 2 | needs_design | task.0274 | Wire NodeAppConfig into sidebar + layout components | Operator Plane | proj.operator-plane |
 | 3 | 30 | 3 | needs_merge | task.0207 | Run: BYO-AI hosted OSS provider — user connects their OpenAI-compatible endpoint | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |

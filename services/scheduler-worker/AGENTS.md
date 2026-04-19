@@ -23,16 +23,17 @@
 ```
 src/
 ├── bootstrap/       # Composition root: env parsing + adapter wiring
-│   ├── env.ts       # Zod-validated env singleton (config parsing only)
-│   └── container.ts # Builds ServiceContainer (concrete adapters → port interfaces)
-├── ports/           # Port barrel — re-exports interfaces from packages
-│   └── index.ts     # ExecutionGrantWorkerPort, GraphRunRepository
-├── activities/      # Temporal activities (I/O via injected ports)
-├── adapters/        # Concrete implementations (Octokit, GitHub App auth)
+│   ├── env.ts       # Zod-validated env singleton (DATABASE_URL optional — ledger only)
+│   └── container.ts # Builds ServiceContainer (HTTP adapters for scheduler path)
+├── ports/           # Port interfaces + error classes (task.0280)
+│   └── index.ts     # GraphRunHttpWriter, ExecutionGrantHttpValidator, RunHttpClientError, Grant*Error
+├── activities/      # Temporal activities — HTTP-delegate run/grant persistence to owning node
+├── adapters/        # Concrete implementations
+│   ├── run-http.ts  # HttpGraphRunWriter + HttpExecutionGrantValidator (task.0280)
 │   └── ingestion/   # GitHub poll adapter + webhook normalizer + token provider
-├── observability/   # Logger factory (sole pino importer), redaction
-├── main.ts          # Entry point: env() → makeLogger() → startSchedulerWorker() + startLedgerWorker()
-├── worker.ts        # Temporal Worker lifecycle: workflowsPath → @cogni/temporal-workflows/scheduler
+├── observability/   # Logger factory (sole pino importer), redaction, metrics
+├── main.ts          # Entry: env() → probeNodeReachability() → startSchedulerWorker() + optional ledger
+├── worker.ts        # Per-node Temporal Workers (one per canonical nodeId + legacy drain queue)
 ├── ledger-worker.ts # Temporal Worker for ledger-tasks: workflowsPath → @cogni/temporal-workflows/ledger
 └── health.ts        # HTTP readiness probe
 ```
@@ -42,10 +43,12 @@ src/
 ### Hard rules (enforced by dep-cruiser)
 
 - **WORKER_IS_DUMB**: scheduler-worker is a thin composition root. It wires activity implementations with concrete deps and starts Temporal workers. Domain-specific logic lives in packages.
+- **SHARED_COMPUTE_HOLDS_NO_DB_CREDS** (task.0280): scheduler path holds zero DB credentials. Runs/grants flow through each node's internal HTTP API. Only the optional ledger path reads `DATABASE_URL`.
+- **QUEUE_PER_NODE_ISOLATION** (task.0280): one Temporal Worker per canonical (UUID) nodeId in `COGNI_NODE_ENDPOINTS`; a flapping node grows its own queue without starving siblings.
 - **activities/ import ports only** — never adapters/, bootstrap/, or @cogni/db-client
 - **bootstrap/container.ts is the only place** that instantiates concrete adapters
 - **observability/logger.ts is the only file** that imports pino directly
-- **ports/ contains no implementations** — pure type re-exports from packages
+- **ports/ is interfaces + error classes only** — no runtime I/O, no framework deps
 
 ## Boundaries
 
@@ -76,13 +79,17 @@ src/
 
 - **Exports:** none (standalone service, not a library)
 - **CLI:** `pnpm --filter @cogni/scheduler-worker-service dev|build|start`
-- **Env:** Validated in `src/bootstrap/env.ts` via Zod. Required: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `DATABASE_URL`, `SCHEDULER_API_TOKEN` (secret), `COGNI_NODE_ENDPOINTS` (format: "operator=http://app:3000,poly=http://poly:3100"). Optional: `GH_REVIEW_APP_ID`, `GH_REVIEW_APP_PRIVATE_KEY_BASE64`, `GH_REPOS`, `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT`. Identity (`node_id`, `scope_id`, `chain_id`) read from `.cogni/repo-spec.yaml` via `@cogni/repo-spec` at bootstrap (baked into Docker image).
+- **Env:** Validated in `src/bootstrap/env.ts` via Zod.
+  - **Required**: `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE` (used as prefix; actual queues are `${prefix}-${nodeId}`), `SCHEDULER_API_TOKEN` (secret), `COGNI_NODE_ENDPOINTS` (must include UUID aliases — e.g. `operator=http://app:3000,4ff8eac1-...=http://app:3000,...`).
+  - **Optional**: `DATABASE_URL` (ledger/attribution path only — scheduler path holds no DB creds), `GH_REVIEW_APP_ID`, `GH_REVIEW_APP_PRIVATE_KEY_BASE64`, `GH_REPOS`, `LOG_LEVEL`, `SERVICE_NAME`, `HEALTH_PORT`.
+  - Identity (`node_id`, `scope_id`, `chain_id`) read from `.cogni/repo-spec.yaml` via `@cogni/repo-spec` at bootstrap (baked into Docker image).
+- **Metrics:** `temporal_activity_duration_ms`, `temporal_activity_errors_total{error_type=retryable|non_retryable}`, `temporal_worker_info`, `scheduler_worker_node_reachable{node_id}` (boot-time probe, never gates).
 - **Files considered API:** `src/main.ts` (entry point), `Dockerfile`
 
 ## Responsibilities
 
-- This directory **does**: Connect to Temporal, register workflows from `@cogni/temporal-workflows` (GraphRunWorkflow, PrReviewWorkflow, CollectEpochWorkflow, FinalizeEpochWorkflow, CollectSourcesWorkflow, EnrichAndAllocateWorkflow), implement and wire activities with concrete deps (scheduler, review, ledger, enrichment), dispatch enrichment and allocation via `@cogni/attribution-pipeline-plugins` registries
-- This directory **does not**: Define workflow logic (that's in `@cogni/temporal-workflows`), import from src/, create/modify/delete schedules (CRUD is authority), define port interfaces (those live in packages)
+- This directory **does**: Connect to Temporal; start one Worker per canonical nodeId (plus a legacy-queue drain Worker); register workflows from `@cogni/temporal-workflows` (GraphRunWorkflow, PrReviewWorkflow, CollectEpochWorkflow, FinalizeEpochWorkflow, CollectSourcesWorkflow, EnrichAndAllocateWorkflow); HTTP-delegate run/grant persistence to the owning node's internal API; dispatch enrichment and allocation via `@cogni/attribution-pipeline-plugins` registries.
+- This directory **does not**: Define workflow logic (that's in `@cogni/temporal-workflows`); import from src/; hold any per-node DB credentials on the scheduler path; create/modify/delete schedules (CRUD is authority); define port interfaces that cross packages (those live in `@cogni/scheduler-core`).
 
 ## Dependencies
 
