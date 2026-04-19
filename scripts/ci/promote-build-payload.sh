@@ -133,19 +133,23 @@ promote_target() {
 
 # Write a per-app `app → source_sha` entry into .promote-state/source-sha-by-app.json
 # on the deploy branch. Called in a second pass after all promotions are
-# recorded, so a map-write failure can never shadow promoted_apps. Errors
-# are logged and swallowed — verify-candidate will still run on the
-# promoted set, and bug.0326's downstream digest-match check is the
-# authoritative rollout gate.
+# recorded, so a map-write failure can never shadow promoted_apps. Per-app
+# failures are surfaced as GitHub Actions `::warning::` annotations (visible
+# in the run summary, not buried in stderr). If the map write fails for
+# EVERY promoted app, the map stops recording provenance entirely — that
+# is a hard break and the caller exits non-zero after pass 2.
+MAP_FAILURES=0
 update_source_sha_map() {
   local app="$1"
   if [ -z "$source_sha" ]; then
-    echo "  ⚠️  source_sha missing from payload — skipping map update for ${app}" >&2
+    echo "::warning::source_sha missing from payload — skipping map update for ${app}"
+    MAP_FAILURES=$((MAP_FAILURES + 1))
     return 0
   fi
   if ! APP="$app" SOURCE_SHA="$source_sha" MAP_FILE="$MAP_FILE" \
        bash "$MAP_SCRIPT"; then
-    echo "  ⚠️  source-sha-map write failed for ${app} — continuing (overlay already promoted)" >&2
+    echo "::warning::source-sha-map write failed for ${app} — overlay already promoted, provenance side-car not updated"
+    MAP_FAILURES=$((MAP_FAILURES + 1))
   fi
 }
 
@@ -163,4 +167,18 @@ done
 # Final emission for the happy-path log line; trap EXIT would also fire
 # this, but an explicit end-of-success message helps humans grep.
 emit_promoted_apps
-echo "Promoted apps: $(IFS=,; echo "${PROMOTED[*]:-none}")"
+if [ ${#PROMOTED[@]} -eq 0 ]; then
+  echo "Promoted apps: none"
+else
+  echo "Promoted apps: $(IFS=,; echo "${PROMOTED[*]}")"
+fi
+
+# Hard break: provenance side-car is dead across every promoted app.
+# Partial failures are ::warning:: annotations above; total failure is an
+# ::error:: that fails the flight job so humans investigate MAP_SCRIPT or
+# the payload's source_sha field rather than letting provenance decay
+# silently across future flights.
+if [ ${#PROMOTED[@]} -gt 0 ] && [ "$MAP_FAILURES" -eq "${#PROMOTED[@]}" ]; then
+  echo "::error::source-sha-map write failed for all ${#PROMOTED[@]} promoted app(s) — provenance side-car is dead (check MAP_SCRIPT=${MAP_SCRIPT} and payload source_sha)"
+  exit 1
+fi

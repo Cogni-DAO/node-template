@@ -79,6 +79,7 @@ run_case() {
   local payload_targets="$3"
   local expect_promoted="$4"
   local expect_map_exists="$5"
+  local expect_rc="${6:-0}"
 
   local case_dir="$WORKDIR/$name"
   mkdir -p "$case_dir"
@@ -118,24 +119,31 @@ run_case() {
     ok=0
   fi
 
+  if [ "$rc" != "$expect_rc" ]; then
+    echo "[FAIL] case=$name expected rc=$expect_rc got=$rc"
+    ok=0
+  fi
+
   if [ "$ok" = "1" ]; then
-    echo "[PASS] case=$name promoted_apps='$got' map_exists=$map_exists"
+    echo "[PASS] case=$name promoted_apps='$got' map_exists=$map_exists rc=$rc"
   else
     FAILED=$((FAILED + 1))
   fi
 }
 
 # Case 1 — happy path. Real update-source-sha-map.sh, full payload.
-run_case "happy" "$UPDATE_MAP" "$FULL_TARGETS" "operator,poly,resy,scheduler-worker" "yes"
+run_case "happy" "$UPDATE_MAP" "$FULL_TARGETS" "operator,poly,resy,scheduler-worker" "yes" 0
 
-# Case 2 — MAP_SCRIPT fails (simulates the production silent-abort class).
-# bug.0327: promoted_apps must still reflect every successful overlay write.
-run_case "map-script-failing" "/bin/false" "$FULL_TARGETS" "operator,poly,resy,scheduler-worker" "no"
+# Case 2 — MAP_SCRIPT fails for EVERY app (provenance side-car dead).
+# promoted_apps must still reflect every overlay write (verify-candidate
+# must still run), but the script exits non-zero so the flight job turns
+# red — total provenance loss is a hard break, not silent decay.
+run_case "map-script-failing" "/bin/false" "$FULL_TARGETS" "operator,poly,resy,scheduler-worker" "no" 1
 
 # Case 3 — genuine no-op (empty payload). promoted_apps must be empty so
 # verify-candidate's job-level gate skips legitimately and release-slot
 # treats it as a green no-op.
-run_case "empty-payload" "$UPDATE_MAP" "$EMPTY_TARGETS" "" "no"
+run_case "empty-payload" "$UPDATE_MAP" "$EMPTY_TARGETS" "" "no" 0
 
 cd "$REPO_ROOT"
 if [ "$FAILED" -gt 0 ]; then
