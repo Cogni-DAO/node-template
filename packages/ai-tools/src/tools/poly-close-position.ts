@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/ai-tools/tools/poly-close-position`
  * Purpose: AI tool that closes an open Polymarket position via a SELL order through PolyTradeCapability. Routes to `bundle.closePosition` which is the only legal SELL path for agents.
- * Scope: Tool contract + factory + stub. Pure package. No env reads, no adapter imports.
+ * Scope: Tool contract + factory + stub. Pure package. Does not read env vars or import adapters.
  * Invariants:
  *   - TOOL_ID_NAMESPACED: id is `core__poly_close_position`
  *   - EFFECT_TYPED: effect is `external_side_effect` — real money moves on success
