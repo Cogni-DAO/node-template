@@ -1,12 +1,12 @@
 ---
 id: bug.0330
 type: bug
-title: poly /api/v1/chat/completions intermittently returns empty body on candidate-a
+title: poly /api/v1/chat/completions intermittently returns empty body (candidate-a + preview)
 status: needs_triage
 priority: 2
 rank: 50
 estimate: 3
-summary: The bug.0322 cross-node smoke check on candidate-a (`scripts/ci/smoke-candidate.sh`) POSTs `gpt-4o-mini` against poly's `/api/v1/chat/completions` and parses `.id`. Twice on 2026-04-19 the call returned an empty body — once after a ~4-hour stall — failing the candidate flight for PRs that did not touch poly. Underlying cause unknown; suspected upstream LiteLLM stall or pod-side timeout returning 200/empty.
+summary: "The bug.0322 cross-node smoke check on candidate-a (`scripts/ci/smoke-candidate.sh`) POSTs `gpt-4o-mini` against poly's `/api/v1/chat/completions` and parses `.id`. Twice on 2026-04-19 the call returned an empty body — once after a ~4-hour stall — failing the candidate flight for PRs that did not touch poly. Reproduced on preview immediately after task.0311 merge — 60s hang, empty body, same graph/model, livez healthy. Underlying cause unknown; suspected upstream LiteLLM stall or pod-side timeout returning 200/empty."
 outcome: poly's `/api/v1/chat/completions` either returns a well-formed completion or a non-2xx error within a bounded time. No empty 2xx bodies. Smoke check passes deterministically when poly is healthy.
 spec_refs:
   - ci-cd
@@ -21,7 +21,7 @@ blocked_by:
 deploy_verified: false
 created: 2026-04-19
 updated: 2026-04-19
-labels: [poly, candidate-flight, flake, litellm]
+labels: [poly, candidate-flight, preview, flake, litellm]
 external_refs:
 ---
 
@@ -44,6 +44,18 @@ Failure log (both runs):
 ```
 
 The body printed after `id:` is empty — `curl` succeeded (no transport error) but the response had no JSON.
+
+## Preview repro (2026-04-19 ~23:30 UTC, post-task.0311 merge eb832de78)
+
+Same symptom on preview (`poly.cognidao.org`):
+
+- `GET /livez` → `200` in ~500ms, three consecutive probes healthy.
+- `POST /api/v1/agent/register` → `200`, returns apiKey.
+- `POST /api/v1/chat/completions` with `graph_name=poet`, `model=gpt-4o-mini`, `messages=[{role:user, content:hi}]` → `curl` reports `STATUS=000 time=60.68s` (no HTTP response received; transport hung until server-side timeout).
+
+Merge commit only added the Doltgres knowledge plane — unrelated to the LLM path the smoke check hits. Happening on both candidate-a and preview rules out any candidate-specific cause.
+
+**Operational gap (adjacent, not same bug):** preview-VM SSH key rotation appears to be missed. `.local/preview-vm-key` fails against both `84.32.109.222` (current overlay IP in `infra/k8s/overlays/preview/*/kustomization.yaml`) and `84.32.110.92` (`.local/preview-vm-ip`). Host key also differs. Blocks direct pod-log inspection during the repro window; fix requires operator to resync local preview creds.
 
 ## Hypotheses
 
