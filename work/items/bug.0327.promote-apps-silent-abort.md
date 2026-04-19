@@ -2,7 +2,7 @@
 id: bug.0327
 type: bug
 title: promote-build-payload silent abort + release-slot treats skipped verify as success — verify-candidate bypassed on real flight
-status: needs_implement
+status: done
 priority: 1
 rank: 5
 estimate: 2
@@ -15,7 +15,7 @@ credit:
 project: proj.cicd-services-gitops
 branch: fix/bug.0327-promote-silent-abort
 pr:
-reviewer:
+reviewer: claude-code
 revision: 0
 blocked_by:
 deploy_verified: false
@@ -193,3 +193,22 @@ temp-dir overlay tree and stub PROMOTE_SCRIPT:
 - **Stronger provenance check**: bug.0326 (wait-for-argocd digest-match) is
   the cousin — asserts the promoted digest actually appears in pod
   `containerStatuses[].imageID`. Complementary, not overlapping.
+- **Wire `scripts/ci/tests/promote-build-payload.test.sh` into CI.** Currently
+  runnable but un-enforced; add to unit/component job or a new `shell-tests`
+  job so regressions fail a PR check rather than a future flight.
+- **Shell-injection hardening** in `release-slot.Decide lease state`: pass
+  `needs.flight.outputs.promoted_apps` via `env:` instead of `${{ }}`
+  interpolation into the script body. Low-risk today (app names are
+  validated), but the pattern applies repo-wide.
+
+## Review Notes (2026-04-19, claude-code)
+
+Approved without blocking issues. Non-blocking suggestions captured as
+follow-ups above. Verified:
+
+- three-case shell harness passes on fix, fails case 2 on main (regression
+  coverage proven)
+- `pnpm check:docs` clean
+- `pnpm format` clean
+- YAML + bash syntax valid
+- decision-matrix in code matches the table in this doc

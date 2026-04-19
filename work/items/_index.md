@@ -108,7 +108,6 @@
 | 1 | 5 | 2 | needs_triage | bug.0231 | Token usage has three disagreeing sources — app logs, LiteLLM spend_logs, and billing callback |  |  |
 | 1 | 5 | 3 | needs_merge | task.0273 | Unify workspace: move operator to nodes/operator/app | Operator Plane | proj.operator-plane |
 | 1 | 5 | 3 | needs_design | bug.0297 | POST /api/v1/agent/register is an unauthenticated account + API-key factory | Accounts, API Keys & Wallet Authentication | proj.accounts-api-keys |
-| 1 | 5 | 2 | needs_implement | bug.0327 | promote-build-payload silent abort + release-slot treats skipped verify as success — verify-candidate bypassed on real flight | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -343,6 +342,7 @@
 | 1 | task.0250 | Extract @cogni/graph-execution-host package | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | story.0262 | Agent contributor protocol — shared workflow for AI agents coordinating on a codebase | Development Workflows | proj.development-workflows |
 | 1 | task.0281 | Canary CI/CD parity + staging promotion — no regression from staging-preview.yml |  |  |
+| 1 | bug.0327 | promote-build-payload silent abort + release-slot treats skipped verify as success — verify-candidate bypassed on real flight | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |
