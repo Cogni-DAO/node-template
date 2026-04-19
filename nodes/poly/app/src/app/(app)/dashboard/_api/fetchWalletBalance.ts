@@ -18,6 +18,7 @@ const EMPTY: PolyWalletBalanceOutput = {
   operator_address: "0x0000000000000000000000000000000000000000",
   usdc_available: 0,
   usdc_locked: 0,
+  usdc_positions_mtm: 0,
   usdc_total: 0,
   pol_gas: 0,
   profile_url: "https://polymarket.com/profile/unconfigured",

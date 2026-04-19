@@ -105,8 +105,9 @@ export const GET = wrapRouteHandlerWithLogging(
     let usdc_locked = 0;
     let usdc_positions_mtm = 0;
     const container = getContainer();
-    const capability = container.polyTradeBundle?.capability;
-    if (!capability) {
+    const bundle = container.polyTradeBundle;
+    const capability = bundle?.capability;
+    if (!bundle || !capability) {
       errors.push("poly_capability: not configured");
     } else {
       try {
@@ -129,9 +130,10 @@ export const GET = wrapRouteHandlerWithLogging(
         );
       }
       try {
-        const positions = await capability.getOperatorPositions();
+        const positions = await bundle.getOperatorPositions();
         usdc_positions_mtm = positions.reduce(
-          (sum, p) => sum + (p.currentValue ?? 0),
+          (sum: number, p: { currentValue?: number }) =>
+            sum + (p.currentValue ?? 0),
           0
         );
       } catch (err: unknown) {
