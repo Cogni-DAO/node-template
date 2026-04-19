@@ -21,9 +21,18 @@
  *   - TICK_IS_SELF_HEALING — errors are caught per-row; the tick continues for
  *     remaining rows and never crashes the interval.
  *   - NO_REDEMPTION_SYNC_V0 — reconciler only syncs from `getOrder`. Position-
- *     based redemption detection is deferred.
- *     TODO(task.0323 §2): implement redemption-sync using `getOperatorPositions`
- *     once task.0323 phase-2 spec is finalized.
+ *     based redemption detection is deferred (task.0329).
+ *   - GETORDER_NEVER_NULL — `getOrder` returns `GetOrderResult`; null is never a
+ *     valid return. Callers branch on the discriminant. (task.0328 CP1)
+ *   - GRACE_WINDOW_IS_CONFIG — not_found rows older than `notFoundGraceMs` are
+ *     promoted to `canceled`; value sourced from `POLY_CLOB_NOT_FOUND_GRACE_MS`
+ *     env var (default 900 000 ms). (task.0328 CP2)
+ *   - UPGRADE_IS_METERED — each not_found-to-canceled promotion increments
+ *     `poly_reconciler_not_found_upgrades_total`. (task.0328 CP2)
+ *   - SYNCED_AT_WRITTEN_ON_EVERY_SYNC — `markSynced` is called for every row
+ *     for which `getOrder` returned a typed answer. (task.0328 CP3)
+ *   - SYNC_HEALTH_IS_PUBLIC — `reconcilerLastTickAt` is stamped each tick and
+ *     surfaced by the `/api/v1/poly/internal/sync-health` endpoint. (task.0328 CP4)
  * Side-effects: starts a `setInterval`, emits logs + metrics.
  * Links: work/items/task.0323 §2, docs/spec/poly-copy-trade-phase1.md
  *
@@ -34,12 +43,13 @@
  * @internal
  */
 
+// TODO(task.0329): redemption-sync will add `getOperatorPositions` back.
 import type {
+  GetOrderResult,
   LoggerPort,
   MetricsPort,
-  OrderReceipt,
+  OrderStatus,
 } from "@cogni/market-provider";
-import type { PolymarketUserPosition } from "@cogni/market-provider/adapters/polymarket";
 import { EVENT_NAMES } from "@cogni/node-shared";
 
 import type { LedgerRow, LedgerStatus, OrderLedger } from "@/features/trading";
@@ -48,13 +58,19 @@ import type { LedgerRow, LedgerStatus, OrderLedger } from "@/features/trading";
 // Metric names
 // ─────────────────────────────────────────────────────────────────────────────
 
-export const RECONCILER_METRICS = {
+export const ORDER_RECONCILER_METRICS = {
   /** One per tick (regardless of how many rows were processed). */
   ticksTotal: "poly_mirror_reconcile_ticks_total",
   /** One per ledger row whose status was actually changed. */
   updatesTotal: "poly_mirror_reconcile_updates_total",
   /** One per `getOrder` / `updateStatus` error; tick continues for other rows. */
   errorsTotal: "poly_mirror_reconcile_errors_total",
+  /**
+   * One per row promoted from open/pending → canceled because CLOB returned
+   * not_found beyond the grace window. A spike here signals CLOB changed its
+   * order-retention / pruning behavior. Alert threshold: >5 in 10 min.
+   */
+  notFoundUpgradesTotal: "poly_reconciler_not_found_upgrades_total",
 } as const;
 
 const RECONCILE_POLL_MS = 60_000;
@@ -67,26 +83,48 @@ const DEFAULT_LIMIT = 200;
 
 export interface OrderReconcilerDeps {
   ledger: OrderLedger;
-  /** `PolyTradeBundle.getOrder` — returns `null` when the order is not found. */
-  getOrder: (orderId: string) => Promise<OrderReceipt | null>;
   /**
-   * `PolyTradeBundle.getOperatorPositions` — fetched once per tick for future
-   * redemption-sync. Currently unused beyond the TODO below.
+   * `PolyTradeBundle.getOrder` — returns a discriminated `GetOrderResult`.
+   * GETORDER_NEVER_NULL invariant (task.0328 CP1): null is never returned.
    */
-  getOperatorPositions: () => Promise<PolymarketUserPosition[]>;
+  getOrder: (orderId: string) => Promise<GetOrderResult>;
   operatorWalletAddress: `0x${string}`;
   logger: LoggerPort;
   metrics: MetricsPort;
+  /**
+   * Grace window (ms) before a not_found row is promoted to canceled.
+   * GRACE_WINDOW_IS_CONFIG invariant (task.0328 CP2): read from
+   * `POLY_CLOB_NOT_FOUND_GRACE_MS` via server-env; default 900 000 (15 min).
+   */
+  notFoundGraceMs: number;
+  /**
+   * Injected clock — returns the current wall time. Defaults to `() => new Date()`
+   * at production call sites. Injected in tests for deterministic age calculations.
+   * Mirrors the `clock` dep pattern in `mirror-coordinator.ts`.
+   */
+  clock?: () => Date;
 }
 
 /** Stops the reconciler. Returned so the container can call on SIGTERM. */
 export type ReconcilerStopFn = () => void;
 
+/**
+ * Handle returned by `startOrderReconciler`.
+ * `stop` clears the interval; `getLastTickAt` returns the wall time of the last
+ * successful tick (after `markSynced` completed), or null before the first tick.
+ *
+ * SYNC_HEALTH_IS_PUBLIC invariant (task.0328 CP4).
+ */
+export interface OrderReconcilerHandle {
+  stop: ReconcilerStopFn;
+  getLastTickAt: () => Date | null;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Receipt status → LedgerStatus map (mirrors order-ledger.ts `mapReceiptStatus`)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function mapReceiptStatus(s: OrderReceipt["status"]): LedgerStatus {
+function mapReceiptStatus(s: OrderStatus): LedgerStatus {
   switch (s) {
     case "filled":
       return "filled";
@@ -116,11 +154,18 @@ export async function runReconcileOnce(
   deps: OrderReconcilerDeps
 ): Promise<void> {
   const log = deps.logger.child({ component: "order-reconciler" });
+  const clock = deps.clock ?? (() => new Date());
 
   const rows: LedgerRow[] = await deps.ledger.listOpenOrPending({
     olderThanMs: DEFAULT_OLDER_THAN_MS,
     limit: DEFAULT_LIMIT,
   });
+
+  // Collect ids for which getOrder returned a typed answer (found OR not_found).
+  // Rows where getOrder threw (network error) are excluded — their staleness
+  // grows until we can verify. Bulk-stamped via markSynced after the loop.
+  // SYNCED_AT_WRITTEN_ON_EVERY_SYNC invariant (task.0328 CP3).
+  const syncedIds: string[] = [];
 
   for (const row of rows) {
     if (!row.order_id) {
@@ -130,11 +175,45 @@ export async function runReconcileOnce(
     }
 
     try {
-      const receipt = await deps.getOrder(row.order_id);
-      if (!receipt) {
-        // Order not found on CLOB — could be very new or purged. Skip.
+      const result = await deps.getOrder(row.order_id);
+      // getOrder returned a typed response — mark as synced regardless of branch.
+      syncedIds.push(row.client_order_id);
+
+      if (!("found" in result)) {
+        const ageMs = clock().getTime() - row.created_at.getTime();
+        if (ageMs < deps.notFoundGraceMs) {
+          // Still within grace — assume CLOB is just slow to index.
+          log.debug(
+            {
+              event: EVENT_NAMES.POLY_RECONCILER_NOT_FOUND,
+              client_order_id: row.client_order_id,
+              ageMs,
+            },
+            "CLOB getOrder returned not_found (within grace window)"
+          );
+          continue;
+        }
+        // Beyond grace — CLOB has pruned or the order was canceled and we
+        // missed the transition. Promote to canceled with a distinct reason
+        // so forensics can tell this apart from a normal user/market cancel.
+        await deps.ledger.updateStatus({
+          client_order_id: row.client_order_id,
+          status: "canceled",
+          reason: "clob_not_found",
+        });
+        deps.metrics.incr(ORDER_RECONCILER_METRICS.notFoundUpgradesTotal, {});
+        log.info(
+          {
+            event: EVENT_NAMES.POLY_RECONCILER_NOT_FOUND_UPGRADE,
+            client_order_id: row.client_order_id,
+            order_id: row.order_id,
+            ageMs,
+          },
+          "reconciler: promoting stuck row to canceled (CLOB not_found > grace)"
+        );
         continue;
       }
+      const receipt = result.found;
 
       const newStatus = mapReceiptStatus(receipt.status);
       if (newStatus === row.status) {
@@ -148,7 +227,7 @@ export async function runReconcileOnce(
         filled_size_usdc: receipt.filled_size_usdc ?? undefined,
       });
 
-      deps.metrics.incr(RECONCILER_METRICS.updatesTotal, {
+      deps.metrics.incr(ORDER_RECONCILER_METRICS.updatesTotal, {
         from: row.status,
         to: newStatus,
       });
@@ -163,7 +242,8 @@ export async function runReconcileOnce(
         "reconciler: status updated"
       );
     } catch (err: unknown) {
-      deps.metrics.incr(RECONCILER_METRICS.errorsTotal, {});
+      // getOrder threw — do NOT add to syncedIds; row staleness grows.
+      deps.metrics.incr(ORDER_RECONCILER_METRICS.errorsTotal, {});
       log.error(
         {
           event: EVENT_NAMES.POLY_MIRROR_RECONCILE_TICK_ERROR,
@@ -177,14 +257,11 @@ export async function runReconcileOnce(
     }
   }
 
-  // TODO(task.0323 §2): redemption-sync — call getOperatorPositions once per
-  // tick and mark filled rows as redeemed when the operator no longer holds
-  // the asset. Deferred: need to distinguish a sold position (canceled) from a
-  // market-resolved redemption (still "filled") without ambiguity.
-  // For now `getOperatorPositions` is accepted in deps but not called, keeping
-  // the interface stable for the follow-up PR.
+  // Bulk-stamp synced_at for all rows that got a typed CLOB response this tick.
+  // One UPDATE vs N — correct and efficient.
+  await deps.ledger.markSynced(syncedIds);
 
-  deps.metrics.incr(RECONCILER_METRICS.ticksTotal, {});
+  deps.metrics.incr(ORDER_RECONCILER_METRICS.ticksTotal, {});
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -193,13 +270,14 @@ export async function runReconcileOnce(
 
 /**
  * Start the 60s reconciler poll. Emits
- * `poly.mirror.reconcile.singleton_claim` at boot. Returns a stop fn.
+ * `poly.mirror.reconcile.singleton_claim` at boot. Returns an
+ * `OrderReconcilerHandle` with `stop` + `getLastTickAt`.
  *
  * @public
  */
 export function startOrderReconciler(
   deps: OrderReconcilerDeps
-): ReconcilerStopFn {
+): OrderReconcilerHandle {
   const log = deps.logger.child({
     component: "order-reconciler-job",
     operator_wallet: deps.operatorWalletAddress,
@@ -213,13 +291,20 @@ export function startOrderReconciler(
     "order reconciler starting (SINGLE_WRITER — alert on duplicate pods running this)"
   );
 
+  // In-memory last-tick timestamp. Updated at the END of each successful tick
+  // (after markSynced completes). Null before first tick completes.
+  // SYNC_HEALTH_IS_PUBLIC invariant (task.0328 CP4).
+  let lastTickAt: Date | null = null;
+
   async function tick(): Promise<void> {
     try {
       await runReconcileOnce(deps);
+      // Stamp AFTER the full tick (including markSynced) succeeds.
+      lastTickAt = new Date();
     } catch (err: unknown) {
       // Belt-and-suspenders: `runReconcileOnce` already catches per-row errors.
       // Anything escaping here is a structural bug (e.g. ledger query threw).
-      deps.metrics.incr(RECONCILER_METRICS.errorsTotal, {});
+      deps.metrics.incr(ORDER_RECONCILER_METRICS.errorsTotal, {});
       log.error(
         {
           event: EVENT_NAMES.POLY_MIRROR_RECONCILE_TICK_ERROR,
@@ -234,15 +319,20 @@ export function startOrderReconciler(
   // First tick fires immediately.
   void tick();
 
-  const handle = setInterval(() => {
+  const intervalHandle = setInterval(() => {
     void tick();
   }, RECONCILE_POLL_MS);
 
-  return function stop() {
-    clearInterval(handle);
-    log.info(
-      { event: EVENT_NAMES.POLY_MIRROR_RECONCILE_STOPPED },
-      "order reconciler stopped"
-    );
+  return {
+    stop() {
+      clearInterval(intervalHandle);
+      log.info(
+        { event: EVENT_NAMES.POLY_MIRROR_RECONCILE_STOPPED },
+        "order reconciler stopped"
+      );
+    },
+    getLastTickAt() {
+      return lastTickAt;
+    },
   };
 }

@@ -32,6 +32,8 @@
     { "path": "./packages/knowledge-store" },
     { "path": "./packages/market-provider" },
     { "path": "./nodes/node-template/packages/knowledge" },
-    { "path": "./nodes/poly/packages/knowledge" }
+    { "path": "./nodes/poly/packages/knowledge" },
+    { "path": "./nodes/poly/packages/db-schema" },
+    { "path": "./nodes/poly/packages/doltgres-schema" }
   ]
 }

@@ -20,6 +20,7 @@ import type {
   OrderLedger,
   RecordDecisionInput,
   StateSnapshot,
+  SyncHealthSummary,
   UpdateStatusInput,
 } from "@/features/trading/order-ledger.types";
 
@@ -111,6 +112,7 @@ export class FakeOrderLedger implements OrderLedger {
       order_id: null,
       status: "pending",
       attributes: attrs,
+      synced_at: null,
       created_at: now,
       updated_at: now,
     });
@@ -187,12 +189,55 @@ export class FakeOrderLedger implements OrderLedger {
     if (input.order_id !== undefined) {
       row.order_id = input.order_id;
     }
-    if (input.filled_size_usdc !== undefined) {
+    if (input.filled_size_usdc !== undefined || input.reason !== undefined) {
       row.attributes = {
         ...(row.attributes ?? {}),
-        filled_size_usdc: input.filled_size_usdc,
+        ...(input.filled_size_usdc !== undefined
+          ? { filled_size_usdc: input.filled_size_usdc }
+          : {}),
+        ...(input.reason !== undefined ? { reason: input.reason } : {}),
       };
     }
+  }
+
+  async markSynced(client_order_ids: string[]): Promise<void> {
+    // No-op on empty array — matches real adapter behaviour.
+    if (client_order_ids.length === 0) return;
+    const now = new Date();
+    for (const row of this.rows) {
+      if (client_order_ids.includes(row.client_order_id)) {
+        row.synced_at = now;
+      }
+    }
+  }
+
+  async syncHealthSummary(): Promise<SyncHealthSummary> {
+    const now = Date.now();
+    const staleThreshold = now - 60_000;
+
+    // oldest_synced_row_age_ms: age of the least-recently-synced row.
+    // Only consider rows with non-null synced_at (never-synced rows use
+    // rows_never_synced).
+    const syncedDates = this.rows
+      .map((r) => r.synced_at?.getTime())
+      .filter((t): t is number => t !== undefined && t !== null);
+
+    const oldest_synced_row_age_ms =
+      syncedDates.length > 0 ? now - Math.min(...syncedDates) : null;
+
+    const rows_stale_over_60s = this.rows.filter(
+      (r) => r.synced_at !== null && r.synced_at.getTime() < staleThreshold
+    ).length;
+
+    const rows_never_synced = this.rows.filter(
+      (r) => r.synced_at === null
+    ).length;
+
+    return {
+      oldest_synced_row_age_ms,
+      rows_stale_over_60s,
+      rows_never_synced,
+    };
   }
 }
 

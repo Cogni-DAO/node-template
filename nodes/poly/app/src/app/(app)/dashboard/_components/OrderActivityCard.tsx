@@ -8,7 +8,7 @@
  * Invariants:
  *   - READ_ONLY: no mutation buttons.
  *   - COPY_PAYLOAD_IS_AGENT_INPUT: per-row copy emits a JSON block shaped for an AI agent prompt.
- *   - LEDGER_STATUS_MAY_BE_STALE: `status` is set at placement time and is not reconciled with the CLOB. (task.0323 §2)
+ *   - LEDGER_STATUS_IS_RECONCILED: status is reconciled from CLOB every reconciler tick; synced_at + staleness_ms render a staleness dot when synced_at IS NULL or staleness > 60s. (task.0328)
  *   - VISUAL_RESTRAINT: only BUY (green) / SELL (red) carry color. Status uses a tiny dot + muted text.
  *   - NO_EOA_PROFILE_LINKS: row click points at the target's Polygon tx (authoritative on-chain proof), never at polymarket.com/profile/<operator> — that redirects to an empty Safe-proxy for EOA-direct operators. See `.claude/skills/poly-dev-expert/SKILL.md`.
  *   - NO_EXTERNAL_PROXY: market title + tx hash are read directly from the row (denormalized at write time in `decide.ts` + `order-ledger.ts`). We do NOT proxy Polymarket Gamma from the client.
@@ -64,7 +64,7 @@ function buildAgentPayload(row: PolyCopyTradeOrderRow): string {
   return JSON.stringify(
     {
       action: "paste-me-to-your-agent",
-      hint: "Inspect / cancel / reprice this Polymarket copy-trade order via core__poly_place_trade and related tools. Ledger status may be stale (task.0323 §2) — cross-check against Data-API /positions.",
+      hint: "Inspect / cancel / reprice this Polymarket copy-trade order via core__poly_place_trade and related tools. Trust row.status when staleness_ms < 60000; treat null synced_at or staleness_ms > 60000 as unverified and cross-check against Data-API /positions.",
       order: row,
       ground_truth: {
         target_wallet_positions: row.target_wallet
@@ -105,6 +105,42 @@ function RowCopyButton({ row }: { row: PolyCopyTradeOrderRow }): ReactElement {
         <Copy className="size-3.5" />
       )}
     </button>
+  );
+}
+
+const STALE_THRESHOLD_MS = 60_000;
+
+/**
+ * Small dot rendered next to the status label.
+ * - No dot when the row is fresh (synced within 60 s).
+ * - Grey dot with tooltip "Never synced" when `synced_at` is null.
+ * - Yellow dot with relative-time tooltip when staleness > 60 s.
+ */
+function StalenessDot({
+  synced_at,
+  staleness_ms,
+}: {
+  synced_at: string | null;
+  staleness_ms: number | null;
+}): ReactElement | null {
+  if (synced_at !== null && (staleness_ms ?? 0) <= STALE_THRESHOLD_MS) {
+    return null; // Fresh — no badge needed.
+  }
+
+  const isNeverSynced = synced_at === null;
+  const tooltip = isNeverSynced
+    ? "Never synced"
+    : `Last synced ${timeAgo(synced_at)} ago`;
+
+  return (
+    // biome-ignore lint/a11y/useAriaPropsForRole: decorative dot uses title for tooltip only
+    <span
+      title={tooltip}
+      className={cn(
+        "inline-block size-1.5 rounded-full",
+        isNeverSynced ? "bg-muted-foreground" : "bg-warning"
+      )}
+    />
   );
 }
 
@@ -182,19 +218,35 @@ export function OrderActivityCard(): ReactElement {
                 const href = row.market_tx_hash
                   ? `https://polygonscan.com/tx/${row.market_tx_hash}`
                   : null;
-                const display =
-                  row.market_title ??
-                  (row.market_id
-                    ? `${row.market_id.slice(-12)}`
-                    : "(unknown market)");
+                // Data-API trades always carry a human-readable title (Zod
+                // schema default=""), so for rows written post-#918 this is
+                // always populated. Pre-#918 legacy rows may render empty;
+                // that's a finite migration tail, not worth placeholder UX.
+                const display = row.market_title ?? "";
 
+                const openHref = () => {
+                  if (href) window.open(href, "_blank", "noopener");
+                };
                 return (
                   <TableRow
                     key={`${row.target_id}:${row.fill_id}`}
-                    onClick={() => {
-                      if (href) window.open(href, "_blank", "noopener");
+                    role={href ? "link" : undefined}
+                    tabIndex={href ? 0 : undefined}
+                    onClick={openHref}
+                    onAuxClick={(e) => {
+                      // middle-click → new tab (same as left-click today).
+                      if (e.button === 1) openHref();
                     }}
-                    className={cn(href && "cursor-pointer hover:bg-muted/30")}
+                    onKeyDown={(e) => {
+                      if (href && (e.key === "Enter" || e.key === " ")) {
+                        e.preventDefault();
+                        openHref();
+                      }
+                    }}
+                    className={cn(
+                      href &&
+                        "cursor-pointer hover:bg-muted/30 focus-visible:bg-muted/30 focus-visible:outline-none"
+                    )}
                   >
                     <TableCell className="text-muted-foreground text-sm">
                       <span className="inline-flex items-center gap-2">
@@ -205,12 +257,13 @@ export function OrderActivityCard(): ReactElement {
                           )}
                         />
                         {row.status}
+                        <StalenessDot
+                          synced_at={row.synced_at}
+                          staleness_ms={row.staleness_ms}
+                        />
                       </span>
                     </TableCell>
-                    <TableCell
-                      className="font-medium text-sm"
-                      title={row.market_title ?? undefined}
-                    >
+                    <TableCell className="font-medium text-sm">
                       {display}
                     </TableCell>
                     <TableCell className="text-center">

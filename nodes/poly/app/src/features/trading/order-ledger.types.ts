@@ -7,7 +7,8 @@
  * Scope: Pure type surface. No drizzle imports, no I/O.
  * Invariants: LEDGER_PORT_SHAPE_IS_STABLE — adding fields is a breaking change. INSERT_BEFORE_PLACE is a caller invariant, not a ledger one.
  * Side-effects: none
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b)
+ * Public types: `LedgerRow` (includes `synced_at`), `LedgerStatus`, `StateSnapshot`, `InsertPendingInput`, `RecordDecisionInput`, `ListRecentOptions`, `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger`.
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md
  * @public
  */
 
@@ -25,7 +26,10 @@ export type LedgerStatus =
 /**
  * Row shape returned by `listRecent` — mirrors `polyCopyTradeFills` $inferSelect
  * but with the fields the read APIs + mirror-coordinator actually consume.
- * Extra columns (`attributes`, `created_at`, `updated_at`) surface as-is.
+ * Extra columns (`attributes`, `created_at`, `updated_at`, `synced_at`) surface as-is.
+ *
+ * `synced_at` is NULL until the reconciler first touches the row
+ * (SYNCED_AT_WRITTEN_ON_EVERY_SYNC invariant — see task.0328 CP3).
  */
 export interface LedgerRow {
   target_id: string;
@@ -35,6 +39,8 @@ export interface LedgerRow {
   order_id: string | null;
   status: LedgerStatus;
   attributes: Record<string, unknown> | null;
+  /** Last time the reconciler received a typed CLOB response for this row. NULL = never checked. */
+  synced_at: Date | null;
   created_at: Date;
   updated_at: Date;
 }
@@ -96,6 +102,29 @@ export interface UpdateStatusInput {
   filled_size_usdc?: number;
   /** Stamp order_id if the adapter returns it on a late acknowledgement. */
   order_id?: string;
+  /**
+   * Machine-readable promotion reason stored in `attributes.reason`.
+   * Used by the reconciler to distinguish "clob_not_found" cancelations from
+   * normal user/market cancelations. Mirrors the pattern of `markError` →
+   * `attributes.error`.
+   */
+  reason?: string;
+}
+
+/**
+ * Aggregate freshness stats returned by `syncHealthSummary`.
+ * Used by GET /api/v1/poly/internal/sync-health.
+ *
+ * `oldest_synced_row_age_ms` — age in ms of the least-recently-synced row
+ *   that HAS a non-null `synced_at`. Null when no row has ever been synced.
+ *   Never-synced rows are counted in `rows_never_synced` instead.
+ *
+ * SYNC_HEALTH_IS_PUBLIC invariant (task.0328 CP4).
+ */
+export interface SyncHealthSummary {
+  oldest_synced_row_age_ms: number | null;
+  rows_stale_over_60s: number;
+  rows_never_synced: number;
 }
 
 /**
@@ -161,4 +190,26 @@ export interface OrderLedger {
    * after placement (mirror-coordinator owns `markOrderId` / `markError`).
    */
   updateStatus(input: UpdateStatusInput): Promise<void>;
+
+  /**
+   * Bulk-stamp `synced_at = now()` on the rows whose `client_order_id` values
+   * are in the given array. Called once per reconciler tick after iterating all
+   * rows for which `getOrder` returned a typed answer (found OR not_found).
+   *
+   * Rows where `getOrder` threw (network error) are NOT included — their
+   * staleness grows until the next successful check.
+   *
+   * No-op when the array is empty (no SQL emitted).
+   *
+   * SYNCED_AT_WRITTEN_ON_EVERY_SYNC invariant (task.0328 CP3).
+   */
+  markSynced(client_order_ids: string[]): Promise<void>;
+
+  /**
+   * Return aggregate sync-freshness stats for the health endpoint.
+   * One DB round-trip (three filtered aggregates in a single SELECT).
+   *
+   * SYNC_HEALTH_IS_PUBLIC invariant (task.0328 CP4).
+   */
+  syncHealthSummary(): Promise<SyncHealthSummary>;
 }

@@ -9,6 +9,7 @@
  * Side-effects: process.env
  * Notes: Extracted from server.ts so that bootstrap/job code can import without pulling in "server-only".
  *        APP_ENV for adapter wiring; SERVICE_NAME for observability; LLM config; DATABASE_URL required (no component-piece fallback).
+ *        POLY_CLOB_NOT_FOUND_GRACE_MS — grace window (ms) before a not_found order is promoted to canceled (default 900 000; task.0328 GRACE_WINDOW_IS_CONFIG).
  *        Lazy init prevents build-time access. Per DATABASE_RLS_SPEC.md design decision 7: no DSN construction in runtime code.
  * Links: Environment configuration specification
  * @public
@@ -277,6 +278,17 @@ export const serverSchema = z.object({
         : [],
     z.array(z.string().regex(/^0x[a-fA-F0-9]{40}$/))
   ),
+
+  // Reconciler not-found grace window (task.0328 CP2, @scaffolding, Deleted-in-phase: 4).
+  // If CLOB returns not_found for a row whose age (now − created_at) exceeds
+  // this many ms, the reconciler promotes the row to `canceled` with
+  // reason="clob_not_found". Default: 15 min (900000 ms). Set lower in
+  // staging/test to exercise the promotion path faster.
+  POLY_CLOB_NOT_FOUND_GRACE_MS: z.coerce
+    .number()
+    .int()
+    .nonnegative()
+    .default(900_000),
 
   // Operator wallet top-up cap (USD)
   // Per operator-wallet.md: MAX_TOPUP_CAP — per-tx ceiling for OpenRouter top-ups.

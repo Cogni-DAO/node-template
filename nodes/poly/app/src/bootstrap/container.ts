@@ -119,12 +119,16 @@ import { createWebSearchCapability } from "@/bootstrap/capabilities/web-search";
 import { createWorkItemCapability } from "@/bootstrap/capabilities/work-item";
 import type { RateLimitBypassConfig } from "@/bootstrap/http/wrapPublicRoute";
 import { startMirrorPoll } from "@/bootstrap/jobs/copy-trade-mirror.job";
-import { startOrderReconciler } from "@/bootstrap/jobs/order-reconciler.job";
+import {
+  type OrderReconcilerHandle,
+  startOrderReconciler,
+} from "@/bootstrap/jobs/order-reconciler.job";
 import { startProcessHealthPublisher } from "@/bootstrap/publishers";
 import {
   type CopyTradeTargetSource,
   envTargetSource,
 } from "@/features/copy-trade/target-source";
+import { createOrderLedger, type OrderLedger } from "@/features/trading";
 import type {
   AccountService,
   AiTelemetryPort,
@@ -257,6 +261,13 @@ export interface Container {
    */
   copyTradeTargetSource: CopyTradeTargetSource;
   /**
+   * Memoized `OrderLedger` singleton scoped to `serviceDb`. Routes must use
+   * this instead of building per-request with `createOrderLedger(...)`.
+   * The singleton is safe: `createOrderLedger` is stateless (no per-call
+   * caches or request-bound state).
+   */
+  orderLedger: OrderLedger;
+  /**
    * Service-role DB client (BYPASSRLS). Exposed for read APIs against
    * `poly_copy_trade_*` — the v0 copy-trade prototype's three tables are
    * system-owned (no RLS per migration 0027). This is a **deliberate v0
@@ -270,6 +281,14 @@ export interface Container {
    * Any new route reaching for this field should instead gate on RLS.
    */
   serviceDb: Database;
+  /**
+   * Returns the wall time of the last completed reconciler tick, or null if
+   * the reconciler has not ticked in this process (e.g. Polymarket creds
+   * absent, or still awaiting first tick).
+   *
+   * SYNC_HEALTH_IS_PUBLIC invariant (task.0328 CP4).
+   */
+  reconcilerLastTickAt: () => Date | null;
 }
 
 // Feature-specific dependency types
@@ -300,6 +319,9 @@ let _workflowClientPromise: Promise<{
   client: WorkflowClient;
   taskQueue: string;
 }> | null = null;
+// Reconciler handle — set when the reconciler starts (async boot path).
+// Null until Polymarket creds are present and the async initialiser fires.
+let _reconcilerHandle: OrderReconcilerHandle | null = null;
 
 /**
  * Get the singleton container instance.
@@ -319,6 +341,7 @@ export function getContainer(): Container {
 export function resetContainer(): void {
   _container = null;
   _webhookRegistrations = null;
+  _reconcilerHandle = null;
   if (_temporalConnection) {
     void _temporalConnection.close();
   }
@@ -540,6 +563,14 @@ function createContainer(): Container {
 
   // Service DB (BYPASSRLS) for worker adapters
   const serviceDb = getServiceDb();
+
+  // Memoized OrderLedger singleton — routes use container.orderLedger instead
+  // of building per-request. createOrderLedger is stateless so this is safe.
+  const orderLedger = createOrderLedger({
+    db: serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
+    logger: log,
+  });
+
   const paymentAttemptServiceRepository =
     new ServiceDrizzlePaymentAttemptRepository(serviceDb);
 
@@ -680,7 +711,6 @@ function createContainer(): Container {
           return;
         }
 
-        const { createOrderLedger } = await import("@/features/trading");
         const { createPolymarketActivitySource } = await import(
           "@/features/wallet-watch"
         );
@@ -698,11 +728,6 @@ function createContainer(): Container {
         // (debug/info/warn/error/child with object + optional msg).
         const mirrorLogger =
           log as unknown as import("@cogni/market-provider").LoggerPort;
-        const ledger = createOrderLedger({
-          db: getServiceDb() as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
-          logger: log,
-        });
-
         for (const targetWallet of wallets) {
           const target = buildMirrorTargetConfig(targetWallet);
           const source = createPolymarketActivitySource({
@@ -714,7 +739,7 @@ function createContainer(): Container {
           startMirrorPoll({
             target,
             source,
-            ledger,
+            ledger: orderLedger,
             placeIntent: polyTradeBundle.placeIntent,
             closePosition: polyTradeBundle.closePosition,
             getOperatorPositions: polyTradeBundle.getOperatorPositions,
@@ -726,13 +751,13 @@ function createContainer(): Container {
         // Ledger reconciler — syncs open/pending rows from CLOB getOrder.
         // Operator-wide (not per-target), so it runs exactly once.
         // (task.0323 §2, @scaffolding, Deleted-in-phase: 4)
-        startOrderReconciler({
-          ledger,
+        _reconcilerHandle = startOrderReconciler({
+          ledger: orderLedger,
           getOrder: polyTradeBundle.getOrder,
-          getOperatorPositions: polyTradeBundle.getOperatorPositions,
           operatorWalletAddress: polyTradeBundle.operatorWalletAddress,
           logger: mirrorLogger,
           metrics: noopMetrics,
+          notFoundGraceMs: env.POLY_CLOB_NOT_FOUND_GRACE_MS,
         });
       } catch (err: unknown) {
         log.error(
@@ -1002,7 +1027,11 @@ function createContainer(): Container {
     })(),
     polyTradeBundle,
     copyTradeTargetSource,
+    orderLedger,
     serviceDb,
+    reconcilerLastTickAt() {
+      return _reconcilerHandle?.getLastTickAt() ?? null;
+    },
   };
 }
 
