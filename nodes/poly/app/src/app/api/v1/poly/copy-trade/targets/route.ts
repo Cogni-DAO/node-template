@@ -23,6 +23,10 @@ import {
   type PolyCopyTradeTarget,
   polyCopyTradeTargetsOperation,
 } from "@cogni/node-contracts";
+import {
+  COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+  COGNI_SYSTEM_PRINCIPAL_USER_ID,
+} from "@cogni/node-shared";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -38,30 +42,33 @@ export const GET = wrapRouteHandlerWithLogging(
     routeId: "poly.copy_trade.targets",
     auth: { mode: "required", getSessionUser },
   },
-  // TODO(HARDCODED_USER): response ignores `sessionUser` — single-operator
-  // prototype. Multi-tenant targets land in task.0315 P2; when they do,
-  // resolve per-user targets via `poly_copy_trade_targets.owner_id = sessionUser.id`.
+  // TODO(task.0318 A4): swap from system-tenant scope to `withTenantScope(appDb,
+  // sessionUser.id, ...)` + `dbTargetSource.listForActor(sessionUser.id)` once
+  // CP A3+A4 land. For now this route reads the system tenant's targets so the
+  // existing single-operator candidate-a flight keeps rendering on the dashboard.
   async (ctx, _request, _sessionUser) => {
     const container = getContainer();
     const wallets = await container.copyTradeTargetSource.listTargets();
     const targets: PolyCopyTradeTarget[] = [];
     if (wallets.length > 0) {
-      // GLOBAL_KILL_SWITCH: `poly_copy_trade_config.enabled` is a singleton in v0
-      // — one bit gates every target. `snapshotState` is FAIL_CLOSED on DB read
-      // failure so the dashboard surfaces `enabled=false` rather than a
-      // misleading true when Postgres is down. Read once; apply to all rows.
       const ledger = createOrderLedger({
         db: container.serviceDb as unknown as NodePgDatabase,
         logger: ctx.log,
       });
-      const configs = wallets.map((w) => ({
-        wallet: w,
-        config: buildMirrorTargetConfig(w),
+      const configs = wallets.map((wallet) => ({
+        wallet,
+        config: buildMirrorTargetConfig({
+          targetWallet: wallet,
+          billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+          createdByUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
+        }),
       }));
       const firstConfig = configs[0];
       if (!firstConfig) throw new Error("unreachable"); // guarded by wallets.length > 0
-      // All targets share the same singleton — read it from the first target_id.
-      const snapshot = await ledger.snapshotState(firstConfig.config.target_id);
+      const snapshot = await ledger.snapshotState(
+        firstConfig.config.target_id,
+        COGNI_SYSTEM_BILLING_ACCOUNT_ID
+      );
       for (const { wallet, config } of configs) {
         targets.push({
           target_id: config.target_id,

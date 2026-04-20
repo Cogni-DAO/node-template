@@ -204,6 +204,13 @@
       "when": 1776588979614,
       "tag": "0028_small_doomsday",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1776700800000,
+      "tag": "0029_poly_copy_trade_multitenant",
+      "breakpoints": true
     }
   ]
 }

@@ -61,8 +61,16 @@ export interface StateSnapshot {
   already_placed_ids: string[];
 }
 
+/** Tenant attribution required by every write into `poly_copy_trade_*`. */
+export interface TenantBinding {
+  /** Data column. FK → billing_accounts.id. */
+  billing_account_id: string;
+  /** RLS key column. FK → users.id. */
+  created_by_user_id: string;
+}
+
 /** Input to `insertPending` — shape captured at decide-time. */
-export interface InsertPendingInput {
+export interface InsertPendingInput extends TenantBinding {
   target_id: string;
   fill_id: string;
   observed_at: Date;
@@ -70,7 +78,7 @@ export interface InsertPendingInput {
 }
 
 /** Input to `recordDecision` — one row per `decide()` outcome, including skips. */
-export interface RecordDecisionInput {
+export interface RecordDecisionInput extends TenantBinding {
   target_id: string;
   fill_id: string;
   outcome: "placed" | "skipped" | "error";
@@ -141,7 +149,10 @@ export interface OrderLedger {
    * returns `{enabled: false, ...zeroes}` plus an error log on the caller's
    * logger — never throws.
    */
-  snapshotState(target_id: string): Promise<StateSnapshot>;
+  snapshotState(
+    target_id: string,
+    billing_account_id: string
+  ): Promise<StateSnapshot>;
 
   /**
    * Insert a `pending` row. Idempotent by PK `(target_id, fill_id)` — a repeat

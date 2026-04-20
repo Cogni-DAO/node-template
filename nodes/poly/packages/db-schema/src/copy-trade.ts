@@ -3,15 +3,20 @@
 
 /**
  * Module: `@cogni/poly-db-schema/copy-trade`
- * Purpose: Schema for the Polymarket copy-trade prototype — fills ledger, global kill-switch singleton, append-only decisions log.
- * Scope: Poly-local table definitions (task.0315 Phase 1 CP3.3; relocated from @cogni/db-schema into @cogni/poly-db-schema by task.0324 for per-node schema independence — consumed by poly-app AND future cross-process importers such as the Temporal worker). Does not contain queries, RLS policies, or runtime logic. System-owned tables (single-operator prototype) — no tenant-scoped RLS.
+ * Purpose: Schema for the Polymarket copy-trade prototype — tracked-wallet records (tenant-scoped),
+ *          fills ledger, per-tenant kill-switch config, append-only decisions log.
+ * Scope: Poly-local table definitions. Does not contain queries, RLS policies, or runtime logic.
+ *        RLS policies live in the SQL migration alongside `ENABLE ROW LEVEL SECURITY`.
  * Invariants:
+ *   - TENANT_SCOPED_ROWS: every row has `billing_account_id NOT NULL` (data column, FK → billing_accounts) +
+ *     `created_by_user_id NOT NULL` (RLS key, FK → users). Mirrors the `connections` pattern from migration 0025.
  *   - FILL_ID_SHAPE_DECIDED: composite `<source>:<native_id>` per task.0315 P0.2, enforced by CHECK.
  *   - IDEMPOTENT_BY_CLIENT_ID: `client_order_id = clientOrderIdFor(target_id, fill_id)` (pinned helper).
- *   - GLOBAL_KILL_DB_ROW: `config.enabled DEFAULT false` = fail-closed; SELECT failure treated as false.
- * Columns (poly_copy_trade_fills): target_id, fill_id, observed_at, client_order_id, order_id, status, attributes, synced_at (nullable timestamptz — added migration 0028; NULL until reconciler first reads from CLOB), created_at, updated_at.
+ *   - PER_TENANT_KILL_SWITCH: `poly_copy_trade_config` PK is `billing_account_id` — flipping one tenant's
+ *     row has zero effect on other tenants. Default `enabled: false` (fail-closed).
+ *   - NO_PER_TARGET_ENABLED: `poly_copy_trade_targets` has no per-row enable flag. Operators add/remove rows.
  * Side-effects: none (schema definitions only)
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 CP3.3), work/items/task.0328.poly-sync-truth-ledger-cache.md (CP3 — synced_at)
+ * Links: docs/spec/poly-multi-tenant-auth.md, work/items/task.0318
  * @public
  */
 
@@ -23,7 +28,6 @@ import {
   jsonb,
   pgTable,
   primaryKey,
-  smallint,
   text,
   timestamp,
   uniqueIndex,
@@ -31,19 +35,59 @@ import {
 } from "drizzle-orm/pg-core";
 
 /**
- * Observed fills from tracked target wallets + their mirror placement state.
- * Composite PK `(target_id, fill_id)` is the canonical dedupe gate —
- * idempotent inserts collapse to the same row; `order_id` is non-null only
- * after the executor successfully placed the mirror order.
+ * Tracked Polymarket wallets the operator is mirroring. One row per (tenant, target_wallet)
+ * — disabling is a soft-delete via `disabled_at`, never a hard DELETE (preserves attribution
+ * history in the fills ledger).
  *
- * `client_order_id` is deterministic from `(target_id, fill_id)` — see
- * IDEMPOTENT_BY_CLIENT_ID above. It is stored so the executor's post-placement
- * receipt correlation doesn't need to recompute it.
+ * @public
+ */
+export const polyCopyTradeTargets = pgTable(
+  "poly_copy_trade_targets",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    /** Tenant data column. FK → billing_accounts.id. */
+    billingAccountId: text("billing_account_id").notNull(),
+    /** RLS key column. Authenticated user that owns this tracking record. */
+    createdByUserId: text("created_by_user_id").notNull(),
+    /** 0x-prefixed 40-hex Polymarket EOA being followed. */
+    targetWallet: text("target_wallet").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    /** Soft-delete tombstone. NULL = active. */
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  },
+  (table) => [
+    check(
+      "poly_copy_trade_targets_wallet_shape",
+      sql`${table.targetWallet} ~ '^0x[a-fA-F0-9]{40}$'`
+    ),
+    // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
+    // so a previously-disabled wallet can be re-added without violating uniqueness.
+    uniqueIndex("poly_copy_trade_targets_billing_wallet_active_idx")
+      .on(table.billingAccountId, table.targetWallet)
+      .where(sql`${table.disabledAt} IS NULL`),
+    index("poly_copy_trade_targets_billing_account_idx").on(
+      table.billingAccountId
+    ),
+  ]
+);
+
+/**
+ * Observed fills from tracked target wallets + their mirror placement state.
+ * Composite PK `(target_id, fill_id)` is the canonical dedupe gate. Tenant-scoped
+ * via `billing_account_id` (data) + `created_by_user_id` (RLS key).
+ *
+ * `client_order_id` is deterministic from `(target_id, fill_id)` per IDEMPOTENT_BY_CLIENT_ID.
  */
 export const polyCopyTradeFills = pgTable(
   "poly_copy_trade_fills",
   {
-    /** P1: synthetic UUID per env target wallet. P2: FK to `poly_copy_trade_targets`. */
+    /** Tenant data column. */
+    billingAccountId: text("billing_account_id").notNull(),
+    /** RLS key column. */
+    createdByUserId: text("created_by_user_id").notNull(),
+    /** P1: synthetic UUID per env target wallet. P2+: target row id. */
     targetId: uuid("target_id").notNull(),
     /** Composite `"<source>:<native_id>"` per FILL_ID_SHAPE_DECIDED. */
     fillId: text("fill_id").notNull(),
@@ -61,7 +105,6 @@ export const polyCopyTradeFills = pgTable(
      * Timestamp of the last reconciler tick that received a typed CLOB response
      * (found OR not_found) for this row. NULL until the reconciler first checks
      * this order. Written by `markSynced` — never by the placement path.
-     * Used by the dashboard staleness badge (STALENESS_VISIBLE_IN_UI invariant).
      */
     syncedAt: timestamp("synced_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
@@ -78,23 +121,22 @@ export const polyCopyTradeFills = pgTable(
     // `client_order_id` is unique-by-construction across all rows (deterministic
     // from the PK pair); index lets the executor detect repeat submits.
     index("poly_copy_trade_fills_client_order_id_idx").on(table.clientOrderId),
-    // Supports fast "oldest unsynced" queries for the sync-health endpoint (CP4).
+    // Supports fast "oldest unsynced" queries for the sync-health endpoint.
     index("idx_poly_copy_trade_fills_synced_at").on(table.syncedAt),
+    // Tenant-scoped queries.
+    index("poly_copy_trade_fills_billing_account_idx").on(
+      table.billingAccountId
+    ),
     // Executor-bug canary — Polymarket order ids are unique by construction, so
     // two fills ever carrying the same `order_id` indicates the mirror path
     // double-submitted. Partial index skips the (common) null rows.
     uniqueIndex("poly_copy_trade_fills_order_id_unique")
       .on(table.orderId)
       .where(sql`${table.orderId} IS NOT NULL`),
-    // Defend the dedupe gate — fill_id MUST be "<source>:<native_id>" with a
-    // known source (FILL_ID_SHAPE_DECIDED). A typo like "dataapi:..." would
-    // silently bypass cross-source dedupe; this CHECK makes that impossible.
     check(
       "poly_copy_trade_fills_fill_id_shape",
       sql`${table.fillId} ~ '^(data-api|clob-ws):.+'`
     ),
-    // Enumerate the canonical OrderStatus set at the schema layer so a buggy
-    // writer can't silently persist, e.g., "LIVE" or "Placed".
     check(
       "poly_copy_trade_fills_status_check",
       sql`${table.status} IN ('pending','open','filled','partial','canceled','error')`
@@ -103,40 +145,36 @@ export const polyCopyTradeFills = pgTable(
 );
 
 /**
- * Global kill-switch singleton. `singleton_id = 1` enforced by CHECK.
- * `enabled DEFAULT false` is **fail-closed**: a freshly-migrated node will
- * refuse to place orders until an operator explicitly flips the row to true.
- * The poll's config SELECT treats any error as `enabled = false`.
+ * Per-tenant kill-switch. PK is `billing_account_id` (replaces v0 singleton).
+ * `enabled DEFAULT false` is **fail-closed** — a freshly-migrated tenant refuses
+ * to place orders until an operator explicitly flips the row to true. The poll's
+ * config SELECT treats any error as `enabled = false`.
  */
-export const polyCopyTradeConfig = pgTable(
-  "poly_copy_trade_config",
-  {
-    singletonId: smallint("singleton_id").notNull().primaryKey(),
-    enabled: boolean("enabled").notNull().default(false),
-    updatedAt: timestamp("updated_at", { withTimezone: true })
-      .notNull()
-      .defaultNow(),
-    /** Operator identity for audit — free-form text ('system' for seed). */
-    updatedBy: text("updated_by").notNull().default("system"),
-  },
-  (table) => [
-    check("poly_copy_trade_config_singleton", sql`${table.singletonId} = 1`),
-  ]
-);
+export const polyCopyTradeConfig = pgTable("poly_copy_trade_config", {
+  /** Tenant PK. FK → billing_accounts.id. */
+  billingAccountId: text("billing_account_id").primaryKey(),
+  /** RLS key column — owner of this kill-switch row. */
+  createdByUserId: text("created_by_user_id").notNull(),
+  enabled: boolean("enabled").notNull().default(false),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  /** Operator identity for audit — free-form text ('system' for seed). */
+  updatedBy: text("updated_by").notNull().default("system"),
+});
 
 /**
  * Append-only log of every `decide()` outcome — `place`, `skip`, or `error`.
- * Rows are never updated or deleted from application code. Used for
- * divergence analysis at the P4 cutover and for debugging.
- *
- * `fill_id` duplicates `poly_copy_trade_fills.fill_id` intentionally: some
- * decisions (`skip` branches) do not create a fills row, so this log must
- * stand on its own.
+ * Tenant-scoped. Rows are never updated or deleted from application code.
  */
 export const polyCopyTradeDecisions = pgTable(
   "poly_copy_trade_decisions",
   {
     id: uuid("id").defaultRandom().primaryKey(),
+    /** Tenant data column. */
+    billingAccountId: text("billing_account_id").notNull(),
+    /** RLS key column. */
+    createdByUserId: text("created_by_user_id").notNull(),
     targetId: uuid("target_id").notNull(),
     fillId: text("fill_id").notNull(),
     /** 'placed' | 'skipped' | 'error' — mirrors the `decide()` return branch. */
@@ -155,7 +193,9 @@ export const polyCopyTradeDecisions = pgTable(
       table.targetId,
       table.fillId
     ),
-    // Enumerate the `decide()` return branches at the schema layer.
+    index("poly_copy_trade_decisions_billing_account_idx").on(
+      table.billingAccountId
+    ),
     check(
       "poly_copy_trade_decisions_outcome_check",
       sql`${table.outcome} IN ('placed','skipped','error')`
@@ -163,6 +203,8 @@ export const polyCopyTradeDecisions = pgTable(
   ]
 );
 
+export type PolyCopyTradeTarget = typeof polyCopyTradeTargets.$inferSelect;
+export type NewPolyCopyTradeTarget = typeof polyCopyTradeTargets.$inferInsert;
 export type PolyCopyTradeFill = typeof polyCopyTradeFills.$inferSelect;
 export type NewPolyCopyTradeFill = typeof polyCopyTradeFills.$inferInsert;
 export type PolyCopyTradeConfig = typeof polyCopyTradeConfig.$inferSelect;

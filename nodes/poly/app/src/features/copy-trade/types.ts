@@ -23,6 +23,10 @@ export const TargetConfigSchema = z.object({
   target_id: z.string().uuid(),
   /** The wallet being copied. 0x-prefixed 40-hex. */
   target_wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  /** Tenant data column. FK → billing_accounts.id. */
+  billing_account_id: z.string(),
+  /** RLS key column. FK → users.id — owner of this tracked target. */
+  created_by_user_id: z.string(),
   /** `live` → PolymarketClobAdapter; `paper` → paper adapter (P3). */
   mode: z.enum(["live", "paper"]),
   /** Notional USDC to mirror per fill (fixed size, not proportional). */
@@ -31,7 +35,7 @@ export const TargetConfigSchema = z.object({
   max_daily_usdc: z.number().positive(),
   /** Rate cap per rolling-1-hour window, intent-based. */
   max_fills_per_hour: z.number().int().positive(),
-  /** Global kill-switch state (read from `poly_copy_trade_config.enabled`). */
+  /** Per-tenant kill-switch state (read from `poly_copy_trade_config.enabled`). */
   enabled: z.boolean(),
 });
 export type TargetConfig = z.infer<typeof TargetConfigSchema>;

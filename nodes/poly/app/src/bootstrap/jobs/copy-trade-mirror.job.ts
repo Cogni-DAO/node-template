@@ -63,18 +63,22 @@ const MIRROR_MAX_DAILY_USDC = 10;
 const MIRROR_MAX_FILLS_PER_HOUR = 5;
 
 /**
- * Build the v0 `TargetConfig` from an env-supplied target wallet. All other
- * fields are hardcoded scaffolding. P2 replaces this factory with a
- * per-tenant DB resolver over `poly_copy_trade_targets`.
+ * Build a `TargetConfig` from an enumerated target wallet + tenant attribution.
+ * All non-tenant fields (mode, mirror_usdc, caps) stay hardcoded scaffolding.
+ * Phase B will source caps from the per-tenant `poly_wallet_grants` row.
  *
  * @public
  */
-export function buildMirrorTargetConfig(
-  targetWallet: `0x${string}`
-): TargetConfig {
+export function buildMirrorTargetConfig(params: {
+  targetWallet: `0x${string}`;
+  billingAccountId: string;
+  createdByUserId: string;
+}): TargetConfig {
   return {
-    target_id: targetIdFromWallet(targetWallet),
-    target_wallet: targetWallet,
+    target_id: targetIdFromWallet(params.targetWallet),
+    target_wallet: params.targetWallet,
+    billing_account_id: params.billingAccountId,
+    created_by_user_id: params.createdByUserId,
     mode: "live", // paper adapter body lands in P3; v0 only places live
     mirror_usdc: MIRROR_USDC,
     max_daily_usdc: MIRROR_MAX_DAILY_USDC,

@@ -32,6 +32,7 @@ import {
 } from "@cogni/knowledge-store/adapters/doltgres";
 import { parseMcpConfigFromEnv } from "@cogni/langgraph-graphs";
 import {
+  COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
   EVENT_NAMES,
   initAnalytics,
@@ -728,8 +729,15 @@ function createContainer(): Container {
         // (debug/info/warn/error/child with object + optional msg).
         const mirrorLogger =
           log as unknown as import("@cogni/market-provider").LoggerPort;
+        // TODO(task.0318 A6): swap to dbTargetSource.listAllActive() so each
+        // target carries its own (billingAccountId, createdByUserId). Until
+        // CP A6 lands, every env-derived wallet runs as the system tenant.
         for (const targetWallet of wallets) {
-          const target = buildMirrorTargetConfig(targetWallet);
+          const target = buildMirrorTargetConfig({
+            targetWallet,
+            billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+            createdByUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
+          });
           const source = createPolymarketActivitySource({
             client: dataApiClient,
             wallet: targetWallet,

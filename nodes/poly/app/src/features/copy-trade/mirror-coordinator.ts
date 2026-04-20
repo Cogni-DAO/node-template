@@ -155,12 +155,17 @@ async function processFill(
 
   // Snapshot is per-fill — simple, slightly more DB reads but correct when
   // caps tighten mid-tick (e.g. first fill tips over the daily cap).
-  const snapshot = await deps.ledger.snapshotState(deps.target.target_id);
+  const snapshot = await deps.ledger.snapshotState(
+    deps.target.target_id,
+    deps.target.billing_account_id
+  );
 
   const source: DecisionSource = fill.source as DecisionSource;
   const decisionBase = {
     target_id: deps.target.target_id,
     fill_id: fill.fill_id,
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
     decided_at: clock(),
   };
 
@@ -237,6 +242,8 @@ async function processSellFill(args: {
   decisionBase: {
     target_id: string;
     fill_id: string;
+    billing_account_id: string;
+    created_by_user_id: string;
     decided_at: Date;
   };
   log: LoggerPort;
@@ -403,7 +410,13 @@ async function executePlacement(
   deps: MirrorCoordinatorDeps,
   fill: import("@cogni/market-provider").Fill,
   client_order_id: `0x${string}`,
-  decisionBase: { target_id: string; fill_id: string; decided_at: Date },
+  decisionBase: {
+    target_id: string;
+    fill_id: string;
+    billing_account_id: string;
+    created_by_user_id: string;
+    decided_at: Date;
+  },
   source: DecisionSource,
   intent: OrderIntent,
   reason: MirrorReason,
@@ -414,6 +427,8 @@ async function executePlacement(
 
   try {
     await deps.ledger.insertPending({
+      billing_account_id: deps.target.billing_account_id,
+      created_by_user_id: deps.target.created_by_user_id,
       target_id: deps.target.target_id,
       fill_id: fill.fill_id,
       observed_at: new Date(fill.observed_at),
