@@ -17,8 +17,6 @@ import {
   ArrowDownRight,
   ArrowUpRight,
   Ban,
-  CloudSun,
-  ExternalLink,
   FlaskConical,
   Minus,
   Shield,
@@ -34,6 +32,10 @@ import {
   CardTitle,
   Separator,
 } from "@/components";
+import {
+  type WalletAnalysisData,
+  WalletAnalysisView,
+} from "@/features/wallet-analysis";
 import { cn } from "@/shared/util/cn";
 
 /* ────────────────────────────────────────────────────────────────── */
@@ -115,6 +117,33 @@ const BEEF = {
   ],
   avg30d: 11,
 } as const;
+
+/** BeefSlayer in WalletAnalysisData shape — fed to the reusable WalletAnalysisView. */
+const BEEF_ANALYSIS: WalletAnalysisData = {
+  address: BEEF.wallet,
+  identity: {
+    name: BEEF.name,
+    category: "Weather",
+    isPrimaryTarget: true,
+  },
+  snapshot: {
+    n: BEEF.stats.resolved,
+    wr: BEEF.stats.winRate,
+    roi: BEEF.stats.roi,
+    pnl: BEEF.stats.pnl,
+    dd: BEEF.stats.dd,
+    medianDur: BEEF.stats.medianDur,
+    avgPerDay: BEEF.avg30d,
+    hypothesisMd:
+      "Daily city high-temp markets are retail-dominant books priced against shallow weather-guessing. A disciplined user of public NOAA / ECMWF ensembles earns a persistent premium. BeefSlayer's 78% WR across 118 resolved positions with 10.7% max drawdown is the largest and cleanest sample in the entire 160-wallet screen.",
+    category: BEEF.category,
+  },
+  trades: {
+    last: BEEF.last5,
+    dailyCounts: BEEF.daily,
+    topMarkets: BEEF.topMkts,
+  },
+};
 
 type Runner = {
   rank: number;
@@ -349,7 +378,7 @@ function VerdictChip({ v }: { v: Direction }): ReactElement {
   );
 }
 
-function StatBlock({
+function _StatBlock({
   label,
   value,
   tone = "default",
@@ -389,7 +418,7 @@ function StatBlock({
 /* ────────────────────────────────────────────────────────────────── */
 
 export function ResearchView(): ReactElement {
-  const maxN = Math.max(...BEEF.daily.map((d) => d.n));
+  const _maxN = Math.max(...BEEF.daily.map((d) => d.n));
 
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-14 px-5 py-10 md:px-8 md:py-14">
@@ -421,245 +450,13 @@ export function ResearchView(): ReactElement {
           kicker="§ 01 — The target"
           title="BeefSlayer, in brief."
         />
-
-        <Card className="relative overflow-hidden border-primary/30">
-          <span
-            aria-hidden
-            className="pointer-events-none absolute top-4 right-6 select-none font-black text-8xl text-primary/5 leading-none tracking-tighter"
-          >
-            01
-          </span>
-
-          <CardHeader className="gap-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge intent="default" size="sm" className="gap-1">
-                <CloudSun className="size-3" /> Weather
-              </Badge>
-              <Badge
-                intent="default"
-                size="sm"
-                className="gap-1 bg-success/15 text-success"
-              >
-                Primary mirror target
-              </Badge>
-              <span className="text-muted-foreground text-xs">
-                n = {BEEF.stats.resolved} resolved positions
-              </span>
-            </div>
-            <CardTitle className="font-semibold font-serif text-4xl leading-tight tracking-tight md:text-5xl">
-              BeefSlayer
-            </CardTitle>
-            <div className="flex flex-wrap items-center gap-3">
-              <code className="font-mono text-muted-foreground text-xs">
-                {BEEF.wallet}
-              </code>
-              <a
-                href={`https://polymarket.com/profile/${BEEF.wallet}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-primary text-xs underline-offset-2 hover:underline"
-              >
-                Polymarket <ExternalLink className="size-3" />
-              </a>
-              <a
-                href={`https://polygonscan.com/address/${BEEF.wallet}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 text-primary text-xs underline-offset-2 hover:underline"
-              >
-                Polygonscan <ExternalLink className="size-3" />
-              </a>
-            </div>
-          </CardHeader>
-
-          <CardContent className="flex flex-col gap-6 pt-0">
-            {/* stats strip */}
-            <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border bg-border md:grid-cols-6">
-              <div className="bg-background">
-                <StatBlock
-                  label="True WR"
-                  value={`${BEEF.stats.winRate}%`}
-                  tone="success"
-                  hint={`over n=${BEEF.stats.resolved}`}
-                />
-              </div>
-              <div className="bg-background">
-                <StatBlock
-                  label="Realized ROI"
-                  value={`+${BEEF.stats.roi}%`}
-                  tone="success"
-                />
-              </div>
-              <div className="bg-background">
-                <StatBlock label="Realized PnL" value={BEEF.stats.pnl} />
-              </div>
-              <div className="bg-background">
-                <StatBlock
-                  label="Max DD"
-                  value={`${BEEF.stats.dd}%`}
-                  tone="success"
-                  hint="of peak equity"
-                />
-              </div>
-              <div className="bg-background">
-                <StatBlock label="Median hold" value={BEEF.stats.medianDur} />
-              </div>
-              <div className="bg-background">
-                <StatBlock
-                  label="Avg trades / day"
-                  value={`≈ ${BEEF.avg30d}`}
-                  hint="30-day mean"
-                />
-              </div>
-            </div>
-
-            {/* two-col: activity + markets */}
-            <div className="grid gap-8 lg:grid-cols-5">
-              {/* activity chart */}
-              <div className="flex flex-col gap-3">
-                <h4 className="font-semibold text-sm uppercase tracking-wider">
-                  Trades / day, last 14 days
-                </h4>
-                <div className="flex h-28 items-end gap-1">
-                  {BEEF.daily.map((d) => {
-                    const h = Math.max(4, (d.n / maxN) * 100);
-                    const isToday = d.d.includes("04-19");
-                    return (
-                      <div
-                        key={d.d}
-                        className="group relative flex flex-1 flex-col items-center gap-1"
-                      >
-                        <span className="text-muted-foreground text-xs tabular-nums opacity-0 group-hover:opacity-100">
-                          {d.n}
-                        </span>
-                        <div
-                          style={{ height: `${h}%` }}
-                          className={cn(
-                            "w-full rounded-t-sm transition-colors",
-                            isToday
-                              ? "bg-primary"
-                              : "bg-muted-foreground/40 group-hover:bg-primary/60"
-                          )}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="flex items-baseline justify-between text-muted-foreground text-xs">
-                  <span>2 weeks ago</span>
-                  <span className="font-mono">
-                    today ·{" "}
-                    <span className="text-primary">
-                      {BEEF.daily.at(-1)?.n} trades
-                    </span>
-                  </span>
-                </div>
-              </div>
-
-              {/* top markets */}
-              <div className="flex flex-col gap-3">
-                <h4 className="font-semibold text-sm uppercase tracking-wider">
-                  Top markets
-                </h4>
-                <ul className="space-y-1.5">
-                  {BEEF.topMkts.map((m, i) => (
-                    <li
-                      key={m}
-                      className="flex items-center gap-3 rounded border border-border/60 px-3 py-1.5 text-sm"
-                    >
-                      <span className="font-mono text-muted-foreground text-xs tabular-nums">
-                        {String(i + 1).padStart(2, "0")}
-                      </span>
-                      <span>{m}</span>
-                    </li>
-                  ))}
-                </ul>
-                <p className="text-muted-foreground text-xs leading-relaxed">
-                  Same playbook daily: stack small BUYs across the probability
-                  ladder of a city's high-temp buckets, then let the resolving
-                  winner pay for the losing tickets.
-                </p>
-              </div>
-            </div>
-
-            {/* last 5 trades */}
-            <div className="flex flex-col gap-3">
-              <h4 className="font-semibold text-sm uppercase tracking-wider">
-                Last 5 trades &nbsp;
-                <span className="font-mono font-normal text-muted-foreground text-xs">
-                  captured 2026-04-19 · via data-api.polymarket.com
-                </span>
-              </h4>
-              <div className="overflow-hidden rounded-lg border">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/30">
-                    <tr className="text-muted-foreground text-xs uppercase tracking-wider">
-                      <th className="px-3 py-2 text-left">When</th>
-                      <th className="px-3 py-2 text-left">Side</th>
-                      <th className="px-3 py-2 text-right">Size</th>
-                      <th className="px-3 py-2 text-right">Px</th>
-                      <th className="px-3 py-2 text-left">Market</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {BEEF.last5.map((t) => (
-                      <tr
-                        key={t.ts + t.mkt}
-                        className="border-border/50 border-t"
-                      >
-                        <td className="px-3 py-2 font-mono text-muted-foreground text-xs tabular-nums">
-                          {t.ts}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={cn(
-                              "inline-flex items-center gap-1 font-mono font-semibold text-xs",
-                              t.side === "BUY"
-                                ? "text-success"
-                                : "text-destructive"
-                            )}
-                          >
-                            {t.side === "BUY" ? (
-                              <ArrowUpRight className="size-3" />
-                            ) : (
-                              <ArrowDownRight className="size-3" />
-                            )}
-                            {t.side}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums">
-                          {t.size}
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono tabular-nums">
-                          {t.px}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">
-                          {t.mkt}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* hypothesis */}
-            <div className="flex gap-3 rounded-lg border border-primary/30 bg-primary/5 p-4">
-              <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
-              <div className="space-y-1 text-sm leading-relaxed">
-                <p className="font-semibold">Edge hypothesis</p>
-                <p className="text-muted-foreground">
-                  Daily city high-temp markets are retail-dominant books priced
-                  against shallow weather-guessing. A disciplined user of public
-                  NOAA / ECMWF ensembles earns a persistent premium.
-                  BeefSlayer's 78% WR across 118 resolved positions with 10.7%
-                  max drawdown is the largest and cleanest sample in the entire
-                  160-wallet screen.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <WalletAnalysisView
+          data={BEEF_ANALYSIS}
+          variant="page"
+          size="hero"
+          capturedAt="2026-04-19"
+          rankBadge="01"
+        />
       </section>
 
       {/* ─── §02 CATEGORIES ──────────────────────── */}

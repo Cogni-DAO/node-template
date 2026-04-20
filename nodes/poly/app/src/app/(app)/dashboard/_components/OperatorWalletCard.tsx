@@ -23,9 +23,10 @@ import { useQuery } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { type ReactElement, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components";
+import { BalanceBar } from "@/features/wallet-analysis";
 import { cn } from "@/shared/util/cn";
 import { fetchWalletBalance } from "../_api/fetchWalletBalance";
-import { formatShortWallet, formatUsdc } from "./wallet-format";
+import { formatShortWallet } from "./wallet-format";
 
 const ZERO_ADDR = "0x0000000000000000000000000000000000000000";
 
@@ -63,12 +64,6 @@ export function OperatorWalletCard(): ReactElement {
   });
 
   const configured = Boolean(data && data.operator_address !== ZERO_ADDR);
-  const total = data?.usdc_total ?? 0;
-  const availablePct =
-    total > 0 ? ((data?.usdc_available ?? 0) / total) * 100 : 0;
-  const lockedPct = total > 0 ? ((data?.usdc_locked ?? 0) / total) * 100 : 0;
-  const positionsPct =
-    total > 0 ? ((data?.usdc_positions_mtm ?? 0) / total) * 100 : 0;
 
   return (
     <Card>
@@ -134,69 +129,15 @@ export function OperatorWalletCard(): ReactElement {
             </code>
             .
           </p>
-        ) : total === 0 ? (
-          <div className="flex items-baseline justify-between text-sm">
-            <span className="text-muted-foreground">Total</span>
-            <span className="font-semibold tabular-nums">$0.00</span>
-          </div>
         ) : (
-          <div className="space-y-2">
-            {/* Single-row summary: total on the left, component legend+values on the right. */}
-            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1 text-sm">
-              <div className="flex items-baseline gap-2">
-                <span className="text-muted-foreground text-xs uppercase tracking-wide">
-                  Total
-                </span>
-                <span className="font-semibold text-base tabular-nums">
-                  {formatUsdc(total)}
-                </span>
-              </div>
-              <div className="flex items-center gap-4 text-muted-foreground text-xs">
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block size-2 rounded-sm bg-success/70" />
-                  Available{" "}
-                  <span className="text-foreground tabular-nums">
-                    {formatUsdc(data.usdc_available)}
-                  </span>
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block size-2 rounded-sm bg-warning/70" />
-                  Locked{" "}
-                  <span className="text-foreground tabular-nums">
-                    {formatUsdc(data.usdc_locked)}
-                  </span>
-                </span>
-                <span className="inline-flex items-center gap-1.5">
-                  <span className="inline-block size-2 rounded-sm bg-[hsl(var(--chart-1))]/70" />
-                  Positions{" "}
-                  <span className="text-foreground tabular-nums">
-                    {formatUsdc(data.usdc_positions_mtm)}
-                  </span>
-                </span>
-              </div>
-            </div>
-
-            {/* Horizontal stacked bar — three segments: available (on-chain
-                USDC), locked (open-order notional), positions (MTM of held
-                shares). Together they reconstruct the wallet's total worth. */}
-            <div className="flex h-2 overflow-hidden rounded-full bg-muted">
-              <div
-                className="bg-success/70"
-                style={{ width: `${availablePct}%` }}
-                title={`Available: ${formatUsdc(data.usdc_available)}`}
-              />
-              <div
-                className="bg-warning/70"
-                style={{ width: `${lockedPct}%` }}
-                title={`Locked: ${formatUsdc(data.usdc_locked)}`}
-              />
-              <div
-                className="bg-[hsl(var(--chart-1))]/70"
-                style={{ width: `${positionsPct}%` }}
-                title={`Positions (MTM): ${formatUsdc(data.usdc_positions_mtm)}`}
-              />
-            </div>
-          </div>
+          <BalanceBar
+            balance={{
+              available: data.usdc_available ?? 0,
+              locked: data.usdc_locked ?? 0,
+              positions: data.usdc_positions_mtm ?? 0,
+              total: data.usdc_total ?? 0,
+            }}
+          />
         )}
       </CardContent>
     </Card>
