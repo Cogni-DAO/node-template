@@ -162,6 +162,13 @@ CREATE POLICY "tenant_isolation" ON "poly_copy_trade_decisions"
 -- COGNI_SYSTEM_PRINCIPAL_USER_ID + COGNI_SYSTEM_BILLING_ACCOUNT_ID
 -- per docs/spec/system-tenant.md (seeded by migration 0008_seed_system_tenant.sql).
 -- The candidate-a flight runs as the system tenant until per-user wallets ship.
+--
+-- Set RLS context to the system principal (transaction-local) BEFORE the INSERT —
+-- without this, the FORCE ROW LEVEL SECURITY clause above rejects the row via
+-- WITH CHECK because `app.current_user_id` is unset on the migrator session.
+-- Mirrors 0008_seed_system_tenant.sql:6.
+SELECT set_config('app.current_user_id', '00000000-0000-4000-a000-000000000001', true);
+--> statement-breakpoint
 INSERT INTO "poly_copy_trade_config" ("billing_account_id", "created_by_user_id", "enabled", "updated_by")
 VALUES (
   '00000000-0000-4000-b000-000000000000',
