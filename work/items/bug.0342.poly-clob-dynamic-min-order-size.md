@@ -64,80 +64,125 @@ Two gaps compose:
 
 Note: `orderMinSize` is in **shares**, not USDC. Effective USDC minimum = `orderMinSize × limit_price`. A 5-share-min market is $5 min at price 1.0, $0.50 min at price 0.10, and $0.05 min at price 0.01.
 
-## Design — dynamic scale-up, bounded by user ceiling
+## Design — sizing lives in the coordinator; adapter is a dumb validator
 
 ### Outcome
 
-The mirror never submits a sub-min intent to CLOB. When a target's fill is below market min, the adapter transparently scales the intent up to the exact market minimum — but only if that fits inside a user-explicit per-intent ceiling carried on the intent itself. If the ceiling is below the market min, the coordinator skips with a stable, low-cardinality reason code. No `success=undefined` rejections reach Loki.
+The mirror never submits a sub-min intent to CLOB. All sizing logic (today: fixed size with scale-up-to-min; tomorrow: proportional, percentile, historical-distribution) lives in the coordinator. The adapter validates the intent against market mechanics (min, tick) and throws a typed, classified error on violation. No `success=undefined` rejections reach Loki. One user-config object (`TargetConfig.sizing`) captures today's hardcoded defaults and absorbs every future sizing policy without touching the port or adapter.
 
 ### Approach
 
-**Solution — one new field in two shared shapes, scaling in the adapter**:
+**One sizing object on `TargetConfig`; nothing on `OrderIntent`.**
 
-| Shape                         | Change                                                                                                                                                  |
+The port surface (`OrderIntent`) stays as-is. Sizing is 100% coordinator-owned. The adapter's only responsibility is: "submit this exact intent; raise a classified error if market mechanics reject it." This flips the earlier draft (which put `max_size_usdc` on the port) because future sizing policies (proportional, percentile, vol-scaled) produce MANY inputs — stamping each one onto `OrderIntent` would churn the port. A single `sizing` object on `TargetConfig` absorbs all of them.
+
+| Shape                         | Change (this PR only)                                                                                                                                   |
 | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OrderIntent` (port)          | Add `max_size_usdc?: number` (optional, defaults to `size_usdc` = no scaling). This is the ceiling the adapter may scale UP to.                          |
-| `TargetConfig` (copy-trade)   | Add `max_usdc_per_trade?: number` (optional, defaults to `mirror_usdc` = opt-out of scaling). Coordinator copies it into `OrderIntent.max_size_usdc`.    |
-| `MirrorReasonSchema`          | Add `"below_market_min"`. One code, covers both "intent < min + no ceiling" and "ceiling < min". Keeps Prometheus cardinality bounded (invariant MIRROR_REASON_BOUNDED). |
-| `PolymarketClobAdapter`       | Existing `Promise.all` fetch of `tickSize/negRisk/feeRateBps` gains `orderMinSize` (4th call). Throws typed `BelowMarketMinError` when ceiling < min.    |
-| `copy-trade-mirror.job.ts`    | Add `MIRROR_MAX_USDC_PER_TRADE = 5` constant → `buildMirrorTargetConfig` sets `max_usdc_per_trade: MIRROR_MAX_USDC_PER_TRADE`. Hardcoded scaffolding today; same field becomes the DB column value in vNext. |
-| `clob-executor.ts`            | Catches `BelowMarketMinError` → returns `{ outcome: "skipped", reason: "below_market_min" }`. No other callers affected.                                 |
+| `OrderIntent` (port)          | **No change.** Sizing is not a port concern.                                                                                                             |
+| `TargetConfig`                | Replace flat `mirror_usdc` (and vNext-intended `max_usdc_per_trade`) with a single `sizing: SizingPolicy` discriminated union. Today's only kind: `"fixed"`. |
+| `SizingPolicy` (new)          | Discriminated union. `{ kind: "fixed", mirror_usdc, max_usdc_per_trade }` is the only variant for this PR. The discriminant is the evolution seam.       |
+| `MirrorReasonSchema`          | Add `"below_market_min"`. One code, covers both "target fill too small" and "user ceiling too tight". Prom cardinality bounded (MIRROR_REASON_BOUNDED).  |
+| `PolymarketClobAdapter`       | `Promise.all` fetch gains `orderMinSize` (4th parallel call). Check `shareSize >= orderMinSize`. On violation, throw `Error` with `code = "BELOW_MARKET_MIN"` and structured fields `{minShares, gotShares, minUsdc}`. No scaling. |
+| `clob-executor.ts`            | Catches the error by `err.code === "BELOW_MARKET_MIN"` (not `instanceof`). Returns `{ outcome: "skipped", reason: "below_market_min" }`.                 |
+| `mirror-coordinator`          | Before `placeIntent`, applies the sizing policy: for `kind: "fixed"`, compute `targetShares = max(mirror_usdc/price, orderMinSize)` only if `targetShares × price ≤ max_usdc_per_trade`; else skip. Coordinator calls a new `adapter.getMarketConstraints(tokenId) → { minShares, tickSize }` to fetch min before deciding. |
+
+**Why the coordinator owns sizing (not the adapter)**:
+
+- Future sizing is rich policy (proportional to target's own bet, historical percentile, vol-scaled, per-market overrides). Policy ≠ platform mechanics. Hexagonal: policy = coordinator, mechanics = adapter.
+- The adapter stays a thin validator — one new parallel fetch, one classified throw. No scaling, no policy, no ceiling.
+- Every future policy variant plugs into the same `sizing` discriminated union. Zero port change, zero adapter change.
 
 **Flow**:
 
 ```
-coordinator/decide()                     → intent { size_usdc:1, limit_price:0.64, max_size_usdc:5 }
-adapter.placeOrder()
-  ├─ Promise.all(tickSize, negRisk, feeRateBps, orderMinSize)   // 1 extra parallel call
-  ├─ minUsdc = orderMinSize × limit_price                        // shares × $/share = $
-  ├─ if size_usdc >= minUsdc → proceed, no change
-  ├─ else if max_size_usdc >= minUsdc → size_usdc = minUsdc, log scaled
-  └─ else → throw BelowMarketMinError(minUsdc, max_size_usdc)
-                                        → coordinator maps to "skipped:below_market_min"
+coordinator.decide()
+  │ fetch market constraints via adapter (new seam: getMarketConstraints)
+  │   → { minShares: 5, tickSize: 0.01 }
+  │ apply sizing policy (kind: "fixed") on target's fill
+  │   targetShares = max(mirror_usdc / price, minShares)         // share-space, no float chain
+  │   effectiveUsdc = targetShares × price
+  │   if effectiveUsdc > max_usdc_per_trade → skip(below_market_min)
+  │   else → intent.size_usdc = effectiveUsdc
+  ▼
+adapter.placeOrder(intent)
+  │ Promise.all(tickSize, negRisk, feeRateBps, minOrderSize)
+  │ shareSize = size_usdc / price
+  │ if shareSize < minOrderSize → throw { code: "BELOW_MARKET_MIN", ... }  // defense-in-depth
+  │ createAndPostOrder
 ```
+
+**Why share-space math** (fixes B1): floats aren't associative. Scaling `size_usdc = orderMinSize × price` then recomputing `shareSize = size_usdc / price` can produce `minShares − ε` → CLOB rejects. Coordinator computes `targetShares` directly in share units; adapter re-verifies `shareSize >= minShares` as defense-in-depth.
+
+**Why classified error not `instanceof`** (fixes B3): package boundaries + bundlers break class identity. Adapter sets `err.code = "BELOW_MARKET_MIN"` + `err.name = "BelowMarketMinError"`; coordinator discriminates on `err.code` (primitive string, bundle-stable).
+
+### Future-vision fit (why this shape, explicitly)
+
+User stated near-term vision: "desired bet size/range + dynamically size bets based on copy-traded wallet's current bet vs its historical distribution."
+
+| Future policy                                           | New variant on `sizing` union                                                             | Touches port? | Touches adapter? |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------- | ------------- | ---------------- |
+| User picks explicit bet range                           | `{ kind: "fixed", mirror_usdc, max_usdc_per_trade }` (today)                              | no            | no               |
+| Mirror X% of target's bet                               | `{ kind: "proportional", pct, min_usdc, max_usdc_per_trade }`                             | no            | no               |
+| Scale by target's historical percentile                 | `{ kind: "percentile", curve: [...], min_usdc, max_usdc_per_trade }`                      | no            | no               |
+| Hybrid (e.g. proportional with floor/ceiling)           | `{ kind: "hybrid", base: <policy>, floor: <policy>, ceiling: <policy> }`                  | no            | no               |
+| Per-market override                                     | Orthogonal: `sizing_overrides_by_market?: Record<MarketId, SizingPolicy>`                 | no            | no               |
+
+All of them compute `effectiveUsdc` in the coordinator before intent construction. The adapter sees an OrderIntent with a concrete `size_usdc` and checks it against `orderMinSize`. That's the stable contract.
 
 **Reuses**:
 
-- Existing `Promise.all` seam in `polymarket.clob.adapter.ts:200` — one more parallel fetch is cheap + mirrors the existing pattern.
-- `@polymarket/clob-client` already exposes per-market min (via `getOrderBook().min_order_size` or `/markets/{tokenId}` — verify at `/implement` time; fall back to Gamma `orderMinSize` field we already know works).
-- Existing `MirrorDecision` + `MirrorReason` machinery — just one new enum value.
+- Existing `Promise.all` seam in `polymarket.clob.adapter.ts:200` — add one parallel call.
+- Existing `MirrorDecision` + `MirrorReason` machinery — one new enum value.
+- Existing `@polymarket/clob-client` fetch methods (verify the exact method for min-order-size before `/implement` — see Prerequisites below).
 
 **Rejected**:
 
-- _Pre-flight in the coordinator_ (original sketch in "Option A/B"). Rejected: forces the coordinator to fetch market metadata it doesn't already need, duplicates Promise.all with the adapter, and breaks the hexagonal split (coordinator is pure decision; adapter owns platform mechanics).
-- _Adapter silently scales with no ceiling_. Rejected: user-provided `mirror_usdc=1` on a $10-min market would spend $10 per fill without consent. The `max_size_usdc` ceiling is the explicit consent gate.
-- _New error code per cause (`above_user_ceiling` + `below_market_min`)_. Rejected: both mean "skipped because not enough size". One reason keeps cardinality down; the structured log line carries `{minUsdc, maxAllowed}` for forensics.
-- _Raise `MIRROR_USDC` default to 5_. Rejected: breaks the "only risk $1" promise for existing targets + still fails on $10+ markets.
+- _Scaling in the adapter_ (prior draft of this design). Rejected: adapter then needs to know the user's ceiling, which means the port grows a `max_size_usdc` field that becomes an attractive nuisance for every future sizing policy. Bad for the vision.
+- _`instanceof BelowMarketMinError` across packages_. Rejected: class identity fractures after bundling. Use `err.code`.
+- _Float-space scaling (`size_usdc = orderMinSize × price`)_. Rejected: `5 × 0.07 / 0.07 = 4.999…` → re-rejected. Share-space only.
+- _Raise `MIRROR_USDC` default to 5_. Rejected: breaks "only risk $1" promise + still fails on higher-min markets.
+- _Flat fields on `TargetConfig` (`mirror_usdc + max_usdc_per_trade`) with no discriminated union_. Rejected: every future policy re-expands the row with new nullable columns. Discriminant absorbs policy shape growth cleanly.
 
 ### Invariants (code review criteria)
 
 <!-- CODE REVIEW CRITERIA -->
 
-- [ ] PORT_SHAPE_OPT_IN: `OrderIntent.max_size_usdc` is optional; callers that don't set it get zero behavior change (adapter treats missing as `max_size_usdc = size_usdc`).
-- [ ] SCALING_IS_BOUNDED: adapter NEVER submits with size > `intent.max_size_usdc ?? intent.size_usdc`. Proof: unit test placing intent { size_usdc:1, max_size_usdc:1 } on a 5-share market at p=0.64 → adapter throws, does not call `createAndPostOrder`.
+- [ ] SIZING_LIVES_IN_COORDINATOR: no sizing math in the adapter beyond the defense-in-depth min-shares guard. `OrderIntent` unchanged.
+- [ ] SHARE_SPACE_MATH: coordinator computes `targetShares` directly; never scales via the USDC round-trip. Adapter guards on shares (`shareSize >= minShares`), not reconstructed USDC.
+- [ ] CLASSIFY_BY_CODE_NOT_INSTANCEOF: coordinator matches `err.code === "BELOW_MARKET_MIN"`. No `instanceof` across packages.
 - [ ] MIRROR_REASON_BOUNDED: one new `"below_market_min"` reason; no variable strings in Prometheus label.
 - [ ] ZERO_SILENT_REJECTIONS: Loki query `|~ "CLOB rejected order" |~ "success=undefined"` on deployed SHA returns zero lines during validation window.
-- [ ] VNEXT_SEAM_STABLE: the DB column added in vNext is `poly_copy_trade_targets.max_usdc_per_trade numeric` — no schema rework of `OrderIntent` needed to surface it to users (the field already exists on the port).
-- [ ] SIMPLE_SOLUTION: Leverages existing Promise.all + existing decision/reason enum over bespoke pre-flight layer.
-- [ ] ARCHITECTURE_ALIGNMENT: Adapter owns market mechanics; coordinator stays pure (spec: architecture § hexagonal).
+- [ ] SIZING_POLICY_IS_DISCRIMINATED: `TargetConfig.sizing` is a Zod discriminated union on `kind`. Adding a new policy is a new variant, not a flat-field addition.
+- [ ] VNEXT_SEAM_STABLE: the DB column added in vNext is `poly_copy_trade_targets.sizing jsonb NOT NULL` (stores the full policy object verbatim). Zero port churn. Zero adapter churn.
+- [ ] SIMPLE_SOLUTION: Leverages existing Promise.all + existing decision/reason enum. One discriminated union; no new ports.
+- [ ] ARCHITECTURE_ALIGNMENT: Adapter = mechanics, coordinator = policy (spec: architecture § hexagonal).
 
 ### Files
 
-- Modify: `packages/market-provider/src/domain/order.ts` — add `max_size_usdc: z.number().positive().optional()` to `OrderIntentSchema`; docstring explains "ceiling the adapter may scale up to".
-- Modify: `packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts` — (1) add `orderMinSize` to the parallel fetch, (2) insert scale-or-throw block before `createAndPostOrder`, (3) define + export `BelowMarketMinError`, (4) log `placeOrder: scaled_up` when scaling fires.
-- Modify: `nodes/poly/app/src/features/copy-trade/types.ts` — add `max_usdc_per_trade: z.number().positive().optional()` to `TargetConfigSchema`; add `"below_market_min"` to `MirrorReasonSchema`.
-- Modify: `nodes/poly/app/src/features/copy-trade/decide.ts` (or `clob-executor.ts`) — wire `target.max_usdc_per_trade ?? target.mirror_usdc` into `intent.max_size_usdc`; catch `BelowMarketMinError` and return `{ outcome: "skipped", reason: "below_market_min" }`.
-- Modify: `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` — add `MIRROR_MAX_USDC_PER_TRADE = 5` constant; `buildMirrorTargetConfig` returns `max_usdc_per_trade`.
-- Test: `packages/market-provider/tests/polymarket-clob-adapter.test.ts` (or sibling) — (a) intent below min with sufficient ceiling → scales, (b) intent below min with tight ceiling → throws `BelowMarketMinError`, (c) intent at/above min → no change.
-- Test: `nodes/poly/app/tests/unit/features/copy-trade/decide-below-market-min.spec.ts` — coordinator maps adapter throw → `skipped:below_market_min`.
-- Test: extend existing `decide` table-tests with one row for the new reason.
+- Modify: `packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts` — (1) add `minOrderSize` to `Promise.all`, (2) defense-in-depth guard `if (shareSize < minOrderSize) throw err({code:"BELOW_MARKET_MIN", ...})`, (3) new method `getMarketConstraints(tokenId)` → `{ minShares, tickSize }` on the adapter interface.
+- Modify: `packages/market-provider/src/ports/market-provider.ts` (or wherever the trade capability lives) — add `getMarketConstraints` to the port.
+- Modify: `nodes/poly/app/src/features/copy-trade/types.ts` — replace `mirror_usdc: z.number().positive()` with `sizing: SizingPolicySchema` (discriminated union on `kind`; only variant `"fixed"` this PR). Add `"below_market_min"` to `MirrorReasonSchema`.
+- Modify: `nodes/poly/app/src/features/copy-trade/decide.ts` — take `minShares` as an input; compute `effectiveUsdc` in share space; route intent or skip. Pure function stays pure.
+- Modify: `nodes/poly/app/src/features/copy-trade/mirror-coordinator.ts` — fetch `getMarketConstraints` before `decide`; catch `err.code === "BELOW_MARKET_MIN"` as defense-in-depth.
+- Modify: `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` — `buildMirrorTargetConfig` returns `sizing: { kind: "fixed", mirror_usdc: 1, max_usdc_per_trade: 5 }`. Rename the two old constants into one `DEFAULT_SIZING_POLICY`.
+- Modify: `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/route.ts` — POST response `buildTargetView` reads `sizing.mirror_usdc` + `sizing.max_usdc_per_trade`; shape kept flat on the wire for now (spec-agnostic to internal rep).
+- Test: `packages/market-provider/tests/polymarket-clob-adapter.test.ts` — (a) shareSize below min throws classified error with `code`, `name`, and structured fields; (b) at-or-above min → no change.
+- Test: `nodes/poly/app/tests/unit/features/copy-trade/decide-sizing-fixed.spec.ts` — table tests: (a) `mirror_usdc` buys ≥ minShares → `effective = mirror_usdc`; (b) `mirror_usdc` buys < minShares but `max_usdc_per_trade ≥ minUsdc` → `effective = minShares × price`; (c) `max_usdc_per_trade < minUsdc` → skip.
+- Test: one `mirror-coordinator` integration test that asserts the error-code discriminator path works (no `instanceof`).
+
+### Prerequisites for `/implement` (Blockers B1–B3 resolved here; B2 still to confirm)
+
+1. **Verify sub-min is the sole cause on candidate-a** (B2). Smallest test: place a single $5 BUY via the same adapter path with the operator key. If it succeeds → hypothesis confirmed; if it also returns `{}` → compounding bug, re-open design before coding. Do this before starting on files.
+2. **Verify the minOrderSize source in `@polymarket/clob-client`** (former C4). Expected: `client.getOrderBook(tokenId).min_order_size` or similar. If the SDK doesn't expose it, fall back to the Gamma client (`market.orderMinSize`) already wired via `@cogni/market-provider`. Pick the source at file-edit time.
 
 ### vNext extensibility (informational — NOT in this PR)
 
-- DB: `ALTER TABLE poly_copy_trade_targets ADD COLUMN max_usdc_per_trade numeric NULL` — nullable, falls back to `MIRROR_MAX_USDC_PER_TRADE` default in config builder.
-- POST `/api/v1/poly/copy-trade/targets` body: accept optional `max_usdc_per_trade` in the zod input schema.
-- UI: show "max per trade" next to "mirror size" on the target row; user edits inline.
-- Zero adapter or coordinator changes required when this lands — the seam is already in place.
+- DB: `ALTER TABLE poly_copy_trade_targets ADD COLUMN sizing jsonb NOT NULL DEFAULT '{"kind":"fixed","mirror_usdc":1,"max_usdc_per_trade":5}'::jsonb`. Policy object stored verbatim; new `kind` values = new variants, no schema migration.
+- POST body accepts `sizing?: SizingPolicy`; defaults retained.
+- UI: today shows "bet $X, cap $Y"; tomorrow shows a picker ("fixed" | "proportional" | "percentile") that swaps the form fields.
+- Proportional: `{ kind: "proportional", pct: 0.1, min_usdc: 1, max_usdc_per_trade: 50 }` — mirror 10% of target's fill, clamped.
+- Percentile: `{ kind: "percentile", curve: [{p: 0.5, usdc: 1}, {p: 0.9, usdc: 10}], ... }` — bet more when target is betting at the high end of their own history.
+- All future variants compute `effectiveUsdc` in the coordinator; adapter never sees sizing policy.
 
 ## Design sketch — two viable paths (superseded, left for context)
 
