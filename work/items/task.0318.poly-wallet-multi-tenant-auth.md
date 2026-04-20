@@ -2,7 +2,7 @@
 id: task.0318
 type: task
 title: "Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables"
-status: needs_implement
+status: needs_closeout
 revision: 1
 priority: 2
 estimate: 5
@@ -20,7 +20,7 @@ assignees: derekg1729
 project: proj.poly-copy-trading
 pr: https://github.com/Cogni-DAO/node-template/pull/944
 created: 2026-04-17
-updated: 2026-04-19
+updated: 2026-04-20
 branch: feat/task-0318-phase-a
 labels: [poly, polymarket, wallets, auth, rls, multi-tenant, privy, security]
 external_refs:
