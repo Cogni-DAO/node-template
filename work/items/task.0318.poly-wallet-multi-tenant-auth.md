@@ -2,7 +2,7 @@
 id: task.0318
 type: task
 title: "Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables"
-status: needs_implement
+status: needs_closeout
 priority: 2
 estimate: 5
 rank: 5
@@ -15,12 +15,12 @@ spec_refs:
   - database-rls
   - system-tenant
   - scheduler
-  - poly-multi-tenant-auth
 assignees: derekg1729
 project: proj.poly-copy-trading
 pr: https://github.com/Cogni-DAO/node-template/pull/932
 created: 2026-04-17
 updated: 2026-04-19
+branch: feat/task-0318-phase-a
 labels: [poly, polymarket, wallets, auth, rls, multi-tenant, privy, security]
 external_refs:
   - work/items/task.0315.poly-copy-trade-prototype.md
@@ -161,7 +161,7 @@ In CP3.1.5 we deleted `PolymarketOrderSigner` + `OperatorWalletPort.signPolymark
 > Reference: [docs/spec/poly-multi-tenant-auth.md](../../docs/spec/poly-multi-tenant-auth.md). Spec is `spec_state: proposed`.
 > Implementation lands on a fresh branch off the PR #932 head. Each checkpoint is a `pnpm check`-clean commit.
 
-- [ ] **A1 — DB migration** (`nodes/poly/app/src/adapters/server/db/migrations/0029_poly_copy_trade_multitenant.sql` — slot 0028 already taken by `0028_small_doomsday.sql`)
+- [x] **A1 — DB migration** (`nodes/poly/app/src/adapters/server/db/migrations/0029_poly_copy_trade_multitenant.sql` — slot 0028 already taken by `0028_small_doomsday.sql`)
   - Drop existing rows in `poly_copy_trade_fills`, `poly_copy_trade_decisions`, `poly_copy_trade_config` (prototype debris per `/design` decision).
   - Add `billing_account_id text NOT NULL` (FK → `billing_accounts(id)` ON DELETE CASCADE) + `created_by_user_id text NOT NULL` (FK → `users(id)`) to `poly_copy_trade_fills` and `poly_copy_trade_decisions`. **`created_by_user_id` is the RLS key; `billing_account_id` is the data column.** Mirrors `connections` exactly (migration `0025_add_connections.sql`).
   - Recreate `poly_copy_trade_config` with PK `(billing_account_id)`, `enabled boolean NOT NULL DEFAULT false`, `created_by_user_id text NOT NULL`, `updated_at timestamptz NOT NULL DEFAULT now()`. Drop `singleton_id`.
@@ -170,35 +170,35 @@ In CP3.1.5 we deleted `PolymarketOrderSigner` + `OperatorWalletPort.signPolymark
   - Seed bootstrap rows owned by `COGNI_SYSTEM_PRINCIPAL_USER_ID` + `COGNI_SYSTEM_BILLING_ACCOUNT_ID`: one `poly_copy_trade_config` row with `enabled = true`, plus one optional `poly_copy_trade_targets` row preserving the existing single-operator candidate-a flight.
   - `pnpm db:generate` — confirm zero drift against the new schema.
 
-- [ ] **A2 — Drizzle schema update** (`packages/poly-db-schema/` — or wherever `poly_copy_trade_*` lives today)
+- [x] **A2 — Drizzle schema update** (`packages/poly-db-schema/` — or wherever `poly_copy_trade_*` lives today)
   - Add new columns + the `poly_copy_trade_targets` table to the Drizzle schema. Re-export from `@cogni/poly-db-schema` (or the local poly path).
   - `pnpm packages:build`.
 
-- [ ] **A3 — `dbTargetSource` impl** (`nodes/poly/app/src/features/copy-trade/target-source.ts`)
+- [x] **A3 — `dbTargetSource` impl** (`nodes/poly/app/src/features/copy-trade/target-source.ts`)
   - Add `dbTargetSource({ serviceDb })`. Implements:
     - `listAllActive(): Promise<readonly { billingAccountId: string; createdByUserId: string; targetWallet: WalletAddress }[]>` — single SELECT joining `poly_copy_trade_targets` × `poly_copy_trade_config` where `config.enabled = true AND target.disabled_at IS NULL`. Runs on `serviceDb` (BYPASSRLS). The **only** cross-tenant read.
     - `listForActor(userId: ActorId): Promise<readonly WalletAddress[]>` — used by the GET route. Wraps SELECT in `withTenantScope(appDb, userId, ...)`.
   - Extend the `CopyTradeTargetSource` interface so both methods are part of the port. `envTargetSource` implements `listAllActive` returning `[{ billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID, createdByUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID, targetWallet }, …]` (preserved for local-dev only, gated on `APP_ENV=test`).
   - Container default: `dbTargetSource` outside test mode.
 
-- [ ] **A4 — CRUD routes + contract** (`packages/node-contracts/src/poly.copy-trade.targets.v1.contract.ts` + new route files)
+- [x] **A4 — CRUD routes + contract** (`packages/node-contracts/src/poly.copy-trade.targets.v1.contract.ts` + new route files)
   - Add `polyCopyTradeTargetCreateOperation` (POST input: `{ target_wallet }`; output: target row) and `polyCopyTradeTargetDeleteOperation` (DELETE param: `id`; output: `{ deleted: boolean }`). GET keeps existing shape but switches `source: "env" | "db"` semantics to be sourced from the port.
   - New routes: `POST /api/v1/poly/copy-trade/targets/route.ts`, `DELETE /api/v1/poly/copy-trade/targets/[id]/route.ts`. `auth: { mode: "required", getSessionUser }`. Both use `withTenantScope(appDb, sessionUser.id, ...)` — RLS enforces tenant boundary.
   - **Defense-in-depth**: after every RLS-scoped SELECT, verify `row.billing_account_id === sessionUser.billingAccountId` before returning to the caller. Mirrors `DrizzleConnectionBrokerAdapter.resolve()` (`adapters/server/connections/drizzle-broker.adapter.ts`). On mismatch, log a security warning + reject with a typed error.
   - GET route: switch from system-scope to `dbTargetSource.listForActor(sessionUser.id)` so each user sees only their own targets.
 
-- [ ] **A5 — Dashboard CRUD wire-up** (`nodes/poly/app/src/app/(app)/dashboard/_components/TopWalletsCard.tsx` + new fetch helpers)
+- [x] **A5 — Dashboard CRUD wire-up** (`nodes/poly/app/src/app/(app)/dashboard/_components/TopWalletsCard.tsx` + new fetch helpers)
   - Replace the disabled `+` button with a real handler: `POST /api/v1/poly/copy-trade/targets { target_wallet }` → invalidate the targets query. Add a `−` button on tracked rows: `DELETE /api/v1/poly/copy-trade/targets/{id}` → invalidate.
   - Add the pooled-execution disclaimer above the table: "Mirror execution is shared across all operators in this node. Per-wallet isolation ships in Phase B."
 
-- [ ] **A6 — Container poll cross-tenant enumerator** (`nodes/poly/app/src/bootstrap/container.ts` + `copy-trade-mirror.job.ts`)
+- [x] **A6 — Container poll cross-tenant enumerator** (`nodes/poly/app/src/bootstrap/container.ts` + `copy-trade-mirror.job.ts`)
   - Replace the per-wallet loop with two passes:
     1. Service-role SELECT via `copyTradeTargetSource.listAllActive()` → `EnumeratedTarget[]`.
     2. **Dedup by `target_wallet`** (one wallet → one Polymarket Data-API source instance). Group attribution: each enumerated target carries `(billing_account_id, created_by_user_id)` so fills + decisions inherit tenant on insert.
   - `mirror-coordinator.runOnce` opens `withTenantScope(appDb, target.created_by_user_id, ...)` for the fills/decisions insert path. The placement itself still uses the shared operator wallet (Phase A non-goal).
   - Reconciler stays single, operator-wide (BYPASSRLS via `serviceDb`).
 
-- [ ] **A7 — Delete `COPY_TRADE_TARGET_WALLETS` env var (and its CI plumbing)**
+- [x] **A7 — Delete `COPY_TRADE_TARGET_WALLETS` env var (and its CI plumbing)**
   - Remove from `nodes/poly/app/src/shared/env/server-env.ts`, `.env.local.example`, `.claude/skills/poly-dev-expert/SKILL.md`. Update `MOCK_SERVER_ENV` test fixture.
   - **CI plumbing added by PR #932 commit `3e61f45f1`** (must be removed in the same A7 commit so nothing orphans):
     - `.github/workflows/candidate-flight-infra.yml` — drop the `COPY_TRADE_TARGET_WALLETS: ${{ secrets.COPY_TRADE_TARGET_WALLETS }}` env line
@@ -207,7 +207,7 @@ In CP3.1.5 we deleted `PolymarketOrderSigner` + `OperatorWalletPort.signPolymark
     - Candidate-a k8s secret `poly-node-app-secrets` — drop the key from the next `deploy-infra` rollout (handled automatically once the workflow stops writing it)
   - `envTargetSource` is no longer wired by default; it's reachable only by direct construction in tests.
 
-- [ ] **A8 — Phase A integration + isolation tests** (scope-pinned per spec § Phase A scope clarification)
+- [x] **A8 — Phase A integration + isolation tests** (scope-pinned per spec § Phase A scope clarification)
   - **In-scope assertions (row-level isolation only)**: A user cannot SELECT, INSERT, UPDATE, or DELETE another tenant's `poly_copy_trade_targets / fills / decisions / config` rows via `appDb`. The mirror-poll cross-tenant enumerator correctly attributes fills/decisions to the originating tenant.
   - **Out-of-scope assertions (cannot be tested in Phase A)**: per-user USDC balance, per-user CTF positions, per-user spend caps, per-user P&L. The operator wallet is shared. Tests MUST NOT assert these — they require Phase B.
   - **Component test** (`tests/component/copy-trade/db-target-source.test.ts`, testcontainers): seed two users + two billing accounts + targets in each. Assert `listForActor(userA)` returns user-A's targets only; `listAllActive()` returns the union with correct tenant attribution.
