@@ -47,6 +47,13 @@ WalletAnalysisView(address, variant)
 
 All molecules accept `{ data, isLoading }` and render their own skeleton. **No sub-component fetches on its own.**
 
+> **2026-04-20 revision (pending Checkpoint B implementation).** The Postgres `poly_wallet_screen_snapshots` table described below is **superseded** by [task.0333](../../work/items/task.0333.wallet-analyst-agent-and-dolt-store.md):
+>
+> - **Numbers** (WR / ROI / DD / median hold / trades-per-day) are deterministic `f(trades × resolutions)` from public Polymarket Data-API + CLOB — compute-on-fetch with a module-scoped TTL cache, **no table, no migration, no seed script**.
+> - **Qualitative analysis** (edge hypothesis, category specialty, risk flags, verdict) goes into a **Dolt** `poly_wallet_analyses` table written by a DAO-funded `poly-brain::wallet-analyst` graph run, triggered by an "Analyze" button on the wallet page. Dolt gives authorship, confidence scores, diffable refinements.
+>
+> Checkpoint B still describes the API route + hook + dynamic page shape; ignore every reference to the Postgres snapshot table and seed script.
+
 ## Data plane
 
 Three slices, three independent fetches, one shared coalescing layer.

@@ -50,19 +50,21 @@ Build a prediction market bot that starts by reading and searching live markets 
 
 > **Not started.** Every row below is un-implemented. Listing them as "Not Started" is tracking, not progress.
 
-| Deliverable                                                                 | Status      | Est | Work Item            |
-| --------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Redis 7 infrastructure (upstream merge from operator repo)                  | Blocked     | 1   | (upstream task.0174) |
-| Data streams spec — Redis live plane + selective Postgres persistence       | Done        | 1   | (data-streams-spec)  |
-| Knowledge data plane — strategy/prompt versioning for analysis graphs       | In Review   | 3   | task.0231            |
-| Temporal MarketStreamWorkflow (poll → Redis → triggers → selective persist) | Not Started | 3   | (create at P1 start) |
-| SSE endpoint — frontend tails Redis for live updates                        | Not Started | 2   | (create at P1 start) |
-| `poly-synth` LangGraph reasoning graph (structured analysis, not chat)      | Not Started | 3   | (create at P1 start) |
-| Temporal AnalysisRunWorkflow (context → LLM → score → persist)              | Not Started | 3   | (create at P1 start) |
-| Semantic search spike — observation-to-market matching                      | Not Started | 2   | spike.0229           |
-| Street intel workflow — user observations matched to live markets           | Not Started | 3   | story.0228           |
-| Calibration loop — outcomes → base rate updates                             | Not Started | 3   | (create at P1 start) |
-| Enrichment sources — GDELT news, Metaculus expert forecasts                 | Not Started | 2   | (create at P1 start) |
+| Deliverable                                                                  | Status      | Est | Work Item            |
+| ---------------------------------------------------------------------------- | ----------- | --- | -------------------- |
+| Redis 7 infrastructure (upstream merge from operator repo)                   | Blocked     | 1   | (upstream task.0174) |
+| Data streams spec — Redis live plane + selective Postgres persistence        | Done        | 1   | (data-streams-spec)  |
+| Knowledge data plane — strategy/prompt versioning for analysis graphs        | In Review   | 3   | task.0231            |
+| Temporal MarketStreamWorkflow (poll → Redis → triggers → selective persist)  | Not Started | 3   | (create at P1 start) |
+| SSE endpoint — frontend tails Redis for live updates                         | Not Started | 2   | (create at P1 start) |
+| `poly-synth` LangGraph reasoning graph (structured analysis, not chat)       | Not Started | 3   | (create at P1 start) |
+| Temporal AnalysisRunWorkflow (context → LLM → score → persist)               | Not Started | 3   | (create at P1 start) |
+| Semantic search spike — observation-to-market matching                       | Not Started | 2   | spike.0229           |
+| Street intel workflow — user observations matched to live markets            | Not Started | 3   | story.0228           |
+| Calibration loop — outcomes → base rate updates                              | Not Started | 3   | (create at P1 start) |
+| Enrichment sources — GDELT news, Metaculus expert forecasts                  | Not Started | 2   | (create at P1 start) |
+| Wallet analysis components — reusable view + live compute + Monitored drawer | In Progress | 4   | task.0329            |
+| Wallet analyst agent — AI qualitative judgments, Dolt-stored, DAO-funded     | Not Started | 5   | task.0333            |
 
 ### Run (P2+) — Autonomous Copy-Trading
 
