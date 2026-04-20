@@ -154,7 +154,6 @@
 | 1 | 30 | 1 | needs_review | bug.0336 | candidate-flight false-fails on rolling-update endpoint cutover race | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 40 | 3 | needs_triage | bug.0322 | Runs made on poly are visible via operator's /api/v1/agent/runs (cross-node data pollution) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 50 | 2 | needs_triage | bug.0329 | Polymarket CLOB adapter SELL on neg_risk markets returns empty error — positions unclosable | Cogni Poly | proj.poly-copy-trading |
-| 1 | 51 | 2 | needs_merge | bug.0335 | Polymarket CLOB rejects every operator BUY on candidate-a with empty error — mirror pipeline boots clean but places zero orders | Cogni Poly | proj.poly-copy-trading |
 | 1 | 99 | 3 | needs_triage | story.0089 | Discord Bot Conversation Evals |  |  |
 | 1 | 99 | 5 | needs_triage | story.0091 | Clawdbot as High-Level Manager Agent |  |  |
 | 1 | 99 | 4 | needs_design | story.0116 | DAO Gateway MVP — multi-tenant AI billing gateway for external projects | Operator Plane | proj.operator-plane |
@@ -360,6 +359,7 @@
 | 1 | task.0311 | Poly Knowledge Plane v0 — Candidate-a Wiring + Upsert Bug Fix (Clean-Slate Nodes) | Cogni Poly | proj.poly-prediction-bot |
 | 1 | bug.0328 | promote-build-payload silent abort + release-slot treats skipped verify as success — verify-candidate bypassed on real flight | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | task.0328 | Poly sync-truth — DB as CLOB cache (first slice: typed not_found, grace window, synced_at, sync-health) | Cogni Poly | proj.poly-copy-trading |
+| 1 | bug.0335 | Polymarket CLOB rejects every operator BUY on candidate-a with empty error — mirror pipeline boots clean but places zero orders | Cogni Poly | proj.poly-copy-trading |
 | 1 | bug.0338 | Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only | Cogni Poly | proj.poly-copy-trading |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
