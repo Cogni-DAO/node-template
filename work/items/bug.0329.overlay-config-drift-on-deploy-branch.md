@@ -1,22 +1,23 @@
 ---
 id: bug.0329
 type: bug
-title: Overlay ConfigMap patches drift from main because deploy-branch overlays are never rsync'd
+title: Overlay config drift — deploy branches are a mutable state store with no single truth source
 status: needs_implement
 priority: 1
 rank: 5
-estimate: 2
-summary: The promote-and-deploy workflow deliberately excludes `infra/k8s/overlays/**` from the base/catalog rsync step ("overlays are NOT synced — they contain env-specific state (IPs) that provision wrote directly to the deploy branch"). Side effect, any non-digest change to an overlay on `main` (e.g. `COGNI_NODE_ENDPOINTS` port correction in `866f6c97d` / `79f888aff`) never propagates to `deploy/preview` / `deploy/candidate-a` / `deploy/production`. Only `promote-k8s-image.sh`'s in-place digest sed runs against the deploy-branch copy. Confirmed in prod on 2026-04-19, preview, scheduler-worker ConfigMap — `poly=http://poly-node-app:3100,resy=http://resy-node-app:3300` on deploy branch even though main has `:3000` for both. Scheduler-worker `createGraphRunActivity` times out with `UND_ERR_CONNECT_TIMEOUT` against poly:3100 (pod `targetPort` 3100 but Service `port` 3000), chat on `poly-preview.cognidao.org` hangs, task.0280 HTTP delegation silently fails post-promote even though the correct manifest is on main. Operator endpoint works by coincidence (`targetPort == port == 3000`).
-outcome: Any change to an overlay on main propagates to every `deploy/*` branch on the next promote. EndpointSlice IP patches (the one piece of legitimately env-local overlay state) are preserved. No bespoke YAML-merge logic — use file-level split + `rsync --exclude`.
+estimate: 4
+summary: The promote-and-deploy workflow treats `deploy/<env>` as a long-lived mutable copy of `infra/k8s/`. Base + catalog are rsync'd from main each promote, but `infra/k8s/overlays/**` is skipped "because overlays contain env-specific state (IPs) that provision wrote directly to the deploy branch." Side effect, any non-digest overlay change on `main` never reaches `deploy/preview` / `deploy/candidate-a` / `deploy/canary` / `deploy/production`. Surfaced 2026-04-19, preview scheduler-worker ConfigMap had `poly=http://poly-node-app:3100,resy=http://resy-node-app:3300` though `main` had `:3000` for both (fix landed in `866f6c97d` / `79f888aff`). Scheduler-worker `createGraphRunActivity` timed out with `UND_ERR_CONNECT_TIMEOUT` (Service port is 3000, pod targetPort is 3100), chat on `poly-preview.cognidao.org` hung, task.0280 HTTP delegation silently broken post-promote. Operator worked by coincidence (`targetPort == port == 3000`). Root cause is not "the port was wrong" — it is "a whole class of main→deploy-branch deltas can go live in preview/prod without anyone noticing because there is no invariant that overlays match main."
+outcome: "A structural invariant — every file under `infra/k8s/` on a deploy branch is either byte-identical to `main` or deterministically generated from a single, auditable per-env truth source (`env-state.yaml`). Overlay drift is impossible by construction, not by workflow discipline."
 spec_refs:
   - cd-pipeline
+  - ci-cd
 assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
 branch: fix/bug.0329-overlay-drift
 pr:
 reviewer: claude-code
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-04-19
@@ -32,57 +33,101 @@ external_refs:
 
 ### Outcome
 
-Any non-IP change to an overlay file on `main` (ConfigMap data, resource list, image digest baseline, resource refs) automatically reaches `deploy/preview`, `deploy/candidate-a`, and `deploy/production` on the next promote. EndpointSlice IP patches written by the provision script stay pinned to the VM's truth.
+The invariant `INFRA_K8S_MAIN_DERIVED` holds after every promote: for every file under `infra/k8s/` on `deploy/<env>`, either the file is byte-identical to `main` at the promoted SHA, or the file is `env-state.yaml` (the single per-env truth source). The only non-rsync write the pipeline performs on a deploy branch is (a) the digest line(s) mutated by `promote-k8s-image.sh` and (b) the entire contents of `env-state.yaml` written by the provision script.
+
+No "ConfigMap drifted from main" incident can recur because no overlay YAML contains values that could drift.
 
 ### Approach
 
-**Solution**: split the EndpointSlice IP patches into their own file per overlay dir, rsync everything else from `main`, exclude the IP file.
+**Solution**: one per-env state file, rsync everything else.
 
-1. **Per overlay dir** (`infra/k8s/overlays/<env>/<app>/`), extract every `EndpointSlice` JSON-patch block out of `kustomization.yaml` into a sibling `endpoints-patch.yaml` that Kustomize references via `patches: - path: endpoints-patch.yaml`.
-2. **Workflow** (`.github/workflows/promote-and-deploy.yml`, "Sync base and catalog" step, line 184): add one more rsync line that syncs overlays but excludes `endpoints-patch.yaml`:
-   ```
-   rsync -a --delete --exclude='endpoints-patch.yaml' \
-     app-src/infra/k8s/overlays/ deploy-branch/infra/k8s/overlays/
-   ```
-3. **Provision script** (`scripts/ci/deploy-infra.sh` + `scripts/setup/provision-test-vm.sh`): writes to `endpoints-patch.yaml` instead of editing inline patches in `kustomization.yaml`. Same kustomize JSON-patch shape, just relocated.
-4. **promote-k8s-image.sh**: no change — it already runs _after_ the rsync step, so it mutates the (now main-derived) `kustomization.yaml` in the deploy-branch checkout.
+1. **Create** `infra/k8s/overlays/<env>/env-state.yaml` per env — the ONLY deploy-branch-local file under `infra/k8s/`. Minimal schema:
 
-**Reuses**: existing rsync step, existing promote-k8s-image.sh digest sed, existing kustomize `patches: - path:` support. Zero new scripts, zero new jobs.
+   ```yaml
+   apiVersion: v1
+   kind: ConfigMap
+   metadata:
+     name: env-state
+   data:
+     VM_INTERNAL_IP: "84.32.109.222"
+   ```
+
+   Written by `scripts/ci/deploy-infra.sh` (and `scripts/setup/provision-test-vm.sh` for local use) from VM facts. Never touched by promote.
+
+2. **Wire EndpointSlice IPs through kustomize `replacements`** in each overlay's `kustomization.yaml`. `replacements` is a native kustomize v4+ feature — one `source: {kind: ConfigMap, name: env-state, fieldPath: data.VM_INTERNAL_IP}`, N `targets` each addressing `/endpoints/0/addresses/0`. No more inline `value: ["84.32.109.222"]` strings anywhere.
+
+3. **Audit overlays** and push every byte-identical-across-envs patch value into `infra/k8s/base/<app>/configmap.yaml` (example: `COGNI_NODE_ENDPOINTS`, `LITELLM_BASE_URL`, `TEMPORAL_ADDRESS`, `REDIS_URL`, `NODE_NAME`, `AUTH_TRUST_HOST` are all identical across `preview/candidate-a/canary/production`). Overlays keep only genuinely env-varying patches (`TEMPORAL_NAMESPACE`, `NEXTAUTH_URL`).
+
+4. **Workflow change** (`.github/workflows/promote-and-deploy.yml`, "Sync base and catalog" step): extend to rsync the entire `infra/k8s/` tree, excluding only `env-state.yaml`:
+
+   ```bash
+   rsync -a --delete --exclude='env-state.yaml' \
+     app-src/infra/k8s/ deploy-branch/infra/k8s/
+   ```
+
+   Drop the separate base/catalog rsync lines — this supersedes them.
+
+5. **Provision scripts** (`scripts/ci/deploy-infra.sh`, `scripts/setup/provision-test-vm.sh`): write only `env-state.yaml`. Delete all existing VM-IP-writing code paths that edit overlay `kustomization.yaml` inline.
+
+6. **promote-k8s-image.sh**: unchanged. Runs after rsync, mutates the (now main-derived) digest line in `kustomization.yaml`.
+
+7. **Deploy-branch migration**: the first promote after merge requires `env-state.yaml` to exist on every `deploy/<env>` branch before kustomize can build. Implement as an idempotent fallback in the provision script path: if `env-state.yaml` absent, generate it from the VM's current `InternalIP`. First promote runs `deploy-infra.sh`, deploy-infra writes `env-state.yaml`, workflow rsyncs everything else, kustomize builds, Argo syncs. No manual commits to deploy branches.
+
+**Reuses**: kustomize native `replacements`, rsync `--exclude`, existing `promote-k8s-image.sh`, existing provision-script plumbing that already runs per promote.
 
 **Rejected**:
 
-- **YAML-aware merge** (parse + merge `kustomization.yaml` from main and deploy branch): fragile in bash, adds `yq` dependency to CI, duplicates kustomize's own patch layering.
-- **Move IPs out of Kustomize entirely** (e.g. a separate `kubectl apply` of EndpointSlice resources from provision): larger blast radius, makes the k8s install no longer fully declarative via Argo.
-- **Re-run provision's IP-write step inside the promote workflow**: couples promote to live VM state, requires VM-IP lookup at promote time, more moving parts than a file split.
-- **Just rebase deploy branches onto main each promote**: preserves history but breaks the "digest-only, atomic, revertable" promote commits the release-slot controller depends on.
+- **Split EndpointSlice patches into a sibling `endpoints-patch.yaml`, rsync the rest with `--exclude`** (previous revision of this design): still leaves overlay files mutable on deploy branches, still couples per-VM state to a kustomize JSON-patch format. `replacements` is the intended kustomize mechanism for "one value flows into many resources," and it keeps the single truth source a data file, not a patch file.
+- **Move only `COGNI_NODE_ENDPOINTS` to base**: fixes today's outage in 3 lines, leaves the class of bug intact. Ad-hoc.
+- **Manual one-shot commit to `deploy/preview` to unblock chat now**: ad-hoc mutation of shared state, creates a manual action that has to be remembered + undone. Preview heals on the next promote cycle after this bug lands; acceptable.
+- **Drop deploy branches entirely, point Argo at `main`**: correct end state, much larger refactor, separate work item.
+- **YAML-aware merge in bash (`yq`)**: fragile, duplicates kustomize's own layering, no truth source.
 
 ### Invariants
 
 <!-- CODE REVIEW CRITERIA -->
 
-- [ ] OVERLAY_NON_IP_PARITY: Any file under `infra/k8s/overlays/**` other than `endpoints-patch.yaml` must be byte-identical between `main` and `deploy/<env>` immediately after a promote (verifiable with `git diff main -- infra/k8s/overlays/ ':!**/endpoints-patch.yaml'`, modulo the single digest line promote-k8s-image.sh writes).
-- [ ] ENDPOINTS_LOCAL: `endpoints-patch.yaml` must be the ONLY overlay file that differs per-VM; workflow must skip it via `--exclude`.
-- [ ] SIMPLE_SOLUTION: Leverages rsync's `--exclude` and kustomize's native patch-path reference — no bespoke YAML merge.
-- [ ] ARCHITECTURE_ALIGNMENT: Preserves GitOps / Argo "manifest is truth" — provisioning still writes a YAML file, just a narrower one.
+- [ ] INFRA_K8S_MAIN_DERIVED: For every file under `infra/k8s/` on `deploy/<env>`, either the file matches `main` at the promoted SHA or the file is `env-state.yaml`. No exceptions. Verifiable: `git diff <promoted-sha> origin/deploy/<env> -- infra/k8s/ ':!**/env-state.yaml'` is empty modulo digest lines `promote-k8s-image.sh` writes.
+- [ ] ENV_STATE_IS_TRUTH: `env-state.yaml` is the only file provision writes under `infra/k8s/`. Provision never edits `kustomization.yaml`.
+- [ ] REPLACEMENTS_NOT_INLINE: No `kustomization.yaml` patches contain inline IP literals under `/endpoints/*/addresses`. All such addresses flow from `env-state.yaml` via kustomize `replacements`.
+- [ ] BASE_OWNS_STATIC: Any ConfigMap value byte-identical across all overlays lives in `infra/k8s/base/<app>/configmap.yaml`, not in overlay patches.
+- [ ] SIMPLE_SOLUTION: Uses only kustomize native `replacements` and rsync `--exclude`. Zero new scripts, zero YAML-merge logic.
 
 ### Files
 
 <!-- High-level scope -->
 
-- Create: `infra/k8s/overlays/<env>/<app>/endpoints-patch.yaml` — per overlay dir that currently has inline EndpointSlice patches (preview, canary, candidate-a, production × scheduler-worker, and any node/operator overlay that patches EndpointSlices).
-- Modify: `infra/k8s/overlays/<env>/<app>/kustomization.yaml` — remove inline EndpointSlice patches, add `patches: - path: endpoints-patch.yaml`.
-- Modify: `.github/workflows/promote-and-deploy.yml` — add overlay rsync with `--exclude='endpoints-patch.yaml'` next to the existing base/catalog rsync.
-- Modify: `scripts/ci/deploy-infra.sh`, `scripts/setup/provision-test-vm.sh` — write to `endpoints-patch.yaml` instead of `kustomization.yaml`.
-- Modify: `docs/spec/ci-cd.md` — document the split + sync semantics.
-- Test: dry-run promote on `candidate-a` with a deliberate ConfigMap change on main, assert `deploy/candidate-a` picks it up, assert EndpointSlice IPs unchanged.
+- Create: `infra/k8s/overlays/<env>/env-state.yaml` × 4 envs (preview, candidate-a, canary, production). Schema fixed by design point 1.
+- Modify: `infra/k8s/overlays/<env>/<app>/kustomization.yaml` × 16 — replace inline EndpointSlice IP patches with `replacements:` referencing `env-state.yaml`; strip any env-identical ConfigMap patches that migrated to base.
+- Modify: `infra/k8s/base/<app>/configmap.yaml` — receive any ConfigMap keys audited out of overlay patches.
+- Modify: `.github/workflows/promote-and-deploy.yml` — replace the base-only rsync with `rsync --exclude='env-state.yaml'` over all of `infra/k8s/`.
+- Modify: `scripts/ci/deploy-infra.sh`, `scripts/setup/provision-test-vm.sh` — write only `env-state.yaml`; delete inline-patch-writing logic.
+- Delete: any inline-EndpointSlice-IP sed/awk in provision scripts.
+- Test: dry-run promote on `candidate-a` with a deliberate ConfigMap change on main, assert `deploy/candidate-a` picks it up, assert EndpointSlice addresses unchanged in the rendered manifest (`kustomize build`).
+- CI guard (optional but recommended in follow-up): a post-promote workflow step that runs the `git diff` check from `INFRA_K8S_MAIN_DERIVED` and fails if non-allowed drift exists.
+
+### Docs / specs to update when this lands
+
+Owned by this work item — update at implement time:
+
+- `docs/spec/ci-cd.md` — describe `env-state.yaml` as the single per-env truth source; strike any language implying overlays are mutable on deploy branches.
+- `docs/spec/cd-pipeline-e2e.md` — update the promote-and-deploy diagram/sequence to show `rsync infra/k8s/ --exclude='env-state.yaml'` replacing the base-only rsync; call out `INFRA_K8S_MAIN_DERIVED` invariant.
+- `docs/spec/cd-pipeline-e2e-legacy-canary.md` — align or mark legacy; same rsync change.
+- `docs/spec/deploy.config-reconciliation.md` — record new reconciliation model (promote re-asserts main-truth; provision re-asserts VM-truth via one file).
+- `docs/spec/preview-deployments.md` — note that preview self-heals from main on the next promote; no manual `deploy/preview` hand-editing is a supported operation.
+- `docs/guides/multi-node-deploy.md` — update the "adding a new node" steps: provision writes `env-state.yaml`, not inline overlay patches.
+- `docs/guides/node-formation-guide.md` — same; also drop any guidance telling humans to hand-edit `deploy/<env>` overlay YAML.
+- `.github/workflows/promote-and-deploy.yml` comments (lines 184-192) — the comment "Overlays are NOT synced — they contain env-specific state (IPs) that provision wrote directly to the deploy branch" is the load-bearing lie; replace with the new contract.
+- `scripts/ci/deploy-infra.sh` header comment — document `env-state.yaml` as the single deploy-branch-local write target.
+- `scripts/setup/provision-test-vm.sh` header comment — same.
+- `services/scheduler-worker/AGENTS.md` — if it currently documents `COGNI_NODE_ENDPOINTS` as overlay-patched, correct to base.
+
+Not expected to change: `docs/spec/multi-node-tenancy.md` (tenancy invariants are unaffected), `docs/spec/scheduler.md` (HTTP delegation shape unchanged).
 
 ## Validation
 
-- After landing, on the next `main → deploy/<env>` promote, `git diff main origin/deploy/<env> -- infra/k8s/overlays/ ':!**/endpoints-patch.yaml'` shows only the single digest line mutation from `promote-k8s-image.sh`, nothing else.
-- Deliberate ConfigMap change on main (e.g. bump a `LOG_LEVEL` value in an overlay) reaches `deploy/candidate-a` ConfigMap inside 1 promote cycle.
-- `kubectl -n cogni-<env> get endpointslices.discovery.k8s.io -o jsonpath='{.items[*].endpoints[*].addresses}'` unchanged across a promote (IPs pinned).
-- Preview scheduler-worker `COGNI_NODE_ENDPOINTS` reads `poly=http://poly-node-app:3000,resy=http://resy-node-app:3000` without a manual poke to `deploy/preview`.
-
-### Immediate preview unblock (separate from this fix)
-
-Out of scope for bug.0329, tracked elsewhere: a one-shot direct commit to `deploy/preview` rewriting `COGNI_NODE_ENDPOINTS` to port 3000 across poly + resy entries, to let task.0280 actually serve chat on preview. Until that lands, this bug's structural fix can't be validated end-to-end on preview (only candidate-a).
+- `git diff <promoted-sha> origin/deploy/<env> -- infra/k8s/ ':!**/env-state.yaml'` returns empty (modulo digest lines) on every promoted env, asserted in a CI guard step.
+- Deliberate ConfigMap change on main (e.g. touch `LOG_LEVEL` in `base/scheduler-worker/configmap.yaml` or a genuinely-env-varying overlay patch) reaches `deploy/candidate-a` in 1 promote cycle.
+- `kubectl -n cogni-<env> get endpointslices.discovery.k8s.io -o jsonpath='{.items[*].endpoints[*].addresses}'` unchanged across a promote (IPs still pinned to the VM).
+- Preview scheduler-worker `COGNI_NODE_ENDPOINTS` reads `poly=http://poly-node-app:3000,resy=http://resy-node-app:3000` without any manual poke to `deploy/preview` — self-heal is the proof.
+- Reprovision a preview VM with a different IP → single commit to `deploy/preview/env-state.yaml`, no other files touched.
