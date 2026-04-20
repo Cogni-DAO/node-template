@@ -255,10 +255,11 @@ export interface Container {
     | import("@/bootstrap/capabilities/poly-trade").PolyTradeBundle
     | undefined;
   /**
-   * Copy-trade target source — strongly-typed seam for "which wallets are we
-   * monitoring right now?". v0 impl reads from `COPY_TRADE_TARGET_WALLETS`
-   * env. P2 swaps in a DB-backed impl over `poly_copy_trade_targets` with
-   * zero caller changes (see `@/features/copy-trade/target-source.ts`).
+   * Copy-trade target source — strongly-typed seam for "which wallets is each
+   * user monitoring right now?". Production: DB-backed (`dbTargetSource`)
+   * reading `poly_copy_trade_targets` × `poly_copy_trade_config`. Test mode:
+   * empty `envTargetSource` (tests construct their own when they need wallets).
+   * See `@/features/copy-trade/target-source.ts`.
    */
   copyTradeTargetSource: CopyTradeTargetSource;
   /**
@@ -683,12 +684,11 @@ function createContainer(): Container {
   // Copy-trade target source. Production wires `dbTargetSource` over
   // poly_copy_trade_targets (RLS-enforced via appDb for `listForActor`,
   // BYPASSRLS via serviceDb for the `listAllActive` enumerator). Test mode
-  // falls back to `envTargetSource` so test stacks without poly_copy_trade
-  // tables still boot. The COPY_TRADE_TARGET_WALLETS env var is dropped in
-  // CP A7; the env source then becomes empty in test mode unless tests
-  // construct it directly.
+  // falls back to `envTargetSource` with an empty wallet list — tests that
+  // need targets construct envTargetSource directly with the wallets they
+  // care about.
   const copyTradeTargetSource: CopyTradeTargetSource = env.isTestMode
-    ? envTargetSource(env.COPY_TRADE_TARGET_WALLETS as readonly `0x${string}`[])
+    ? envTargetSource([])
     : dbTargetSource({
         appDb:
           db as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase<
@@ -799,7 +799,6 @@ function createContainer(): Container {
       {
         event: EVENT_NAMES.POLY_MIRROR_POLL_SKIPPED,
         has_bundle: false,
-        target_count: env.COPY_TRADE_TARGET_WALLETS.length,
       },
       "mirror poll not started (Polymarket creds missing)"
     );

@@ -3,9 +3,10 @@
 
 /**
  * Module: `@tests/unit/features/copy-trade/target-source`
- * Purpose: Verifies the env-backed `CopyTradeTargetSource` + the server-env parser
- *          for `COPY_TRADE_TARGET_WALLETS` (comma-separated list).
- * Scope: Unit. No DB, no HTTP. Just the port impl + the Zod preprocessing.
+ * Purpose: Verifies the `envTargetSource` impl of `CopyTradeTargetSource` —
+ *          the local-dev/test fallback for the production `dbTargetSource`.
+ *          DB-backed coverage lives in component tests against testcontainers.
+ * Scope: Unit. No DB, no HTTP. Just the port impl.
  * @public
  */
 
@@ -14,8 +15,7 @@ import {
   COGNI_SYSTEM_BILLING_ACCOUNT_ID,
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
 } from "@cogni/node-shared";
-import { BASE_VALID_ENV } from "@tests/_fixtures/env/base-env";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   envTargetSource,
   type WalletAddress,
@@ -59,57 +59,5 @@ describe("envTargetSource", () => {
         targetWallet: W2,
       },
     ]);
-  });
-});
-
-const ORIGINAL_ENV = { ...process.env };
-
-beforeEach(() => {
-  vi.resetModules();
-  process.env = { ...ORIGINAL_ENV };
-});
-
-afterEach(() => {
-  process.env = ORIGINAL_ENV;
-});
-
-describe("serverEnv.COPY_TRADE_TARGET_WALLETS parsing", () => {
-  it("defaults to [] when unset", async () => {
-    process.env = { ...BASE_VALID_ENV };
-    delete process.env.COPY_TRADE_TARGET_WALLETS;
-    const { serverEnv } = await import("@/shared/env/server-env");
-    expect(serverEnv().COPY_TRADE_TARGET_WALLETS).toEqual([]);
-  });
-
-  it("parses empty string as []", async () => {
-    process.env = { ...BASE_VALID_ENV, COPY_TRADE_TARGET_WALLETS: "" };
-    const { serverEnv } = await import("@/shared/env/server-env");
-    expect(serverEnv().COPY_TRADE_TARGET_WALLETS).toEqual([]);
-  });
-
-  it("parses a single address", async () => {
-    process.env = { ...BASE_VALID_ENV, COPY_TRADE_TARGET_WALLETS: W1 };
-    const { serverEnv } = await import("@/shared/env/server-env");
-    expect(serverEnv().COPY_TRADE_TARGET_WALLETS).toEqual([W1]);
-  });
-
-  it("parses comma-separated list with whitespace", async () => {
-    process.env = {
-      ...BASE_VALID_ENV,
-      COPY_TRADE_TARGET_WALLETS: ` ${W1} , ${W2} `,
-    };
-    const { serverEnv } = await import("@/shared/env/server-env");
-    expect(serverEnv().COPY_TRADE_TARGET_WALLETS).toEqual([W1, W2]);
-  });
-
-  it("rejects a malformed address", async () => {
-    process.env = {
-      ...BASE_VALID_ENV,
-      COPY_TRADE_TARGET_WALLETS: `${W1},0xnot-hex`,
-    };
-    const { serverEnv, EnvValidationError } = await import(
-      "@/shared/env/server-env"
-    );
-    expect(() => serverEnv()).toThrow(EnvValidationError);
   });
 });
