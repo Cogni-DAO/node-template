@@ -3,11 +3,10 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: cogni-preview
+namespace: cogni-production
 
 resources:
   - ../../../base/node-app
-  - ../../../base/poly-doltgres
   - env-state.yaml
 
 namePrefix: poly-
@@ -15,10 +14,10 @@ namePrefix: poly-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:46946c6fb9a4dfc943b852617626762f21b38a0faa73a5e374689979318184ee"
+    newTag: "prod-placeholder-poly"
   - name: ghcr.io/cogni-dao/cogni-template-migrate
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:de3c0c0f967addfeb25cf5de111ab56b14bf4b789ea2927e3d8d87b3f321d4f4"
+    newTag: "prod-placeholder-poly"
 
 patches:
   # Node-specific ConfigMap values.
@@ -32,7 +31,7 @@ patches:
         value: "poly"
       - op: replace
         path: /data/TEMPORAL_NAMESPACE
-        value: "cogni-preview"
+        value: "cogni-production"
       - op: replace
         path: /data/LITELLM_BASE_URL
         value: "http://poly-litellm-external:4000"
@@ -44,7 +43,7 @@ patches:
         value: "redis://poly-redis-external:6379"
       - op: add
         path: /data/NEXTAUTH_URL
-        value: "https://poly-preview.cognidao.org"
+        value: "https://poly.cognidao.org"
   # NodePort + instance label on selector (prevents cross-node routing)
   - target:
       kind: Service
@@ -76,8 +75,9 @@ patches:
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
         value: "poly"
-  # Migration: shared migrator image runs operator's schema (all nodes share one schema).
-  # Secret ref patched to poly's secret so DATABASE_URL points to cogni_poly.
+  # Migration: skip until node-template builds its own -migrate image (task.0260).
+  # The current migrate digest points to the app image, which starts Next.js
+  # instead of running migrations — blocking Argo PreSync indefinitely.
   - target:
       kind: Job
       name: migrate-node-app
@@ -85,13 +85,9 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
         value: "poly-node-app-secrets"
-  - target:
-      kind: Job
-      name: migrate-poly-doltgres
-    patch: |
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
-        value: "poly-node-app-secrets"
+      - op: add
+        path: /spec/template/spec/containers/0/command
+        value: ["sh", "-c", "echo 'poly: no dedicated migrate image yet (task.0260)' && exit 0"]
   - target:
       kind: EndpointSlice
       name: postgres-external-1
@@ -120,13 +116,6 @@ patches:
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-redis-external"
-  - target:
-      kind: EndpointSlice
-      name: doltgres-external-1
-    patch: |
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "poly-doltgres-external"
 
 replacements:
   - source:
@@ -152,10 +141,5 @@ replacements:
       - select:
           kind: EndpointSlice
           name: redis-external-1
-        fieldPaths:
-          - endpoints.0.addresses.0
-      - select:
-          kind: EndpointSlice
-          name: doltgres-external-1
         fieldPaths:
           - endpoints.0.addresses.0

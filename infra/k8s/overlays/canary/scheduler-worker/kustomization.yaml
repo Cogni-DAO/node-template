@@ -3,7 +3,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: cogni-preview
+namespace: cogni-canary
 
 resources:
   - ../../../base/scheduler-worker
@@ -14,7 +14,7 @@ resources:
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:b34cdf7cc148dbc8cd3912dc7ae8c12d3fde1419abd4350ce36bcffbc19a4cca"
+    digest: "sha256:c8fa27bc2f8b8e57359fc5fd86f0f02429ed4d707fbfb4e1623ca1cac7375f15"
 
 patches:
   # Patch ConfigMap with staging-specific values
@@ -24,7 +24,7 @@ patches:
     patch: |
       - op: replace
         path: /data/TEMPORAL_NAMESPACE
-        value: "cogni-preview"
+        value: "cogni-canary"
       - op: replace
         path: /data/IMAGE_DIGEST
         value: "staging-placeholder-scheduler-worker"

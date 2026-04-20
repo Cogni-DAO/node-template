@@ -7,16 +7,17 @@ namespace: cogni-preview
 
 resources:
   - ../../../base/node-app
+  - env-state.yaml
 
 namePrefix: operator-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:79000dbe17ff55bd96d85086ad0ddefe5abbd6c5a6b863216f7943896e2686c4"
+    digest: "sha256:fa272b9a9b0409f05d637c96a50eeefae01119718aa1800819b63aeb8776da23"
   - name: ghcr.io/cogni-dao/cogni-template-migrate
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:31e9d8fdb4a082adf5b40bb4597f6463bacb78bdfc401244a615471ed8d989ff"
+    digest: "sha256:f0b7b6e9fcea0b86957ce628a1874338f874e226ed56152d645c8eb374accbce"
 
 patches:
   # Node-specific ConfigMap values.
@@ -25,9 +26,6 @@ patches:
       kind: ConfigMap
       name: node-app-config
     patch: |
-      - op: replace
-        path: /data/APP_ENV
-        value: "production"
       - op: replace
         path: /data/NODE_NAME
         value: "operator"
@@ -46,9 +44,6 @@ patches:
       - op: add
         path: /data/NEXTAUTH_URL
         value: "https://preview.cognidao.org"
-      - op: add
-        path: /data/AUTH_TRUST_HOST
-        value: "true"
   # NodePort assignment (operator = 30000) + instance label on selector.
   # Instance label prevents cross-node service routing: namePrefix only renames
   # resource names, not labels/selectors, so without this every Service
@@ -63,7 +58,7 @@ patches:
       - op: add
         path: /spec/selector/app.kubernetes.io~1instance
         value: "operator"
-  # Fix secret refs + instance label + memory limit.
+  # Fix secret refs + instance label on matchLabels and pod template.
   - target:
       kind: Deployment
       name: node-app
@@ -71,12 +66,6 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/envFrom/1/secretRef/name
         value: "operator-node-app-secrets"
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/requests/memory
-        value: "512Mi"
-      - op: replace
-        path: /spec/template/spec/containers/0/resources/limits/memory
-        value: "1Gi"
       - op: add
         path: /spec/selector/matchLabels/app.kubernetes.io~1instance
         value: "operator"
@@ -90,17 +79,10 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
         value: "operator-node-app-secrets"
-  # EndpointSlice IPs + service-name label fix.
-  # namePrefix renames Services but NOT the kubernetes.io/service-name label
-  # inside EndpointSlices. Without this fix, DNS can't associate the
-  # EndpointSlice with the prefixed Service → NXDOMAIN.
   - target:
       kind: EndpointSlice
       name: postgres-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.92"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-postgres-external"
@@ -109,18 +91,12 @@ patches:
       name: temporal-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.92"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-temporal-external"
   - target:
       kind: EndpointSlice
       name: litellm-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.92"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-litellm-external"
@@ -129,8 +105,44 @@ patches:
       name: redis-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.92"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-redis-external"
+  - target:
+      kind: EndpointSlice
+      name: doltgres-external-1
+    patch: |
+      - op: replace
+        path: /metadata/labels/kubernetes.io~1service-name
+        value: "operator-doltgres-external"
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: env-state
+      fieldPath: data.VM_IP
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: postgres-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: temporal-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: litellm-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: redis-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: doltgres-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
