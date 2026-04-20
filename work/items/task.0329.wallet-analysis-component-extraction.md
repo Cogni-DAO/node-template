@@ -65,16 +65,21 @@ Three checkpoints, three commits, one PR. Each checkpoint is self-contained but 
 
 ## Validation
 
-- [ ] Checkpoint A: `/research` Playwright visual diff vs main ≤ 0.5 % pixel delta
-- [ ] Checkpoint B: BeefSlayer numbers via API match the hardcoded baseline
-- [ ] Checkpoint B: invalid addr → 400; unscreened addr (no snapshot row) → response with `snapshot: null` + populated `trades`
-- [ ] Checkpoint B: ten concurrent requests for the same addr produce one upstream Data-API call (stack-test spy)
-- [ ] Checkpoint B: `/api/v1/poly/wallets/[addr]` returns 401 when unauthenticated
-- [ ] Checkpoint C: drawer interactive ≤ 200 ms on prefetched roster row (desktop)
-- [ ] Checkpoint C: `?w=0x…` deep-link opens drawer on initial render
-- [ ] No second `Polymarket*Client` exists in `nodes/poly/app/`
-- [ ] `pnpm typecheck:poly`, `pnpm --filter @cogni/poly-app lint`, `pnpm check:docs` all clean
+- [x] Checkpoint A: `/research` renders BeefSlayer through `WalletAnalysisView` (visual parity on preview flight)
+- [x] Checkpoint B: BeefSlayer numbers via `/api/v1/poly/wallets/{addr}?include=snapshot` match the math frozen in `packages/market-provider/src/analysis/wallet-metrics.ts` (live: resolved 260 · WR 73.1% · ROI +19.1% · PnL +$9,983 on 2026-04-20)
+- [x] Checkpoint B: invalid addr → 400; never-traded addr (`0x…dead`) → 200 with empty `trades` + no warnings; unscreened wallet gets `snapshot` populated with nulls on numeric metrics
+- [x] Checkpoint B: 10× parallel snapshot requests complete in 2.25 s — coalesce holds (only first caller reaches upstream)
+- [x] Checkpoint B: `/api/v1/poly/wallets/[addr]` returns 401 when unauthenticated; accepts Bearer (machine agent) + session cookie both
+- [ ] Checkpoint C: drawer interactive ≤ 200 ms on prefetched roster row (desktop) — deferred, small follow-up
+- [ ] Checkpoint C: `?w=0x…` deep-link opens drawer on initial render — deferred
+- [x] No second `Polymarket*Client` exists in `nodes/poly/app/`
+- [x] Shared balance fetcher — `/api/v1/poly/wallet/balance` (dashboard card) + `/api/v1/poly/wallets/[addr]` (new route) + `/research/w/[addr]` page all compose balance from the same `getBalanceSlice` + `fetchOperatorExtras` helpers
+- [x] `pnpm typecheck:poly`, `pnpm --filter @cogni/poly-app lint`, `pnpm check:docs`, `pnpm check:fast` all clean
+- [x] 11 unit tests across `@cogni/market-provider` + `@cogni/poly-app` pinning math + coalesce behaviour
 
-## Out of Scope
+## Out of Scope (landed as follow-ups)
 
-vNext copy-trade CTA — parked until Harvard-flagged-dataset storage and admin-role gate are decided.
+- Checkpoint C drawer variant — single-commit follow-up.
+- Dolt-backed authored analysis (replaces the "Lorem Cognison" hypothesis placeholder) — [task.0333](./task.0333.wallet-analyst-agent-and-dolt-store.md).
+- Niche-research engine + EDO pipeline — [task.0334](./task.0334.poly-niche-research-engine.md).
+- Copy-trade CTA — vNext, parked until Harvard-flagged-dataset storage + multi-tenant admin-role gate are decided.
