@@ -84,13 +84,16 @@ export interface PolymarketClobAdapterConfig {
    * pass a pino child logger bound with `{component: "poly-clob-adapter"}`.
    * Every log line carries `provider`, `chain_id`, `funder`, and — where
    * applicable — `token_id`, `client_order_id`, `order_id`, `duration_ms`.
+   * On `phase: rejected|error` the line additionally carries `error_code`
+   * (from `POLY_CLOB_ERROR_CODES`), `http_status`, `response_keys`, `reason`,
+   * and the preflight market context (`tick_size`, `neg_risk`, `fee_rate_bps`).
    */
   logger?: LoggerPort;
   /**
    * Metrics sink. Defaults to a no-op. Emits:
-   *   - `poly_clob_place_total{result}` (counter; result ∈ ok|rejected|error)
-   *   - `poly_clob_place_duration_ms{result}` (duration observation)
-   *   - analogous pairs for `cancel` and `get_order`.
+   *   - `poly_clob_place_total{result, error_code}` (counter; result ∈ ok|rejected|error; error_code set on non-ok)
+   *   - `poly_clob_place_duration_ms{result, error_code}` (duration observation)
+   *   - analogous pairs for `cancel` and `get_order` (without error_code).
    * Dashboards reference the names in `POLY_CLOB_METRICS`.
    */
   metrics?: MetricsPort;

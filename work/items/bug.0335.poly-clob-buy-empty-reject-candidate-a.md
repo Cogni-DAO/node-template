@@ -2,7 +2,7 @@
 id: bug.0335
 type: bug
 title: "Polymarket CLOB rejects every operator BUY on candidate-a with empty error — mirror pipeline boots clean but places zero orders"
-status: needs_research
+status: needs_merge
 priority: 1
 rank: 51
 estimate: 2
@@ -120,6 +120,17 @@ Fixed when the reproducer in §Reproducer returns a normal orderID receipt, AND 
 - **candidate-a mirror is a pure no-op today.** Every detected target fill produces an `error`-status ledger row and spends nothing. Rate cap (5 fills/hr) makes the noise bounded.
 - **Spending caps are intact**: hardcoded $1/trade + $10/day + 5 fills/hr. Even if the underlying cause turns out to be a CLOB regression (not a wallet problem), worst case is we lose $10/day in attempted but-rejected placements until it's diagnosed.
 - **Preview / production**: bug.0318's documented manual-seed recipe copies candidate-a's `POLY_CLOB_*` and `POLY_PROTO_PRIVY_*` values into those envs. If candidate-a's CLOB keys are stale, preview's will be too.
+
+## Fix note (observability patch — this PR)
+
+Root cause turned out to be orderMinSize × price (tracked as bug.0342 by parallel agent — Option A/B design pending). This PR does **not** close that business-logic gap; it closes the diagnostic gap that made the silent reject unreadable:
+
+- `classifyClobFailure(response)` + `classifyClientError(err)` extract `{error_code, response_keys, http_status, reason}` from whatever CLOB actually returned — no more `(success=undefined, errorMsg="")` blackholes.
+- `ClobRejectionError` carries `ClobFailureDetails`; callers branch on enum, not string-matching.
+- `placeOrder` catch logs those fields + preflight market context (`tick_size`, `neg_risk`, `fee_rate_bps`). Metric labels gain `error_code` (bounded 8-value enum, dashboard-safe).
+- No raw response bodies logged — structured fields + 128-char `reason` only (per `docs/spec/observability.md` rule 5).
+
+When bug.0342 ships and the next silent reject appears, the Loki line will read `error_code: invalid_price_or_tick` (or similar) instead of the opaque empty-string signature.
 
 ## Pointers
 
