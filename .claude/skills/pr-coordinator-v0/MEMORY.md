@@ -43,3 +43,38 @@ Derek runs this loop in the background while working on other projects. He expec
 **Why:** Derek has limited attention. The coordinator's job is to keep the pipeline moving, not to ask permission at every step.
 
 **How to apply:** Default to action. Narrate the plan in ≤3 lines, execute, report outcome. Confirm only when the choice is 50/50 or the action is destructive beyond a normal flight.
+
+## NEVER claim a flight is healthy without proof-of-rollout. Dispatch ≠ rollout.
+
+**This is the coordinator's ONE job.** Flight → *confirm the flight landed* → report. Skipping the confirm step is the single highest-impact failure mode.
+
+What "dispatched" means: `gh workflow run` returned a run ID. Nothing is deployed yet.
+What "rolled out" means: Argo reports Healthy AND the new pod emits `app started` with `buildSha` matching the PR head SHA in Loki.
+
+**Explicit failure modes to guard against:**
+
+1. **Lease-held dispatches silently fail.** If another flight is holding `candidate-lease.state`, a second dispatch completes instantly as `flight: failure` on the acquire step — NOT as a queued retry. Always `gh run view <id> --json conclusion` the dispatched run before reporting anything.
+2. **User saying "healthy" means they checked the URL.** It does NOT mean your dispatched flight rolled out. If you have not verified buildSha in Loki AND the promote commit on `deploy/candidate-a` matches your PR head SHA, the user is probably seeing the *previous* deployment. Correct the user rather than agree.
+3. **"PR Build succeeded" ≠ "flight will succeed".** PR Build produces images; candidate-flight needs the lease AND the ArgoCD sync AND a pod rollout. Three independent failure points after dispatch.
+
+**Required confirm sequence after every dispatch:**
+
+```bash
+# 1. Wait for flight job to reach a terminal state
+gh run view <run_id> --json conclusion,jobs --jq '{flight: (.jobs[] | select(.name=="flight") | .conclusion), verify: (.jobs[] | select(.name=="verify-candidate") | .conclusion)}'
+
+# 2. Confirm the promote commit
+git fetch origin deploy/candidate-a --quiet
+git log origin/deploy/candidate-a -1 --format='%s'   # should read: candidate-flight: pr-<N> <SHA>
+
+# 3. Confirm app-started log with matching buildSha in Loki
+mcp__grafana__query_loki_logs:
+  {namespace="cogni-candidate-a", pod=~"<app>-node-app-.*"} | json | msg="app started" | buildSha="<PR head SHA>"
+# startRfc3339 = dispatch time; endRfc3339 = now. If empty → rollout didn't happen. Do not claim healthy.
+```
+
+Only after (1) terminal success + (2) promote commit matches + (3) Loki log exists may you report the flight as rolled.
+
+**Why this rule exists:** On 2026-04-19 the coordinator dispatched #910 rebased, dispatched #932 (failed on lease), agreed with Derek that "#910 is healthy" without verifying, while candidate-a was actually still on #929 (the restore flight's lease was held). #910 was never tested on candidate. It then merged to main and broke preview. Every step above would have caught it.
+
+**How to apply:** No exceptions, even when Derek is pushing hard. "Flighted and confirmed" is the required deliverable — "flighted" alone is a lie. If confirmation takes 3 minutes, take 3 minutes.
