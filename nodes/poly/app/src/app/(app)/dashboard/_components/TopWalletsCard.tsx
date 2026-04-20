@@ -3,23 +3,28 @@
 
 /**
  * Module: `@app/(app)/dashboard/_components/TopWalletsCard`
- * Purpose: "Monitored Wallets" card — live leaderboard of top Polymarket wallets with a per-row
- *          "Copy" CTA (scaffold) and a Tracked indicator for wallets currently being mirrored.
- * Scope: Client component. React Query polls the internal API route. Does not place orders.
+ * Purpose: "Monitored Wallets" card — live leaderboard of top Polymarket wallets with
+ *          a per-row + button to track and a − button to untrack on user-owned rows.
+ *          Reads + writes go through the per-user, RLS-scoped API.
+ * Scope: Client component. React Query polls + mutates against the internal API.
+ *        Does not place orders.
  * Invariants:
- *   - READ_ONLY
- *   - Time-period selector drives the query key.
- *   - Copy CTA is a scaffold in P1 — shows a tooltip; hooks up to POST /api/v1/poly/copy-targets in P2.
- * Side-effects: IO (via React Query)
- * Links: [fetchTopWallets](../_api/fetchTopWallets.ts), work/items/task.0315
+ *   - PER_USER: list shows only the calling user's tracked wallets; create/delete
+ *     are RLS-scoped to the session user (enforced server-side, not here).
+ *   - POOLED_EXECUTION_DISCLAIMER: the card explicitly states that mirror execution
+ *     is shared across all operators in this node until per-user wallets ship in
+ *     Phase B (per docs/spec/poly-multi-tenant-auth.md § Phase A scope clarification).
+ * Side-effects: IO (via React Query — fetch/mutate against /api/v1/poly/copy-trade/targets).
+ * Links: [fetchCopyTargets](../_api/fetchCopyTargets.ts), [fetchTopWallets](../_api/fetchTopWallets.ts),
+ *        docs/spec/poly-multi-tenant-auth.md, work/items/task.0318
  * @public
  */
 
 "use client";
 
 import type { WalletTimePeriod } from "@cogni/ai-tools";
-import { useQuery } from "@tanstack/react-query";
-import { Eye, Plus } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Eye, Minus, Plus } from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import {
@@ -36,7 +41,11 @@ import {
   ToggleGroup,
   ToggleGroupItem,
 } from "@/components";
-import { fetchCopyTargets } from "../_api/fetchCopyTargets";
+import {
+  createCopyTarget,
+  deleteCopyTarget,
+  fetchCopyTargets,
+} from "../_api/fetchCopyTargets";
 import { fetchTopWallets } from "../_api/fetchTopWallets";
 import {
   formatNumTrades,
@@ -69,15 +78,28 @@ export function TopWalletsCard(): ReactElement {
     retry: 1,
   });
 
-  // TODO(task.0315 P2 / single-tenant auth):
-  // v0 returns a single env-derived target; P2 adds DB-backed per-user targets
-  // + click-to-copy writes. When that ships, the `+` CTA below becomes real.
+  const queryClient = useQueryClient();
+  const COPY_TARGETS_KEY = ["dashboard-copy-targets"] as const;
+
   const { data: targetsData } = useQuery({
-    queryKey: ["dashboard-copy-targets"],
+    queryKey: COPY_TARGETS_KEY,
     queryFn: fetchCopyTargets,
     staleTime: 30_000,
     gcTime: 5 * 60_000,
     retry: 1,
+  });
+
+  const createTargetMutation = useMutation({
+    mutationFn: (targetWallet: string) =>
+      createCopyTarget({ target_wallet: targetWallet }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: COPY_TARGETS_KEY }),
+  });
+
+  const deleteTargetMutation = useMutation({
+    mutationFn: (id: string) => deleteCopyTarget(id),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: COPY_TARGETS_KEY }),
   });
 
   const targetList = targetsData?.targets ?? [];
@@ -98,6 +120,7 @@ export function TopWalletsCard(): ReactElement {
   type MissingTrackedRow = {
     kind: "missing";
     proxyWallet: string;
+    targetId: string;
   };
   type DisplayRow =
     | { kind: "present"; tracked: boolean; trader: TraderRow }
@@ -118,7 +141,11 @@ export function TopWalletsCard(): ReactElement {
   }
   const trackedMissing: DisplayRow[] = targetList
     .filter((t) => !presentWalletSet.has(t.target_wallet.toLowerCase()))
-    .map((t) => ({ kind: "missing", proxyWallet: t.target_wallet }));
+    .map((t) => ({
+      kind: "missing",
+      proxyWallet: t.target_wallet,
+      targetId: t.target_id,
+    }));
 
   const displayRows: DisplayRow[] = [
     ...trackedMissing,
@@ -154,6 +181,10 @@ export function TopWalletsCard(): ReactElement {
         </div>
       </CardHeader>
       <CardContent className="p-0">
+        <p className="border-warning/30 border-b bg-warning/5 px-5 py-2 text-muted-foreground text-xs">
+          Mirror execution is shared across all operators in this node. Per-user
+          wallets and isolated execution ship in Phase B (task.0318).
+        </p>
         {isLoading ? (
           <div className="animate-pulse space-y-px px-5 pb-4">
             <div className="h-9 rounded bg-muted" />
@@ -236,7 +267,20 @@ export function TopWalletsCard(): ReactElement {
                       <TableCell className="text-right text-muted-foreground text-sm">
                         —
                       </TableCell>
-                      <TableCell />
+                      <TableCell className="pl-0 text-right">
+                        <button
+                          type="button"
+                          aria-label={`Untrack ${row.proxyWallet}`}
+                          title="Stop tracking this wallet"
+                          disabled={deleteTargetMutation.isPending}
+                          onClick={() =>
+                            deleteTargetMutation.mutate(row.targetId)
+                          }
+                          className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-success/20 hover:text-success disabled:cursor-wait disabled:opacity-40"
+                        >
+                          <Minus className="size-3.5" />
+                        </button>
+                      </TableCell>
                     </TableRow>
                   );
                 }
@@ -300,15 +344,34 @@ export function TopWalletsCard(): ReactElement {
                       {formatNumTrades(t.numTrades, t.numTradesCapped)}
                     </TableCell>
                     <TableCell className="pl-0 text-right">
-                      <button
-                        type="button"
-                        aria-label="Track this wallet (coming in Phase 2)"
-                        title="Click-to-copy mirror — lands in task.0315 Phase 2"
-                        disabled
-                        className="inline-flex size-7 items-center justify-center rounded text-muted-foreground/40 disabled:cursor-not-allowed"
-                      >
-                        <Plus className="size-3.5" />
-                      </button>
+                      {tracked ? (
+                        <button
+                          type="button"
+                          aria-label={`Untrack ${t.proxyWallet}`}
+                          title="Stop tracking this wallet"
+                          disabled={deleteTargetMutation.isPending}
+                          onClick={() => {
+                            if (!target) return;
+                            deleteTargetMutation.mutate(target.target_id);
+                          }}
+                          className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-success/20 hover:text-success disabled:cursor-wait disabled:opacity-40"
+                        >
+                          <Minus className="size-3.5" />
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          aria-label={`Track ${t.proxyWallet}`}
+                          title="Track this wallet (mirror its fills)"
+                          disabled={createTargetMutation.isPending}
+                          onClick={() =>
+                            createTargetMutation.mutate(t.proxyWallet)
+                          }
+                          className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:cursor-wait disabled:opacity-40"
+                        >
+                          <Plus className="size-3.5" />
+                        </button>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
