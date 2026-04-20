@@ -18,4 +18,4 @@ metadata:
   annotations:
     config.kubernetes.io/local-config: "true"
 data:
-  VM_IP: "84.32.109.222"
+  VM_IP: "84.32.110.92"
