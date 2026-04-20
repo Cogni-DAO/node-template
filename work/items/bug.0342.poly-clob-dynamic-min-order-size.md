@@ -14,7 +14,7 @@ assignees: derekg1729
 credit:
 project: proj.poly-copy-trading
 branch: fix/bug-0342-poly-clob-dynamic-min-order-size
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/967
 reviewer:
 revision: 0
 blocked_by:
