@@ -38,11 +38,12 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 > **Active.** v0 shipped with known gaps — cursor persistence, CTF SELL approvals, ledger status sync, rate-cap telemetry. v2 adds multi-target support as the trivial next step once the ledger is correct.
 
-| Deliverable                                                                                                  | Status    | Est | Work Item                                                                          |
-| ------------------------------------------------------------------------------------------------------------ | --------- | --- | ---------------------------------------------------------------------------------- |
-| v1 hardening bucket — cursor persistence, CTF SELL, status-sync, metrics, alerting                           | In Review | 3   | [task.0323](../items/task.0323.poly-copy-trade-v1-hardening.md)                    |
-| Sync-truth cache — DB as CLOB cache with typed not_found + grace window + `synced_at` + `/sync-health` route | Done      | 3   | [task.0328](../items/task.0328.poly-sync-truth-ledger-cache.md)                    |
-| Multi-target support — `CopyTradeTargetSource` port + N-wallet mirror-poll fan-out under one operator        | In Review | 3   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase A (this PR) |
+| Deliverable                                                                                                  | Status       | Est | Work Item                                                                          |
+| ------------------------------------------------------------------------------------------------------------ | ------------ | --- | ---------------------------------------------------------------------------------- |
+| v1 hardening bucket — cursor persistence, CTF SELL, status-sync, metrics, alerting                           | In Review    | 3   | [task.0323](../items/task.0323.poly-copy-trade-v1-hardening.md)                    |
+| Sync-truth cache — DB as CLOB cache with typed not_found + grace window + `synced_at` + `/sync-health` route | Done         | 3   | [task.0328](../items/task.0328.poly-sync-truth-ledger-cache.md)                    |
+| Multi-target support — `CopyTradeTargetSource` port + N-wallet mirror-poll fan-out under one operator        | In Review    | 3   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase A (this PR) |
+| Shared batched poller — replace per-wallet `setInterval` with one poll loop + `TargetSubscriptionRouter`     | Needs Design | 3   | [task.0332](../items/task.0332.poly-mirror-shared-poller.md) — blocks Phase 3      |
 
 ### Phase 3 (P3) — Multi-tenant: per-user operator wallets + RLS
 
