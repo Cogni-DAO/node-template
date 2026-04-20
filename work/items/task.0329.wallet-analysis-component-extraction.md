@@ -2,12 +2,12 @@
 id: task.0329
 type: task
 title: "Wallet analysis — reusable component + live data plane (any wallet) + Monitored drawer"
-status: needs_implement
+status: needs_review
 priority: 2
 rank: 5
 estimate: 4
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-20
 summary: "One PR with checkpoints: extract WalletAnalysisView from /research, wire a single API route through the existing PolymarketDataApiClient with server-side coalescing, ship /research/w/[addr] for any 0x wallet, and open a drawer from Monitored Wallets rows."
 outcome: "Click any wallet → see live analysis. /research keeps BeefSlayer hero via the new component. /research/w/[addr] works for any address. Monitored Wallets row opens drawer with prefetch. Snapshot data layered in for screened wallets; non-screened wallets show live trades only."
 spec_refs:
@@ -16,7 +16,7 @@ assignees: [derekg1729]
 credit:
 project: proj.poly-prediction-bot
 branch: design/wallet-analysis-components
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/934
 reviewer:
 revision: 0
 blocked_by:
