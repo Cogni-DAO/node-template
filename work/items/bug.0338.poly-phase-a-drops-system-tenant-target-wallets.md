@@ -2,7 +2,7 @@
 id: bug.0338
 type: bug
 title: Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 20
 estimate: 2
@@ -13,7 +13,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.poly-copy-trading
-branch:
+branch: feat/task-0318-phase-a
 pr:
 reviewer:
 revision: 0
@@ -139,36 +139,26 @@ A user POSTs a tracked wallet through their own account → within one mirror-po
 
 ### Checkpoints (for /implement)
 
-**Checkpoint 1 — POST implicitly enables tenant config**
+**Checkpoint 1 — POST implicitly enables tenant config** ✅
 
 - Milestone: a freshly-registered tenant can POST a target and GET returns `enabled:true` without any ops action; a pre-disabled tenant's config is not overwritten.
 - Invariants: `CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST`, `TENANT_SCOPED_WRITES_INTACT`, `NO_NEW_MIGRATION`.
 - Todos:
-  - [ ] POST handler: after the target insert, run `tx.insert(polyCopyTradeConfig).values({ billingAccountId: account.id, createdByUserId: sessionUser.id, enabled: true }).onConflictDoNothing()` in the same `withTenantScope` tx.
-  - [ ] POST route file header: update Invariants block.
-  - [ ] Extend `targets-route.int.test.ts` with two cases above.
-- Validation:
-  - `pnpm exec vitest run nodes/poly/app/tests/component/copy-trade/targets-route.int.test.ts`
-  - `pnpm check:fast`
+  - [x] POST handler upserts `polyCopyTradeConfig {enabled:true}` (onConflictDoNothing) inside the same `withTenantScope` tx.
+  - [x] POST route file header Invariants block updated.
+  - [x] `targets-route.int.test.ts` extended: fresh-tenant POST asserts config row + enabled=true; pre-disabled tenant POST asserts row unchanged.
+- Validation: 4 tests pass (`pnpm exec vitest run --config nodes/poly/app/vitest.component.config.mts nodes/poly/app/tests/component/copy-trade/targets-route.int.test.ts`).
 
-**Checkpoint 2 — Mirror reconciler replaces boot-time enumerator**
+**Checkpoint 2 — Mirror reconciler replaces boot-time enumerator** ✅
 
 - Milestone: pod detects new/removed targets within one tick cadence without restart.
 - Invariants: `POLL_RECONCILES_PER_TICK`, `SIMPLE_SOLUTION`, `ARCHITECTURE_ALIGNMENT`.
 - Todos:
-  - [ ] Replace the boot-time `for (const enumeratedTarget of enumerated)` block with a reconciler that:
-    - (a) first-tick fires immediately so startup targets begin polling without waiting 30s;
-    - (b) thereafter runs under `setInterval(30_000)`;
-    - (c) keys running polls by `` `${billingAccountId}:${targetWallet.toLowerCase()}` ``;
-    - (d) starts `startMirrorPoll` for keys in `current \ running`; invokes the stored `MirrorJobStopFn` for keys in `running \ current`.
-  - [ ] Emit `poly.mirror.reconcile.tick` structured log: `{ active_targets, added, removed, total_running }`. Add a new `EVENT_NAMES` entry.
-  - [ ] Preserve existing `poly.mirror.poll.skipped {target_count:0}` behavior for the initial empty enumeration.
-  - [ ] Hold the reconciler's own `setInterval` handle on a module-level `_reconcilerHandle`-like slot so tests can stop it cleanly.
-  - [ ] Unit test: fake source + fake `startMirrorPoll` counting start / stop per key; sequences `[] → [A] → [A,B] → [B] → []` produce the exact set of {start(A), start(B), stop(A), stop(B)} with no extras.
-- Validation:
-  - `pnpm exec vitest run nodes/poly/app/tests/unit/bootstrap/copy-trade-reconciler.test.ts`
-  - `pnpm check:fast`
-  - Manual: `pnpm dev:stack:full`, POST a target, confirm local pod logs emit `poly.mirror.poll.singleton_claim` within 60s.
+  - [x] New `nodes/poly/app/src/bootstrap/copy-trade-reconciler.ts` — first-tick-immediate + `setInterval(30_000)`, keys running polls by `` `${billingAccountId}:${targetWallet.toLowerCase()}` ``, starts/stops per diff. `KEY_STABILITY`, `FIRST_TICK_IMMEDIATE`, `SELF_HEALING` invariants in the module header.
+  - [x] `container.ts` wires the reconciler, stores stop handle on `_targetsReconcilerStop`, cleaned up in `resetContainer()`. Ledger reconciler (`startOrderReconciler`) runs once at boot as before.
+  - [x] New events (avoiding collision with existing ledger-reconciler names): `POLY_MIRROR_TARGETS_RECONCILE_TICK` = `poly.mirror.targets.reconcile.tick` (plus `_TICK_ERROR` + `_STOPPED`). Updates the spec invariant wording accordingly.
+  - [x] Unit test `copy-trade-reconciler.test.ts` — 6 cases including `[] → [A] → [A,B] → [B] → []` sequence, key stability across ticks, wallet case-variance dedupe, `listAllActive` throw recovery, idempotent stop.
+- Validation: `pnpm --filter @cogni/poly-app exec vitest run tests/unit/bootstrap/copy-trade-reconciler.test.ts` (6 passed). `pnpm check` clean (full gate, ~60s packages-build + all lint/typecheck/tests).
 
 **Checkpoint 3 — Candidate-a live validation**
 
@@ -184,7 +174,7 @@ A user POSTs a tracked wallet through their own account → within one mirror-po
 ## Validation
 
 - **exercise**: As a registered agent (not system tenant), `POST /api/v1/poly/copy-trade/targets {"target_wallet":"0x…"}` → `201 Created` with `enabled:true` in the response → within ≤60s the mirror pod claims the wallet.
-- **observability**: `{namespace="cogni-candidate-a"} |~ "poly.mirror.poll.singleton_claim"` at the deployed SHA returns ≥1 line for the POSTed wallet; the preceding pod-local log line is a prior `poly.mirror.reconcile.tick` (or initial empty-set boot line), NOT a fresh pod boot. Separate query `{...} |~ "poly.mirror.reconcile.tick"` shows a ~30s cadence.
+- **observability**: `{namespace="cogni-candidate-a"} |~ "poly.mirror.poll.singleton_claim"` at the deployed SHA returns ≥1 line for the POSTed wallet; the preceding pod-local log line is a prior `poly.mirror.targets.reconcile.tick` (or initial empty-set boot line), NOT a fresh pod boot. Separate query `{...} |~ "poly.mirror.targets.reconcile.tick"` shows a ~30s cadence.
 
 ## Not in scope
 

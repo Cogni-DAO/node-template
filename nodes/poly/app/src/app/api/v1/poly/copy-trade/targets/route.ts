@@ -17,6 +17,10 @@
  *     `DrizzleConnectionBrokerAdapter.resolve()`). Read paths (GET / DELETE) rely on
  *     the RLS clamp alone — they project bare wallet strings or do RLS-scoped
  *     UPDATE-by-id; there is no row-shaped tenant column to defense-check.
+ *   - CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST: POST upserts `poly_copy_trade_config`
+ *     with `enabled: true` inside the same tenant-scoped tx as the target insert.
+ *     `ON CONFLICT (billing_account_id) DO NOTHING` — pre-existing rows (enabled
+ *     OR user-disabled) are never overwritten. Ref bug.0338.
  *   - GLOBAL_KILL_SWITCH_PER_TENANT: `enabled` field reflects the tenant's
  *     `poly_copy_trade_config.enabled` row. Read once per request.
  * Side-effects: IO (Postgres reads + writes via appDb).
@@ -33,7 +37,10 @@ import {
   polyCopyTradeTargetCreateOperation,
   polyCopyTradeTargetsOperation,
 } from "@cogni/node-contracts";
-import { polyCopyTradeTargets } from "@cogni/poly-db-schema";
+import {
+  polyCopyTradeConfig,
+  polyCopyTradeTargets,
+} from "@cogni/poly-db-schema";
 import { and, eq, isNull } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { NextResponse } from "next/server";
@@ -171,24 +178,38 @@ export const POST = wrapRouteHandlerWithLogging(
     >;
     const actorId = userActor(toUserId(sessionUser.id));
 
-    // INSERT under withTenantScope — RLS WITH CHECK enforces created_by_user_id == actor.
-    const insertedRows = await withTenantScope(appDb, actorId, async (tx) =>
-      tx
-        .insert(polyCopyTradeTargets)
+    // INSERT target + upsert tenant config under withTenantScope in a single
+    // RLS-clamped transaction. POST is the opt-in act: a fresh tenant gets
+    // config{enabled:true}; a pre-existing row (enabled OR user-disabled) is
+    // left alone via ON CONFLICT DO NOTHING. Spec: CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST.
+    const insertedRows = await withTenantScope(appDb, actorId, async (tx) => {
+      await tx
+        .insert(polyCopyTradeConfig)
         .values({
           billingAccountId: account.id,
           createdByUserId: sessionUser.id,
-          targetWallet,
+          enabled: true,
         })
-        // Conflict resolves against the partial unique index
-        // `poly_copy_trade_targets_billing_wallet_active_idx` (WHERE disabled_at IS NULL).
-        .onConflictDoNothing()
-        .returning({
-          id: polyCopyTradeTargets.id,
-          billing_account_id: polyCopyTradeTargets.billingAccountId,
-          created_by_user_id: polyCopyTradeTargets.createdByUserId,
-        })
-    );
+        .onConflictDoNothing();
+
+      return (
+        tx
+          .insert(polyCopyTradeTargets)
+          .values({
+            billingAccountId: account.id,
+            createdByUserId: sessionUser.id,
+            targetWallet,
+          })
+          // Conflict resolves against the partial unique index
+          // `poly_copy_trade_targets_billing_wallet_active_idx` (WHERE disabled_at IS NULL).
+          .onConflictDoNothing()
+          .returning({
+            id: polyCopyTradeTargets.id,
+            billing_account_id: polyCopyTradeTargets.billingAccountId,
+            created_by_user_id: polyCopyTradeTargets.createdByUserId,
+          })
+      );
+    });
 
     let inserted = insertedRows[0];
     if (!inserted) {

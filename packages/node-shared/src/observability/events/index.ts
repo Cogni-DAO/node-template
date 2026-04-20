@@ -145,6 +145,14 @@ export const EVENT_NAMES = {
   POLY_MIRROR_POLL_TICK_ERROR: "poly.mirror.poll.tick_error",
   POLY_MIRROR_POLL_SKIPPED: "poly.mirror.poll.skipped",
   POLY_MIRROR_POLL_BOOT_FAILED: "poly.mirror.poll.boot_failed",
+  // Target-set reconciler (bug.0338 fix — separate from the ledger reconciler
+  // below which walks CLOB order status). Ticks every 30s, diffs the active
+  // target set against running per-target polls, starts/stops as needed.
+  POLY_MIRROR_TARGETS_RECONCILE_TICK: "poly.mirror.targets.reconcile.tick",
+  POLY_MIRROR_TARGETS_RECONCILE_TICK_ERROR:
+    "poly.mirror.targets.reconcile.tick_error",
+  POLY_MIRROR_TARGETS_RECONCILE_STOPPED:
+    "poly.mirror.targets.reconcile.stopped",
   // Ledger reconciler (task.0323 §2)
   POLY_MIRROR_RECONCILE_SINGLETON_CLAIM:
     "poly.mirror.reconcile.singleton_claim",

@@ -325,6 +325,10 @@ let _workflowClientPromise: Promise<{
 // Reconciler handle — set when the reconciler starts (async boot path).
 // Null until Polymarket creds are present and the async initialiser fires.
 let _reconcilerHandle: OrderReconcilerHandle | null = null;
+// Target-set reconciler handle — separate from the ledger-order reconciler
+// above. Starts/stops per-target mirror polls to match the active target set
+// every 30s (bug.0338 / POLL_RECONCILES_PER_TICK).
+let _targetsReconcilerStop: (() => void) | null = null;
 
 /**
  * Get the singleton container instance.
@@ -345,6 +349,14 @@ export function resetContainer(): void {
   _container = null;
   _webhookRegistrations = null;
   _reconcilerHandle = null;
+  if (_targetsReconcilerStop) {
+    try {
+      _targetsReconcilerStop();
+    } catch {
+      // Best-effort — tests re-create the container; nothing blocks here.
+    }
+    _targetsReconcilerStop = null;
+  }
   if (_temporalConnection) {
     void _temporalConnection.close();
   }
@@ -698,35 +710,21 @@ function createContainer(): Container {
   });
 
   // Autonomous 30s mirror poll per target wallet (task.0315 CP4.3e, @scaffolding).
-  // Starts when Polymarket creds are present (polyTradeBundle defined) AND the
-  // target source yields at least one wallet. One `startMirrorPoll` per wallet;
-  // exactly one `startOrderReconciler` regardless of target count (operator-
-  // wide CLOB reconciliation, not per-target). Size + cadence + caps are
-  // hardcoded in the job shim; the `poly_copy_trade_config.enabled` kill-switch
-  // remains the global ops gate between "polls are running" and "polls actually
-  // place orders."
+  // Starts when Polymarket creds are present (polyTradeBundle defined). A
+  // target-set reconciler ticks `copyTradeTargetSource.listAllActive()` every
+  // 30s and diffs the result against running per-target polls — so a user
+  // POSTing a tracked wallet begins copy-trading within one tick, with no pod
+  // restart (bug.0338 / POLL_RECONCILES_PER_TICK). One `startMirrorPoll` per
+  // active wallet; exactly one `startOrderReconciler` regardless of target
+  // count (operator-wide CLOB reconciliation, not per-target). Size + cadence
+  // + caps are hardcoded in the job shim; `poly_copy_trade_config.enabled`
+  // remains the per-tenant kill-switch between "polls are running" and "polls
+  // actually place orders."
   if (polyTradeBundle !== undefined) {
     // Lazy-load the poll wiring so its transitive imports (Data-API HTTP
     // client, Drizzle queries) don't run on pods without Polymarket creds.
     void (async () => {
       try {
-        // The ONE sanctioned cross-tenant read — see TARGET_SOURCE_TENANT_SCOPED
-        // invariant in docs/spec/poly-multi-tenant-auth.md. Each enumerated
-        // target carries (billing_account_id, created_by_user_id) so per-tenant
-        // fills/decisions writes can fan out under withTenantScope downstream.
-        const enumerated = await copyTradeTargetSource.listAllActive();
-        if (enumerated.length === 0) {
-          log.info(
-            {
-              event: EVENT_NAMES.POLY_MIRROR_POLL_SKIPPED,
-              has_bundle: true,
-              target_count: 0,
-            },
-            "mirror poll not started (no active targets across any tenant)"
-          );
-          return;
-        }
-
         const { createPolymarketActivitySource } = await import(
           "@/features/wallet-watch"
         );
@@ -739,38 +737,18 @@ function createContainer(): Container {
         const { buildMirrorTargetConfig } = await import(
           "@/bootstrap/jobs/copy-trade-mirror.job"
         );
+        const { startCopyTradeReconciler } = await import(
+          "@/bootstrap/copy-trade-reconciler"
+        );
         const dataApiClient = new PolymarketDataApiClient();
         // pino's Logger is structurally compatible with LoggerPort's subset
         // (debug/info/warn/error/child with object + optional msg).
         const mirrorLogger =
           log as unknown as import("@cogni/market-provider").LoggerPort;
-        for (const enumeratedTarget of enumerated) {
-          const targetWallet = enumeratedTarget.targetWallet;
-          const target = buildMirrorTargetConfig({
-            targetWallet,
-            billingAccountId: enumeratedTarget.billingAccountId,
-            createdByUserId: enumeratedTarget.createdByUserId,
-          });
-          const source = createPolymarketActivitySource({
-            client: dataApiClient,
-            wallet: targetWallet,
-            logger: mirrorLogger,
-            metrics: noopMetrics,
-          });
-          startMirrorPoll({
-            target,
-            source,
-            ledger: orderLedger,
-            placeIntent: polyTradeBundle.placeIntent,
-            closePosition: polyTradeBundle.closePosition,
-            getOperatorPositions: polyTradeBundle.getOperatorPositions,
-            logger: mirrorLogger,
-            metrics: noopMetrics,
-          });
-        }
 
         // Ledger reconciler — syncs open/pending rows from CLOB getOrder.
-        // Operator-wide (not per-target), so it runs exactly once.
+        // Operator-wide (not per-target), so it runs exactly once at boot
+        // independent of the target-set reconciler below.
         // (task.0323 §2, @scaffolding, Deleted-in-phase: 4)
         _reconcilerHandle = startOrderReconciler({
           ledger: orderLedger,
@@ -779,6 +757,38 @@ function createContainer(): Container {
           logger: mirrorLogger,
           metrics: noopMetrics,
           notFoundGraceMs: env.POLY_CLOB_NOT_FOUND_GRACE_MS,
+        });
+
+        // Target-set reconciler — ticks listAllActive every 30s, starts/stops
+        // per-wallet polls to match. First tick fires immediately. See
+        // docs/spec/poly-multi-tenant-auth.md § POLL_RECONCILES_PER_TICK.
+        _targetsReconcilerStop = startCopyTradeReconciler({
+          targetSource: copyTradeTargetSource,
+          startPollForTarget: (enumeratedTarget) => {
+            const targetWallet = enumeratedTarget.targetWallet;
+            const target = buildMirrorTargetConfig({
+              targetWallet,
+              billingAccountId: enumeratedTarget.billingAccountId,
+              createdByUserId: enumeratedTarget.createdByUserId,
+            });
+            const source = createPolymarketActivitySource({
+              client: dataApiClient,
+              wallet: targetWallet,
+              logger: mirrorLogger,
+              metrics: noopMetrics,
+            });
+            return startMirrorPoll({
+              target,
+              source,
+              ledger: orderLedger,
+              placeIntent: polyTradeBundle.placeIntent,
+              closePosition: polyTradeBundle.closePosition,
+              getOperatorPositions: polyTradeBundle.getOperatorPositions,
+              logger: mirrorLogger,
+              metrics: noopMetrics,
+            });
+          },
+          logger: mirrorLogger,
         });
       } catch (err: unknown) {
         log.error(

@@ -14,6 +14,9 @@
  *   - target_id from POST/GET == DB row PK (DELETE accepts it).
  *   - POST is idempotent on conflict (active row already exists).
  *   - DELETE returns 404 when called with a UUIDv5-from-wallet that isn't the row PK.
+ *   - CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST (bug.0338): POST upserts
+ *     `poly_copy_trade_config{enabled:true}` on fresh tenant; a pre-existing
+ *     disabled row is never overwritten (ON CONFLICT DO NOTHING).
  * @public
  */
 
@@ -71,15 +74,9 @@ describe("poly.copy_trade.targets — HTTP round-trip (component)", () => {
       avatarColor: null,
     };
 
-    // Per-tenant kill-switch — required for the GET/POST snapshot read.
-    await getSeedDb()
-      .insert(polyCopyTradeConfig)
-      .values({
-        billingAccountId,
-        createdByUserId: userId,
-        enabled: true,
-      })
-      .onConflictDoNothing();
+    // NOTE: we do NOT pre-seed poly_copy_trade_config here — the POST route is
+    // now the opt-in act (bug.0338 / CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST).
+    // Tests that want a pre-existing disabled config seed it themselves.
 
     vi.mocked(getSessionUser).mockResolvedValue(sessionUser);
   });
@@ -188,5 +185,69 @@ describe("poly.copy_trade.targets — HTTP round-trip (component)", () => {
       params: Promise.resolve({ id: wrongId }),
     });
     expect(delRes.status).toBe(404);
+  });
+
+  it("POST creates poly_copy_trade_config{enabled:true} on a fresh tenant (CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST)", async () => {
+    // No pre-seed (beforeEach no longer seeds the config row).
+    const createReq = new NextRequest(
+      "http://localhost/api/v1/poly/copy-trade/targets",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ target_wallet: TARGET_WALLET }),
+      }
+    );
+    const createRes = await createTarget(createReq);
+    expect([200, 201]).toContain(createRes.status);
+    const body = (await createRes.json()) as {
+      target: { enabled: boolean };
+    };
+    expect(body.target.enabled).toBe(true);
+
+    // DB-level assertion — the row actually lives with enabled=true.
+    const configRows = await getSeedDb()
+      .select()
+      .from(polyCopyTradeConfig)
+      .where(eq(polyCopyTradeConfig.billingAccountId, billingAccountId));
+    expect(configRows).toHaveLength(1);
+    expect(configRows[0]?.enabled).toBe(true);
+    expect(configRows[0]?.createdByUserId).toBe(userId);
+  });
+
+  it("POST does NOT overwrite a pre-existing disabled config row (onConflictDoNothing honored)", async () => {
+    // Operator or kill-switch toggle previously set the tenant to disabled.
+    await getSeedDb()
+      .insert(polyCopyTradeConfig)
+      .values({
+        billingAccountId,
+        createdByUserId: userId,
+        enabled: false,
+      })
+      .onConflictDoNothing();
+
+    const createReq = new NextRequest(
+      "http://localhost/api/v1/poly/copy-trade/targets",
+      {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ target_wallet: TARGET_WALLET }),
+      }
+    );
+    const createRes = await createTarget(createReq);
+    expect([200, 201]).toContain(createRes.status);
+
+    // Config row still disabled — POST didn't flip it.
+    const configRows = await getSeedDb()
+      .select()
+      .from(polyCopyTradeConfig)
+      .where(eq(polyCopyTradeConfig.billingAccountId, billingAccountId));
+    expect(configRows).toHaveLength(1);
+    expect(configRows[0]?.enabled).toBe(false);
+
+    // The route reflects the current state — `enabled: false` in the response.
+    const body = (await createRes.json()) as {
+      target: { enabled: boolean };
+    };
+    expect(body.target.enabled).toBe(false);
   });
 });
