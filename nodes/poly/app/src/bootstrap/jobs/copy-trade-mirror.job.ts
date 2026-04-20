@@ -26,12 +26,12 @@ import type {
   OrderReceipt,
 } from "@cogni/market-provider";
 import { EVENT_NAMES } from "@cogni/node-shared";
-import { v5 as uuidv5 } from "uuid";
 import {
   type MirrorCoordinatorDeps,
   type OperatorPosition,
   runOnce,
 } from "@/features/copy-trade/mirror-coordinator";
+import { targetIdFromWallet } from "@/features/copy-trade/target-id";
 import type { TargetConfig } from "@/features/copy-trade/types";
 import type { OrderLedger } from "@/features/trading";
 import type { WalletActivitySource } from "@/features/wallet-watch";
@@ -63,18 +63,22 @@ const MIRROR_MAX_DAILY_USDC = 10;
 const MIRROR_MAX_FILLS_PER_HOUR = 5;
 
 /**
- * Build the v0 `TargetConfig` from an env-supplied target wallet. All other
- * fields are hardcoded scaffolding. P2 replaces this factory with a
- * per-tenant DB resolver over `poly_copy_trade_targets`.
+ * Build a `TargetConfig` from an enumerated target wallet + tenant attribution.
+ * All non-tenant fields (mode, mirror_usdc, caps) stay hardcoded scaffolding.
+ * Phase B will source caps from the per-tenant `poly_wallet_grants` row.
  *
  * @public
  */
-export function buildMirrorTargetConfig(
-  targetWallet: `0x${string}`
-): TargetConfig {
+export function buildMirrorTargetConfig(params: {
+  targetWallet: `0x${string}`;
+  billingAccountId: string;
+  createdByUserId: string;
+}): TargetConfig {
   return {
-    target_id: targetIdFromWallet(targetWallet),
-    target_wallet: targetWallet,
+    target_id: targetIdFromWallet(params.targetWallet),
+    target_wallet: params.targetWallet,
+    billing_account_id: params.billingAccountId,
+    created_by_user_id: params.createdByUserId,
     mode: "live", // paper adapter body lands in P3; v0 only places live
     mirror_usdc: MIRROR_USDC,
     max_daily_usdc: MIRROR_MAX_DAILY_USDC,
@@ -202,23 +206,8 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
   };
 }
 
-/**
- * UUIDv5 namespace for poly target wallets. Arbitrary but fixed — any future
- * caller that needs a stable `target_id` from a wallet address uses this
- * namespace so ids collide with ours.
- */
-const POLY_TARGET_WALLET_NAMESPACE =
-  "e2a38b91-7b7d-5f8e-9c0d-4a1e6f8b2c3d" as const;
-
-/**
- * Derive a stable synthetic `target_id` from the target wallet.
- * v0 single-tenant: one wallet ⇒ one id, deterministic across restarts so
- * `client_order_id = clientOrderIdFor(target_id, fill_id)` stays stable.
- * TODO(P2): replace with a real `poly_copy_trade_targets.id` FK once the
- * table exists. Tracked at task.0315 P2.
- *
- * @public
- */
-export function targetIdFromWallet(wallet: `0x${string}`): string {
-  return uuidv5(wallet.toLowerCase(), POLY_TARGET_WALLET_NAMESPACE);
-}
+// `targetIdFromWallet` moved to `@/features/copy-trade/target-id` so the env
+// `CopyTradeTargetSource` impl can synthesize stable per-wallet ids without
+// crossing the features → bootstrap layer boundary. Re-exported here for
+// pre-existing import sites.
+export { targetIdFromWallet };

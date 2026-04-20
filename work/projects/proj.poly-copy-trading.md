@@ -38,12 +38,12 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 > **Active.** v0 shipped with known gaps — cursor persistence, CTF SELL approvals, ledger status sync, rate-cap telemetry. v2 adds multi-target support as the trivial next step once the ledger is correct.
 
-| Deliverable                                                                                                  | Status       | Est | Work Item                                                                          |
-| ------------------------------------------------------------------------------------------------------------ | ------------ | --- | ---------------------------------------------------------------------------------- |
-| v1 hardening bucket — cursor persistence, CTF SELL, status-sync, metrics, alerting                           | In Review    | 3   | [task.0323](../items/task.0323.poly-copy-trade-v1-hardening.md)                    |
-| Sync-truth cache — DB as CLOB cache with typed not_found + grace window + `synced_at` + `/sync-health` route | Done         | 3   | [task.0328](../items/task.0328.poly-sync-truth-ledger-cache.md)                    |
-| Multi-target support — `CopyTradeTargetSource` port + N-wallet mirror-poll fan-out under one operator        | In Review    | 3   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase A (this PR) |
-| Shared batched poller — replace per-wallet `setInterval` with one poll loop + `TargetSubscriptionRouter`     | Needs Design | 3   | [task.0332](../items/task.0332.poly-mirror-shared-poller.md) — blocks Phase 3      |
+| Deliverable                                                                                                                                                              | Status       | Est | Work Item                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------ | --- | ----------------------------------------------------------------------------- |
+| v1 hardening bucket — cursor persistence, CTF SELL, status-sync, metrics, alerting                                                                                       | In Review    | 3   | [task.0323](../items/task.0323.poly-copy-trade-v1-hardening.md)               |
+| Sync-truth cache — DB as CLOB cache with typed not_found + grace window + `synced_at` + `/sync-health` route                                                             | Done         | 3   | [task.0328](../items/task.0328.poly-sync-truth-ledger-cache.md)               |
+| User-owned tracked wallets + RLS on copy-trade tables — `dbTargetSource` (cross-tenant enumerator), CRUD routes, dashboard +/− wire-up, pooled shared-operator execution | In Review    | 3   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase A      |
+| Shared batched poller — replace per-wallet `setInterval` with one poll loop + `TargetSubscriptionRouter`                                                                 | Needs Design | 3   | [task.0332](../items/task.0332.poly-mirror-shared-poller.md) — blocks Phase 3 |
 
 ### Phase 3 (P3) — Multi-tenant: per-user operator wallets + RLS
 
@@ -51,7 +51,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 | Deliverable                                                                                                   | Status       | Est | Work Item                                                                |
 | ------------------------------------------------------------------------------------------------------------- | ------------ | --- | ------------------------------------------------------------------------ |
-| Per-user operator wallet binding + durable `WalletGrant` + RLS on copy-trade tables                           | Needs Design | 5   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase B |
+| Per-user operator wallet binding + durable `WalletGrant` (RLS on copy-trade tables shipped in Phase A)        | Needs Design | 5   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase B |
 | Signing-backend decision (Safe+4337 vs Privy-per-user vs Turnkey) — see task.0318 §signing-backend-comparison | Needs Design | 2   | (inline in task.0318)                                                    |
 
 ### Phase 4 (P4) — Streaming + adversarial-robust ranking
@@ -91,7 +91,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 ## As-Built Specs
 
 - [Poly Copy-Trade Phase 1](../../docs/spec/poly-copy-trade-phase1.md) — layer boundaries, invariants, fill_id shape (as-built v0)
-- [Poly Multi-Tenant Auth](../../docs/spec/poly-multi-tenant-auth.md) — tenant scoping, WalletSignerPort, grant model (draft, Phase 3 target)
+- [Poly Multi-Tenant Auth](../../docs/spec/poly-multi-tenant-auth.md) — tenant-scoped copy-trade tables, `CopyTradeTargetSource` port, Phase A implemented; `WalletSignerPort` + `poly_wallet_{connections,grants}` pending Phase B
 - [Polymarket Account Setup](../../docs/guides/polymarket-account-setup.md) — Privy operator onboarding runbook (guide, not spec)
 
 ## Design Notes
@@ -100,6 +100,6 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 - **Two-approval onboarding**: a wallet that can BUY but not SELL is useless for copy-trading. USDC.e allowance on {Exchange, Neg-Risk Exchange, Neg-Risk Adapter} enables BUY. CTF `setApprovalForAll(operator, true)` on {Exchange, Neg-Risk Exchange} enables SELL. Skipping either is a latent bug that only surfaces on close-position.
 
-- **Target-source seam (`CopyTradeTargetSource`)**: Phase 1 reads a `COPY_TRADE_TARGET_WALLETS` env list at boot. Phase 3 swaps in a DB-backed impl over `poly_copy_trade_targets` with zero caller changes. The for-loop in `container.ts` that fan-outs `startMirrorPoll` per wallet is source-agnostic.
+- **Target-source seam (`CopyTradeTargetSource`)**: Phase A lands the DB-backed impl (`dbTargetSource` over `poly_copy_trade_targets`) alongside the original `envTargetSource` (now local-dev only). The port has two methods: `listForActor(actorId)` RLS-clamped via appDb for per-user routes, and `listAllActive()` under serviceDb — the ONE sanctioned BYPASSRLS read — used exclusively by the mirror-poll enumerator in `container.ts`.
 
 - **Sync-truth cache (task.0328)**: the ledger's `status` column is insert-time only — actual CLOB state may be filled, canceled, or partial. The reconciler reads CLOB on a 60s cadence and writes `synced_at`. Routes that show live status must cross-check Data-API `/positions?user=<addr>` or check `synced_at` staleness.

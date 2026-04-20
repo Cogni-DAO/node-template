@@ -39,8 +39,8 @@ Generic Polymarket placement + order-ledger substrate. Every path that places an
 ## Public Surface
 
 - **Exports (executor):** `createClobExecutor(deps) → ClobExecutor`, `ClobExecutorDeps`, `CLOB_EXECUTOR_METRICS`.
-- **Exports (order ledger):** `createOrderLedger(deps) → OrderLedger`, `OrderLedgerDeps`, `snapshotState`, `insertPending`, `markOrderId`, `markError`, `updateStatus` (accepts optional `reason?`), `recordDecision`, `listRecent`, `listOpenOrPending`, `markSynced`, `syncHealthSummary`.
-- **Exports (types):** `LedgerRow` (includes `synced_at`), `LedgerStatus`, `StateSnapshot`, `UpdateStatusInput`, `ListOpenOrPendingOptions`, `SyncHealthSummary`.
+- **Exports (order ledger):** `createOrderLedger(deps) → OrderLedger`, `OrderLedgerDeps`, `snapshotState(target_id, billing_account_id)`, `insertPending` (TenantBinding required), `markOrderId`, `markError`, `updateStatus` (accepts optional `reason?`), `recordDecision` (TenantBinding required), `listRecent`, `listOpenOrPending`, `markSynced`, `syncHealthSummary`.
+- **Exports (types):** `LedgerRow` (includes `synced_at`), `LedgerStatus`, `StateSnapshot`, `TenantBinding` (`{billing_account_id, created_by_user_id}`), `UpdateStatusInput`, `ListOpenOrPendingOptions`, `SyncHealthSummary`.
 
 ## Invariants
 
@@ -54,7 +54,7 @@ Generic Polymarket placement + order-ledger substrate. Every path that places an
 
 - Own the Polymarket CLOB executor (structured logs + metrics wrapper around an injected `placeOrder`).
 - Own the order-ledger read/write surface over `poly_copy_trade_fills` + `poly_copy_trade_decisions` (table rename deferred to P2).
-- Expose `snapshotState(target_id)` returning `RuntimeState`-shaped data so the coordinator doesn't SELECT directly.
+- Expose `snapshotState(target_id, billing_account_id)` returning `RuntimeState`-shaped data so the coordinator doesn't SELECT directly. The kill-switch read is per-tenant per migration 0029.
 
 ## Notes
 

@@ -420,27 +420,33 @@ REPO_URL="https://${GHCR_USERNAME:-Cogni-1729}:${GHCR_TOKEN}@github.com/Cogni-DA
 log_info "Cloning $DEPLOY_BRANCH..."
 git clone --depth=1 --branch "$DEPLOY_BRANCH" "$REPO_URL" "$DEPLOY_TMP" 2>/dev/null
 
-# Sed-replace any IP in EndpointSlice address arrays across all overlays
-# Note: sed -i '' is macOS syntax — this script runs locally only (not in CI)
-for overlay in "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}"/*/kustomization.yaml; do
-  if [[ -f "$overlay" ]]; then
-    sed -i '' -E "s/value: \[\"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+\"\]/value: [\"${VM_IP}\"]/g" "$overlay"
-  fi
+# Write VM IP to each overlay's env-state.yaml (bug.0334). This is the ONLY
+# file provision writes under infra/k8s/. The promote workflow rsyncs
+# everything else from main with --exclude='env-state.yaml'.
+for overlay_dir in "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}"/*/; do
+  [[ -d "$overlay_dir" ]] || continue
+  cat > "${overlay_dir}env-state.yaml" <<EOF
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Per-overlay VM truth — written by provision only (bug.0334).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: env-state
+  annotations:
+    config.kubernetes.io/local-config: "true"
+data:
+  VM_IP: "${VM_IP}"
+EOF
 done
-
-# Guard: fail if any placeholder 0.0.0.0 remains (should never happen after sed)
-if grep -rq 'value: \["0\.0\.0\.0"\]' "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}/" 2>/dev/null; then
-  log_error "Placeholder 0.0.0.0 still present in overlays after patching — aborting"
-  rm -rf "$DEPLOY_TMP"
-  exit 1
-fi
 
 cd "$DEPLOY_TMP"
 git config user.name "provision-script"
 git config user.email "provision@cogni.dev"
 git add -A
 if ! git diff --cached --quiet; then
-  git commit -m "chore(infra): patch ${DEPLOY_ENV} EndpointSlice IPs to ${VM_IP} [provision]"
+  git commit -m "chore(infra): write env-state.yaml for ${DEPLOY_ENV} — VM_IP=${VM_IP} [provision]"
   git push origin "$DEPLOY_BRANCH"
   log_info "Pushed EndpointSlice IP patches to $DEPLOY_BRANCH"
 else

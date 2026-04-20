@@ -3,7 +3,7 @@
 
 /**
  * Module: `@features/trading/order-ledger`
- * Purpose: Drizzle-backed `OrderLedger` adapter. Reads + writes `poly_copy_trade_fills` + `poly_copy_trade_decisions` + `poly_copy_trade_config` (system-owned tables, no RLS per migration 0027). Every placement path (agent tool, mirror-coordinator, future WS ingester) reads + writes through this adapter.
+ * Purpose: Drizzle-backed `OrderLedger` adapter. Reads + writes `poly_copy_trade_fills` + `poly_copy_trade_decisions` + `poly_copy_trade_config` (tenant-scoped per migration 0029, RLS enforced when run on `appDb`). Every placement path (agent tool, mirror-coordinator, future WS ingester) reads + writes through this adapter. Callers are responsible for opening `withTenantScope(appDb, createdByUserId, ...)` around per-tenant writes; the cross-tenant mirror-poll enumerator is the only sanctioned BYPASSRLS reader.
  * Scope: Drizzle queries only. Does not build a DB client (caller injects); does not import from `adapters/server/*` (layer boundary); does not know about copy-trade or wallet-watch (TRADING_IS_GENERIC).
  * Invariants:
  *   - TRADING_IS_GENERIC — no imports from `features/copy-trade/` or `features/wallet-watch/`.
@@ -53,14 +53,17 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   const log = deps.logger.child({ component: "order-ledger" });
 
   return {
-    async snapshotState(target_id: string): Promise<StateSnapshot> {
+    async snapshotState(
+      target_id: string,
+      billing_account_id: string
+    ): Promise<StateSnapshot> {
       try {
         // Four concurrent reads — one round-trip to postgres-js, four statements.
         const [configRows, spendRows, rateRows, cidRows] = await Promise.all([
           deps.db
             .select({ enabled: polyCopyTradeConfig.enabled })
             .from(polyCopyTradeConfig)
-            .where(eq(polyCopyTradeConfig.singletonId, 1))
+            .where(eq(polyCopyTradeConfig.billingAccountId, billing_account_id))
             .limit(1),
           // Caps are INTENT-based (CAPS_COUNT_INTENTS invariant): filter by
           // `created_at` (when we inserted the pending row) — NOT by
@@ -165,6 +168,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       await deps.db
         .insert(polyCopyTradeFills)
         .values({
+          billingAccountId: input.billing_account_id,
+          createdByUserId: input.created_by_user_id,
           targetId: input.target_id,
           fillId: input.fill_id,
           observedAt: input.observed_at,
@@ -227,6 +232,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
 
     async recordDecision(input: RecordDecisionInput): Promise<void> {
       await deps.db.insert(polyCopyTradeDecisions).values({
+        billingAccountId: input.billing_account_id,
+        createdByUserId: input.created_by_user_id,
         targetId: input.target_id,
         fillId: input.fill_id,
         outcome: input.outcome,

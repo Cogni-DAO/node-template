@@ -50,6 +50,7 @@ All require `Authorization: Bearer ${SCHEDULER_API_TOKEN}`.
 **Poly copy-trade contracts:**
 
 - `poly.copy-trade.orders.v1.contract` — `GET /api/v1/poly/copy-trade/orders`; response rows include `synced_at: string | null` + `staleness_ms: number | null` (task.0328 CP3)
+- `poly.copy-trade.targets.v1.contract` — three operations over the calling user's tracked wallets, all RLS-scoped per docs/spec/poly-multi-tenant-auth.md: `polyCopyTradeTargetsOperation` (`GET`), `polyCopyTradeTargetCreateOperation` (`POST` body `{target_wallet}`), `polyCopyTradeTargetDeleteOperation` (`DELETE /:id`).
 - `poly.sync-health.v1.contract` — `GET /api/v1/poly/internal/sync-health`; returns `{oldest_synced_row_age_ms, rows_stale_over_60s, rows_never_synced, reconciler_last_tick_at}` (task.0328 CP4)
 
 ## Responsibilities

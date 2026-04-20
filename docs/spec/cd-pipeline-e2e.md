@@ -8,7 +8,7 @@ summary: End-to-end specification for multi-node GitOps deployment aligned to tr
 read_when: Aligning the multi-node deployment pipeline, updating GitHub workflows, or deriving implementation tasks from the trunk-based CI/CD model
 owner: cogni-dev
 created: 2026-04-02
-verified: 2026-04-19
+verified: 2026-04-20
 initiative: proj.cicd-services-gitops
 ---
 
@@ -334,6 +334,8 @@ Merge to main
 - routine deploy-state bumps on `deploy/*` should not require PRs
 - push access on `deploy/*` should be restricted to the CI app or bot, with incident-only human bypass
 - Argo should keep watching those deploy refs rather than relying on direct CI-to-Argo mutation
+
+**Invariant `INFRA_K8S_MAIN_DERIVED` (bug.0334).** Every file under `infra/k8s/` on a deploy branch is either byte-identical to `main` at the promoted SHA, OR is `env-state.yaml` (the per-overlay VM-truth file written by provision). Kustomize `replacements:` reads `env-state.yaml` to inject VM IPs into EndpointSlice addresses. `promote-and-deploy.yml` does a two-pass rsync: (1) `--ignore-existing` seed of `env-state.yaml` for new overlays; (2) `--delete --exclude='env-state.yaml'` authoritative sync of everything else. `promote-k8s-image.sh` mutates image-digest lines only. No other deploy-branch-local writes under `infra/k8s/` are permitted.
 
 ### 4.6 Validation Authority In V0
 

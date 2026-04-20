@@ -7,6 +7,7 @@ namespace: cogni-preview
 
 resources:
   - ../../../base/node-app
+  - env-state.yaml
 
 namePrefix: resy-
 
@@ -83,14 +84,10 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
         value: "resy-node-app-secrets"
-  # EndpointSlice IPs + service-name label fix (namePrefix doesn't update label values)
   - target:
       kind: EndpointSlice
       name: postgres-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "resy-postgres-external"
@@ -99,18 +96,12 @@ patches:
       name: temporal-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "resy-temporal-external"
   - target:
       kind: EndpointSlice
       name: litellm-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "resy-litellm-external"
@@ -119,9 +110,6 @@ patches:
       name: redis-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "resy-redis-external"
   - target:
@@ -129,8 +117,37 @@ patches:
       name: doltgres-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "resy-doltgres-external"
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: env-state
+      fieldPath: data.VM_IP
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: postgres-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: temporal-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: litellm-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: redis-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: doltgres-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0

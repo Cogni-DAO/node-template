@@ -28,6 +28,7 @@
 | 0 | 1 | 3 | needs_design | task.0296 | Candidate slot controller v0 — one-slot PR flight control plane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 1 | needs_implement | bug.0307 | Operator OOM on candidate-a — memory limit too low, manual canary bump never landed in overlay | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 4 | needs_design | task.0309 | QA agent — reads work item, exercises feature, confirms observability post-flight | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | 1 | 3 | needs_merge | bug.0334 | Overlay EndpointSlice IPs via env-state.yaml + workflow rsync — establish INFRA_K8S_MAIN_DERIVED | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -111,7 +112,6 @@
 | 1 | 5 | 3 | needs_design | bug.0297 | POST /api/v1/agent/register is an unauthenticated account + API-key factory | Accounts, API Keys & Wallet Authentication | proj.accounts-api-keys |
 | 1 | 5 | 3 | needs_triage | bug.0327 | No client-side crash telemetry — node apps can serve broken UX to users and we don't know | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 5 | 1 | needs_merge | bug.0333 | Base audit — move envs-identical ConfigMap values out of overlay patches into base | CI/CD Pipeline | proj.cicd-services-gitops |
-| 1 | 5 | 4 | needs_design | bug.0334 | Overlay EndpointSlice IPs + workflow rsync — establish INFRA_K8S_MAIN_DERIVED invariant | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -178,7 +178,7 @@
 | 2 | 5 | 2 | needs_design | task.0310 | Rename k8s staging namespace and overlays to preview | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 5 | 5 | needs_implement | task.0315 | Poly copy-trade prototype — v0 top-wallet scoreboard, v0.1 shadow 1-wallet mirror | Cogni Poly | proj.poly-copy-trading |
 | 2 | 5 | 3 | needs_design | task.0317 | Per-node LangGraph catalogs — factory library + node-owned catalog registry |  |  |
-| 2 | 5 | 5 | needs_design | task.0318 | Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables | Cogni Poly | proj.poly-copy-trading |
+| 2 | 5 | 5 | needs_merge | task.0318 | Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables | Cogni Poly | proj.poly-copy-trading |
 | 2 | 5 | 4 | needs_review | task.0329 | Wallet analysis — reusable component + live data plane (any wallet) + Monitored drawer | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 5 | 5 | needs_design | task.0333 | Wallet analyst agent — AI qualitative judgments, Dolt-stored, DAO-funded | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 6 | 5 | needs_design | task.0334 | Poly niche-research engine — skill-creator + research graph + Dolt store + EDO evidence | Cogni Poly | proj.poly-prediction-bot |
@@ -196,9 +196,11 @@
 | 2 | 17 | 1 | needs_research | spike.0037 | Research Tailscale/Headscale mesh VPN for Cogni infrastructure |  |  |
 | 2 | 20 | 3 | needs_design | task.0211 | BYO-AI ChatGPT — auth manager + Codex CLI in Docker image | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 2 | 30 | 1 | needs_implement | bug.0168 | App container uses seccomp=unconfined for TigerBeetle io_uring — replace with targeted profile | AI Operator Wallet | proj.ai-operator-wallet |
+| 2 | 30 | 1 | needs_triage | bug.0339 | Tenant context missing from request-envelope logs — Loki can't slice by user/billing |  |  |
 | 2 | 50 | 2 | needs_implement | task.0134 | EIP-4824 daoURI v0 — lightweight DAOstar metadata endpoint | Financial Ledger | proj.financial-ledger |
 | 2 | 50 | 2 | needs_merge | task.0324 | Per-node DB schema split (minimal — no new tooling) | Database Operations | proj.database-ops |
 | 2 | 50 | 3 | needs_triage | bug.0330 | poly /api/v1/chat/completions intermittently returns empty body on candidate-a | CI/CD Pipeline | proj.cicd-services-gitops |
+| 2 | 50 | 2 | needs_triage | bug.0337 | Per-node testcontainers setup uses operator's migrations — drift once any node diverges | Database Operations | proj.database-ops |
 | 2 | 99 | 1 | needs_design | bug.0093 | Ownership facade N+1 — sequential DB queries per epoch | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 99 | 2 | needs_design | task.0104 | Ledger production hardening — upsert batching, connection pooling, activity tests | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 99 | 3 | needs_design | task.0105 | Allocation algorithm expansion — multi-source credit estimate algos + per-source weight derivation | Transparent Credit Payouts | proj.transparent-credit-payouts |
@@ -357,6 +359,7 @@
 | 1 | task.0311 | Poly Knowledge Plane v0 — Candidate-a Wiring + Upsert Bug Fix (Clean-Slate Nodes) | Cogni Poly | proj.poly-prediction-bot |
 | 1 | bug.0328 | promote-build-payload silent abort + release-slot treats skipped verify as success — verify-candidate bypassed on real flight | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | task.0328 | Poly sync-truth — DB as CLOB cache (first slice: typed not_found, grace window, synced_at, sync-health) | Cogni Poly | proj.poly-copy-trading |
+| 1 | bug.0338 | Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only | Cogni Poly | proj.poly-copy-trading |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |
