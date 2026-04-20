@@ -104,6 +104,7 @@ services/*/dist
 
 # Claude Code worktrees
 .claude/worktrees/
+.claude/scheduled_tasks.lock
 
 # Generated work index (derived from frontmatter — never hand-edit)
 work/items/_index.md
