@@ -2,7 +2,7 @@
 id: task.0318
 type: task
 title: "Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables"
-status: needs_closeout
+status: needs_merge
 revision: 1
 priority: 2
 estimate: 5
