@@ -22,6 +22,7 @@ import {
   OrderType,
   Side,
   SignatureType,
+  type TickSize,
 } from "@polymarket/clob-client";
 
 import type {
@@ -188,13 +189,19 @@ export class PolymarketClobAdapter implements MarketProviderPort {
     const shareSize = intent.size_usdc / intent.limit_price;
     const side = intent.side === "BUY" ? Side.BUY : Side.SELL;
 
+    // Hoisted so the error path can include market context (bug.0335 — a
+    // tick-size/fee-rate mismatch previously only appeared on the success log).
+    let tickSize: TickSize | undefined;
+    let negRisk: boolean | undefined;
+    let feeRateBps: number | undefined;
+
     try {
       // B1 — fetch per-market tickSize + negRisk + feeRateBps rather than hardcoding.
       // Polymarket has markets with 0.001 / 0.0001 tick sizes, neg-risk markets route
       // through a different Exchange contract, and live markets today reject
       // feeRateBps=0 with "fee rate for the market must be 1000". A stale hardcode
       // either rejects at the CLOB or produces a bad EIP-712 signature.
-      const [tickSize, negRisk, feeRateBps] = await Promise.all([
+      [tickSize, negRisk, feeRateBps] = await Promise.all([
         this.client.getTickSize(tokenId),
         this.client.getNegRisk(tokenId),
         this.client.getFeeRateBps(tokenId),
@@ -241,18 +248,36 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       return receipt;
     } catch (err) {
       const duration_ms = Date.now() - start;
-      // B2 rejections throw from mapOrderResponseToReceipt — classify as "rejected"
-      // when the error message carries the CLOB-rejection signature, otherwise "error".
-      const msg = err instanceof Error ? err.message : String(err);
-      const result = msg.includes("CLOB rejected order") ? "rejected" : "error";
-      this.metrics.incr(POLY_CLOB_METRICS.placeTotal, { result });
+      // Rejections from mapOrderResponseToReceipt throw ClobRejectionError; other
+      // thrown errors (axios non-2xx, network, etc.) come via classifyClientError.
+      const details =
+        err instanceof ClobRejectionError
+          ? err.details
+          : classifyClientError(err);
+      const result = err instanceof ClobRejectionError ? "rejected" : "error";
+      this.metrics.incr(POLY_CLOB_METRICS.placeTotal, {
+        result,
+        error_code: details.error_code,
+      });
       this.metrics.observeDurationMs(
         POLY_CLOB_METRICS.placeDurationMs,
         duration_ms,
-        { result }
+        { result, error_code: details.error_code }
       );
       this.log.error(
-        { ...baseFields, phase: result, duration_ms, error: truncErr(err) },
+        {
+          ...baseFields,
+          phase: result,
+          duration_ms,
+          tick_size: tickSize,
+          neg_risk: negRisk,
+          fee_rate_bps: feeRateBps,
+          error_code: details.error_code,
+          http_status: details.http_status,
+          response_keys: details.response_keys,
+          reason: details.reason,
+          error: truncErr(err),
+        },
         `placeOrder: ${result}`
       );
       throw err;
@@ -513,6 +538,153 @@ interface ClobOrderResponseLike {
   transactionsHashes?: string[];
 }
 
+/**
+ * Enum of known CLOB rejection classes. Logged as `error_code` on the adapter
+ * error event and as a metric label. Expand the switch in `classifyClobFailure`
+ * when a new signature shows up in Loki and we decide it's worth alerting on.
+ */
+export const POLY_CLOB_ERROR_CODES = {
+  insufficientBalance: "insufficient_balance",
+  insufficientAllowance: "insufficient_allowance",
+  staleApiKey: "stale_api_key",
+  invalidSignature: "invalid_signature",
+  invalidPriceOrTick: "invalid_price_or_tick",
+  emptyResponse: "empty_response",
+  httpError: "http_error",
+  unknown: "unknown",
+} as const;
+export type PolyClobErrorCode =
+  (typeof POLY_CLOB_ERROR_CODES)[keyof typeof POLY_CLOB_ERROR_CODES];
+
+export interface ClobFailureDetails {
+  error_code: PolyClobErrorCode;
+  /** Keys present on the response body — useful when CLOB returns an unexpected shape. */
+  response_keys: string[];
+  /** HTTP status if the underlying client threw an axios-like error. */
+  http_status?: number;
+  /** Short operator-facing reason text, truncated. Never contains user content. */
+  reason?: string;
+}
+
+export class ClobRejectionError extends Error {
+  readonly details: ClobFailureDetails;
+  constructor(message: string, details: ClobFailureDetails) {
+    super(message);
+    this.name = "ClobRejectionError";
+    this.details = details;
+  }
+}
+
+function classifyRejectionMessage(msg: string): PolyClobErrorCode {
+  const lowered = msg.toLowerCase();
+  if (
+    lowered.includes("not enough balance") ||
+    lowered.includes("insufficient funds")
+  )
+    return POLY_CLOB_ERROR_CODES.insufficientBalance;
+  if (lowered.includes("allowance"))
+    return POLY_CLOB_ERROR_CODES.insufficientAllowance;
+  if (
+    lowered.includes("invalid api key") ||
+    lowered.includes("api key") ||
+    lowered.includes("unauthorized") ||
+    lowered.includes("forbidden")
+  )
+    return POLY_CLOB_ERROR_CODES.staleApiKey;
+  if (lowered.includes("signature"))
+    return POLY_CLOB_ERROR_CODES.invalidSignature;
+  if (lowered.includes("tick") || lowered.includes("price"))
+    return POLY_CLOB_ERROR_CODES.invalidPriceOrTick;
+  return POLY_CLOB_ERROR_CODES.unknown;
+}
+
+/**
+ * Extract a structured failure summary from whatever CLOB returned. Used to
+ * replace the ad-hoc `(success=undefined, orderID=<missing>, errorMsg="")`
+ * string — that format dropped the HTTP status, response shape, and any
+ * fields outside the 4-prop `ClobOrderResponseLike` interface, which made
+ * silent rejects (bug.0335) indistinguishable in Loki.
+ *
+ * `response_keys` captures the top-level field names so we can tell a bare
+ * `{}` from a `{error, code}` shape without dumping payload contents.
+ */
+export function classifyClobFailure(response: unknown): ClobFailureDetails {
+  if (response == null || typeof response !== "object") {
+    return {
+      error_code: POLY_CLOB_ERROR_CODES.emptyResponse,
+      response_keys: [],
+      reason:
+        response == null ? "null_response" : `non_object:${typeof response}`,
+    };
+  }
+  const r = response as Record<string, unknown>;
+  const response_keys = Object.keys(r);
+  const errorText =
+    (typeof r.errorMsg === "string" && r.errorMsg) ||
+    (typeof r.error === "string" && r.error) ||
+    (typeof r.message === "string" && r.message) ||
+    "";
+  if (response_keys.length === 0) {
+    return {
+      error_code: POLY_CLOB_ERROR_CODES.emptyResponse,
+      response_keys,
+    };
+  }
+  const error_code = errorText
+    ? classifyRejectionMessage(errorText)
+    : POLY_CLOB_ERROR_CODES.emptyResponse;
+  const reason = errorText
+    ? errorText.slice(0, 128)
+    : `empty_error_fields:[${response_keys.join(",")}]`;
+  return { error_code, response_keys, reason };
+}
+
+/**
+ * Build a `ClobFailureDetails` from a thrown error (pre-`mapOrderResponseToReceipt`
+ * — e.g. an axios error from `createAndPostOrder`). Looks for axios shape
+ * (`err.response.{status,data}`) and falls back to message-classification.
+ */
+export function classifyClientError(err: unknown): ClobFailureDetails {
+  const anyErr = err as {
+    response?: { status?: unknown; data?: unknown };
+    message?: unknown;
+  } | null;
+  const http_status =
+    typeof anyErr?.response?.status === "number"
+      ? anyErr.response.status
+      : undefined;
+  const message =
+    typeof anyErr?.message === "string" ? anyErr.message : String(err);
+
+  // HTTP status is the strongest signal when present — 401/403 = stale creds
+  // regardless of what the body looks like.
+  if (http_status === 401 || http_status === 403) {
+    return {
+      error_code: POLY_CLOB_ERROR_CODES.staleApiKey,
+      response_keys: [],
+      http_status,
+      reason: message.slice(0, 128),
+    };
+  }
+
+  // Body classification wins for other 4xx (e.g. 400 with "not enough balance").
+  const data = anyErr?.response?.data;
+  if (data && typeof data === "object" && Object.keys(data).length > 0) {
+    const fromBody = classifyClobFailure(data);
+    return { ...fromBody, http_status };
+  }
+
+  const error_code = http_status
+    ? POLY_CLOB_ERROR_CODES.httpError
+    : classifyRejectionMessage(message);
+  return {
+    error_code,
+    response_keys: [],
+    http_status,
+    reason: message.slice(0, 128),
+  };
+}
+
 export function mapOrderResponseToReceipt(
   response: unknown,
   intent: OrderIntent
@@ -522,8 +694,10 @@ export function mapOrderResponseToReceipt(
   // rejections (orderID can be populated even when the order was not accepted).
   // Treat an explicit `success === false` as a hard failure regardless of orderID.
   if (r.success === false || !r.orderID) {
-    throw new Error(
-      `PolymarketClobAdapter.placeOrder: CLOB rejected order (success=${String(r.success)}, orderID=${r.orderID ?? "<missing>"}, errorMsg="${r.errorMsg ?? ""}")`
+    const details = classifyClobFailure(response);
+    throw new ClobRejectionError(
+      `PolymarketClobAdapter.placeOrder: CLOB rejected order (error_code=${details.error_code}, response_keys=[${details.response_keys.join(",")}], reason="${details.reason ?? ""}")`,
+      details
     );
   }
 

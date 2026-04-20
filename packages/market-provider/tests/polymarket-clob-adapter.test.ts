@@ -14,9 +14,13 @@
 import { describe, expect, it, vi } from "vitest";
 
 import {
+  ClobRejectionError,
+  classifyClientError,
+  classifyClobFailure,
   mapOpenOrderToReceipt,
   mapOrderResponseToReceipt,
   normalizePolymarketStatus,
+  POLY_CLOB_ERROR_CODES,
   POLY_CLOB_METRICS,
   PolymarketClobAdapter,
 } from "../src/adapters/polymarket/polymarket.clob.adapter.js";
@@ -90,17 +94,18 @@ describe("mapOrderResponseToReceipt", () => {
     expect(receipt.filled_size_usdc).toBe(0.5);
   });
 
-  it("throws when the CLOB response omits orderID", () => {
+  it("throws ClobRejectionError when the CLOB response omits orderID", () => {
     expect(() =>
       mapOrderResponseToReceipt(
         { status: "error", errorMsg: "rejected" },
         BASE_INTENT
       )
-    ).toThrow(/CLOB rejected order/);
+    ).toThrow(ClobRejectionError);
   });
 
   it("throws when CLOB returns success=false even with an orderID populated (B2)", () => {
-    expect(() =>
+    let caught: unknown;
+    try {
       mapOrderResponseToReceipt(
         {
           orderID: "0xpresent",
@@ -109,8 +114,14 @@ describe("mapOrderResponseToReceipt", () => {
           errorMsg: "insufficient allowance",
         },
         BASE_INTENT
-      )
-    ).toThrow(/success=false/);
+      );
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(ClobRejectionError);
+    expect((caught as ClobRejectionError).details.error_code).toBe(
+      POLY_CLOB_ERROR_CODES.insufficientAllowance
+    );
   });
 
   it("preserves rawStatus in attributes for debugging", () => {
@@ -119,6 +130,101 @@ describe("mapOrderResponseToReceipt", () => {
       BASE_INTENT
     );
     expect(receipt.attributes?.rawStatus).toBe("live");
+  });
+});
+
+describe("classifyClobFailure (bug.0335 diagnostics)", () => {
+  it("flags a bare empty object as empty_response", () => {
+    const details = classifyClobFailure({});
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.emptyResponse);
+    expect(details.response_keys).toEqual([]);
+  });
+
+  it("classifies the empty-string-errorMsg production signature without dropping the field shape", () => {
+    // Matches the Loki signature observed on candidate-a 2026-04-19T23:52Z:
+    //   `{success: undefined, orderID: <missing>, errorMsg: ""}` — the shape
+    //   had NO usable fields and we lost the whole signal.
+    const details = classifyClobFailure({
+      success: undefined,
+      orderID: undefined,
+      errorMsg: "",
+    });
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.emptyResponse);
+    expect(details.response_keys).toEqual(
+      expect.arrayContaining(["success", "orderID", "errorMsg"])
+    );
+    expect(details.reason).toMatch(/empty_error_fields/);
+  });
+
+  it("maps 'not enough balance' → insufficient_balance", () => {
+    const details = classifyClobFailure({
+      success: false,
+      errorMsg: "not enough balance",
+    });
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.insufficientBalance);
+    expect(details.reason).toBe("not enough balance");
+  });
+
+  it("maps an 'allowance' errorMsg → insufficient_allowance", () => {
+    const details = classifyClobFailure({
+      success: false,
+      errorMsg: "allowance exceeded",
+    });
+    expect(details.error_code).toBe(
+      POLY_CLOB_ERROR_CODES.insufficientAllowance
+    );
+  });
+
+  it("reads `error` field when `errorMsg` is absent (unknown response shape)", () => {
+    const details = classifyClobFailure({ error: "invalid api key" });
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.staleApiKey);
+    expect(details.response_keys).toEqual(["error"]);
+  });
+
+  it("truncates reason to 128 chars", () => {
+    const details = classifyClobFailure({
+      errorMsg: "x".repeat(500),
+    });
+    expect(details.reason?.length).toBe(128);
+  });
+});
+
+describe("classifyClientError (axios / network)", () => {
+  it("surfaces http_status and routes 401 → stale_api_key", () => {
+    const axiosErr = {
+      message: "Request failed with status code 401",
+      response: { status: 401, data: {} },
+    };
+    const details = classifyClientError(axiosErr);
+    expect(details.http_status).toBe(401);
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.staleApiKey);
+  });
+
+  it("extracts keys from axios response.data when present", () => {
+    const axiosErr = {
+      message: "boom",
+      response: { status: 400, data: { error: "not enough balance" } },
+    };
+    const details = classifyClientError(axiosErr);
+    expect(details.http_status).toBe(400);
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.insufficientBalance);
+    expect(details.response_keys).toEqual(["error"]);
+  });
+
+  it("falls back to http_error for non-4xx without a parseable body", () => {
+    const axiosErr = {
+      message: "Request failed with status code 502",
+      response: { status: 502 },
+    };
+    const details = classifyClientError(axiosErr);
+    expect(details.http_status).toBe(502);
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.httpError);
+  });
+
+  it("classifies plain errors by message when no axios shape present", () => {
+    const details = classifyClientError(new Error("invalid signature"));
+    expect(details.http_status).toBeUndefined();
+    expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.invalidSignature);
   });
 });
 

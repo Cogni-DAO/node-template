@@ -16,10 +16,16 @@ export {
   type PolymarketAdapterConfig,
 } from "./polymarket.adapter.js";
 export {
+  type ClobFailureDetails,
+  ClobRejectionError,
+  classifyClientError,
+  classifyClobFailure,
   mapOpenOrderToReceipt,
   mapOrderResponseToReceipt,
   normalizePolymarketStatus,
+  POLY_CLOB_ERROR_CODES,
   POLY_CLOB_METRICS,
+  type PolyClobErrorCode,
   PolymarketClobAdapter,
   type PolymarketClobAdapterConfig,
 } from "./polymarket.clob.adapter.js";
