@@ -8,17 +8,16 @@ namespace: cogni-preview
 resources:
   - ../../../base/node-app
   - ../../../base/poly-doltgres
-  - env-state.yaml
 
 namePrefix: poly-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:aeef406ab2830f4bf2e9a167fb69e4855c1b110c62c24dd37c82230ea8bb9272"
+    digest: "sha256:46946c6fb9a4dfc943b852617626762f21b38a0faa73a5e374689979318184ee"
   - name: ghcr.io/cogni-dao/cogni-template-migrate
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:d72f145c273cafed60a0795e797184cd676071894b8ffbd6b9983228535bb73f"
+    digest: "sha256:de3c0c0f967addfeb25cf5de111ab56b14bf4b789ea2927e3d8d87b3f321d4f4"
 
 patches:
   # Node-specific ConfigMap values.
@@ -92,70 +91,91 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
         value: "poly-node-app-secrets"
-  - target:
-      kind: EndpointSlice
-      name: postgres-external-1
-    patch: |
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "poly-postgres-external"
-  - target:
-      kind: EndpointSlice
-      name: temporal-external-1
-    patch: |
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "poly-temporal-external"
-  - target:
-      kind: EndpointSlice
-      name: litellm-external-1
-    patch: |
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "poly-litellm-external"
-  - target:
-      kind: EndpointSlice
-      name: redis-external-1
-    patch: |
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "poly-redis-external"
-  - target:
-      kind: EndpointSlice
-      name: doltgres-external-1
-    patch: |
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "poly-doltgres-external"
 
-replacements:
-  - source:
-      kind: ConfigMap
-      name: env-state
-      fieldPath: data.VM_IP
-    targets:
-      - select:
-          kind: EndpointSlice
-          name: postgres-external-1
-        fieldPaths:
-          - endpoints.0.addresses.0
-      - select:
-          kind: EndpointSlice
-          name: temporal-external-1
-        fieldPaths:
-          - endpoints.0.addresses.0
-      - select:
-          kind: EndpointSlice
-          name: litellm-external-1
-        fieldPaths:
-          - endpoints.0.addresses.0
-      - select:
-          kind: EndpointSlice
-          name: redis-external-1
-        fieldPaths:
-          - endpoints.0.addresses.0
-      - select:
-          kind: EndpointSlice
-          name: doltgres-external-1
-        fieldPaths:
-          - endpoints.0.addresses.0
+  # bug.0295: VM discovery via DNS (preview.vm.cognidao.org).
+  # Convert base headless Services → ExternalName; delete EndpointSlices.
+  - target: { kind: Service, name: postgres-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: postgres-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: temporal-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: temporal-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: litellm-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: litellm-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: redis-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: redis-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: doltgres-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: doltgres-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: EndpointSlice, name: postgres-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: postgres-external-1
+  - target: { kind: EndpointSlice, name: temporal-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: temporal-external-1
+  - target: { kind: EndpointSlice, name: litellm-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: litellm-external-1
+  - target: { kind: EndpointSlice, name: redis-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: redis-external-1
+  - target: { kind: EndpointSlice, name: doltgres-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: doltgres-external-1
