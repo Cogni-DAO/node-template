@@ -30,7 +30,7 @@ import type {
   WalletAnalysisWarning,
 } from "@cogni/node-contracts";
 import pLimit from "p-limit";
-import { coalesce } from "./coalesce.js";
+import { coalesce } from "./coalesce";
 
 /** Cache TTL for every slice. Matches design doc 30 s. */
 const SLICE_TTL_MS = 30_000;
