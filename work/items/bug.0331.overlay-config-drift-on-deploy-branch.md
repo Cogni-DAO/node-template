@@ -14,8 +14,8 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
-branch: fix/bug.0331-overlay-drift
-pr:
+branch: worktree-task.0280-preview-handoff
+pr: https://github.com/Cogni-DAO/node-template/pull/939
 reviewer: claude-code
 revision: 2
 blocked_by:
