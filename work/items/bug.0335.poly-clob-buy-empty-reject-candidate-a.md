@@ -2,12 +2,13 @@
 id: bug.0335
 type: bug
 title: "Polymarket CLOB rejects every operator BUY on candidate-a with empty error — mirror pipeline boots clean but places zero orders"
-status: needs_triage
+status: needs_research
 priority: 1
 rank: 51
 estimate: 2
+branch: fix/bug-0335-poly-clob-buy-empty-reject
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-20
 summary: 'Candidate-a operator wallet `0x7A33…0aEB` has not landed a successful CLOB order in 20+ hours. Every BUY from the autonomous mirror (5 attempts at $1 each, mix of neg_risk=true and neg_risk=false markets) returns the empty-error signature `success=undefined, orderID=<missing>, errorMsg=""`. Same surface as bug.0329, but distinct: that bug is SELL-on-neg-risk-only; this is BUY on every market type. Blocks all mirror validation on candidate-a until diagnosed.'
 outcome: "Operator wallet `0x7A33…0aEB` places a $1 BUY via `scripts/experiments/privy-polymarket-order.ts` against any active Polymarket market and receives a normal orderID receipt. The candidate-a mirror can then resume placing trades when kill switch is flipped on."
 spec_refs:
