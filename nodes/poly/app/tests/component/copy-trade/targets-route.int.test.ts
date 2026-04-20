@@ -85,8 +85,13 @@ describe("poly.copy_trade.targets — HTTP round-trip (component)", () => {
   });
 
   afterEach(async () => {
-    // Cascade clean up via billing_accounts → poly_copy_trade_*.
-    const { users } = await import("@/shared/db/schema");
+    // poly_copy_trade_targets.created_by_user_id FK to users has no CASCADE.
+    // Delete billing_account first (CASCADE → targets + fills + decisions +
+    // config), THEN users, so the FK holds at every step.
+    const { billingAccounts, users } = await import("@/shared/db/schema");
+    await getSeedDb()
+      .delete(billingAccounts)
+      .where(eq(billingAccounts.id, billingAccountId));
     await getSeedDb().delete(users).where(eq(users.id, userId));
   });
 

@@ -127,7 +127,6 @@ import { startProcessHealthPublisher } from "@/bootstrap/publishers";
 import {
   type CopyTradeTargetSource,
   dbTargetSource,
-  envTargetSource,
 } from "@/features/copy-trade/target-source";
 import { createOrderLedger, type OrderLedger } from "@/features/trading";
 import type {
@@ -256,9 +255,11 @@ export interface Container {
     | undefined;
   /**
    * Copy-trade target source — strongly-typed seam for "which wallets is each
-   * user monitoring right now?". Production: DB-backed (`dbTargetSource`)
-   * reading `poly_copy_trade_targets` × `poly_copy_trade_config`. Test mode:
-   * empty `envTargetSource` (tests construct their own when they need wallets).
+   * user monitoring right now?". Always DB-backed (`dbTargetSource`) against
+   * `poly_copy_trade_targets` × `poly_copy_trade_config`; component + stack
+   * tests get the testcontainers Postgres. Unit tests that want a
+   * deterministic list construct `envTargetSource(wallets)` directly instead
+   * of going through the container.
    * See `@/features/copy-trade/target-source.ts`.
    */
   copyTradeTargetSource: CopyTradeTargetSource;
@@ -681,24 +682,20 @@ function createContainer(): Container {
       : undefined,
   });
 
-  // Copy-trade target source. Production wires `dbTargetSource` over
-  // poly_copy_trade_targets (RLS-enforced via appDb for `listForActor`,
-  // BYPASSRLS via serviceDb for the `listAllActive` enumerator). Test mode
-  // falls back to `envTargetSource` with an empty wallet list — tests that
-  // need targets construct envTargetSource directly with the wallets they
-  // care about.
-  const copyTradeTargetSource: CopyTradeTargetSource = env.isTestMode
-    ? envTargetSource([])
-    : dbTargetSource({
-        appDb:
-          db as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase<
-            Record<string, unknown>
-          >,
-        serviceDb:
-          serviceDb as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase<
-            Record<string, unknown>
-          >,
-      });
+  // Copy-trade target source — always DB-backed. Component + stack tests
+  // have a real Postgres (testcontainers), so there's no need to fall back to
+  // an in-memory env impl. Pure unit tests that want a deterministic list
+  // construct `envTargetSource(wallets)` directly.
+  const copyTradeTargetSource: CopyTradeTargetSource = dbTargetSource({
+    appDb:
+      db as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase<
+        Record<string, unknown>
+      >,
+    serviceDb:
+      serviceDb as unknown as import("drizzle-orm/postgres-js").PostgresJsDatabase<
+        Record<string, unknown>
+      >,
+  });
 
   // Autonomous 30s mirror poll per target wallet (task.0315 CP4.3e, @scaffolding).
   // Starts when Polymarket creds are present (polyTradeBundle defined) AND the
