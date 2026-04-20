@@ -47,18 +47,20 @@ export function TradesPerDayChart({
       </h4>
       <div className="flex h-28 items-end gap-1">
         {daily.map((d, i) => {
-          const h = d.n === 0 ? 4 : Math.max(8, (d.n / maxN) * 100);
+          // pixel heights — h-28 is 7rem ≈ 112px. Percentage heights don't
+          // work here because the column wrapper sizes to content.
+          const CHART_PX = 112;
+          const heightPx =
+            d.n === 0 ? 4 : Math.max(8, Math.round((d.n / maxN) * CHART_PX));
           const isToday = i === daily.length - 1;
           return (
             <div
               key={d.d}
-              className="group relative flex flex-1 flex-col items-center gap-1"
+              className="group relative flex flex-1 items-end"
+              title={`${d.d} · ${d.n} trades`}
             >
-              <span className="text-muted-foreground text-xs tabular-nums opacity-0 group-hover:opacity-100">
-                {d.n}
-              </span>
               <div
-                style={{ height: `${h}%` }}
+                style={{ height: `${heightPx}px` }}
                 className={cn(
                   "w-full rounded-t-sm transition-colors",
                   isToday
