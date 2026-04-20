@@ -279,7 +279,6 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           http_status: details.http_status,
           response_keys: details.response_keys,
           reason: details.reason,
-          error: truncErr(err),
         },
         `placeOrder: ${result}`
       );

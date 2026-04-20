@@ -573,7 +573,8 @@ describe("PolymarketClobAdapter — observability", () => {
       /CLOB rejected order/
     );
 
-    // Counter labeled result=rejected (not error) — distinct for dashboards.
+    // Counter labeled result=rejected (not error), carries error_code sub-label
+    // so dashboards can split silent rejects by class (bug.0335).
     const rejects = metrics.emissions.filter(
       (e) =>
         e.kind === "counter" &&
@@ -581,15 +582,17 @@ describe("PolymarketClobAdapter — observability", () => {
         e.labels.result === "rejected"
     );
     expect(rejects).toHaveLength(1);
+    expect(rejects[0]?.labels.error_code).toBe(POLY_CLOB_ERROR_CODES.unknown);
 
     const errLog = calls.find((c) => c.level === "error");
     expect(errLog?.obj).toMatchObject({
       event: "poly.clob.place",
       phase: "rejected",
       client_order_id: BASE_INTENT.client_order_id,
+      error_code: POLY_CLOB_ERROR_CODES.unknown,
+      reason: expect.stringContaining("fee rate for the market"),
     });
     expect(typeof errLog?.obj.duration_ms).toBe("number");
-    expect(String(errLog?.obj.error)).toContain("fee rate for the market");
   });
 
   it("placeOrder classifies thrown network errors as result=error", async () => {
@@ -609,9 +612,10 @@ describe("PolymarketClobAdapter — observability", () => {
         e.labels.result === "error"
     );
     expect(errs).toHaveLength(1);
+    expect(errs[0]?.labels.error_code).toBe(POLY_CLOB_ERROR_CODES.unknown);
     const errLog = calls.find((c) => c.level === "error");
     expect(errLog?.obj.phase).toBe("error");
-    expect(String(errLog?.obj.error)).toContain("ECONNRESET");
+    expect(String(errLog?.obj.reason)).toContain("ECONNRESET");
   });
 
   it("placeOrder with missing token_id emits error metric and log before throwing", async () => {
