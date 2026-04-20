@@ -22,6 +22,7 @@ pr: https://github.com/Cogni-DAO/node-template/pull/944
 created: 2026-04-17
 updated: 2026-04-20
 branch: feat/task-0318-phase-a
+deploy_verified: true
 labels: [poly, polymarket, wallets, auth, rls, multi-tenant, privy, security]
 external_refs:
   - work/items/task.0315.poly-copy-trade-prototype.md
