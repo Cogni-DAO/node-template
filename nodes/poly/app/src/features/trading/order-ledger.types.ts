@@ -7,8 +7,8 @@
  * Scope: Pure type surface. No drizzle imports, no I/O.
  * Invariants: LEDGER_PORT_SHAPE_IS_STABLE — adding fields is a breaking change. INSERT_BEFORE_PLACE is a caller invariant, not a ledger one.
  * Side-effects: none
- * Public types: `LedgerRow` (includes `synced_at`), `LedgerStatus`, `StateSnapshot`, `InsertPendingInput`, `RecordDecisionInput`, `ListRecentOptions`, `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger`.
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md
+ * Public types: `LedgerRow` (includes `synced_at`), `LedgerStatus`, `StateSnapshot`, `TenantBinding`, `InsertPendingInput` (extends TenantBinding), `RecordDecisionInput` (extends TenantBinding), `ListRecentOptions`, `ListOpenOrPendingOptions`, `UpdateStatusInput` (includes `reason?`), `SyncHealthSummary`, `OrderLedger` (snapshotState takes `(target_id, billing_account_id)`).
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3b), work/items/task.0328.poly-sync-truth-ledger-cache.md, docs/spec/poly-multi-tenant-auth.md
  * @public
  */
 

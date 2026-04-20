@@ -11,8 +11,9 @@
  *   - IDEMPOTENT_BY_CLIENT_ID — `client_order_id = clientOrderIdFor(target.target_id, fill.fill_id)`, pinned helper. Deterministic from the PK pair so re-runs dedupe.
  *   - RECORD_EVERY_DECISION — `order-ledger.recordDecision` fires for EVERY decide() outcome (placed, skipped, or error). Supports P4 divergence analysis without the fills ledger.
  *   - DECISIONS_TOTAL_HAS_SOURCE — `poly_mirror_decisions_total{outcome, reason, source}` always carries `source` (v0 = `"data-api"`, P4 adds `"clob-ws"`).
+ *   - TENANT_INHERITED_FROM_TARGET — every `insertPending` and `recordDecision` writes `(billing_account_id, created_by_user_id)` taken from `deps.target` (`TargetConfig`). The mirror-coordinator never reads tenant from anywhere else.
  * Side-effects: delegated — DB I/O via `OrderLedger`, HTTP via `WalletActivitySource`, Polymarket CLOB via `placeIntent`. Coordinator itself is pure sequencing + logger/metrics calls.
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3d), docs/spec/poly-copy-trade-phase1.md
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3d), docs/spec/poly-copy-trade-phase1.md, docs/spec/poly-multi-tenant-auth.md
  * @public
  */
 

@@ -5,9 +5,9 @@
  * Module: `@features/copy-trade/types`
  * Purpose: Port-level types for the copy-trade decide/execute boundary — `TargetConfig`, `RuntimeState`, `MirrorDecision`, skip-reason enum.
  * Scope: Pure type surface consumed by `decide.ts`, `clob-executor.ts`, and the poll job. Does not contain logic, does not import adapters.
- * Invariants: MIRROR_REASON_BOUNDED — reason codes are an enum (bounded Prom label cardinality); DECISION_IS_PURE_INPUT — all runtime state is handed to decide() explicitly, never read at decide-time.
+ * Invariants: MIRROR_REASON_BOUNDED — reason codes are an enum (bounded Prom label cardinality); DECISION_IS_PURE_INPUT — all runtime state is handed to decide() explicitly, never read at decide-time; TARGET_CONFIG_CARRIES_TENANT — every TargetConfig carries `billing_account_id` (data) + `created_by_user_id` (RLS key) so downstream fills/decisions writes inherit tenant attribution.
  * Side-effects: none
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 CP4.1)
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 CP4.1), docs/spec/poly-multi-tenant-auth.md
  * @public
  */
 

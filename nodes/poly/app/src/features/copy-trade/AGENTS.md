@@ -14,7 +14,9 @@ Thin copy-trade coordinator — the pure `decide()` policy that, given a normali
 ## Pointers
 
 - [task.0315 — Phase 1 plan](../../../../../../work/items/task.0315.poly-copy-trade-prototype.md)
+- [task.0318 — Phase A multi-tenant auth](../../../../../../work/items/task.0318.poly-wallet-multi-tenant-auth.md)
 - [Phase 1 spec](../../../../../../docs/spec/poly-copy-trade-phase1.md)
+- [Multi-tenant auth spec](../../../../../../docs/spec/poly-multi-tenant-auth.md)
 - [Root poly node AGENTS.md](../AGENTS.md)
 - Sibling layers: [../trading/AGENTS.md](../trading/AGENTS.md), [../wallet-watch/AGENTS.md](../wallet-watch/AGENTS.md)
 
@@ -39,17 +41,20 @@ Thin copy-trade coordinator — the pure `decide()` policy that, given a normali
 ## Public Surface
 
 - **Exports (pure):** `decide()` — the stable-boundary decision function.
-- **Exports (types):** `TargetConfig`, `RuntimeState`, `MirrorDecision`, `MirrorReason`, `DecideInput`.
-- **Exports (coordinator, CP4.3):** `mirror-coordinator.runOnce(deps)` — pure orchestration of wallet-watch → decide → trading.
+- **Exports (types):** `TargetConfig` (carries `billing_account_id` + `created_by_user_id`), `RuntimeState`, `MirrorDecision`, `MirrorReason`, `DecideInput`.
+- **Exports (coordinator):** `mirror-coordinator.runOnce(deps)` — pure orchestration of wallet-watch → decide → trading.
+- **Exports (target source):** `CopyTradeTargetSource` port + `EnumeratedTarget` shape, `envTargetSource(wallets)` (local-dev), `dbTargetSource({appDb, serviceDb})` (production). Two methods: `listForActor(actorId)` (RLS-clamped) + `listAllActive()` (the ONE sanctioned BYPASSRLS read).
 
 ## Invariants
 
 - **COPY_TRADE_ONLY_COORDINATES** — files in this slice MAY import `features/trading/` and `features/wallet-watch/`. They MUST NOT import each other's internals except through the public barrel.
 - **FAIL_CLOSED** — kill-switch disabled or unreadable → skip. Callers MUST NOT default to `enabled: true` on DB read failure.
-- **INTENT_BASED_CAPS** — caps count against intent submissions, not partial fills. Revisit in P3 with paper-PnL data.
+- **INTENT_BASED_CAPS** — caps count against intent submissions, not partial fills.
 - **IDEMPOTENT_BY_CLIENT_ID** — repeat decisions with the same `(target_id, fill_id)` are silently dropped via `already_placed_ids`.
 - **DECIDE_IS_PURE** — no I/O, no env reads, no clock reads; all runtime state handed in explicitly.
 - **MIRROR_REASON_BOUNDED** — `MirrorReason` is an enum; used verbatim as a Prom label.
+- **TARGET_SOURCE_TENANT_SCOPED** — `listForActor` returns only the actor's own targets under appDb RLS. `listAllActive` is the only cross-tenant path; it runs under serviceDb and returns `(billing_account_id, created_by_user_id, target_wallet)` triples so downstream writes inherit tenant attribution.
+- **TENANT_INHERITED_FROM_TARGET** — every fills/decisions write inherits `(billing_account_id, created_by_user_id)` from `TargetConfig`. The coordinator never reads tenant from anywhere else.
 
 ## Responsibilities
 

@@ -45,7 +45,7 @@ Cross-process importers (scheduler-worker, Temporal worker, `@cogni/poly-graphs`
 
 - **Subpath exports (mirrors `@cogni/db-schema` shape):**
   - `@cogni/poly-db-schema` — root barrel re-exports every slice
-  - `@cogni/poly-db-schema/copy-trade` — `polyCopyTradeFills` (includes `syncedAt` column — nullable `timestamptz`, migration 0028), `polyCopyTradeConfig`, `polyCopyTradeDecisions` (task.0315 copy-trade prototype tables; `syncedAt` added task.0328 CP3)
+  - `@cogni/poly-db-schema/copy-trade` — `polyCopyTradeTargets` (tenant-scoped tracked-wallet records, born in migration 0029), `polyCopyTradeFills` (`billingAccountId` + `createdByUserId` + `syncedAt` columns), `polyCopyTradeConfig` (per-tenant PK on `billingAccountId`, default `enabled=false` fail-closed), `polyCopyTradeDecisions` (tenant-scoped). All four tables enforce RLS via `tenant_isolation` policy keyed on `created_by_user_id` per docs/spec/poly-multi-tenant-auth.md.
 - **Files considered API:** all `src/*.ts` via package.json exports
 
 ## Ports
