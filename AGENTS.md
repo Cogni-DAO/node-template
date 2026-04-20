@@ -1,104 +1,130 @@
-# AGENTS.md — Cogni-Template MetaPrompt
+# AGENTS.md — Cogni-Template
 
-> Scope: repository-wide orientation for all agents. Keep ≤150 lines. Subdirs inherit from this.
+> Scope: repository-wide orientation for all agents. Keep ≤150 lines. Subdir `AGENTS.md` files extend this; they do not override it. Closest file in the tree wins, per the [agents.md open spec](https://agents.md/).
 
 ## Mission
 
-Provide a reproducible, open-source foundation for autonomous AI-powered organizations:
+A reproducible, open-source foundation for autonomous AI-powered organizations:
 
 - All infra deployable via open tooling (Docker + OpenTofu + Akash)
 - All accounting and payments via DAO-controlled crypto wallets
 - Strict reproducibility and code discipline across all Cogni repos
 
+## How Agents Work Here — In One Paragraph
+
+**Think briefly, then ship to candidate-a and learn from real behavior.** Plan enough to know what you're building and how you'll prove it works — no more. Prototype the smallest thing that produces a real signal. Push it to a PR, flight it to `candidate-a`, then _interact with your own feature on the deployed build_ and _watch your own request land in Loki_. Iterate against what the running system actually does, not what you assumed it would. Your work is not "done" until you have personally driven a real interaction through the deployed candidate-a build and confirmed the observability signal of your own action. The lifecycle commands (`/triage → /design → /implement → /closeout → /review-implementation`) are scaffolding around that loop, not a substitute for it.
+
+## Definition of Done
+
+You are done when **all** of the following are true — not before:
+
+1. **Lifecycle completed** — work item moved through the [`/triage → (/design) → /implement → /closeout → /review-implementation`](docs/spec/development-lifecycle.md) flow. Every `needs_*` status maps to exactly one `/command`.
+2. **Validation block committed** — `## Validation` section with `exercise:` + `observability:` is on the work item before `/closeout` creates the PR. (Invariant `VALIDATION_REQUIRED`.)
+3. **Code gate green** — PR merged to `main`. `status: done`. _This is only the code gate._
+4. **Flight gate green** — promoted to [`candidate-a`](docs/spec/ci-cd.md#environment-model) via flight. Argo `Healthy`, rollout clean, `/readyz.version` matches the source-sha map.
+5. **Feature gate green — by your own hand** — you (or qa-agent) have hit the real candidate-a URL with the `exercise:` from your validation block, got the expected response, and queried Loki for the observability signal at the deployed SHA and seen _your own request_ in the logs. Then set `deploy_verified: true` on the work item.
+
+`status: done` = code gate. `deploy_verified: true` = real gate. Never conflate.
+
+Reference interaction patterns:
+
+- HTTP / API surfaces → [Agent-First API Validation](docs/guides/agent-api-validation.md) (discover → register → auth → execute → list → stream, no browser session)
+- Other surfaces (CLI, graph, scheduler, infra) → [Development Lifecycle § Feature Validation Contract](docs/spec/development-lifecycle.md#feature-validation-contract)
+
 ## Workflow Guiding Principles
 
-- **Spec first:** Write the plan before code. Confirm the plan with the user.
-- **Port, don't rewrite:** When refactoring, copy existing working logic verbatim and change only the boundary (I/O layer, calling convention). Never rewrite business logic from scratch — it introduces bugs that the original code already solved.
-- **Compact progress:** Summarize after each step.
-- **Prune aggressively:** Delete noise, keep signal.
-- **Delegate cleanly:** Use subagents with narrow scopes.
-- **Validate early:** Run `pnpm check:fast` during iteration (auto-fixes lint/format). Run targeted tests for what you changed.
-- **Validate once before commit:** Run `pnpm check` once as the pre-commit gate. Never run it more than once per session.
-- **Update docs:** Reflect any surface changes in AGENTS.md.
-- **Full Validation:** `pnpm check:full` runs in CI (~20 min). Check CI status on the PR after push — stack test success is the required gate.
+- **Bias for action.** Think until you know what to build and how you'll prove it — then go. Long plans on paper don't beat a running prototype on candidate-a.
+- **Prototype against reality.** Your first goal after planning is a real interaction with a deployed build. Code that only runs locally has not yet earned trust.
+- **Close your own loop.** Drive the feature yourself on candidate-a and confirm the observability signal of your own call in Loki. Don't hand the loop off and call it done.
+- **Goal-driven execution.** Convert every task into a verifiable `## Validation` block. The `exercise:` + `observability:` pair _is_ your success criterion — loop to green.
+- **Think before coding.** State assumptions. Surface ambiguity. Push back when the prompt implies over-scope or a simpler path exists. _Then ship._
+- **Simplicity first.** Write the minimum code that solves the problem. No speculative abstractions. No error handling for impossible cases.
+- **Surgical changes.** Edit only what the task demands. Match existing style. Mention drive-by issues — don't fix them in the same PR.
+- **Deterministic reproducibility.** Everything the system runs on lives in git — infra as code (GitOps via Argo + OpenTofu), memory as code (Dolt ops). Ad-hoc `ssh`, `kubectl`, one-off env vars, and console clicks are fine for a 5-minute experiment; anything that needs to stay gets captured as a script, terraform change, or GitOps commit before the session ends. If it isn't in git, it didn't happen.
+- **`main` is holy clean.** There are no "pre-existing" test, type, lint, or `pnpm check` failures on `main`. If you hit one, it's either your worktree setup (missing install, unbuilt packages, missing env) or a bug you just introduced. Bootstrap the worktree first ([`docs/guides/new-worktree-setup.md`](docs/guides/new-worktree-setup.md)); if it still fails, it's your PR and you fix it before asking for help.
+- **Port, don't rewrite.** When refactoring, copy working logic verbatim and change only the boundary. Rewrites reintroduce bugs the original already solved.
+- **Prune aggressively.** Delete noise; keep signal. Summarize after each step. Keep context <40% of the window.
+
+## Verification Loop
+
+Each stage is a real signal, not a ceremony. Skipping a stage does not save time — it just moves the failure later.
+
+- **During iteration:** `pnpm check:fast` — typecheck + lint/format auto-fix + unit. Run targeted tests for what you changed.
+- **Pre-commit:** `pnpm check` — once per session, never repeated. The full static gate.
+- **Pre-merge (CI):** `pnpm check:full` (~20 min). Stack-test success is the required CI gate. Check PR status after push.
+- **Post-merge:** flight to `candidate-a` → exercise the feature on the live URL → read your own request back out of Loki → `deploy_verified: true`. This is the gate that actually proves the feature exists.
+
+## Pull Request Discipline
+
+PRs are the durable artifact of a work item. [`/closeout`](.claude/commands/closeout.md) creates them. Every PR body answers:
+
+- **TLDR** — what changed, in 1–2 lines.
+- **Deployment impact** — does this need `candidate-flight-infra`? Add or rotate secrets? Touch `deploy/*`? Name it and link the workflow, or say `none`.
+- **E2E validation plan** — the `exercise:` + `observability:` pair from the work item's `## Validation` block, verbatim.
+- **Validation result** — post-flight comment with the real `exercise:` response and the Loki line proving your own request hit the deployed SHA. This flips `deploy_verified: true`.
 
 ## Agent Behavior
 
-- Follow this root file as primary instruction; subdir AGENTS.md may extend but not override core principles.
-- Never modify outside assigned directories.
-- Keep context lean (<40% window); summarize often.
-- Purge incorrect info instead of propagating it.
-- If asked to install tools, run: `pnpm install --frozen-lockfile`
+- Follow this file as primary instruction. Subdir `AGENTS.md` may extend but may not override core principles.
+- **Drive the work to `deploy_verified: true`.** Don't wait for a human to unblock the next step — run the command, read the log, fix the error, try again. Escalate only on truly critical blockers (missing auth, revoked access, destructive-op confirmation).
+- **Scale your learnings.** When you hit a mistake or blocker another agent is likely to repeat, edit the relevant guide / spec / command file so the next agent doesn't rediscover it. A 3-line fix to a pointer doc beats a 30-minute onboarding by the next agent. This is how the playbook gets better.
+- Never modify files outside your assigned scope. Never commit on a branch you did not create.
+- Use git worktrees for isolated work — never `checkout`/`stash` on the user's main worktree.
+- If asked to install tools: `pnpm install --frozen-lockfile`.
+
+## API Contracts are the Single Source of Truth
+
+- All HTTP/API request/response shapes **must** be defined in `src/contracts/*.contract.ts` using Zod.
+- Facades, routes, services, and tests **must** use `z.infer<typeof ...>` from these contracts — never re-declare types.
+- When a contract shape changes: update the contract file first, then fix whatever TypeScript + Zod complain about.
+- No other manual type definitions are allowed for these shapes.
 
 ## Environment
 
 - **Framework:** Next.js (TypeScript, App Router)
-- **Infra:** Docker + OpenTofu → Spheron (managed Akash)
+- **Infra:** Docker + OpenTofu → k3s / Spheron (managed Akash). Argo CD reconciles from `deploy/*` branches.
 - **Toolchain:** pnpm, Biome, ESLint, Prettier, Vitest, Playwright, SonarQube
-- **Observability:** Pino JSON → Alloy → local Loki (dev) or Grafana Cloud (preview/prod). MCP via grafana-local/grafana.
-- **CI entrypoint:** `pnpm check` (static) → `pnpm check:full` (stack tests)
+- **Observability:** Pino JSON → Alloy → local Loki (dev) or Grafana Cloud (preview/prod). Agents query Loki via the `grafana` MCP to read back their own requests at the deployed SHA. **New MCP / metrics tools will be wired in as validation matures** — Langfuse is the v2 target for AI-call traces. Tool-specific usage details belong in the validation guides, not here.
 - **Node layout:** sovereign node code lives under `nodes/{node}/` (`app/`, `graphs/`, `.cogni/`)
-
-## API Contracts are the Single Source of Truth
-
-- All HTTP/API request/response shapes **must** be defined in `src/contracts/*.contract.ts` using Zod
-- Facades, routes, services, and tests **must** use `z.infer<typeof ...>` from these contracts instead of re-declaring types
-- If the contract shape changes, update the contract file first and then fix whatever TypeScript + Zod complain about
-- No other manual type definitions are allowed for those shapes
 
 ## Pointers
 
-- [Architecture](docs/spec/architecture.md) — Hexagonal layering, directory structure, enforcement rules
-- [Feature Development Guide](docs/guides/feature-development.md) — How to add features end-to-end
-- [Common Agent Mistakes](docs/guides/common-mistakes.md) — Top mistakes and troubleshooting
-- [Developer Setup](docs/guides/developer-setup.md) — Getting started locally
-- [Testing Strategy](docs/guides/testing.md) — Test types, when to use each
-- [Style & Lint Rules](docs/spec/style.md) — Code style and lint configuration
-- [AI Setup Spec](docs/spec/ai-setup.md) — AI correlation IDs, telemetry
-- [AI Pipeline E2E](docs/spec/ai-pipeline-e2e.md) — Auth, execution, billing flow & security scorecard
-- [Work Management](work/README.md) — Charters, projects, and work items
-- [Subdir AGENTS.md Policy](docs/templates/agents_subdir_template.md) — Template for subdirectory files
+**Lifecycle, CI/CD, and validation** — read before starting non-trivial work.
+
+- [Development Lifecycle](docs/spec/development-lifecycle.md) — status-driven flow, `/command` dispatch, invariants
+- [CI/CD Pipeline](docs/spec/ci-cd.md) — trunk-based model, candidate-a flight, promotion, source-sha map
+- [Agent-First API Validation](docs/guides/agent-api-validation.md) — reference interaction flow for API features
+
+**Architecture & development**
+
+- [Architecture](docs/spec/architecture.md) — hexagonal layering, directory structure, enforcement rules
+- [Feature Development Guide](docs/guides/feature-development.md) — end-to-end feature flow
+- [Developer Setup](docs/guides/developer-setup.md) — local setup + full command catalog
+- [Multi-node Dev](docs/guides/multi-node-dev.md) — layout, commands, testing
+- [Testing Strategy](docs/guides/testing.md) — test types and when to use each
+- [Common Agent Mistakes](docs/guides/common-mistakes.md) — top mistakes and troubleshooting
+
+**Standards**
+
+- [Style & Lint Rules](docs/spec/style.md)
+- [AI Setup Spec](docs/spec/ai-setup.md) — correlation IDs, telemetry
+- [AI Pipeline E2E](docs/spec/ai-pipeline-e2e.md) — auth, execution, billing, security scorecard
+- [Work Management](work/README.md) — charters, projects, work items
+- [Subdir AGENTS.md Template](docs/templates/agents_subdir_template.md)
 
 ## Usage
 
+Essentials only — full catalog in [Developer Setup](docs/guides/developer-setup.md).
+
 ```bash
-pnpm dev                      # start operator dev server
-pnpm dev:poly                 # start poly node (port 3100, requires dev:infra)
-pnpm dev:resy                 # start resy node (port 3300, requires dev:infra)
-pnpm dev:stack                # start operator + infrastructure (main dev workflow)
-pnpm dev:stack:full           # start operator + all nodes + infrastructure
-pnpm dev:stack:test           # start dev server + infrastructure for testing
-pnpm dev:stack:test:setup     # first time: create test DB + run migrations
-pnpm dev:infra:tb             # opt-in: start TigerBeetle (needs ~1.2GiB RAM)
-pnpm docker:dev:stack         # start all services containerized (with build)
-pnpm docker:dev:stack:fast    # start all services containerized (skip build for speed)
-pnpm docker:test:stack        # start all services containerized in test mode (with build)
-pnpm docker:test:stack:fast   # start all services containerized in test mode (skip build)
-pnpm docker:stack             # start full stack locally (with build)
-pnpm docker:stack:fast        # start full stack locally (skip build)
-pnpm build                    # build for production
-pnpm packages:build           # build workspace packages (tsup JS + tsc declarations)
-pnpm packages:clean           # clean package dist/ and .tsbuildinfo
-pnpm check:fast               # typecheck + lint/format fix + unit tests (use during iteration)
-pnpm check                    # ALL static checks: type + lint + format + arch + docs + tests (once before commit)
-pnpm check:full               # CI-parity: docker build + stack launch + all test suites (~20 min, runs in CI)
-pnpm check:full:fast          # Same as check:full but skip Docker rebuild
-pnpm test                     # run unit tests (no server required)
-pnpm test:external            # external API tests (requires GITHUB_TOKEN, not in CI)
-pnpm test:ci                  # run tests with test coverage statistics
-pnpm test:component           # Component tests (isolated testcontainers, no server)
-pnpm test:contract            # Contract tests (in-memory, no HTTP)
-pnpm test:stack:dev           # Full Stack tests (requires dev:stack:test running)
-pnpm test:stack:docker        # Full Stack tests (requires docker:test:stack running)
-pnpm dotenv -e .env.test -- vitest run --config vitest.stack.config.mts <testfile> # run a specific stack test file
-pnpm format                   # prettier format fixes
-pnpm check:docs               # lint AGENTS.md documentation
-pnpm typecheck:node-template  # typecheck node-template app
-pnpm typecheck:poly           # typecheck poly node app
-pnpm typecheck:resy           # typecheck resy node app
-pnpm e2e                      # Black box end-to-end tests (run on pnpm docker:stack)
+pnpm dev:stack                # primary dev loop (operator + infra)
+pnpm dev:stack:full           # operator + all nodes + infra
+pnpm dev:stack:test           # dev server + infra for stack tests
+pnpm check:fast               # iteration gate (typecheck + lint/format fix + unit)
+pnpm check                    # pre-commit gate — once per session
+pnpm check:full               # CI-parity gate (~20 min)
+pnpm test:component           # component tests (isolated testcontainers)
+pnpm test:stack:dev           # stack tests (requires dev:stack:test running)
 ```
 
-**Fast variants:** Commands with `:fast` skip Docker rebuilds, using existing images for faster startup.
-
-**Multi-node:** See [docs/guides/multi-node-dev.md](docs/guides/multi-node-dev.md) for layout, commands, and testing guide.
+`:fast` variants skip Docker rebuilds for faster startup.

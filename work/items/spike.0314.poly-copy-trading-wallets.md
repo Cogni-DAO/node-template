@@ -11,7 +11,7 @@ outcome: "Research doc shipped at docs/research/poly-copy-trading-wallets.md wit
 spec_refs:
 assignees: derekg1729
 credit:
-project: proj.poly-prediction-bot
+project: proj.poly-copy-trading
 branch:
 pr:
 reviewer:
@@ -29,7 +29,7 @@ external_refs:
 
 > Research doc: [poly-copy-trading-wallets](../../docs/research/poly-copy-trading-wallets.md)
 > Project: [proj.poly-prediction-bot](../projects/proj.poly-prediction-bot.md) (Run phase — "Follow-a-wallet")
-> Related: [task.0311 poly knowledge syntropy seed](./task.0311.poly-knowledge-syntropy-seed.md), [poly strategy knowledge ingestion MCP](../../docs/research/poly-strategy-knowledge-ingestion-mcp.md)
+> Related: [task.0311 poly knowledge syntropy seed](./task.0311.poly-knowledge-syntropy-seed.md)
 
 ## Question
 

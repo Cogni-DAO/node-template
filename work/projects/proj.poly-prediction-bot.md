@@ -11,6 +11,8 @@ outcome: A self-improving prediction market intelligence system — from read-on
 assignees: derekg1729
 created: 2026-03-31
 updated: 2026-04-19
+child_projects:
+  - proj.poly-copy-trading
 labels: [poly, prediction-markets, ai, langgraph, temporal, copy-trading]
 ---
 
@@ -62,21 +64,11 @@ Build a prediction market bot that starts by reading and searching live markets 
 | Calibration loop — outcomes → base rate updates                             | Not Started | 3   | (create at P1 start) |
 | Enrichment sources — GDELT news, Metaculus expert forecasts                 | Not Started | 2   | (create at P1 start) |
 
-### Run (P2+) — Paper Trading & Treasury
+### Run (P2+) — Autonomous Copy-Trading
 
-**Goal:** Simulated trading with full position tracking and P&L accounting. DAO treasury grows on paper. "Follow a wallet" lets users shadow successful traders. System proves edge before real money.
+**Spun out to its own project on 2026-04-19.** See [proj.poly-copy-trading](proj.poly-copy-trading.md) for the full roadmap across (1) v0 single-operator prototype, (2) v1 hardening + multi-target, (3) per-user multi-tenant operator wallets + RLS, and (4) streaming + adversarial-robust ranking.
 
-| Deliverable                                                                | Status      | Est | Work Item            |
-| -------------------------------------------------------------------------- | ----------- | --- | -------------------- |
-| Follow-a-wallet — trade library + migration (no VM wiring yet) (PR #890)   | In Review   | 5   | task.0315            |
-| Sync-truth: typed not_found, grace window, synced_at, sync-health endpoint | In Review   | 1   | task.0328            |
-| Multi-tenant wallet auth — per-user EOA + RLS + durable trade grants       | Not Started | 5   | task.0318            |
-| Paper trading engine — simulated order execution against live odds         | Not Started | 4   | (create at P2 start) |
-| Position tracking + P&L ledger (integrated with `@cogni/financial-ledger`) | Not Started | 3   | (create at P2 start) |
-| Balance sheet dashboard — portfolio view, historical returns, Sharpe ratio | Not Started | 3   | (create at P2 start) |
-| Strategy backtesting — replay historical signals against resolved markets  | Not Started | 3   | (create at P2 start) |
-| DAO governance integration — community votes on risk parameters, strategy  | Not Started | 2   | (create at P2 start) |
-| Human-in-the-loop approval flow — signal → approve → execute               | Not Started | 3   | (create at P2 start) |
+Paper-trading infrastructure + DAO treasury integration + strategy backtesting + human-in-the-loop approval remain unscoped. Create a dedicated project when those deliverables are picked up; they are orthogonal to the autonomous-mirror track.
 
 ## Constraints
 
@@ -102,7 +94,7 @@ Build a prediction market bot that starts by reading and searching live markets 
 ## As-Built Specs
 
 - [Data Streams](../../docs/spec/data-streams.md) — Redis live plane, selective Postgres persistence, SSE
-- [Knowledge Data Plane](../../docs/spec/knowledge-data-plane.md) — versioned strategy/prompt expertise (draft)
+- [Knowledge Data Plane](../../docs/spec/knowledge-data-plane.md) — Doltgres knowledge plane, per-node DBs, agent tools (active)
 - [Poly Mirror v0](../../docs/spec/poly-copy-trade-phase1.md) — three-layer decomposition (trading / wallet-watch / copy-trade), order-ledger, placement invariants (task.0315)
 - ~~AI Awareness & Decision Plane (`docs/spec/monitoring-engine.md`)~~ — referenced in the original roadmap but the file does not exist. Deleted from pointers until it's written.
 

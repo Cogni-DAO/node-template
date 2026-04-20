@@ -12,10 +12,12 @@ spec_refs:
   - operator-wallet
   - tenant-connections
   - scheduler
+  - poly-multi-tenant-auth
 assignees: derekg1729
-project: proj.poly-prediction-bot
+project: proj.poly-copy-trading
+pr: https://github.com/Cogni-DAO/node-template/pull/932
 created: 2026-04-17
-updated: 2026-04-17
+updated: 2026-04-19
 labels: [poly, polymarket, wallets, auth, rls, multi-tenant, privy, security]
 external_refs:
   - work/items/task.0315.poly-copy-trade-prototype.md
@@ -48,6 +50,56 @@ Replace the single-operator env-directed model with per-user wallet connections 
 - Multi-wallet-per-user. v1 is one operator wallet per `billing_account_id`.
 - Revoking grants mid-flight (in-flight order completion is out of scope — grants gate placement, not cancellation).
 - Migrating historical P1 rows to a tenant. P1 rows were written with a synthetic `target_id` under `updated_by='system'`; this task either drops them as prototype debris or assigns them to the bootstrap operator account.
+
+## Phased approach (added 2026-04-19)
+
+This task ships in two phases. **Phase A** lands the user-owned **tracked-wallet records + RLS** while keeping the existing shared operator wallet for execution. **Phase B** lands per-user signing wallets and isolated execution.
+
+PR #932 (multi-wallet copy-trade v0) shipped a strongly-typed `CopyTradeTargetSource` port specifically so Phase A can swap `envTargetSource` → `dbTargetSource` with no caller churn.
+
+### Phase A — user-owned tracked wallets + RLS (shared execution)
+
+Goal: each user manages their own list of wallets to mirror; RLS prevents cross-tenant reads. Mirror polls still place from the shared operator wallet — fills are pooled.
+
+| Layer          | Change                                                                                                                                                                                   |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| DB             | New `poly_copy_trade_targets` table (born tenant-scoped). Migrate `poly_copy_trade_fills`, `poly_copy_trade_decisions` to add `billing_account_id`. Per-tenant `poly_copy_trade_config`. |
+| RLS            | `USING (billing_account_id = current_setting('app.current_billing_account_id', true))`. Same shape as `connections`.                                                                     |
+| Port           | `dbTargetSource(serviceDb)` impl alongside existing `envTargetSource`. Container uses DB impl. Env impl preserved for local-dev only.                                                    |
+| Routes         | `POST /api/v1/poly/copy-trade/targets` (create for session user), `DELETE /api/v1/poly/copy-trade/targets/:id`. GET already exists.                                                      |
+| Dashboard      | Wire the existing `+` CTA on `TopWalletsCard` (currently disabled stub). Add `−` on user-owned tracked rows.                                                                             |
+| Container poll | Iterate **union of all users' enabled targets**, deduped by `target_wallet`. Same operator wallet, pooled fills.                                                                         |
+| Env            | Delete `COPY_TRADE_TARGET_WALLETS`.                                                                                                                                                      |
+
+Phase A non-goals: per-user caps, per-user P&L attribution, per-user kill-switch, per-user wallet custody. Document the pooled-execution wart on the dashboard.
+
+Size: ~2–3 days.
+
+### Phase B — user-owned signing wallets (isolated execution)
+
+Goal: each user's mirror fills settle on **their own** wallet. Real isolation, real attribution, real per-user caps. This is where the existing task.0318 schema (`poly_wallet_connections`, `poly_wallet_grants`) lands.
+
+#### Signing-backend comparison
+
+| Option                             | OSS                      | Autonomous      | Connect UX                                                                                                                                                                                                              | Notes                                                                                                                                            |
+| ---------------------------------- | ------------------------ | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **RainbowKit / wagmi alone**       | ✅                       | ❌ popup per tx | Great connect                                                                                                                                                                                                           | **Cannot drive a 30s autonomous poll.** Connect-wallet UI only — every signature requires a browser-wallet popup.                                |
+| **Privy per-user**                 | ❌ closed                | ✅              | Email / social login, custodial                                                                                                                                                                                         | Cheapest copy-paste (Privy already in repo for the operator wallet). Locks Cogni to a closed dependency forever. Violates CLAUDE.md OSS mission. |
+| **Turnkey**                        | partial (Rust core open) | ✅              | API-driven MPC                                                                                                                                                                                                          | Middle ground. More work than Privy.                                                                                                             |
+| **ERC-4337 + Safe + session keys** | ✅ fully                 | ✅ within scope | User connects via RainbowKit → signs **one** meta-tx granting a session key scoped to (CTF approvals + USDC.e approvals + CLOB order signing), bounded by $/day + expiry, revocable anytime. App holds the session key. | Best OSS story. Aligns with CLAUDE.md mission. ~2–3 weeks of engineering + audit.                                                                |
+| Raw encrypted PK                   | ✅ but awful             | ✅              | User pastes PK                                                                                                                                                                                                          | Custody liability. **Avoid.**                                                                                                                    |
+
+**RainbowKit ≠ alternative to Privy for autonomous signing.** RainbowKit is a connect-wallet UI on top of wagmi; once connected, every signature still goes through the user's browser wallet. A 30-second autonomous poll cannot survive popups. You need either (a) a custodial signer the app controls (Privy / Turnkey) or (b) delegated signing authority from a Safe via session keys.
+
+#### Recommendation: ship **B.2 (Safe + session keys)**, skip Privy-per-user
+
+The week saved by shipping Privy is paid back the moment the DAO asks to remove the closed-source dependency. The only argument for B.1 (Privy) is a revenue milestone blocked on user wallets in <1 week.
+
+Suggested sequencing:
+
+1. Ship Phase A.
+2. Spike B.2 in parallel (1–2 days): prove a Safe session key granted from a RainbowKit connection can place a CLOB order from the operator pod. If clean, commit to B.2. If blocked, reopen the Privy debate.
+3. Ship B.2.
 
 ## Design sketch
 
@@ -103,12 +155,26 @@ In CP3.1.5 we deleted `PolymarketOrderSigner` + `OperatorWalletPort.signPolymark
 
 ## Plan (draft checkpoints — revise at `/design`)
 
-- [ ] **CP1 — Schema + migration for `poly_wallet_connections` + `poly_wallet_grants`**. Both tenant-scoped with RLS policies. Seed helper for the bootstrap operator.
-- [ ] **CP2 — Add tenant columns + RLS to `poly_copy_trade_{fills, config, decisions}`**. Migrate config from singleton to per-tenant. Backfill or drop P1 rows.
-- [ ] **CP3 — Wallet-connection CRUD** (server actions + dashboard): provision a new Privy HSM wallet bound to the signed-in billing account; surface address + allowance state; "Connect wallet" button; revocation UI.
-- [ ] **CP4 — Grant issuance UI + server actions**: user-set caps (daily / hourly / per-order); explicit "authorize trading" step that creates the `poly_wallet_grants` row.
-- [ ] **CP5 — Executor + poll rewiring**: env-directed path removed; poll iterates grants; per-tenant kill-switch; per-tenant `decide()` state.
-- [ ] **CP6 — Cross-tenant isolation tests**: two users, two wallets, two target sets; proves RLS forbids cross-reads and that one tenant's kill-switch has no effect on the other.
+### Phase A — tracked-wallet RLS (shared execution)
+
+- [ ] **A1 — Schema + migration for `poly_copy_trade_targets`**. Born tenant-scoped (`billing_account_id NOT NULL`). RLS policy mirrors `connections`. Seed dev helper for the bootstrap operator.
+- [ ] **A2 — Add `billing_account_id` + RLS to `poly_copy_trade_{fills, decisions}`**. Migrate `poly_copy_trade_config` from singleton (`singleton_id=1`) to per-tenant PK. Drop P1 prototype rows.
+- [ ] **A3 — `dbTargetSource(serviceDb)` impl** in `nodes/poly/app/src/features/copy-trade/target-source.ts`. Returns wallets keyed by tenant; container `CopyTradeTargetSource` swaps env → DB. `envTargetSource` retained for local-dev only (gated on `APP_ENV=test`).
+- [ ] **A4 — CRUD routes + contract**: `POST /api/v1/poly/copy-trade/targets`, `DELETE /api/v1/poly/copy-trade/targets/:id`. Update `polyCopyTradeTargetsOperation` contract. RLS-enforced via `appDb`.
+- [ ] **A5 — Dashboard wire-up**: enable the `+` CTA on `TopWalletsCard` (currently `disabled`). Add `−` removal button on user-owned tracked rows. Disclaimer: "Mirror execution is pooled across operators in this node; per-user wallets ship in Phase B."
+- [ ] **A6 — Container poll change**: iterate the **union** of all users' enabled targets (deduped by `target_wallet`). Reconciler still single, operator-wide.
+- [ ] **A7 — Delete `COPY_TRADE_TARGET_WALLETS` env var** from `server-env.ts`, `.env.local.example`, SKILL.md, candidate-a secret.
+- [ ] **A8 — Phase A isolation tests**: two users → two target lists; user-A cannot SELECT user-B's targets via `appDb`. Mirror correctly polls the union.
+
+### Phase B — per-user signing wallets (isolated execution)
+
+- [ ] **B1 — Spike: Safe + ERC-4337 session keys**. Prove a Safe session key granted from a RainbowKit connection can place a CLOB order from the operator pod. Spike timebox: 2 days. If green, B2+ commit to Safe. If blocked, reopen Privy-per-user debate.
+- [ ] **B2 — Schema + migration for `poly_wallet_connections` + `poly_wallet_grants`**. Both tenant-scoped with RLS policies. Schema in spec doc.
+- [ ] **B3 — Wallet-connection CRUD** (server actions + dashboard): connect Safe via RainbowKit; provision session key; surface address + allowance state; "Connect wallet" button; revocation UI.
+- [ ] **B4 — Grant issuance UI + server actions**: user-set caps (daily / hourly / per-order); explicit "authorize trading" step that creates the `poly_wallet_grants` row.
+- [ ] **B5 — Executor + poll rewiring**: shared-operator path removed; poll iterates grants; per-tenant kill-switch; per-tenant `decide()` state.
+- [ ] **B6 — Add `created_by_user_id` to `poly_copy_trade_fills`** for per-user attribution. Backfill or drop Phase A pooled rows.
+- [ ] **B7 — Cross-tenant isolation tests**: two users, two wallets, two target sets; proves RLS forbids cross-reads, fills isolated, kill-switch isolated.
 
 ## Invariants
 
@@ -126,6 +192,8 @@ In CP3.1.5 we deleted `PolymarketOrderSigner` + `OperatorWalletPort.signPolymark
 
 ## Open questions (resolve at `/design`)
 
+- **Safe session-keys vs Privy-per-user (B-phase)**: leaning Safe (OSS-aligned, CLAUDE.md mission). Decide after B1 spike.
+- **Phase A pooled-execution UX**: how to message that fills are not user-attributable yet. Disclaimer banner vs feature-flag the "fills" view per-user-only.
 - **Bootstrap operator**: do we keep a "system" operator that the existing P1 tests / scripts can use, or move everything to a real `billing_account_id`? Leaning toward a `billing_accounts` row with `id='system:poly-bootstrap'` + a helper seed migration.
 - **Pre-existing P1 rows**: drop (prototype debris) vs backfill to bootstrap operator. Drop is simpler; backfill preserves the CP5 dress-rehearsal `order_id` evidence if anyone already placed one.
 - **BYO wallet (imported EOAs) timeline**: punt to follow-up task, or include a thin import path in CP3? Leaning punt — Privy-only is enough to exercise the whole grant flow.
