@@ -2,7 +2,8 @@
 id: bug.0338
 type: bug
 title: Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only
-status: needs_merge
+status: done
+deploy_verified: true
 priority: 1
 rank: 20
 estimate: 2
@@ -118,6 +119,15 @@ A user POSTs a tracked wallet through their own account → within one mirror-po
 
 - **exercise**: As a registered agent (not system tenant), `POST /api/v1/poly/copy-trade/targets {"target_wallet":"0x…"}` → `201 Created` with `enabled:true` in the response → within ≤60s the mirror pod claims the wallet.
 - **observability**: `{namespace="cogni-candidate-a"} |~ "poly.mirror.poll.singleton_claim"` at the deployed SHA returns ≥1 line for the POSTed wallet; the preceding pod-local log line is a prior `poly.mirror.targets.reconcile.tick` (or initial empty-set boot line), NOT a fresh pod boot. Separate query `{...} |~ "poly.mirror.targets.reconcile.tick"` shows a ~30s cadence.
+
+### Verified on candidate-a (2026-04-20, SHA `ed52f9225`)
+
+- Agent POST `0x204f…5e14` at 19:47:33Z on fresh tenant → `201 {enabled:true}`. Reconciler tick at 19:47:41Z (`active:1, added:1`) → `singleton_claim` same second.
+- After reflight, user's UI clicks (`0x204f`, `0xefbc`, `0x37c1`) each picked up within ≤30s of `create_success`. Zero pod boots between any POST and its `singleton_claim`.
+
+## Follow-ups surfaced during validation
+
+- [bug.0339](./bug.0339.tenant-context-missing-from-request-envelope-logs.md) — envelope-level logs lack `user_id` / `billing_account_id`, so Loki can't slice a route by tenant without parsing the request body.
 
 ## Not in scope
 

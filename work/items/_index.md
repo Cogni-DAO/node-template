@@ -142,7 +142,6 @@
 | 1 | 20 | 3 | needs_design | task.0135 | Rewards-Ready Token Formation: Governance Decisions + Implementation | Financial Ledger | proj.financial-ledger |
 | 1 | 20 | 3 | needs_design | task.0141 | Category pool allocation — split epoch budget across source categories before per-source scoring | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 20 | 5 | needs_implement | task.0181 | Worker-local graph execution — move AI runtime out of Next.js | Unified Graph Launch | proj.unified-graph-launch |
-| 1 | 20 | 2 | needs_merge | bug.0338 | Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only | Cogni Poly | proj.poly-copy-trading |
 | 1 | 21 | 2 | needs_triage | task.0076 | Dedicated Discord community agent — separate agent config with Discord-specific personality and skills | Messenger Channels | proj.messenger-channels |
 | 1 | 22 | 2 | needs_design | task.0038 | Rename tests/integration → tests/component with dependency-class subdirs | Reusable CI/CD Rails & Multi-Node Pipeline | proj.ci-cd-reusable |
 | 1 | 22 | 2 | needs_design | task.0142 | Epoch pool value stabilization — minimum activity threshold + carry-over policy | Transparent Credit Payouts | proj.transparent-credit-payouts |
@@ -194,6 +193,7 @@
 | 2 | 17 | 1 | needs_research | spike.0037 | Research Tailscale/Headscale mesh VPN for Cogni infrastructure |  |  |
 | 2 | 20 | 3 | needs_design | task.0211 | BYO-AI ChatGPT — auth manager + Codex CLI in Docker image | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 2 | 30 | 1 | needs_implement | bug.0168 | App container uses seccomp=unconfined for TigerBeetle io_uring — replace with targeted profile | AI Operator Wallet | proj.ai-operator-wallet |
+| 2 | 30 | 1 | needs_triage | bug.0339 | Tenant context missing from request-envelope logs — Loki can't slice by user/billing |  |  |
 | 2 | 50 | 2 | needs_implement | task.0134 | EIP-4824 daoURI v0 — lightweight DAOstar metadata endpoint | Financial Ledger | proj.financial-ledger |
 | 2 | 50 | 2 | needs_merge | task.0324 | Per-node DB schema split (minimal — no new tooling) | Database Operations | proj.database-ops |
 | 2 | 50 | 3 | needs_triage | bug.0330 | poly /api/v1/chat/completions intermittently returns empty body on candidate-a | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -356,6 +356,7 @@
 | 1 | task.0311 | Poly Knowledge Plane v0 — Candidate-a Wiring + Upsert Bug Fix (Clean-Slate Nodes) | Cogni Poly | proj.poly-prediction-bot |
 | 1 | bug.0328 | promote-build-payload silent abort + release-slot treats skipped verify as success — verify-candidate bypassed on real flight | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | task.0328 | Poly sync-truth — DB as CLOB cache (first slice: typed not_found, grace window, synced_at, sync-health) | Cogni Poly | proj.poly-copy-trading |
+| 1 | bug.0338 | Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only | Cogni Poly | proj.poly-copy-trading |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |
