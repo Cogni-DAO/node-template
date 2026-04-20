@@ -11,8 +11,9 @@
  *   - IDEMPOTENT_BY_CLIENT_ID — `client_order_id = clientOrderIdFor(target.target_id, fill.fill_id)`, pinned helper. Deterministic from the PK pair so re-runs dedupe.
  *   - RECORD_EVERY_DECISION — `order-ledger.recordDecision` fires for EVERY decide() outcome (placed, skipped, or error). Supports P4 divergence analysis without the fills ledger.
  *   - DECISIONS_TOTAL_HAS_SOURCE — `poly_mirror_decisions_total{outcome, reason, source}` always carries `source` (v0 = `"data-api"`, P4 adds `"clob-ws"`).
+ *   - TENANT_INHERITED_FROM_TARGET — every `insertPending` and `recordDecision` writes `(billing_account_id, created_by_user_id)` taken from `deps.target` (`TargetConfig`). The mirror-coordinator never reads tenant from anywhere else.
  * Side-effects: delegated — DB I/O via `OrderLedger`, HTTP via `WalletActivitySource`, Polymarket CLOB via `placeIntent`. Coordinator itself is pure sequencing + logger/metrics calls.
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3d), docs/spec/poly-copy-trade-phase1.md
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (CP4.3d), docs/spec/poly-copy-trade-phase1.md, docs/spec/poly-multi-tenant-auth.md
  * @public
  */
 
@@ -155,12 +156,17 @@ async function processFill(
 
   // Snapshot is per-fill — simple, slightly more DB reads but correct when
   // caps tighten mid-tick (e.g. first fill tips over the daily cap).
-  const snapshot = await deps.ledger.snapshotState(deps.target.target_id);
+  const snapshot = await deps.ledger.snapshotState(
+    deps.target.target_id,
+    deps.target.billing_account_id
+  );
 
   const source: DecisionSource = fill.source as DecisionSource;
   const decisionBase = {
     target_id: deps.target.target_id,
     fill_id: fill.fill_id,
+    billing_account_id: deps.target.billing_account_id,
+    created_by_user_id: deps.target.created_by_user_id,
     decided_at: clock(),
   };
 
@@ -237,6 +243,8 @@ async function processSellFill(args: {
   decisionBase: {
     target_id: string;
     fill_id: string;
+    billing_account_id: string;
+    created_by_user_id: string;
     decided_at: Date;
   };
   log: LoggerPort;
@@ -403,7 +411,13 @@ async function executePlacement(
   deps: MirrorCoordinatorDeps,
   fill: import("@cogni/market-provider").Fill,
   client_order_id: `0x${string}`,
-  decisionBase: { target_id: string; fill_id: string; decided_at: Date },
+  decisionBase: {
+    target_id: string;
+    fill_id: string;
+    billing_account_id: string;
+    created_by_user_id: string;
+    decided_at: Date;
+  },
   source: DecisionSource,
   intent: OrderIntent,
   reason: MirrorReason,
@@ -414,6 +428,8 @@ async function executePlacement(
 
   try {
     await deps.ledger.insertPending({
+      billing_account_id: deps.target.billing_account_id,
+      created_by_user_id: deps.target.created_by_user_id,
       target_id: deps.target.target_id,
       fill_id: fill.fill_id,
       observed_at: new Date(fill.observed_at),

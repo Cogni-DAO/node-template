@@ -68,9 +68,9 @@ RPC flakiness: `polygon-bor-rpc.publicnode.com` round-robins and occasionally re
 
 - `POLY_PROTO_WALLET_ADDRESS`, `POLY_PROTO_PRIVY_SIGNING_KEY`, `POLY_PROTO_PRIVY_APP_ID`, `POLY_PROTO_PRIVY_APP_SECRET`
 - `POLY_CLOB_API_KEY`, `POLY_CLOB_API_SECRET`, `POLY_CLOB_PASSPHRASE`
-- `COPY_TRADE_TARGET_WALLETS` — **comma-separated list** of 0x addresses. **Not in the overlay**; patched directly into the secret (scaffolding per handoff). Empty / unset ⇒ mirror skips boot + logs `poly.mirror.poll.skipped`. Each wallet spawns its own 30s poll; exactly one `startOrderReconciler` runs regardless of target count. Source-of-truth is `CopyTradeTargetSource` (`@/features/copy-trade/target-source`) — P2 swaps the env impl for a DB-backed one.
+- Tracked wallets are now **per-user rows in `poly_copy_trade_targets`** (RLS-scoped, migration 0029). Add via the dashboard `+` button or `POST /api/v1/poly/copy-trade/targets`; remove via the `−` button or `DELETE /api/v1/poly/copy-trade/targets/[id]`. Mirror poll uses `dbTargetSource.listAllActive()` — the ONE sanctioned BYPASSRLS read across tenants. Per docs/spec/poly-multi-tenant-auth.md.
 
-**Enable switch:** `UPDATE poly_copy_trade_config SET enabled=true WHERE singleton_id=1;` on the poly DB. Takes effect within one poll tick (≤30s).
+**Enable switch:** `UPDATE poly_copy_trade_config SET enabled=true WHERE billing_account_id='<billing-account-uuid>';` on the poly DB. Per-tenant in Phase A — flipping one tenant's row has zero effect on others. The system tenant (`COGNI_SYSTEM_BILLING_ACCOUNT_ID`) is seeded enabled=true by migration 0029 so the existing single-operator candidate-a flight keeps placing. Takes effect within one poll tick (≤30s).
 
 **Poll cadence:** 30s. Warmup backlog: 60s. Hardcoded in `copy-trade-mirror.job.ts`.
 

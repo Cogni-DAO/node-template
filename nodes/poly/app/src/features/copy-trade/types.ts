@@ -5,9 +5,9 @@
  * Module: `@features/copy-trade/types`
  * Purpose: Port-level types for the copy-trade decide/execute boundary — `TargetConfig`, `RuntimeState`, `MirrorDecision`, skip-reason enum.
  * Scope: Pure type surface consumed by `decide.ts`, `clob-executor.ts`, and the poll job. Does not contain logic, does not import adapters.
- * Invariants: MIRROR_REASON_BOUNDED — reason codes are an enum (bounded Prom label cardinality); DECISION_IS_PURE_INPUT — all runtime state is handed to decide() explicitly, never read at decide-time.
+ * Invariants: MIRROR_REASON_BOUNDED — reason codes are an enum (bounded Prom label cardinality); DECISION_IS_PURE_INPUT — all runtime state is handed to decide() explicitly, never read at decide-time; TARGET_CONFIG_CARRIES_TENANT — every TargetConfig carries `billing_account_id` (data) + `created_by_user_id` (RLS key) so downstream fills/decisions writes inherit tenant attribution.
  * Side-effects: none
- * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 CP4.1)
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md (Phase 1 CP4.1), docs/spec/poly-multi-tenant-auth.md
  * @public
  */
 
@@ -23,6 +23,10 @@ export const TargetConfigSchema = z.object({
   target_id: z.string().uuid(),
   /** The wallet being copied. 0x-prefixed 40-hex. */
   target_wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  /** Tenant data column. FK → billing_accounts.id. */
+  billing_account_id: z.string(),
+  /** RLS key column. FK → users.id — owner of this tracked target. */
+  created_by_user_id: z.string(),
   /** `live` → PolymarketClobAdapter; `paper` → paper adapter (P3). */
   mode: z.enum(["live", "paper"]),
   /** Notional USDC to mirror per fill (fixed size, not proportional). */
@@ -31,7 +35,7 @@ export const TargetConfigSchema = z.object({
   max_daily_usdc: z.number().positive(),
   /** Rate cap per rolling-1-hour window, intent-based. */
   max_fills_per_hour: z.number().int().positive(),
-  /** Global kill-switch state (read from `poly_copy_trade_config.enabled`). */
+  /** Per-tenant kill-switch state (read from `poly_copy_trade_config.enabled`). */
   enabled: z.boolean(),
 });
 export type TargetConfig = z.infer<typeof TargetConfigSchema>;
