@@ -80,7 +80,7 @@ The returned `repoSpecYaml` should be saved to `.cogni/repo-spec.yaml` in your r
 
 After on-chain formation, the new node needs infrastructure to run. These steps are **not automated yet** — each is a manual TODO:
 
-- [ ] **Add node overlay to deploy branches**: Create `infra/k8s/overlays/{env}/{node}/kustomization.yaml` on each `deploy/*` branch. `promote-and-deploy.yml` does not sync overlays from the app branch — deploy branches are the sole persistence layer for env-specific state. Copy an existing node's overlay and update `namePrefix`, `NodePort`, secret refs, and EndpointSlice IPs.
+- [ ] **Add node overlay on the app branch**: Create `infra/k8s/overlays/{env}/{node}/kustomization.yaml` on `main` (via PR). `promote-and-deploy.yml` rsyncs `infra/k8s/` from main to each `deploy/*` branch except `env-state.yaml`, so overlays propagate automatically. Copy an existing node's overlay and update `namePrefix`, `NodePort`, secret refs, and the kustomize `replacements:` block. Do NOT hand-edit overlays on deploy branches — invariant `INFRA_K8S_MAIN_DERIVED` (bug.0334) requires they track main. Seed `env-state.yaml` via `provision-test-vm.sh`.
 - [ ] **Add catalog entry**: Create `infra/catalog/{node}.yaml` on the app branch. Argo ApplicationSets discover nodes via catalog files — without this, Argo won't create an Application for the new node.
 - [ ] **Create k8s secrets**: `{node}-node-app-secrets` in each target namespace. `deploy-infra.sh` creates these from GitHub environment secrets, but a new node needs its own DB and credentials.
 - [ ] **Create node database**: Add the node's DB name to `COGNI_NODE_DBS` and run `db-provision`.

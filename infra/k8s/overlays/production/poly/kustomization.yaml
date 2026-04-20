@@ -7,6 +7,7 @@ namespace: cogni-production
 
 resources:
   - ../../../base/node-app
+  - env-state.yaml
 
 namePrefix: poly-
 
@@ -87,14 +88,10 @@ patches:
       - op: add
         path: /spec/template/spec/containers/0/command
         value: ["sh", "-c", "echo 'poly: no dedicated migrate image yet (task.0260)' && exit 0"]
-  # EndpointSlice IPs + service-name label fix (namePrefix doesn't update label values)
   - target:
       kind: EndpointSlice
       name: postgres-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-postgres-external"
@@ -103,18 +100,12 @@ patches:
       name: temporal-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-temporal-external"
   - target:
       kind: EndpointSlice
       name: litellm-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-litellm-external"
@@ -123,8 +114,32 @@ patches:
       name: redis-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["10.0.0.1"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "poly-redis-external"
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: env-state
+      fieldPath: data.VM_IP
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: postgres-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: temporal-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: litellm-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: redis-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0

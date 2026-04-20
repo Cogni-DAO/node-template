@@ -7,6 +7,7 @@ namespace: cogni-preview
 
 resources:
   - ../../../base/scheduler-worker
+  - env-state.yaml
 
 # Image digest — updated by promote-k8s-image.sh on each CI push.
 # Argo CD ApplicationSet points here; digest change → auto-sync.
@@ -28,39 +29,34 @@ patches:
         path: /data/IMAGE_DIGEST
         value: "staging-placeholder-scheduler-worker"
 
-  # EndpointSlice IPs — node InternalIP (provision script updates this per-VM)
-  - target:
-      kind: EndpointSlice
-      name: temporal-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-  - target:
-      kind: EndpointSlice
-      name: postgres-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-  - target:
-      kind: EndpointSlice
-      name: app-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-  - target:
-      kind: EndpointSlice
-      name: poly-app-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-  - target:
-      kind: EndpointSlice
-      name: resy-app-1
-    patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
+replacements:
+  - source:
+      kind: ConfigMap
+      name: env-state
+      fieldPath: data.VM_IP
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: temporal-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: postgres-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: app-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: poly-app-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: resy-app-1
+        fieldPaths:
+          - endpoints.0.addresses.0
