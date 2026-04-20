@@ -14,7 +14,7 @@ assignees: derekg1729
 credit:
 project:
 branch: fix/bug-0339-tenant-context-envelope-logs
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/962
 reviewer:
 revision: 0
 blocked_by:
