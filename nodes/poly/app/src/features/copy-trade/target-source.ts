@@ -38,6 +38,7 @@ import {
 } from "@cogni/poly-db-schema";
 import { and, eq, isNull } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { targetIdFromWallet } from "@/features/copy-trade/target-id";
 
 export type WalletAddress = `0x${string}`;
 
@@ -51,14 +52,26 @@ export interface EnumeratedTarget {
   targetWallet: WalletAddress;
 }
 
+/**
+ * One row returned to per-user list/CRUD callers. `id` is the DB row PK —
+ * the value DELETE accepts, distinct from the deterministic UUIDv5
+ * (`targetIdFromWallet`) used internally for `client_order_id` correlation
+ * in the fills ledger.
+ */
+export interface UserTargetRow {
+  id: string;
+  targetWallet: WalletAddress;
+}
+
 export interface CopyTradeTargetSource {
   /**
-   * Wallets the calling user is monitoring. Caller passes their session user
+   * Rows the calling user is monitoring. Caller passes their session user
    * UUID (branded `ActorId`). Implementation uses appDb under
    * `withTenantScope(actorId)` so RLS enforces tenant boundary at the DB layer.
    * Caller-visible order is preserved (`created_at` ascending — stable rendering).
+   * Returns `{ id, targetWallet }` so callers can route DELETE by the DB row PK.
    */
-  listForActor(actorId: ActorId): Promise<readonly WalletAddress[]>;
+  listForActor(actorId: ActorId): Promise<readonly UserTargetRow[]>;
 
   /**
    * **The ONE sanctioned cross-tenant read path.** Returns every active
@@ -86,16 +99,25 @@ export interface CopyTradeTargetSource {
 export function envTargetSource(
   wallets: readonly WalletAddress[]
 ): CopyTradeTargetSource {
-  const frozen = Object.freeze([...wallets]);
+  // Synthesize stable per-wallet UUIDs so the test impl behaves like the DB
+  // impl: each wallet has a single `id` consistent across listForActor calls.
+  // Use the same UUIDv5 helper the fills ledger uses; consumers (the dashboard)
+  // need a stable id to round-trip through DELETE.
+  const userRows: readonly UserTargetRow[] = Object.freeze(
+    wallets.map((targetWallet) => ({
+      id: targetIdFromWallet(targetWallet),
+      targetWallet,
+    }))
+  );
   const enumerated: readonly EnumeratedTarget[] = Object.freeze(
-    frozen.map((targetWallet) => ({
+    wallets.map((targetWallet) => ({
       billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
       createdByUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
       targetWallet,
     }))
   );
   return {
-    listForActor: async () => frozen,
+    listForActor: async () => userRows,
     listAllActive: async () => enumerated,
   };
 }
@@ -124,17 +146,21 @@ export function dbTargetSource(
   deps: DbTargetSourceDeps
 ): CopyTradeTargetSource {
   return {
-    async listForActor(actorId: ActorId): Promise<readonly WalletAddress[]> {
+    async listForActor(actorId: ActorId): Promise<readonly UserTargetRow[]> {
       const rows = await withTenantScope(deps.appDb, actorId, async (tx) =>
         tx
           .select({
+            id: polyCopyTradeTargets.id,
             target_wallet: polyCopyTradeTargets.targetWallet,
           })
           .from(polyCopyTradeTargets)
           .where(isNull(polyCopyTradeTargets.disabledAt))
           .orderBy(polyCopyTradeTargets.createdAt)
       );
-      return rows.map((r) => r.target_wallet as WalletAddress);
+      return rows.map((r) => ({
+        id: r.id,
+        targetWallet: r.target_wallet as WalletAddress,
+      }));
     },
 
     async listAllActive(): Promise<readonly EnumeratedTarget[]> {

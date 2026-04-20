@@ -16,8 +16,10 @@ import {
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
 } from "@cogni/node-shared";
 import { describe, expect, it } from "vitest";
+import { targetIdFromWallet } from "@/features/copy-trade/target-id";
 import {
   envTargetSource,
+  type UserTargetRow,
   type WalletAddress,
 } from "@/features/copy-trade/target-source";
 
@@ -31,17 +33,20 @@ describe("envTargetSource", () => {
     await expect(src.listForActor(ANY_ACTOR)).resolves.toEqual([]);
   });
 
-  it("listForActor preserves caller order", async () => {
+  it("listForActor preserves caller order and synthesizes stable per-wallet ids", async () => {
     const src = envTargetSource([W1, W2]);
-    await expect(src.listForActor(ANY_ACTOR)).resolves.toEqual([W1, W2]);
+    await expect(src.listForActor(ANY_ACTOR)).resolves.toEqual([
+      { id: targetIdFromWallet(W1), targetWallet: W1 },
+      { id: targetIdFromWallet(W2), targetWallet: W2 },
+    ]);
   });
 
   it("listForActor result is frozen — push throws", async () => {
     const src = envTargetSource([W1, W2]);
-    const first = (await src.listForActor(ANY_ACTOR)) as WalletAddress[];
-    expect(() => first.push(W1)).toThrow();
+    const first = (await src.listForActor(ANY_ACTOR)) as UserTargetRow[];
+    expect(() => first.push({ id: "x", targetWallet: W1 })).toThrow();
     const second = await src.listForActor(ANY_ACTOR);
-    expect(second).toEqual([W1, W2]);
+    expect(second).toHaveLength(2);
   });
 
   it("listAllActive attributes every wallet to the system tenant", async () => {

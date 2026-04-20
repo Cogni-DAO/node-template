@@ -12,9 +12,11 @@
  *        No business logic; no cross-tenant access.
  * Invariants:
  *   - TENANT_SCOPED: routes use `withTenantScope(appDb, sessionUser.id)`. RLS clamp.
- *   - TENANT_DEFENSE_IN_DEPTH: every row returned to the caller is verified against
- *     `expected.billingAccountId` after the RLS-scoped SELECT (mirrors
- *     `DrizzleConnectionBrokerAdapter.resolve()`).
+ *   - TENANT_DEFENSE_IN_DEPTH: write paths (POST) verify `row.billing_account_id ===
+ *     expected.billingAccountId` after the RLS-scoped INSERT/SELECT (mirrors
+ *     `DrizzleConnectionBrokerAdapter.resolve()`). Read paths (GET / DELETE) rely on
+ *     the RLS clamp alone — they project bare wallet strings or do RLS-scoped
+ *     UPDATE-by-id; there is no row-shaped tenant column to defense-check.
  *   - GLOBAL_KILL_SWITCH_PER_TENANT: `enabled` field reflects the tenant's
  *     `poly_copy_trade_config.enabled` row. Read once per request.
  * Side-effects: IO (Postgres reads + writes via appDb).
@@ -39,18 +41,17 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer, resolveAppDb } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { buildMirrorTargetConfig } from "@/bootstrap/jobs/copy-trade-mirror.job";
-import { createOrderLedger } from "@/features/trading";
 
 export const dynamic = "force-dynamic";
 
 /**
  * Hardcoded scaffolding caps the dashboard surfaces alongside each tracked
  * wallet. Operator-wide in Phase A — Phase B sources these per-tenant from
- * `poly_wallet_grants`. Kept inline here (not re-exported) so the route does
- * not import from the mirror-job shim.
+ * `poly_wallet_grants`. `id` is the DB row PK from `poly_copy_trade_targets`,
+ * exposed as the contract's `target_id` so DELETE can find it.
  */
 function buildTargetView(params: {
-  id?: string;
+  id: string;
   targetWallet: `0x${string}`;
   billingAccountId: string;
   createdByUserId: string;
@@ -63,7 +64,7 @@ function buildTargetView(params: {
     createdByUserId: params.createdByUserId,
   });
   return {
-    target_id: config.target_id,
+    target_id: params.id,
     target_wallet: params.targetWallet,
     mode: config.mode,
     mirror_usdc: config.mirror_usdc,
@@ -91,34 +92,35 @@ export const GET = wrapRouteHandlerWithLogging(
       .accountsForUser(toUserId(sessionUser.id))
       .getOrCreateBillingAccountForUser({ userId: sessionUser.id });
 
-    const wallets = await container.copyTradeTargetSource.listForActor(
+    const rows = await container.copyTradeTargetSource.listForActor(
       userActor(toUserId(sessionUser.id))
     );
 
-    if (wallets.length === 0) {
+    if (rows.length === 0) {
       return NextResponse.json(
         polyCopyTradeTargetsOperation.output.parse({ targets: [] })
       );
     }
 
     // Per-tenant kill-switch — single read for all rows in this response.
-    const ledger = createOrderLedger({
-      db: container.serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
-      logger: ctx.log,
-    });
+    // `snapshotState` is called against any one of the synthetic per-wallet
+    // target_ids; the kill-switch read is keyed on `billing_account_id`.
+    const firstRow = rows[0];
+    if (!firstRow) throw new Error("unreachable"); // guarded by rows.length === 0 above
     const firstConfig = buildMirrorTargetConfig({
-      targetWallet: wallets[0] as `0x${string}`,
+      targetWallet: firstRow.targetWallet,
       billingAccountId: account.id,
       createdByUserId: sessionUser.id,
     });
-    const snapshot = await ledger.snapshotState(
+    const snapshot = await container.orderLedger.snapshotState(
       firstConfig.target_id,
       account.id
     );
 
-    const targets = wallets.map((targetWallet) =>
+    const targets = rows.map((row) =>
       buildTargetView({
-        targetWallet,
+        id: row.id,
+        targetWallet: row.targetWallet,
         billingAccountId: account.id,
         createdByUserId: sessionUser.id,
         enabled: snapshot.enabled,
@@ -233,16 +235,15 @@ export const POST = wrapRouteHandlerWithLogging(
     }
 
     // Read kill-switch for the response shape.
-    const ledger = createOrderLedger({
-      db: container.serviceDb as unknown as import("drizzle-orm/node-postgres").NodePgDatabase,
-      logger: ctx.log,
-    });
     const config = buildMirrorTargetConfig({
       targetWallet,
       billingAccountId: account.id,
       createdByUserId: sessionUser.id,
     });
-    const snapshot = await ledger.snapshotState(config.target_id, account.id);
+    const snapshot = await container.orderLedger.snapshotState(
+      config.target_id,
+      account.id
+    );
 
     const target = buildTargetView({
       id: inserted.id,

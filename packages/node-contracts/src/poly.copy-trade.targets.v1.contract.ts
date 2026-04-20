@@ -24,7 +24,12 @@
 import { z } from "zod";
 
 const targetSchema = z.object({
-  /** UUIDv5 derived from `target_wallet` (deterministic across rows for the same wallet). */
+  /**
+   * `poly_copy_trade_targets.id` — DB row PK uuid. Pass this value to
+   * `DELETE /api/v1/poly/copy-trade/targets/:id`. Distinct from the deterministic
+   * UUIDv5 derived from `target_wallet` that lives in the fills ledger's
+   * `target_id` column for `client_order_id` correlation; that value is internal.
+   */
   target_id: z.string().uuid(),
   /** 0x-prefixed 40-hex — the wallet being watched / copied. */
   target_wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),

@@ -131,17 +131,33 @@ describe("dbTargetSource (component, RLS)", () => {
       >,
     });
 
-    const aWallets = await source.listForActor(
+    const aRows = await source.listForActor(
       userActor(toUserId(tenantA.userId))
     );
-    const bWallets = await source.listForActor(
+    const bRows = await source.listForActor(
       userActor(toUserId(tenantB.userId))
     );
+
+    const aWallets = aRows.map((r) => r.targetWallet);
+    const bWallets = bRows.map((r) => r.targetWallet);
 
     expect(aWallets).toEqual(expect.arrayContaining([TARGET_A, TARGET_SHARED]));
     expect(aWallets).not.toContain(TARGET_B);
     expect(bWallets).toEqual(expect.arrayContaining([TARGET_B, TARGET_SHARED]));
     expect(bWallets).not.toContain(TARGET_A);
+
+    // Each row carries a stable DB row uuid (not the UUIDv5-from-wallet).
+    // The two tenants' rows for TARGET_SHARED have distinct ids — same wallet,
+    // different per-tenant tracking record.
+    const aShared = aRows.find((r) => r.targetWallet === TARGET_SHARED);
+    const bShared = bRows.find((r) => r.targetWallet === TARGET_SHARED);
+    expect(aShared?.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+    expect(bShared?.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    );
+    expect(aShared?.id).not.toEqual(bShared?.id);
   });
 
   it("listAllActive enumerates both tenants with correct attribution", async () => {
