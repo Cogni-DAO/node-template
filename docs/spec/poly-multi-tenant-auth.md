@@ -10,7 +10,7 @@ read_when: Adding tables to the poly node, touching the copy-trade executor, wir
 implements: proj.poly-prediction-bot
 owner: derekg1729
 created: 2026-04-19
-verified: 2026-04-19
+verified: 2026-04-20
 tags: [poly, polymarket, copy-trading, auth, rls, multi-tenant, wallets, web3]
 ---
 
@@ -269,7 +269,8 @@ Per [database-rls](./database-rls.md) § `SERVICE_BYPASS_CONTAINED`: the service
 | `nodes/poly/app/src/features/copy-trade/target-source.ts`                               | `CopyTradeTargetSource` port with `listForActor` (RLS via appDb) + `listAllActive` (BYPASSRLS via serviceDb). `envTargetSource` and `dbTargetSource` impls.                                                            |
 | `nodes/poly/app/src/features/copy-trade/types.ts`                                       | `TargetConfig` carries `billing_account_id` + `created_by_user_id` so the coordinator inherits tenant on every fills/decisions write.                                                                                  |
 | `nodes/poly/app/src/features/trading/order-ledger.ts` + `.types.ts`                     | `OrderLedger` — `snapshotState(target_id, billing_account_id)` reads the per-tenant config; `insertPending` + `recordDecision` inputs extend `TenantBinding`.                                                          |
-| `nodes/poly/app/src/bootstrap/container.ts`                                             | Wires `dbTargetSource` in production, empty `envTargetSource` in test. Mirror poll iterates `listAllActive` → per-tenant attribution.                                                                                  |
+| `nodes/poly/app/src/bootstrap/container.ts`                                             | Wires `dbTargetSource`. Delegates mirror-poll lifecycle to the target-set reconciler (below).                                                                                                                          |
+| `nodes/poly/app/src/bootstrap/copy-trade-reconciler.ts`                                 | Target-set reconciler — ticks `listAllActive` every 30s, diffs against a `Map<(tenant, wallet), StopFn>`, starts/stops per-target polls. First tick immediate. Emits `poly.mirror.targets.reconcile.tick`.             |
 | `packages/node-contracts/src/poly.copy-trade.targets.v1.contract.ts`                    | Three operations: list + create + delete. All RLS-scoped.                                                                                                                                                              |
 | `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/route.ts`                        | `GET` (per-user list) + `POST` (create, with app-side tenant defense-in-depth).                                                                                                                                        |
 | `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/[id]/route.ts`                   | `DELETE /:id` — soft-delete via RLS-clamped UPDATE.                                                                                                                                                                    |

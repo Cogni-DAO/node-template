@@ -2,7 +2,7 @@
 id: bug.0338
 type: bug
 title: Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 20
 estimate: 2
@@ -14,7 +14,7 @@ assignees: derekg1729
 credit:
 project: proj.poly-copy-trading
 branch: feat/task-0318-phase-a
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/944
 reviewer:
 revision: 0
 blocked_by:
@@ -49,45 +49,10 @@ Loki `{pod=~"poly-node-app-647bc98466.*"} |~ "singleton_claim|poll.skipped|creat
 
 The pod knows about the targets (POST wrote them). The mirror poll doesn't know anything changed.
 
-## Gap 1 — POST doesn't create the tenant's kill-switch config row
+## Two composing gaps
 
-`nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/route.ts:172-189` writes to `poly_copy_trade_targets` only. No matching upsert into `poly_copy_trade_config`. When the enumerator runs:
-
-```sql
--- dbTargetSource.listAllActive (target-source.ts:140-170)
-SELECT ...
-FROM poly_copy_trade_targets
-INNER JOIN poly_copy_trade_config
-  ON config.billing_account_id = targets.billing_account_id
-WHERE targets.disabled_at IS NULL AND config.enabled = true
-```
-
-A fresh tenant has NO row in `poly_copy_trade_config` → inner-join drops all their targets → `listAllActive()` returns []. The POST response surfaces this correctly: `enabled: false` (from `snapshotState`'s fail-closed default when the config row is missing).
-
-**Fix:** POST route upserts `poly_copy_trade_config` for the tenant at creation time. Default behavior TBD:
-
-- **(a)** `enabled = false` — user must explicitly enable (new endpoint `PATCH /api/v1/poly/copy-trade/config {enabled:true}`). Safer but requires more UI.
-- **(b)** `enabled = true` — opt-out model; mirror starts as soon as any target is added. Matches the pre-flight env-driven behavior for the system tenant. Simpler demo path.
-
-Preferred: **(a)**, with the dashboard adding a toggle next to the pooled-execution disclaimer. But **(b)** for system-tenant config (migration 0030) so candidate-a demo works without UI.
-
-## Gap 2 — Enumerator runs once at container boot
-
-`nodes/poly/app/src/bootstrap/container.ts:720-773`:
-
-```ts
-const enumerated = await copyTradeTargetSource.listAllActive();  // once
-if (enumerated.length === 0) return;
-for (const enumeratedTarget of enumerated) {
-  startMirrorPoll({ target, source, ledger, ... });  // one setInterval per target
-}
-```
-
-Adding a target mid-flight does not produce a new `setInterval`. The only way a new target starts polling is a pod restart — which re-runs this code and re-enumerates.
-
-**Fix:** either (i) re-run `listAllActive()` every poll tick and diff against the current set of running polls, adding/removing `setInterval` handles, or (ii) the proper fix per [task.0332](./task.0332.poly-mirror-shared-poller.md) — one batched poller with a `TargetSubscriptionRouter` that subscribes/unsubscribes on add/remove.
-
-Gap 2 is partially covered by task.0332 already. This bug tightens the scope: task.0332 is "batched poller" (scale); gap 2 specifically is "any reload, ever" (correctness).
+- **Gap 1 — POST doesn't create the tenant's kill-switch config row.** `dbTargetSource.listAllActive` inner-joins targets × `poly_copy_trade_config WHERE enabled = true`. A freshly-POSTed tenant has no config row, so the join drops their targets. POST response surfaces this as `enabled: false` (snapshotState's fail-closed default).
+- **Gap 2 — enumerator runs once at container boot.** `container.ts` called `listAllActive()` once, for-looped `startMirrorPoll` per wallet, and never re-read. Adding a target mid-flight required a pod restart. Orthogonal to task.0332 (scale): this is the "any reload, ever" correctness gap.
 
 ## Design
 
@@ -137,39 +102,17 @@ A user POSTs a tracked wallet through their own account → within one mirror-po
 - Modify: `docs/spec/poly-multi-tenant-auth.md` — add `CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST` + `POLL_RECONCILES_PER_TICK` invariants; add one Decisions row; add an acceptance check for the new-user end-to-end flow.
 - Modify: `work/items/_index.md` — reflect `needs_implement` status.
 
-### Checkpoints (for /implement)
+### Shipped (commit `ed52f9225`, stacked on PR #944)
 
-**Checkpoint 1 — POST implicitly enables tenant config** ✅
+- `targets/route.ts` — POST upserts `polyCopyTradeConfig {enabled:true}` (onConflictDoNothing) inside the same `withTenantScope` tx as the target INSERT. Pre-disabled rows preserved.
+- `bootstrap/copy-trade-reconciler.ts` — new module. First-tick immediate, `setInterval(30_000)`, `Map<"${billing}:${wallet.lower()}", StopFn>`, starts/stops per diff. Self-healing on `listAllActive` throw. Idempotent stop.
+- `container.ts` — delegates mirror-poll lifecycle to the reconciler; stores stop handle on `_targetsReconcilerStop`, cleared by `resetContainer()`. Ledger reconciler (`startOrderReconciler`) still runs once at boot.
+- Events (avoid collision with ledger reconciler): `poly.mirror.targets.reconcile.tick` + `_tick_error` + `_stopped`.
+- Tests: 2 new component cases in `targets-route.int.test.ts` (fresh-tenant POST, pre-disabled preservation). 6 new unit cases in `copy-trade-reconciler.test.ts` (first-tick-immediate, `[] → [A] → [A,B] → [B] → []` diff, key stability, case-variance dedupe, throw recovery, idempotent stop).
 
-- Milestone: a freshly-registered tenant can POST a target and GET returns `enabled:true` without any ops action; a pre-disabled tenant's config is not overwritten.
-- Invariants: `CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST`, `TENANT_SCOPED_WRITES_INTACT`, `NO_NEW_MIGRATION`.
-- Todos:
-  - [x] POST handler upserts `polyCopyTradeConfig {enabled:true}` (onConflictDoNothing) inside the same `withTenantScope` tx.
-  - [x] POST route file header Invariants block updated.
-  - [x] `targets-route.int.test.ts` extended: fresh-tenant POST asserts config row + enabled=true; pre-disabled tenant POST asserts row unchanged.
-- Validation: 4 tests pass (`pnpm exec vitest run --config nodes/poly/app/vitest.component.config.mts nodes/poly/app/tests/component/copy-trade/targets-route.int.test.ts`).
+### Candidate-a validation (post-flight)
 
-**Checkpoint 2 — Mirror reconciler replaces boot-time enumerator** ✅
-
-- Milestone: pod detects new/removed targets within one tick cadence without restart.
-- Invariants: `POLL_RECONCILES_PER_TICK`, `SIMPLE_SOLUTION`, `ARCHITECTURE_ALIGNMENT`.
-- Todos:
-  - [x] New `nodes/poly/app/src/bootstrap/copy-trade-reconciler.ts` — first-tick-immediate + `setInterval(30_000)`, keys running polls by `` `${billingAccountId}:${targetWallet.toLowerCase()}` ``, starts/stops per diff. `KEY_STABILITY`, `FIRST_TICK_IMMEDIATE`, `SELF_HEALING` invariants in the module header.
-  - [x] `container.ts` wires the reconciler, stores stop handle on `_targetsReconcilerStop`, cleaned up in `resetContainer()`. Ledger reconciler (`startOrderReconciler`) runs once at boot as before.
-  - [x] New events (avoiding collision with existing ledger-reconciler names): `POLY_MIRROR_TARGETS_RECONCILE_TICK` = `poly.mirror.targets.reconcile.tick` (plus `_TICK_ERROR` + `_STOPPED`). Updates the spec invariant wording accordingly.
-  - [x] Unit test `copy-trade-reconciler.test.ts` — 6 cases including `[] → [A] → [A,B] → [B] → []` sequence, key stability across ticks, wallet case-variance dedupe, `listAllActive` throw recovery, idempotent stop.
-- Validation: `pnpm --filter @cogni/poly-app exec vitest run tests/unit/bootstrap/copy-trade-reconciler.test.ts` (6 passed). `pnpm check` clean (full gate, ~60s packages-build + all lint/typecheck/tests).
-
-**Checkpoint 3 — Candidate-a live validation**
-
-- Milestone: real end-user flow proven on candidate-a with Loki evidence, `deploy_verified: true`.
-- Invariants: `CONFIG_ROW_AUTO_ENABLED_ON_FIRST_POST`, `POLL_RECONCILES_PER_TICK`.
-- Todos:
-  - [ ] `/closeout` → PR against `main` → flight to candidate-a.
-  - [ ] As a registered agent (my tenant, not system tenant): POST a `target_wallet`.
-  - [ ] Loki query `{namespace="cogni-candidate-a"} |~ "poly.mirror.poll.singleton_claim"` within 60s of POST — expect ≥1 hit for the POSTed wallet. No intervening pod boot event.
-  - [ ] Append deployed-SHA + Loki query URL to this item's `## Validation` block.
-  - [ ] Set `deploy_verified: true`.
+`deploy_verified: true` requires: as a registered agent (not system tenant), POST a `target_wallet` → within ≤60s Loki shows `poly.mirror.poll.singleton_claim` for that wallet at the deployed SHA with no intervening pod boot; `poly.mirror.targets.reconcile.tick` ticks on ~30s cadence.
 
 ## Validation
 
