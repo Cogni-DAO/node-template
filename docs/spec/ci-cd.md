@@ -8,7 +8,7 @@ summary: Trunk-based CI/CD where PRs prove safety in fixed candidate slots befor
 read_when: Understanding deployment pipelines, release workflow, or CI configuration
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-04-19
+verified: 2026-04-20
 tags: []
 ---
 
@@ -43,6 +43,7 @@ This document supersedes the old canary-first branch model. The branch model, de
 14. **Skipped verification is not success** (bug.0328). When a downstream job (`release-slot`, `lock-preview-on-success`) consumes the result of a verification job that was gated `if: promoted_apps != ''` per Axiom 11, a `skipped` result is only a valid green signal when `promoted_apps == ''`. A skipped verification combined with a non-empty `promoted_apps` is a **contradiction** (the promote job pushed real digests but verification never ran, e.g. because `promote-build-payload.sh` aborted mid-run and left `$GITHUB_OUTPUT` empty), and must hard-fail the workflow. The job-level skip gate from Axiom 11 prevents _silent step-skip_ success; this axiom prevents _silent job-skip_ success at the consumer. Defense: emit `promoted_apps` incrementally + via `trap EXIT` so the signal survives abort, AND have consumers treat skip-with-promotions as failure.
 15. **Argo "Healthy" is necessary but not sufficient** (bug.0326). `status.health.status == Healthy` fires as soon as enough pods are Ready — including pods from the **old** ReplicaSet during a rolling update. `/readyz` served from those pods returns the prior `BUILD_SHA`, so downstream `verify-buildsha.sh` fails on a green-up-stream flight. `wait-for-argocd.sh` therefore runs `kubectl rollout status deployment/<name>` per promoted app **after** the Healthy check; `rollout status` only returns 0 when the new ReplicaSet is fully available AND the old pods are torn down. That is the authoritative "new pods are live" signal.
 16. **Image target catalog is single-sourced** (bug.0328 architectural follow-up). `scripts/ci/lib/image-tags.sh` defines `ALL_TARGETS`, `NODE_TARGETS`, and `tag_suffix_for_target()` once. Every producer (`build-and-push-images.sh`), discoverer (`resolve-pr-build-images.sh`), dispatcher (`detect-affected.sh`), re-tagger (`flight-preview.yml` retag step), and promoter (`promote-and-deploy.yml` resolve + promote steps) sources that lib instead of maintaining its own copy. Adding a new node `mynode` is a single-file edit — workflows pick it up on the next run. Duplicate target lists across workflows are a code-smell of this axiom.
+17. **`INFRA_K8S_MAIN_DERIVED`** (bug.0334). Every file under `infra/k8s/` on a deploy branch is byte-identical to `main` at the promoted SHA, OR is the per-overlay `env-state.yaml` (the VM-truth file written by provision). The promote workflow does a two-pass rsync: (1) `--ignore-existing` seed pass for `env-state.yaml` (bootstraps new overlays without clobbering VM-written IPs); (2) `--delete --exclude='env-state.yaml'` authoritative sync for everything else. Image digests are mutated by `promote-k8s-image.sh` after rsync — the only other deploy-branch-local write. Kustomize `replacements:` reads `env-state.yaml.data.VM_IP` and injects it into every EndpointSlice `/endpoints/0/addresses/0`, so VM IPs never live inline in `kustomization.yaml`. Violation: any non-digest, non-env-state diff between `main` and `deploy/<env>` after a promote.
 
 ## Branch And Deploy-State Model
 
@@ -250,7 +251,7 @@ Every deploy branch carries `.promote-state/source-sha-by-app.json` — a merge-
 ## Deploy Branch Rules
 
 - Deploy branches are long-lived, machine-written environment-state refs.
-- They may contain image digests, overlay patches, and other deployment facts such as environment endpoints.
+- `infra/k8s/` tracks `main` under invariant `INFRA_K8S_MAIN_DERIVED` (Axiom 17). Only image digests (mutated by `promote-k8s-image.sh`) and `env-state.yaml` files (written by provision) are allowed to differ from main. All other overlay content — ConfigMap patches, Service patches, resource lists, `replacements:` blocks — is rsynced from main every promote.
 - They are never merged back into app branches.
 - PRs are not required for routine automated deploy-state updates; git history is the audit trail.
 - Push access on `deploy/*` should be restricted to the CI app or bot, with incident-only human bypass if needed.

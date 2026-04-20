@@ -181,14 +181,24 @@ jobs:
           token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
           path: deploy-branch
 
-      - name: Sync base and catalog from app branch
+      - name: Sync infra/k8s + catalog from app branch
         run: |
-          # Base templates and catalog may change on the app branch.
-          # Overlays are NOT synced — they contain env-specific state (IPs)
-          # that provision wrote directly to the deploy branch.
-          # NOTE: New node overlay directories must be added to the deploy branch
-          # manually when a node is added (see docs/guides/node-formation-guide.md).
-          rsync -a --delete app-src/infra/k8s/base/ deploy-branch/infra/k8s/base/
+          # INFRA_K8S_MAIN_DERIVED (bug.0334): every file under infra/k8s/ on a
+          # deploy branch must be byte-identical to main at the promoted SHA, OR
+          # be an env-state.yaml (the per-overlay VM-truth file written by
+          # provision). Two passes:
+          #   (1) Bootstrap-only: seed env-state.yaml from main if missing
+          #       (first promote after bug.0334 ships, or when a new overlay
+          #       is added). --ignore-existing preserves VM IPs written by
+          #       provision on subsequent runs.
+          #   (2) Authoritative sync: rewrite everything else under infra/k8s/
+          #       from main, preserving env-state.yaml via --exclude.
+          # Digest lines are mutated in the next step by promote-k8s-image.sh.
+          rsync -a --ignore-existing \
+            --include='*/' --include='env-state.yaml' --exclude='*' \
+            app-src/infra/k8s/ deploy-branch/infra/k8s/
+          rsync -a --delete --exclude='env-state.yaml' \
+            app-src/infra/k8s/ deploy-branch/infra/k8s/
           rsync -a --delete app-src/infra/catalog/ deploy-branch/infra/catalog/
 
       - name: Update overlay digests on deploy branch

@@ -7,6 +7,7 @@ namespace: cogni-canary
 
 resources:
   - ../../../base/node-app
+  - env-state.yaml
 
 namePrefix: operator-
 
@@ -78,17 +79,10 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
         value: "operator-node-app-secrets"
-  # EndpointSlice IPs + service-name label fix.
-  # namePrefix renames Services but NOT the kubernetes.io/service-name label
-  # inside EndpointSlices. Without this fix, DNS can't associate the
-  # EndpointSlice with the prefixed Service → NXDOMAIN.
   - target:
       kind: EndpointSlice
       name: postgres-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-postgres-external"
@@ -97,18 +91,12 @@ patches:
       name: temporal-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-temporal-external"
   - target:
       kind: EndpointSlice
       name: litellm-external-1
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
       - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-litellm-external"
@@ -117,8 +105,32 @@ patches:
       name: redis-external-1
     patch: |
       - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.109.222"]
-      - op: replace
         path: /metadata/labels/kubernetes.io~1service-name
         value: "operator-redis-external"
+
+replacements:
+  - source:
+      kind: ConfigMap
+      name: env-state
+      fieldPath: data.VM_IP
+    targets:
+      - select:
+          kind: EndpointSlice
+          name: postgres-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: temporal-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: litellm-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
+      - select:
+          kind: EndpointSlice
+          name: redis-external-1
+        fieldPaths:
+          - endpoints.0.addresses.0
