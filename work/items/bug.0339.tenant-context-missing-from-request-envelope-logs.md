@@ -15,6 +15,7 @@ credit:
 project:
 branch: fix/bug-0339-tenant-context-envelope-logs
 pr: https://github.com/Cogni-DAO/node-template/pull/962
+deploy_verified: true
 reviewer:
 revision: 0
 blocked_by:
