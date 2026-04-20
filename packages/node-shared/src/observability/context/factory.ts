@@ -57,6 +57,7 @@ export function createRequestContext(
       traceId: meta.traceId,
       route: meta.routeId,
       method: request.method,
+      userId: meta.session?.id,
     }),
     reqId,
     traceId: meta.traceId,

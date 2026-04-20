@@ -2,7 +2,7 @@
 id: bug.0339
 type: bug
 title: Tenant context missing from request-envelope logs — Loki can't slice by user/billing
-status: needs_implement
+status: needs_closeout
 priority: 2
 rank: 30
 estimate: 1
