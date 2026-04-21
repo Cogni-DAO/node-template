@@ -7,7 +7,7 @@ priority: 0
 rank: 1
 estimate: 5
 summary: "Main's `infra/k8s/overlays/*/<service>/kustomization.yaml` digest fields are hand-maintained seeds. Every flight runs `rsync -a --delete` of main's overlay onto the deploy branch, then `promote-k8s-image.sh` bumps digests only for apps in the affected-targets set (`scripts/ci/detect-affected.sh`). Services not touched by the flight's PR inherit main's seed — if the seed is stale, the deploy branch silently reverts to a pre-feature image on every unrelated flight. Produced #970 (poly-doltgres migrator with missing script → ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND), #971 (scheduler-worker pre-multi-queue → 30–40s silent chat hang on preview + candidate-a), #972 (operator + resy pre-BUILD_SHA → /readyz.version=0 → verify-buildsha fails every flight). Manual per-service bumps are sunk cost on a dying pattern and don't scale past v0."
-outcome: "Git is eventually-consistent with GHCR. Argo CD Image Updater watches the `deploy/preview` Applications for new `preview-*` image tags and commits fresh digests back to `main`. Unrelated flights inherit a current seed and never regress a service's digest. `scripts/ci/promote-k8s-image.sh` + hand-bumps disappear from the routine flow. Zero new bespoke GitHub Actions workflows."
+outcome: "Git is eventually-consistent with GHCR. Argo CD Image Updater (pinned v0.15.2 — last version tested against Argo CD v2.13.x) watches the `deploy/preview` Applications for new `preview-*` image tags and commits fresh digests back to `main` under the existing `Cogni-1729` PAT identity used by every other automated commit in this repo. Unrelated flights inherit a current seed and never regress a service's digest. `scripts/ci/promote-k8s-image.sh` + hand-bumps disappear from the routine flow. Zero new bespoke GitHub Actions workflows, zero new GitHub App registrations, zero new branch-protection carve-outs."
 spec_refs:
   - ci-cd
 assignees: derekg1729
@@ -50,15 +50,16 @@ A dedicated controller makes `main`'s overlay digest seed **eventually-consisten
 
 ### Approach
 
-**Solution**: Install **Argo CD Image Updater** (argoproj-labs, Apache-2.0) into the existing `argocd` namespace. Annotate each preview Application (generated from `preview-applicationset.yaml`) with an image-list + `write-back-method: git` + `git-branch: main`. The controller polls GHCR, finds new `preview-{sha}` digests, and commits digest updates back to `main`'s overlay kustomization files. Commits authored by a dedicated `cogni-image-updater[bot]` identity so `git blame` makes drift incidents traceable.
+**Solution**: Install **Argo CD Image Updater v0.15.2** (argoproj-labs, Apache-2.0) into the existing `argocd` namespace. Annotate each preview Application (generated from `preview-applicationset.yaml`) with an image-list + `write-back-method: git` + `git-branch: main`. The controller polls GHCR, finds new `preview-{sha}` digests, and commits digest updates back to `main`'s overlay kustomization files, authenticated as the existing **`Cogni-1729`** bot account via the already-provisioned `ACTIONS_AUTOMATION_BOT_PAT`. Provenance is established via stable commit-message prefix (`chore(deps): argocd-image-updater ...`) — the same mechanism `promote-k8s-image.sh`, `flight-preview.yml`, and `promote-to-production.yml` commits already rely on.
 
 **Reuses**:
 
-- **Argo CD Image Updater v0.18.x (annotation-based)** — 2K-star argoproj-labs project, latest Helm chart `1.1.5` published 2026-04-08, active maintainers (chengfang, dkarpele), aligned with our already-installed Argo CD v2.13.4 via the legacy `latest-annotation-based` image tag. We pin to a specific image digest for reproducibility.
+- **Argo CD Image Updater v0.15.2** — last upstream release explicitly tested against Argo CD v2.13.4 (`chore(deps): bump argo-cd from 2.13.2 to 2.13.4`, release 0.15.1 PR#925). We stay on this pin until the Argo CD server itself is upgraded to v2.14+ / v3.x, at which point an Image Updater upgrade can be earned (tracked as a follow-up, not a prerequisite).
+- **`ACTIONS_AUTOMATION_BOT_PAT` + `Cogni-1729` identity** — already authoring every automated commit on `main` and `deploy/*` today (`release.yml`, `promote-to-production.yml`, `promote-and-deploy.yml`, `flight-preview.yml`). Image Updater's git write-back is the same trust envelope as those workflows. No new GitHub App, no new branch-protection carve-out.
 - **Existing `preview-applicationset.yaml`** — annotated in place; no new AppSet.
 - **Existing `infra/k8s/argocd/kustomization.yaml`** — the Image Updater install manifest slots in alongside `install.yaml` and `ksops-cmp.yaml`.
 - **Existing per-service `kustomization.yaml` `images:` blocks** — controller writes the `digest:` field using the same syntax `promote-k8s-image.sh` already edits; no schema change.
-- **Existing GHCR pull credentials** on Argo CD repo-server — reused for registry access.
+- **Existing ksops CMP (`ksops-cmp.yaml`)** — the git-credentials secret and GHCR registry secret are delivered through the established SOPS/age encrypted-at-rest pattern. Same secret-management story as every other in-cluster secret today.
 
 ### Why watch `deploy/preview`, not `deploy/candidate-a`
 
@@ -92,11 +93,12 @@ Rsync (`INFRA_K8S_MAIN_DERIVED`, Axiom 17) still wins on deploy branches: `main 
 
 - [ ] **NO_BESPOKE_DIGEST_WORKFLOW** — solution is adoption of the existing Image Updater project, not a new `.github/workflows/*.yml` that commits digests. Fail if the PR adds a workflow whose purpose is "commit digest updates to main".
 - [ ] **DIGEST_IMMUTABILITY_PRESERVED** — Image Updater is configured with `update-strategy: digest` (never `latest`). `IMAGE_IMMUTABILITY` axiom (`docs/spec/ci-cd.md`) untouched. Verify: the controller's `allow-tags` regex matches only `^preview-[0-9a-f]{40}$` (post-merge immutable tag class), never `latest` / `stable` / floating tags.
-- [ ] **COMMIT_PROVENANCE_VISIBLE** — every digest-update commit on `main` is authored by the dedicated `cogni-image-updater[bot]` identity (distinct from `github-actions[bot]`) and its commit message includes the source image tag. `git log --author=cogni-image-updater -- infra/k8s/overlays/` returns a clean audit trail.
+- [ ] **COMMIT_PROVENANCE_VIA_MESSAGE_PREFIX** — every digest-update commit on `main` uses commit-message prefix `chore(deps): argocd-image-updater` (configured via Image Updater's `--commit-message-template` flag / `git.commit-message-template` ConfigMap key) so `git log --grep='argocd-image-updater' -- infra/k8s/overlays/` is the audit filter. The commit author is `Cogni-1729` — same as every other automated commit — intentionally consistent with the existing PAT-based automation pattern (`release.yml`, `promote-to-production.yml`, `promote-and-deploy.yml`, `flight-preview.yml`).
 - [ ] **SCOPE_IS_MAIN_ONLY** — Image Updater writes to `main` only. Deploy branch digest promotion (`promote-k8s-image.sh` during candidate/preview/production flights) stays as-is. Verify: no Image Updater annotation points `git-branch` at a `deploy/*` branch.
 - [ ] **PRODUCTION_NOT_AUTO_UPDATED** — production flights require explicit human dispatch via `promote-to-production.yml`. The controller watches only `deploy/preview`'s Applications; annotations on `production-applicationset.yaml` are **not** added. Verify: `infra/k8s/argocd/production-applicationset.yaml` has zero `argocd-image-updater.argoproj.io/*` annotations.
-- [ ] **SIMPLE_SOLUTION** — leverages the upstream install manifest as a remote Kustomize resource (same pattern as `install.yaml: https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.4/manifests/install.yaml`). No forking, no vendoring, no custom Helm values file beyond a minimal patch for registry + git credentials.
-- [ ] **ARCHITECTURE_ALIGNMENT** — installs into the existing `argocd` namespace via the existing `infra/k8s/argocd/kustomization.yaml`. Credentials use existing GHCR pull-secret reference. No new namespace, no new secret management pattern.
+- [ ] **NO_NEW_GITHUB_APP** — reuses the existing `Cogni-1729` PAT (`ACTIONS_AUTOMATION_BOT_PAT`). No GitHub App registration, no branch-protection bypass carve-out, no new trust envelope. Verify: PR adds zero references to new App IDs / private keys / installation IDs.
+- [ ] **SIMPLE_SOLUTION** — leverages the upstream install manifest as a remote Kustomize resource (same pattern as `install.yaml: https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.4/manifests/install.yaml`). No forking, no vendoring, no Helm.
+- [ ] **ARCHITECTURE_ALIGNMENT** — installs into the existing `argocd` namespace via the existing `infra/k8s/argocd/kustomization.yaml`. Credentials delivered via existing ksops CMP pattern. No new namespace, no new secret-management pattern.
 
 ### Wiring (concrete)
 
@@ -115,7 +117,8 @@ Argo CD Image Updater (continuous, every 2m default poll)
         write-back-method: git
         git-branch: main                                 ← ✅ writes to main, not deploy/preview
         write-back-target: kustomization:./infra/k8s/overlays/<env>/<app>/
-        commit-author: cogni-image-updater[bot]          ← ✅ provenance
+        commit author: Cogni-1729 (reuses ACTIONS_AUTOMATION_BOT_PAT)  ← ✅ no new App
+        commit message prefix: chore(deps): argocd-image-updater ...  ← ✅ provenance via grep
         → updates digest: "sha256:..." in all 3 env overlays on main
 
 next flight (candidate-a or preview)
@@ -127,10 +130,11 @@ next flight (candidate-a or preview)
 
 **Create:**
 
-- `infra/k8s/argocd/image-updater/kustomization.yaml` — references upstream install manifest pinned by version (e.g. `https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/v0.18.0/manifests/install.yaml`) plus local patches.
-- `infra/k8s/argocd/image-updater/registry-secret-patch.yaml` — patches the controller's ConfigMap to mount GHCR pull credentials for registry scanning (reuses existing `ghcr-pull-secret` reference).
-- `infra/k8s/argocd/image-updater/git-credentials-patch.yaml` — mounts a secret containing a GitHub App private key (or PAT) with push access to `main` for `infra/k8s/overlays/**`. Secret itself delivered by the existing ksops CMP (same pattern as every other cluster secret today).
-- `docs/runbooks/image-updater-bootstrap.md` — one-page runbook: generating the GitHub App, installing its private key via ksops, validating the first auto-commit, rolling back if the controller misbehaves.
+- `infra/k8s/argocd/image-updater/kustomization.yaml` — references upstream install manifest pinned at `https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/v0.15.2/manifests/install.yaml` plus local patches.
+- `infra/k8s/argocd/image-updater/config-patch.yaml` — patches the `argocd-image-updater-config` ConfigMap: sets the `registries:` entry for `ghcr.io` (credentials reference the ksops-decrypted `argocd-image-updater-ghcr` Secret in the `argocd` namespace) and sets `git.commit-message-template` to prefix commits with `chore(deps): argocd-image-updater`.
+- `infra/k8s/argocd/image-updater/ghcr-secret.enc.yaml` — ksops-encrypted `argocd-image-updater-ghcr` Secret holding `username: Cogni-1729` + `password: <GHCR_DEPLOY_TOKEN>` (reuses the existing `GHCR_DEPLOY_TOKEN` secret value already delivered via setup-secrets; this is a new namespace-local representation of the same credential, encrypted via ksops). Distinct from node-app image-pull secrets because the controller scans a different API surface (registry metadata, not kubelet pulls).
+- `infra/k8s/argocd/image-updater/git-creds-secret.enc.yaml` — ksops-encrypted `argocd-image-updater-git-creds` Secret holding `username: Cogni-1729` + `password: <ACTIONS_AUTOMATION_BOT_PAT>`. Reuses the existing PAT value — no new credential minted.
+- `docs/runbooks/image-updater-bootstrap.md` — one-page runbook: encrypting the two secrets via ksops, validating the first auto-commit on `main`, rolling back (removing AppSet annotations + scaling controller to 0) if the controller misbehaves, PAT rotation procedure (re-encrypt both secrets + `kubectl rollout restart deployment/argocd-image-updater -n argocd`).
 
 **Modify:**
 
@@ -150,20 +154,25 @@ next flight (candidate-a or preview)
 1. On `main`, capture current digest for any one service (e.g. `resy` in `infra/k8s/overlays/preview/resy/kustomization.yaml`): `D0`.
 2. Merge a no-op change that touches `nodes/resy/**` (triggers `pr-build` → `flight-preview` → new `preview-{mergeSHA}` tag). Capture new GHCR digest: `D1`.
 3. Wait ≤ 5 minutes.
-4. Expect: a bot-authored commit on `main` has landed with author `cogni-image-updater[bot]`, touching all three overlay files (`candidate-a/resy`, `preview/resy`, `production/resy`) and setting `digest: "D1"`.
+4. Expect: a new commit on `main` authored by `Cogni-1729` with message prefix `chore(deps): argocd-image-updater`, touching all three overlay files (`candidate-a/resy`, `preview/resy`, `production/resy`) and setting `digest: "D1"`.
 5. Trigger a `candidate-flight.yml` for an **unrelated** PR (e.g. one touching only `nodes/poly/**`). After flight success, inspect `deploy/candidate-a:infra/k8s/overlays/candidate-a/resy/kustomization.yaml`: resy's digest must equal `D1` (fresh seed inherited), not `D0` (the stale pre-Image-Updater value).
 
 **observability:**
 
-- `{app="argocd-image-updater"}` in Loki shows `level=info msg="Successfully updated image"` for each processed Application, with the target digest in the payload.
-- `git log --author="cogni-image-updater" --since="1 hour ago" -- infra/k8s/overlays/ infra/k8s/overlays/preview/resy/kustomization.yaml` returns at least one commit for the resy change.
+- `{namespace="argocd",pod=~"argocd-image-updater-.*"}` in Loki shows `level=info msg="Successfully updated image"` for each processed Application, with the target digest in the payload.
+- `git log --grep='chore(deps): argocd-image-updater' --since="1 hour ago" -- infra/k8s/overlays/` returns at least one commit covering the resy update.
 - `argocd app get candidate-a-resy -o json | jq '.status.summary.images'` at rest matches the latest `main` seed for resy.
 
 ## Blocked by / prerequisites
 
-- **GitHub App registration** for the `cogni-image-updater[bot]` identity with `contents: write` scope on the repo. Write via ksops-encrypted secret in-cluster, not via GitHub Actions secrets (which are CI-only).
-- **Branch protection carve-out on `main`** — the bot must be able to push commits touching `infra/k8s/overlays/**/kustomization.yaml` (digest fields only) without requiring PR review. Simplest path: GitHub ruleset bypass for the App identity, scoped to that path. Alternative (higher-latency, lower-risk): Image Updater's `write-back-method: git-pull-request` mode + a narrow auto-merge workflow. MVP picks direct-commit; the PR-mode fallback is noted in the runbook if branch protection ends up unworkable.
-- **Argo CD v2.13.4 ↔ Image Updater v0.18.x compatibility smoke test** — upstream v0.18.0 was built against Argo CD v3.x but the annotation-based API surface used here is stable back to Argo CD v2.10+. First install: watch controller logs for 5 minutes to confirm it reconciles the existing preview Applications without API errors. If incompatible, pin to v0.15.2 (last known v2.13-compatible release) as the fallback.
+- **Ksops secret authoring access** — the implementer needs SOPS/age private-key material to encrypt `ghcr-secret.enc.yaml` and `git-creds-secret.enc.yaml` locally before commit. Same requirement every other encrypted cluster secret has today; no new process.
+- **GHCR scan via `GHCR_DEPLOY_TOKEN`** — the existing org-level PAT already has `read:packages` scope and is what every deploy pipeline uses to pull images. Reused verbatim for Image Updater's registry metadata scanning; no new credential.
+
+_Intentionally not prerequisites_ (reconciled during `/review-design`):
+
+- ~~New GitHub App registration~~ — reuses `ACTIONS_AUTOMATION_BOT_PAT` + `Cogni-1729`, the existing PAT-based automation identity. See `proj.vcs-integration.md` L70 — that "separate apps per blast radius" constraint governs GitHub **Apps**; PAT reuse is consistent with every other automated commit path in this repo.
+- ~~Branch-protection carve-out on `main`~~ — the PAT already has push access to `main` (used by `release.yml`, `promote-and-deploy.yml`, `flight-preview.yml`). Same trust envelope, no new bypass rule.
+- ~~Argo CD v2.14+ compatibility smoke test~~ — we pin v0.15.2, which was tested against Argo CD v2.13.4 upstream. Upgrading Image Updater to v0.18.x or v1.x is a follow-up tied to the Argo CD server upgrade, not a precondition for this MVP.
 
 ## Related
 
