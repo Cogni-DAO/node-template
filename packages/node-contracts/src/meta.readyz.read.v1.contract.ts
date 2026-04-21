@@ -21,7 +21,8 @@ export const readyzStatusSchema = z.enum(["healthy"]);
 export const metaReadyzOutputSchema = z.object({
   status: readyzStatusSchema,
   timestamp: z.string(), // RFC3339/ISO-8601 format
-  version: z.string().optional(),
+  buildSha: z.string(), // CANONICAL — 40-char hex (per BUILD_SHA_IN_METRICS invariant)
+  version: z.string().optional(), // DEPRECATED — alias for buildSha, remove after deprecation cycle
 });
 
 // Protocol-neutral operation metadata.

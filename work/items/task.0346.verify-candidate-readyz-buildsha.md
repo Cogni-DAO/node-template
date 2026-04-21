@@ -2,7 +2,7 @@
 id: task.0346
 type: task
 title: "verify-candidate reads /api/metrics build_info, retires Loki scrape"
-status: needs_triage
+status: needs_implement
 priority: 2
 rank: 50
 estimate: 1
@@ -18,7 +18,7 @@ branch: feat/task-0346-metrics-buildsha
 pr:
 reviewer:
 revision: 0
-blocked_by: [task.0345]
+blocked_by: []
 deploy_verified: false
 created: 2026-04-20
 updated: 2026-04-21

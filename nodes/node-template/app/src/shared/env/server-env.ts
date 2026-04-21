@@ -62,6 +62,10 @@ export const serverSchema = z.object({
   // Deployment environment (for observability labels and analytics filtering)
   DEPLOY_ENVIRONMENT: z.string().optional(),
 
+  // Build SHA — image identifier from Docker build (injected via --build-arg)
+  // Used by /readyz, /api/metrics, .well-known/agent.json for build verification
+  APP_BUILD_SHA: z.string().optional(),
+
   // Service identity for observability (multi-service deployments)
   SERVICE_NAME: z.string().default("app"),
 

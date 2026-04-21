@@ -110,11 +110,12 @@ export const GET = wrapRouteHandlerWithLogging(
       // Verify system tenant billing account exists (per SYSTEM_TENANT_STARTUP_CHECK)
       await verifySystemTenant(container.serviceAccountService);
 
+      const sha = env.APP_BUILD_SHA ?? "unknown";
       const payload = {
         status: "healthy" as const,
         timestamp: new Date().toISOString(),
-        // biome-ignore lint/style/noProcessEnv: build-time plumbing injected via Dockerfile ARG
-        version: process.env.APP_BUILD_SHA || undefined,
+        buildSha: sha, // CANONICAL — per BUILD_SHA_IN_METRICS invariant
+        version: sha, // DEPRECATED — alias for buildSha, remove after deprecation cycle
       };
 
       const parsed = metaReadyzOperation.output.parse(payload);

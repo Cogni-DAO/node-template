@@ -20,6 +20,8 @@
 
 import { NextResponse } from "next/server";
 
+import { serverEnv } from "@/shared/env";
+
 export const runtime = "nodejs";
 
 /**
@@ -42,9 +44,12 @@ function publicOrigin(request: Request): string {
 
 export async function GET(request: Request) {
   const origin = publicOrigin(request);
+  const env = serverEnv();
+  const buildSha = env.APP_BUILD_SHA ?? "unknown";
   return NextResponse.json({
     name: "Cogni Node API",
     version: "v1",
+    buildSha, // Image SHA — per BUILD_SHA_IN_METRICS invariant
     registrationUrl: `${origin}/api/v1/agent/register`,
     auth: { type: "bearer", keyPrefix: "cogni_ag_sk_v1_" },
     endpoints: {

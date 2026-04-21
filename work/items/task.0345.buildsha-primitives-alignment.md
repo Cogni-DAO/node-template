@@ -2,26 +2,26 @@
 id: task.0345
 type: task
 title: "Align buildSha across /readyz, /api/metrics, .well-known/agent.json"
-status: needs_triage
+status: needs_implement
 priority: 2
 rank: 50
 estimate: 1
 summary: "Expose the running image SHA uniformly on the three standard per-node surfaces. Pure plumbing — no consumer changes, no flight-verify rewrites."
-outcome: "Every node-app publishes its buildSha on (1) /api/metrics as build_info{sha,version,node_id} gauge, (2) /readyz as required .buildSha field, (3) .well-known/agent.json as top-level buildSha. No existing consumer breaks; verify-buildsha.sh continues reading /readyz (dual field during deprecation of .version)."
+outcome: "Every node-app publishes its buildSha on (1) /api/metrics as app_build_info{version,commit_sha} gauge (CANONICAL), (2) /readyz as .buildSha field (deprecated), (3) .well-known/agent.json as top-level buildSha. No existing consumer breaks."
 spec_refs:
   - docs/spec/ci-cd.md
   - docs/spec/observability.md
 assignees: []
 credit:
 project: proj.observability-hardening
-branch: feat/task-0337-buildsha-surfaces
+branch: feat/task-0345-buildsha-surfaces
 pr:
 reviewer:
 revision: 0
 blocked_by: []
 deploy_verified: false
 created: 2026-04-20
-updated: 2026-04-20
+updated: 2026-04-21
 labels: [observability, contracts]
 external_refs:
 ---

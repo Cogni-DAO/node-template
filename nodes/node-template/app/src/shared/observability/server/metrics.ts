@@ -57,6 +57,21 @@ if (!globalForMetrics.metricsInitialized) {
     node_id: readNodeIdForMetrics(),
   });
   client.collectDefaultMetrics({ register: metricsRegistry });
+
+  new client.Gauge({
+    name: "app_build_info",
+    help: "Build information — canonical source per BUILD_SHA_IN_METRICS invariant",
+    labelNames: ["version", "commit_sha"] as const,
+    registers: [metricsRegistry],
+  }).set(
+    {
+      // npm_package_version injected at build time via npm
+      version: process.env.npm_package_version ?? "unknown",
+      // APP_BUILD_SHA injected at Docker build time via --build-arg
+      commit_sha: process.env.APP_BUILD_SHA ?? "unknown",
+    },
+    1
+  );
 }
 
 // =============================================================================
