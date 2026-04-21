@@ -17,7 +17,7 @@ branch: design/bug-0344-digest-updater
 pr:
 deploy_verified: false
 reviewer:
-revision: 1
+revision: 2
 blocked_by:
 created: 2026-04-20
 updated: 2026-04-20
@@ -93,12 +93,14 @@ Rsync (`INFRA_K8S_MAIN_DERIVED`, Axiom 17) still wins on deploy branches: `main 
 
 - [ ] **NO_BESPOKE_DIGEST_WORKFLOW** — solution is adoption of the existing Image Updater project, not a new `.github/workflows/*.yml` that commits digests. Fail if the PR adds a workflow whose purpose is "commit digest updates to main".
 - [ ] **DIGEST_IMMUTABILITY_PRESERVED** — Image Updater is configured with `update-strategy: latest` (v0.15.2 semantics: pick newest tag by image-manifest creation timestamp), paired with a tight `allow-tags` regex that only admits the post-merge SHA-bearing tag class. Tag-class immutability comes from the regex, not the strategy name: every tag admitted by `^preview-[0-9a-f]{40}(-<suffix>)?$` is content-addressed by the merge SHA, so `IMAGE_IMMUTABILITY` axiom (`docs/spec/ci-cd.md`) is untouched. The `digest` strategy is the wrong primitive here (it tracks a single mutable tag). Verify: `allow-tags` admits only preview-SHA-tag-class, never `latest` / `stable` / floating tags.
-- [ ] **COMMIT_PROVENANCE_VIA_MESSAGE_PREFIX** — every digest-update commit on `main` uses commit-message prefix `chore(deps): argocd-image-updater` (configured via Image Updater's `--commit-message-template` flag / `git.commit-message-template` ConfigMap key) so `git log --grep='argocd-image-updater' -- infra/k8s/overlays/` is the audit filter. The commit author is `Cogni-1729` — same as every other automated commit — intentionally consistent with the existing PAT-based automation pattern (`release.yml`, `promote-to-production.yml`, `promote-and-deploy.yml`, `flight-preview.yml`).
-- [ ] **SCOPE_IS_MAIN_ONLY** — Image Updater writes to `main` only. Deploy branch digest promotion (`promote-k8s-image.sh` during candidate/preview/production flights) stays as-is. Verify: no Image Updater annotation points `git-branch` at a `deploy/*` branch.
-- [ ] **PRODUCTION_NOT_AUTO_UPDATED** — production flights require explicit human dispatch via `promote-to-production.yml`. The controller watches only `deploy/preview`'s Applications; annotations on `production-applicationset.yaml` are **not** added. Verify: `infra/k8s/argocd/production-applicationset.yaml` has zero `argocd-image-updater.argoproj.io/*` annotations.
-- [ ] **NO_NEW_GITHUB_APP** — reuses the existing `Cogni-1729` PAT (`ACTIONS_AUTOMATION_BOT_PAT`). No GitHub App registration, no branch-protection bypass carve-out, no new trust envelope. Verify: PR adds zero references to new App IDs / private keys / installation IDs.
+- [ ] **COMMIT_PROVENANCE_VIA_MESSAGE_PREFIX** — every digest-update commit on `main` uses commit-message prefix `chore(deps): argocd-image-updater` (configured via Image Updater's `git.commit-message-template` ConfigMap key) so `git log --grep='argocd-image-updater' -- infra/k8s/overlays/` is the controller-specific audit filter. Authentication flows through `ACTIONS_AUTOMATION_BOT_PAT` (pusher = `Cogni-1729`), but **authorship** (`git.user` / `git.email`) is `github-actions[bot] <github-actions[bot]@users.noreply.github.com>` — the canonical CI-bot identity used by every other automated commit in this repo: `scripts/ci/promote-k8s-image.sh:114-115` (the very script whose logic this automates), `promote-and-deploy.yml:273-274`, `candidate-flight.yml:130-131,365-366`. This keeps the cross-automation audit filter `git log --author='github-actions\[bot\]' -- infra/k8s/overlays/` usable alongside the grep-prefix filter. Verify: `config-patch.yaml` sets `git.user: github-actions[bot]`, not `Cogni-1729`.
+- [ ] **MAIN_WRITE_IS_NARROW_CARVE_OUT** — auto-writing to `main` is a deliberate exception to the "main = human-reviewed code truth" contract in `docs/spec/cd-pipeline-e2e.md:332`. Feasibility relies on Cogni-1729's admin role + `enforce_admins: false` on `main`'s branch protection (verified via `gh api repos/:owner/:repo/branches/main/protection`). The carve-out is scoped by **construction**, not by convention: ACIU can only mutate `images:` blocks for entries matching its configured `kustomize.image-name`, inside the Kustomize directory named by each Application's `source.path` (`infra/k8s/overlays/preview/{{name}}/`). No other path on `main` is reachable. Any future widening of this surface needs an explicit invariant change here.
+- [ ] **WRITE_BACK_SCOPE_IS_MAIN_PREVIEW** — ACIU writes to `main` only, and only to `infra/k8s/overlays/preview/<app>/kustomization.yaml`. Deploy branch digest promotion (`promote-k8s-image.sh` during candidate/preview/production flights) stays as-is. Verify: no `argocd-image-updater.argoproj.io/git-branch` annotation points at a `deploy/*` branch, and no annotations are added to `candidate-a-applicationset.yaml` or `production-applicationset.yaml`.
+- [ ] **PRODUCTION_NOT_AUTO_UPDATED** — production flights require explicit human dispatch via `promote-to-production.yml`. The controller watches only `preview-applicationset.yaml`'s Applications; annotations on `production-applicationset.yaml` are **not** added. Verify: `infra/k8s/argocd/production-applicationset.yaml` has zero `argocd-image-updater.argoproj.io/*` annotations.
+- [ ] **APP_AND_MIGRATOR_BOTH_UPDATED** — every node-type catalog entry (operator, poly, resy) has a two-image kustomize overlay (`cogni-template` + `cogni-template-migrate`); both seeds must stay fresh on `main` or bug #970-class failures return the next time an **unrelated** flight rsyncs `main → deploy/preview`. The AppSet template therefore declares two ACIU image aliases: `app=ghcr.io/cogni-dao/cogni-template` with `allow-tags` keyed to `image_tag_suffix`, and `migrator=ghcr.io/cogni-dao/cogni-template` with `allow-tags` keyed to `migrator_tag_suffix` and `kustomize.image-name: ghcr.io/cogni-dao/cogni-template-migrate`. Scheduler-worker has only an app alias in effect — its `migrator_tag_suffix` regex matches zero GHCR tags, so ACIU no-ops the migrator for it.
+- [ ] **NO_NEW_GITHUB_APP** — reuses the existing `Cogni-1729` PAT (`ACTIONS_AUTOMATION_BOT_PAT`). No GitHub App registration, no new trust envelope. Verify: PR adds zero references to new App IDs / private keys / installation IDs.
 - [ ] **SIMPLE_SOLUTION** — leverages the upstream install manifest as a remote Kustomize resource (same pattern as `install.yaml: https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.4/manifests/install.yaml`). No forking, no vendoring, no Helm.
-- [ ] **ARCHITECTURE_ALIGNMENT** — installs into the existing `argocd` namespace via the existing `infra/k8s/argocd/kustomization.yaml`. Credentials delivered via existing ksops CMP pattern. No new namespace, no new secret-management pattern.
+- [ ] **ARCHITECTURE_ALIGNMENT** — installs into the existing `argocd` namespace via the existing `infra/k8s/argocd/kustomization.yaml`. Credentials delivered via the same imperative `kubectl create secret generic --dry-run=client -o yaml | kubectl apply -f -` pattern used by `scripts/ci/deploy-infra.sh:966` (ksops is retired — see `infra/provision/cherry/base/bootstrap.yaml`, task.0284). No new namespace, no new secret-management pattern.
 
 ### Wiring (concrete)
 
@@ -111,20 +113,33 @@ flight-preview.yml (on merge to main)
   └─ writes deploy/preview overlay digest via promote-k8s-image.sh
 
 Argo CD Image Updater (continuous, every 2m default poll)
-  ├─ watches: Applications generated from preview-applicationset.yaml (candidate-a and production intentionally excluded)
-  ├─ registry: ghcr.io/cogni-dao/cogni-template with per-Application allow-tags regex
-  │   (^preview-[0-9a-f]{40}{{image_tag_suffix}}$), update-strategy: latest
+  ├─ watches: Applications generated from preview-applicationset.yaml
+  │           (candidate-a and production intentionally excluded — their
+  │            AppSets have no ACIU annotations)
+  ├─ registry: ghcr.io/cogni-dao/cogni-template
+  │   ├─ app alias       allow-tags: ^preview-[0-9a-f]{40}{{image_tag_suffix}}$
+  │   │                  update-strategy: latest, kustomize.image-name (default):
+  │   │                  ghcr.io/cogni-dao/cogni-template
+  │   └─ migrator alias  allow-tags: ^preview-[0-9a-f]{40}{{migrator_tag_suffix}}$
+  │                      update-strategy: latest, kustomize.image-name:
+  │                      ghcr.io/cogni-dao/cogni-template-migrate
   └─ on new digest:
-        write-back-method: git
-        git-branch: main                                 ← ✅ writes to main, not deploy/preview
+        write-back-method: git (HTTPS + argocd-image-updater-git-creds Secret
+                                → Cogni-1729 PAT does the auth/push; admin-
+                                with-enforce-off lets the push land on main)
+        git-branch: main                                  ← ✅ writes to main, not deploy/preview
         write-back-target: kustomization    (Application source.path: infra/k8s/overlays/preview/{{name}})
-        commit author: Cogni-1729 (reuses ACTIONS_AUTOMATION_BOT_PAT)  ← ✅ no new App
+        commit author: github-actions[bot]                ← ✅ matches promote-k8s-image.sh:114-115
         commit message prefix: chore(deps): argocd-image-updater ...  ← ✅ provenance via grep
-        → updates digest: "sha256:..." in main's preview/{{name}}/kustomization.yaml (MVP scope)
+        → updates BOTH digest fields in main's preview/{{name}}/kustomization.yaml:
+              - the cogni-template entry (app)
+              - the cogni-template-migrate entry (per-node migrator; skipped for scheduler-worker)
 
 next preview flight
-  └─ rsync main → deploy/preview  (Axiom 17)            ← ✅ main's preview overlay is fresh
-     └─ promote-k8s-image.sh bumps affected apps only   ← ✅ non-affected apps now have CURRENT seed
+  └─ rsync main → deploy/preview  (Axiom 17)             ← ✅ main's preview overlay is fresh
+     └─ promote-k8s-image.sh bumps affected apps only    ← ✅ non-affected apps (incl. their
+                                                            migrator entries) now have CURRENT seed
+                                                            → kills the #970 recurrence path
 ```
 
 ### Files
@@ -132,52 +147,57 @@ next preview flight
 **Create:**
 
 - `infra/k8s/argocd/image-updater/kustomization.yaml` — references upstream install manifest pinned at `https://raw.githubusercontent.com/argoproj-labs/argocd-image-updater/v0.15.2/manifests/install.yaml` plus local patches.
-- `infra/k8s/argocd/image-updater/config-patch.yaml` — patches the `argocd-image-updater-config` ConfigMap: sets the `registries:` entry for `ghcr.io` (credentials reference the `argocd-image-updater-ghcr` Secret in the `argocd` namespace), sets `git.user` / `git.email` for Cogni-1729 commit authorship, and sets `git.commit-message-template` to prefix commits with `chore(deps): argocd-image-updater`.
+- `infra/k8s/argocd/image-updater/config-patch.yaml` — patches the `argocd-image-updater-config` ConfigMap: sets the `registries:` entry for `ghcr.io` (credentials reference the `argocd-image-updater-ghcr` Secret in the `argocd` namespace), sets `git.user: github-actions[bot]` / `git.email: github-actions[bot]@users.noreply.github.com` to match the CI-bot authorship used by `scripts/ci/promote-k8s-image.sh` and every other automated commit in this repo, and sets `git.commit-message-template` to prefix commits with `chore(deps): argocd-image-updater`.
 - `docs/runbooks/image-updater-bootstrap.md` — one-page runbook: imperatively creating the two Kubernetes Secrets (`kubectl create secret generic --from-literal=... --dry-run=client -o yaml | kubectl apply -f -`, matching the pattern in `scripts/ci/deploy-infra.sh`), validating the first auto-commit on `main`, rolling back (removing AppSet annotations + scaling controller to 0) if the controller misbehaves, PAT rotation procedure (re-apply the Secret + `kubectl rollout restart deployment/argocd-image-updater -n argocd`). Note: ksops was retired from this repo's Argo CD bootstrap (`infra/provision/cherry/base/bootstrap.yaml`, task.0284 ESO migration) — secrets are **not** committed to git.
 
 **Modify:**
 
 - `infra/k8s/argocd/kustomization.yaml` — add `image-updater/` to `resources:` so the controller is installed alongside the existing `install.yaml`.
-- `infra/k8s/argocd/preview-applicationset.yaml` — add the `argocd-image-updater.argoproj.io/*` annotations on the `template.metadata.annotations` block, parameterized via the catalog generator: `image-list: app=ghcr.io/cogni-dao/cogni-template`, `app.update-strategy: latest`, `app.allow-tags: regexp:^preview-[0-9a-f]{40}{{image_tag_suffix}}$`, `write-back-method: git:secret:argocd/argocd-image-updater-git-creds`, `git-branch: main`, `write-back-target: kustomization`. GHCR credentials are resolved at the registry level (via `registries.conf`) — no per-Application `pull-secret` annotation is needed.
-- `infra/catalog/{operator,poly,resy,scheduler-worker}.yaml` — add `image_tag_suffix` field (`""` for operator, `"-poly"`, `"-resy"`, `"-scheduler-worker"` respectively), exposing the per-target tag suffix already canonical in `scripts/ci/lib/image-tags.sh` to the ApplicationSet template.
+- `infra/k8s/argocd/preview-applicationset.yaml` — add the `argocd-image-updater.argoproj.io/*` annotations on the `template.metadata.annotations` block, parameterized via the catalog generator. Two image aliases: `app=ghcr.io/cogni-dao/cogni-template` (`app.allow-tags: regexp:^preview-[0-9a-f]{40}{{image_tag_suffix}}$`, `app.update-strategy: latest`) and `migrator=ghcr.io/cogni-dao/cogni-template` (`migrator.allow-tags: regexp:^preview-[0-9a-f]{40}{{migrator_tag_suffix}}$`, `migrator.update-strategy: latest`, `migrator.kustomize.image-name: ghcr.io/cogni-dao/cogni-template-migrate`). Plus `write-back-method: git:secret:argocd/argocd-image-updater-git-creds`, `git-branch: main`, `write-back-target: kustomization`. GHCR credentials resolve at the registry level (via `registries.conf`) — no per-Application `pull-secret` annotation needed.
+- `infra/catalog/{operator,poly,resy,scheduler-worker}.yaml` — add `image_tag_suffix` + `migrator_tag_suffix` fields. `image_tag_suffix`: `""` / `"-poly"` / `"-resy"` / `"-scheduler-worker"`. `migrator_tag_suffix`: `"-operator-migrate"` / `"-poly-migrate"` / `"-resy-migrate"` / `"-scheduler-worker-migrate"` (the last is a no-op — scheduler-worker has no migrator; ACIU's regex matches zero tags for it). Both fields mirror `scripts/ci/lib/image-tags.sh:tag_suffix_for_target` and exist because ApplicationSet Git-file generators interpolate catalog fields into the template.
 - `docs/spec/ci-cd.md` § Deploy Branch Rules — replace the current "⚠️ Known anti-pattern: main's overlay digests are hand-curated seeds." callout with a description of the controller's role (seed-keeper on `main`'s preview overlay) and a pointer to this bug's PR, the bootstrap runbook, and the remaining follow-up surfaces (candidate-a / production overlays + migrators).
 - `work/projects/proj.cicd-services-gitops.md` row 21 (Active Blockers) — leave open after this PR lands; only flip once the MVP is extended to cover candidate-a/production overlays and migrators (tracked as separate follow-ups).
 
 **MVP scope boundaries (what this PR intentionally does NOT cover):**
 
 - **Candidate-a & production overlays on `main`** stay manually maintained. Rationale: Image Updater's `write-back-target: kustomization` writes to the Application's single `source.path`. The preview AppSet's source.path is `infra/k8s/overlays/preview/{{name}}` — so only that path is updated. Fan-out to sibling envs needs either (a) annotating the candidate-a AppSet the same way (legal — its Applications also live on `deploy/candidate-a`, so writes redirect to `main` via `git-branch: main`) or (b) a small post-commit script that mirrors the digest across env overlays. Pick one in a follow-up once this MVP is proven in steady state.
-- **Per-node migrator images** (`cogni-template` tags `-poly-migrate`, `-resy-migrate`, `-operator-migrate`) stay maintained by `promote-k8s-image.sh --migrator-digest` on deploy branches. Rationale: the kustomize `images:` block uses two entries (app + migrator) sharing one `newName` but different source `name`s; Image Updater's one-alias-per-image-list model is awkward for this shape. Follow-up: add a second alias (`migrate=ghcr.io/cogni-dao/cogni-template`) per Application with its own `kustomize.image-name: ghcr.io/cogni-dao/cogni-template-migrate` write-back match.
-- **Scheduler-worker + operator coverage in MVP**: both are included (same annotation shape, different `image_tag_suffix`). No node-app migrator dance there — operator has no Kubernetes migrator Job today and scheduler-worker has no migrator image at all.
+
+**In-MVP coverage (revised after rev 2 review):**
+
+- **All four preview catalog entries** — operator, poly, resy, scheduler-worker — get ACIU annotations.
+- **Per-node migrator images** (`-operator-migrate`, `-poly-migrate`, `-resy-migrate`) are handled by the second image alias. This is what makes the poly case actually solvable in MVP: every poly flight bumps `-poly` and `-poly-migrate` together via `promote-k8s-image.sh --migrator-digest`, and bug #970 is specifically the scenario where the migrator seed rots on main and rsync overwrites the fresh migrator digest on `deploy/preview` during an unrelated flight. Deferring the migrator alias would have left the most frequent flight path unprotected.
+- **Scheduler-worker** has no per-node migrator (it uses the shared operator migrator in-cluster; its kustomize overlay has one images entry, not two). Its `migrator_tag_suffix` regex never matches — ACIU silently skips the migrator alias for it. Clean no-op, no error.
 
 **Test / Validation:**
 
-- `docs/runbooks/image-updater-bootstrap.md` includes the explicit test: push a trivial change to `nodes/resy/app/...`, merge, observe `flight-preview.yml` re-tag to `preview-<merge-sha>-resy` in GHCR, observe within 5 minutes a `Cogni-1729`-authored commit on `main` updating `infra/k8s/overlays/preview/resy/kustomization.yaml` to the new `sha256:...`.
+- `docs/runbooks/image-updater-bootstrap.md` includes the explicit test: push a trivial change to `nodes/poly/app/...`, merge, observe `flight-preview.yml` re-tag to `preview-<merge-sha>-poly` (and `-poly-migrate` if poly's Dockerfile chain produced it) in GHCR, observe within 5 minutes a `github-actions[bot]`-authored commit on `main` updating `infra/k8s/overlays/preview/poly/kustomization.yaml` — both the `cogni-template` and `cogni-template-migrate` image digests — to the new `sha256:...` values.
 
 ## Validation
 
-**exercise:**
+**exercise:** (poly is the most frequent flight path and the most important app for this MVP)
 
-1. On `main`, capture current digest for resy in `infra/k8s/overlays/preview/resy/kustomization.yaml`: `D0`.
-2. Merge a no-op change that touches `nodes/resy/**` (triggers `pr-build` → `flight-preview` → new `preview-{mergeSHA}-resy` tag). Capture new GHCR digest: `D1`.
-3. Wait ≤ 5 minutes.
-4. Expect: a new commit on `main` authored by `Cogni-1729` with message prefix `chore(deps): argocd-image-updater`, touching `infra/k8s/overlays/preview/resy/kustomization.yaml` and setting the primary app image's `digest:` field to `D1`. (Migrator entry + candidate-a/production overlays on main are explicitly out of MVP scope — they still get bumped the old way during flights.)
-5. Trigger a `flight-preview` run for an **unrelated** PR (e.g. one touching only `nodes/poly/**`). After the flight rsyncs `main → deploy/preview`, inspect `deploy/preview:infra/k8s/overlays/preview/resy/kustomization.yaml`: resy's primary app digest must equal `D1` (fresh seed inherited from main), not `D0` (the stale pre-Image-Updater value).
+1. On `main`, capture current digests for poly in `infra/k8s/overlays/preview/poly/kustomization.yaml`: `D_app0` (the `cogni-template` entry) and `D_mig0` (the `cogni-template-migrate` entry).
+2. Merge a no-op change that touches `nodes/poly/**` (triggers `pr-build` → `flight-preview` → new `preview-{mergeSHA}-poly` + `preview-{mergeSHA}-poly-migrate` tags in GHCR). Capture new digests: `D_app1`, `D_mig1`.
+3. Wait ≤ 5 minutes (one ACIU poll cycle + commit latency).
+4. Expect **one or two** new commits on `main` authored by `github-actions[bot]` with message prefix `chore(deps): argocd-image-updater`, touching `infra/k8s/overlays/preview/poly/kustomization.yaml` and setting BOTH `cogni-template` digest → `D_app1` and `cogni-template-migrate` digest → `D_mig1`. (ACIU may batch both image updates in a single commit or emit two sequential commits — both are valid; same provenance prefix either way.)
+5. Trigger a `flight-preview` run for an **unrelated** PR (e.g. one touching only `nodes/operator/**`). After the flight rsyncs `main → deploy/preview`, inspect `deploy/preview:infra/k8s/overlays/preview/poly/kustomization.yaml`: **both** poly digests must equal `D_app1` / `D_mig1` (fresh seeds inherited from main), not `D_app0` / `D_mig0` (the stale pre-Image-Updater values). If only the app digest is fresh and the migrator is stale, bug #970's mechanism is still live → blocker.
 
 **observability:**
 
-- `{namespace="argocd",pod=~"argocd-image-updater-.*"}` in Loki shows `level=info msg="Successfully updated image"` for each processed Application, with the target digest in the payload.
-- `git log --grep='chore(deps): argocd-image-updater' --since="1 hour ago" -- infra/k8s/overlays/preview/` returns at least one commit covering the resy update.
-- `argocd app get preview-resy -o json | jq '.status.summary.images'` at rest matches the latest `main` preview seed for resy.
+- `{namespace="argocd",pod=~"argocd-image-updater-.*"}` in Loki shows `level=info msg="Successfully updated image"` lines for both `app` and `migrator` aliases on the `preview-poly` Application at the deployed SHA of the controller.
+- `git log --grep='chore(deps): argocd-image-updater' --author='github-actions\[bot\]' --since="1 hour ago" -- infra/k8s/overlays/preview/poly/` returns at least one commit covering both digest bumps.
+- `argocd app get preview-poly -o json | jq '.status.summary.images'` at rest matches the latest `main` preview seed for poly (both app and migrator).
 
 ## Blocked by / prerequisites
 
-- **Ksops secret authoring access** — the implementer needs SOPS/age private-key material to encrypt `ghcr-secret.enc.yaml` and `git-creds-secret.enc.yaml` locally before commit. Same requirement every other encrypted cluster secret has today; no new process.
+- **Cluster-side Secret authoring access** — the bootstrap operator needs to run two `kubectl create secret generic ... | kubectl apply -f -` commands in the `argocd` namespace (see `docs/runbooks/image-updater-bootstrap.md` §1). Same access surface as `scripts/ci/deploy-infra.sh` already exercises; no new permission tier.
 - **GHCR scan via `GHCR_DEPLOY_TOKEN`** — the existing org-level PAT already has `read:packages` scope and is what every deploy pipeline uses to pull images. Reused verbatim for Image Updater's registry metadata scanning; no new credential.
+- **`main` branch protection must permit admin direct push** — verified pre-design via `gh api repos/:owner/:repo/branches/main/protection`: `required_pull_request_reviews.required_approving_review_count: 1` + `enforce_admins: false`; Cogni-1729 is `role_name: admin`. Admin-with-enforce-off = PAT direct push to main works. If this changes (e.g. `enforce_admins: true` is ever flipped), ACIU will start failing its write-back silently — the `MAIN_WRITE_IS_NARROW_CARVE_OUT` invariant makes this an explicit dependency, not a hidden assumption.
 
-_Intentionally not prerequisites_ (reconciled during `/review-design`):
+_Intentionally not prerequisites_ (reconciled during `/review-design` and `/review-implementation`):
 
 - ~~New GitHub App registration~~ — reuses `ACTIONS_AUTOMATION_BOT_PAT` + `Cogni-1729`, the existing PAT-based automation identity. See `proj.vcs-integration.md` L70 — that "separate apps per blast radius" constraint governs GitHub **Apps**; PAT reuse is consistent with every other automated commit path in this repo.
-- ~~Branch-protection carve-out on `main`~~ — the PAT already has push access to `main` (used by `release.yml`, `promote-and-deploy.yml`, `flight-preview.yml`). Same trust envelope, no new bypass rule.
+- ~~New branch-protection carve-out on `main`~~ — the required bypass (admin-with-`enforce_admins: false`) **already exists** on main's current branch protection. The design relies on that pre-existing posture; it does not add a new rule, exemption, or ruleset.
 - ~~Argo CD v2.14+ compatibility smoke test~~ — we pin v0.15.2, which was tested against Argo CD v2.13.4 upstream. Upgrading Image Updater to v0.18.x or v1.x is a follow-up tied to the Argo CD server upgrade, not a precondition for this MVP.
 
 ## Implementation review (revision 1)
@@ -193,7 +213,15 @@ Self-review against upstream v0.15.2 docs and the live bootstrap script surfaced
 Drive-by notes (not this PR):
 
 - `infra/k8s/argocd/kustomization.yaml:4` header comment + `ksops-cmp.yaml` resource + `repo-server-patch.yaml` sidecar patch are all ksops-era dead code. Track under task.0284 (ESO migration).
-- `image_tag_suffix` in `infra/catalog/*.yaml` duplicates `scripts/ci/lib/image-tags.sh:tag_suffix_for_target`. Either side could become the generator for the other. Follow-up after this MVP proves out.
+- `image_tag_suffix` + `migrator_tag_suffix` in `infra/catalog/*.yaml` duplicate `scripts/ci/lib/image-tags.sh:tag_suffix_for_target`. Either side could become the generator for the other. Follow-up after this MVP proves out.
+
+## Implementation review (revision 2)
+
+Rev-1 passed my own gate but an external reviewer pressure-tested three load-bearing assumptions. All three needed real fixes — one was a design error that would have left the most important app (poly) **incompletely covered**.
+
+- [x] **B5 — Wrong commit author.** Rev-1 set `git.user: Cogni-1729` / `git.email: Cogni-1729@users.noreply.github.com`. This is a value I invented, not a value I observed. The canonical CI-bot authorship in this repo is `github-actions[bot] <github-actions[bot]@users.noreply.github.com>`, used by **the very script whose job we're automating** — `scripts/ci/promote-k8s-image.sh:114-115` — and by `promote-and-deploy.yml:273-274`, `candidate-flight.yml:130-131,365-366`. Authentication is still Cogni-1729 via the PAT (that's what lets the push land on main); authorship is the bot identity. Fix: `config-patch.yaml` now sets `git.user: github-actions[bot]`. Updated `COMMIT_PROVENANCE_VIA_MESSAGE_PREFIX` invariant + Wiring diagram accordingly.
+- [x] **B6 — `main` write feasibility was asserted, not verified.** Rev-1's "~~Branch-protection carve-out on `main`~~" struck-through line claimed the PAT "already has push access to main" by analogy to `release.yml` / `promote-and-deploy.yml` — but those workflows push to `deploy/*` branches (`release.yml` pushes release branches, `promote-and-deploy.yml` pushes `deploy/preview`/`deploy/production`, `candidate-flight.yml` pushes `deploy/candidate-a`). **None of them direct-push to main.** PR merges route through the API (`gh pr merge`), not raw `git push origin main`. I verified the actual posture: `gh api repos/:owner/:repo/branches/main/protection` returns `required_pull_request_reviews.required_approving_review_count: 1` with `enforce_admins: false`; `Cogni-1729` is `role_name: admin`. So the PAT **can** direct-push to main today — but only because admin+enforce-off bypass exists. Fix: added `MAIN_WRITE_IS_NARROW_CARVE_OUT` invariant + explicit `main branch protection` prerequisite so this posture is a documented dependency of the design, not a latent assumption. Also tightened the "not a prerequisite" bullet to say the carve-out **already exists**, not that none is needed.
+- [x] **B7 — Poly migrator deferral rendered MVP ineffective for the most important app.** Rev-1 explicitly deferred migrator digest updates ("Per-node migrator images stay maintained by `promote-k8s-image.sh --migrator-digest` on deploy branches"). Walk the failure path: (1) poly PR merges → flight bumps `-poly` + `-poly-migrate` on `deploy/preview`; (2) unrelated operator PR merges → flight runs `rsync -a --delete main → deploy/preview`; this **wipes the fresh poly-migrate digest on `deploy/preview` with main's stale seed**; (3) `promote-k8s-image.sh` then bumps only operator. Result: fresh operator + fresh poly-app + **stale poly-migrate** on `deploy/preview` → bug #970 returns. Deferring the migrator meant the MVP did not actually solve the case the ticket was opened for. Fix: added a second image alias `migrator=ghcr.io/cogni-dao/cogni-template` with `migrator.allow-tags` keyed to a new `migrator_tag_suffix` catalog field and `migrator.kustomize.image-name: ghcr.io/cogni-dao/cogni-template-migrate` so the controller writes to the second `images:` entry. Added 4-case `migrator_tag_suffix` to catalog files (`-operator-migrate`, `-poly-migrate`, `-resy-migrate`, `-scheduler-worker-migrate`). Scheduler-worker's migrator regex matches zero tags → no-op. Added `APP_AND_MIGRATOR_BOTH_UPDATED` invariant. Rewrote validation block to exercise poly (not resy) and require both digests to refresh.
 
 ## Related
 

@@ -11,9 +11,11 @@ Argo CD Image Updater runs as a Deployment in the `argocd` namespace. Every 2 mi
 1. Lists all Argo CD `Application`s carrying the annotation `argocd-image-updater.argoproj.io/image-list`.
 2. For each matched Application, scans GHCR for tags matching the Application's `allow-tags` regex.
 3. Picks the newest tag by image-manifest creation timestamp (`update-strategy: latest` — v0.15.2's name for build-time-ordered selection, filtered by the `allow-tags` regex).
-4. If the newest tag's digest differs from the one currently rendered in the Application's Kustomize overlay, clones `main`, rewrites the `digest:` field in `infra/k8s/overlays/preview/<app>/kustomization.yaml`, and pushes the commit back to `main` as `Cogni-1729`.
+4. If the newest tag's digest differs from the one currently rendered in the Application's Kustomize overlay, clones `main`, rewrites the `digest:` field in `infra/k8s/overlays/preview/<app>/kustomization.yaml`, and pushes the commit back to `main` under PAT `ACTIONS_AUTOMATION_BOT_PAT` (pusher = `Cogni-1729`, authored as `github-actions[bot]` — matching `scripts/ci/promote-k8s-image.sh`, the script whose job this automates).
 
-Every commit is prefixed `chore(deps): argocd-image-updater` so `git log --grep='argocd-image-updater' -- infra/k8s/overlays/` is the audit filter.
+Every Application carries two image aliases — `app=ghcr.io/cogni-dao/cogni-template` and `migrator=ghcr.io/cogni-dao/cogni-template` — so ACIU keeps both the primary app digest and the per-node migrator digest fresh on `main`. Without the second alias, the migrator seed would rot and recurse bug #970 on every unrelated flight. `scheduler-worker` has no migrator (single `images:` entry in its overlay); its migrator regex matches zero GHCR tags so ACIU silently no-ops.
+
+Every commit is prefixed `chore(deps): argocd-image-updater` so `git log --grep='argocd-image-updater' -- infra/k8s/overlays/` is the controller-specific audit filter, and `git log --author='github-actions\[bot\]' -- infra/k8s/overlays/` is the broader CI-bot audit filter.
 
 ## One-time bootstrap
 
@@ -69,38 +71,42 @@ Within one poll cycle (≤2 minutes) you should see `considering image` lines fo
 
 ## Smoke test (end-to-end)
 
-On fresh bootstrap, exercise the full loop:
+Exercise the loop on poly — this is the most frequent flight path and the case bug.0344 was opened for (bug #970's migrator-seed-rot mechanism lives here).
 
-1. Capture the current digest for `preview-resy` on main:
-
-   ```bash
-   git show main:infra/k8s/overlays/preview/resy/kustomization.yaml | grep 'digest:'
-   ```
-
-2. Push a trivial whitespace change to `nodes/resy/app/...`, merge. This triggers `pr-build.yml` → `flight-preview.yml`, which re-tags the built image as `preview-<mergeSHA>-resy` in GHCR.
-3. Within ~5 minutes (one poll cycle + commit latency), expect a new commit on `main`:
+1. Capture the current digests for `preview-poly` on main. Poly's overlay has two `images:` entries — both must refresh:
 
    ```bash
-   git log --grep='argocd-image-updater' --author='Cogni-1729' -- infra/k8s/overlays/preview/resy/
+   git show main:infra/k8s/overlays/preview/poly/kustomization.yaml \
+     | grep -E '^\s*(name|digest):'
+   # Expect two name/digest pairs: cogni-template and cogni-template-migrate.
    ```
 
-4. The commit should bump the primary `ghcr.io/cogni-dao/cogni-template` image's `digest:` field to the new `sha256:...`.
+2. Push a trivial whitespace change to `nodes/poly/app/...`, merge. This triggers `pr-build.yml` → `flight-preview.yml`, which re-tags the built images as `preview-<mergeSHA>-poly` and `preview-<mergeSHA>-poly-migrate` in GHCR.
+3. Within ~5 minutes (one poll cycle + commit latency), expect one or two new commits on `main`:
+
+   ```bash
+   git log --grep='argocd-image-updater' --author='github-actions\[bot\]' \
+     -- infra/k8s/overlays/preview/poly/
+   ```
+
+4. Both the `cogni-template` entry AND the `cogni-template-migrate` entry in `infra/k8s/overlays/preview/poly/kustomization.yaml` should show the new `sha256:...` values. If only the app digest refreshes and migrator stays stale, stop — that's bug #970's mechanism still live; investigate the `migrator` alias annotations first.
+5. Unrelated-flight regression check: trigger a flight for a PR touching only `nodes/operator/**`. After the flight rsyncs `main → deploy/preview`, inspect `deploy/preview:infra/k8s/overlays/preview/poly/kustomization.yaml`. Both poly digests must match main's fresh seeds from step 4 — not the pre-Image-Updater values from step 1.
 
 If step 4 shows no commit after 10 minutes:
 
 - Check controller logs: `kubectl logs -n argocd deployment/argocd-image-updater --tail=200`.
 - Look for `error updating image` or registry auth errors (401/403 from ghcr.io → GHCR secret is wrong).
-- Look for `error writing back to git` (gitHub 403 → git-creds PAT is expired/revoked).
+- Look for `error writing back to git` (GitHub 403 → git-creds PAT expired/revoked **or** branch protection on main rejected the push — verify `enforce_admins: false` still holds via `gh api repos/:owner/:repo/branches/main/protection`).
+- Look for `no newer version found` for the `migrator` alias on scheduler-worker — that's expected (no migrator image exists for it) and safe to ignore.
 
 ## MVP scope — what is NOT covered yet
 
-| Gap                                                          | Current owner                                               | Follow-up ticket                         |
-| ------------------------------------------------------------ | ----------------------------------------------------------- | ---------------------------------------- |
-| `main`'s `candidate-a/` overlays                             | Manual — still hand-bumped                                  | Extend to annotate candidate-a AppSet    |
-| `main`'s `production/` overlays                              | Manual — `promote-to-production.yml` mirrors                | Follow-up — needs careful scoping        |
-| Migrator image digests (`-poly-migrate`, `-resy-migrate`, …) | `promote-k8s-image.sh --migrator-digest` on deploy branches | Add a second image alias per Application |
+| Gap                              | Current owner                                | Follow-up                                                      |
+| -------------------------------- | -------------------------------------------- | -------------------------------------------------------------- |
+| `main`'s `candidate-a/` overlays | Manual — still hand-bumped                   | Annotate `candidate-a-applicationset.yaml` with the same shape |
+| `main`'s `production/` overlays  | Manual — `promote-to-production.yml` mirrors | Needs careful scoping — production is explicitly human-gated   |
 
-These are deliberate cuts for MVP, not oversights. See bug.0344 § _MVP scope boundaries_.
+Per-node migrator digests (`-operator-migrate`, `-poly-migrate`, `-resy-migrate`) **are** covered in MVP via the `migrator` image alias — see bug.0344 revision-2 review for why deferring them would have left the poly case (bug #970) unsolved.
 
 ## Rollback
 
