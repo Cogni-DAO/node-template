@@ -221,9 +221,12 @@ export interface CreateFromAdapterDeps {
   getOrder?: (orderId: string) => Promise<GetOrderResult>;
   /**
    * `getMarketConstraints(tokenId)` — used by the copy-trade coordinator to
-   * pre-flight intent sizing against the market's share-min. bug.0342.
+   * pre-flight intent sizing against the market's share-min + USDC-notional
+   * floors. bug.0342.
    */
-  getMarketConstraints?: (tokenId: string) => Promise<{ minShares: number }>;
+  getMarketConstraints?: (
+    tokenId: string
+  ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
   /** `listPositions(wallet)` — used by `closePosition` + coordinator. */
   listPositions?: (wallet: string) => Promise<PolymarketUserPosition[]>;
   /** Operator EOA (used for the receipt's profile_url and position lookups). */
@@ -259,7 +262,9 @@ export interface PolyTradeBundle {
    * market's share-minimum. Raw passthrough to `PolymarketClobAdapter.
    * getMarketConstraints`. bug.0342.
    */
-  getMarketConstraints: (tokenId: string) => Promise<{ minShares: number }>;
+  getMarketConstraints: (
+    tokenId: string
+  ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
   closePosition: (params: ClosePositionParams) => Promise<OrderReceipt>;
   getOrder: (orderId: string) => Promise<GetOrderResult>;
   getOperatorPositions: () => Promise<PolymarketUserPosition[]>;
@@ -449,11 +454,11 @@ export function createPolyTradeCapabilityFromAdapter(
 
   async function bundleGetMarketConstraints(
     tokenId: string
-  ): Promise<{ minShares: number }> {
+  ): Promise<{ minShares: number; minUsdcNotional?: number }> {
     if (!deps.getMarketConstraints) {
-      // Safe fallback: unknown market → minShares=0 means the sizing policy
-      // treats the intent as-is (no scale-up, no skip). The adapter's
-      // defense-in-depth guard still catches sub-min at placement time.
+      // Safe fallback: unknown market → no floors applied. The adapter's
+      // defense-in-depth guard still catches sub-floor submissions at
+      // placement time; coordinator will observe the classified throw.
       return { minShares: 0 };
     }
     return deps.getMarketConstraints(tokenId);
@@ -594,6 +599,9 @@ export function createPolyTradeCapability(
     }) => Promise<OrderReceipt[]>;
     cancelOrder: (orderId: string) => Promise<void>;
     getOrder: (orderId: string) => Promise<GetOrderResult>;
+    getMarketConstraints: (
+      tokenId: string
+    ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
     listPositions: (wallet: string) => Promise<PolymarketUserPosition[]>;
   };
   let cached: AdapterMethods | undefined;
@@ -638,12 +646,19 @@ export function createPolyTradeCapability(
     const m = await ensureMethods();
     return m.listPositions(wallet);
   }
+  async function lazyGetMarketConstraints(
+    tokenId: string
+  ): Promise<{ minShares: number; minUsdcNotional?: number }> {
+    const m = await ensureMethods();
+    return m.getMarketConstraints(tokenId);
+  }
 
   return createPolyTradeCapabilityFromAdapter({
     placeOrder: lazyPlaceOrder,
     listOpenOrders: lazyListOpenOrders,
     cancelOrder: lazyCancelOrder,
     getOrder: lazyGetOrder,
+    getMarketConstraints: lazyGetMarketConstraints,
     listPositions: lazyListPositions,
     operatorWalletAddress,
     logger: config.logger,
@@ -678,7 +693,9 @@ async function buildRealAdapterMethods(
   }) => Promise<OrderReceipt[]>;
   cancelOrder: (orderId: string) => Promise<void>;
   getOrder: (orderId: string) => Promise<GetOrderResult>;
-  getMarketConstraints: (tokenId: string) => Promise<{ minShares: number }>;
+  getMarketConstraints: (
+    tokenId: string
+  ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
   listPositions: (wallet: string) => Promise<PolymarketUserPosition[]>;
 }> {
   // Dynamic imports — keep `@polymarket/clob-client` + `@privy-io/node` out of

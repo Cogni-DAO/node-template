@@ -76,7 +76,9 @@ export interface MirrorCoordinatorDeps {
    * absent (unit tests, paper-only flows), the share-min guard is skipped.
    */
   getMarketConstraints?:
-    | ((tokenId: string) => Promise<{ minShares: number }>)
+    | ((
+        tokenId: string
+      ) => Promise<{ minShares: number; minUsdcNotional?: number }>)
     | undefined;
   /** Static target config for v0 — P2 swaps for a per-tick DB resolver. */
   target: TargetConfig;
@@ -209,12 +211,13 @@ async function processFill(
   }
 
   // ── BUY branch ──────────────────────────────────────────────────────────────
-  // Fetch market share-min before decide() so the sizing policy can scale to
-  // it (or skip if the resulting notional would exceed the user's ceiling).
-  // Failures are swallowed → decide runs without min_shares (legacy behavior);
-  // defense-in-depth guard in the adapter still catches sub-min submissions.
-  // bug.0342.
+  // Fetch market share-min + USDC-notional floor before decide() so the
+  // sizing policy can scale to whichever floor dominates at this price.
+  // Failures are swallowed → decide runs without constraints (legacy
+  // behavior); defense-in-depth guard in the adapter still catches sub-floor
+  // submissions and throws a classified error. bug.0342.
   let min_shares: number | undefined;
+  let min_usdc_notional: number | undefined;
   if (deps.getMarketConstraints) {
     const tokenId =
       typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
@@ -222,6 +225,7 @@ async function processFill(
       try {
         const constraints = await deps.getMarketConstraints(tokenId);
         min_shares = constraints.minShares;
+        min_usdc_notional = constraints.minUsdcNotional;
       } catch (err) {
         log.warn(
           {
@@ -230,7 +234,7 @@ async function processFill(
             client_order_id,
             err: err instanceof Error ? err.message : String(err),
           },
-          "mirror coordinator: getMarketConstraints threw; decide() will run without min_shares"
+          "mirror coordinator: getMarketConstraints threw; decide() will run without market floors"
         );
       }
     }
@@ -246,6 +250,7 @@ async function processFill(
     },
     client_order_id,
     min_shares,
+    min_usdc_notional,
   });
 
   if (decision.action === "skip") {

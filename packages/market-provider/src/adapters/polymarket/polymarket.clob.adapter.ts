@@ -223,9 +223,19 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       const orderBook = preflight[3];
 
       const minShares = Number(orderBook.min_order_size);
-      if (Number.isFinite(minShares) && shareSize < minShares) {
+      const effectiveUsdc = shareSize * intent.limit_price;
+      // Polymarket marketable-BUY $1 USDC notional floor is platform-level,
+      // not exposed per-market. Hardcoded here; kept in lock-step with
+      // getMarketConstraints.minUsdcNotional. bug.0342.
+      const POLY_MARKETABLE_BUY_MIN_USDC = 1;
+      const belowShareMin = Number.isFinite(minShares) && shareSize < minShares;
+      const belowUsdcMin =
+        intent.side === "BUY" &&
+        intent.attributes?.post_only !== true &&
+        effectiveUsdc < POLY_MARKETABLE_BUY_MIN_USDC;
+      if (belowShareMin || belowUsdcMin) {
         const err = new Error(
-          `PolymarketClobAdapter.placeOrder: intent is below market share-min (gotShares=${shareSize}, minShares=${minShares}, tokenId=${tokenId}). Coordinator should have scaled or skipped. bug.0342.`
+          `PolymarketClobAdapter.placeOrder: intent below market floor (gotShares=${shareSize}, minShares=${minShares}, gotUsdc=${effectiveUsdc}, minUsdc=${POLY_MARKETABLE_BUY_MIN_USDC}, tokenId=${tokenId}). Coordinator should have scaled or skipped. bug.0342.`
         );
         // Discriminator for cross-package catch blocks — `err.code` is
         // bundler-stable where `instanceof` is not.
@@ -539,6 +549,12 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           `PolymarketClobAdapter.getMarketConstraints: unexpected min_order_size=${book.min_order_size} for token ${tokenId}`
         );
       }
+      // Polymarket platform rule: marketable BUY orders must be ≥ $1 USDC
+      // notional. This is a platform constant (not a per-market field exposed
+      // by the SDK), hardcoded here so the coordinator can pre-scale intents.
+      // Observed live on candidate-a 2026-04-21: "invalid amount for a
+      // marketable BUY order ($0.9996), min size: $1".
+      const POLY_MARKETABLE_BUY_MIN_USDC = 1;
       const duration_ms = Date.now() - start;
       this.log.debug(
         {
@@ -547,10 +563,14 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           duration_ms,
           token_id: tokenId,
           min_shares: minShares,
+          min_usdc_notional: POLY_MARKETABLE_BUY_MIN_USDC,
         },
         "getMarketConstraints: ok"
       );
-      return { minShares };
+      return {
+        minShares,
+        minUsdcNotional: POLY_MARKETABLE_BUY_MIN_USDC,
+      };
     } catch (err) {
       const duration_ms = Date.now() - start;
       this.log.error(

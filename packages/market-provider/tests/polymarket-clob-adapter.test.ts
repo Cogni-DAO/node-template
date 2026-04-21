@@ -457,7 +457,7 @@ describe("PolymarketClobAdapter", () => {
 
   // bug.0342 ----------------------------------------------------------------
 
-  it("getMarketConstraints returns minShares from the CLOB order book", async () => {
+  it("getMarketConstraints returns minShares + Polymarket $1 USDC-notional floor", async () => {
     const getOrderBook = vi.fn().mockResolvedValue({
       min_order_size: "5",
       tick_size: "0.01",
@@ -467,7 +467,35 @@ describe("PolymarketClobAdapter", () => {
     const constraints = await adapter.getMarketConstraints("0xtoken");
 
     expect(getOrderBook).toHaveBeenCalledWith("0xtoken");
-    expect(constraints).toEqual({ minShares: 5 });
+    expect(constraints).toEqual({ minShares: 5, minUsdcNotional: 1 });
+  });
+
+  it("placeOrder throws BELOW_MARKET_MIN on sub-$1 USDC-notional BUY (1-share-min cheap market)", async () => {
+    const createAndPostOrder = vi.fn(); // must NOT be called
+    // 1-share-min market, price 0.49, size_usdc 1 → shareSize 2.04 ≥ 1
+    // (share-min OK), but effectiveUsdc = 2.04 × 0.49 = 1.000 → right at
+    // boundary. Use a size that yields $0.9996.
+    const getOrderBook = vi.fn().mockResolvedValue({
+      min_order_size: "1",
+      tick_size: "0.01",
+    });
+    const adapter = makeAdapter({ createAndPostOrder, getOrderBook });
+
+    let caught: unknown;
+    try {
+      // 1.02 × 0.98 = 0.9996 USDC — share-min passes (1.04 ≥ 1) but usdc-min fails
+      await adapter.placeOrder({
+        ...BASE_INTENT,
+        size_usdc: 0.9996,
+        limit_price: 0.98,
+        side: "BUY",
+      });
+    } catch (err) {
+      caught = err;
+    }
+    const errObj = caught as { code?: string };
+    expect(errObj.code).toBe("BELOW_MARKET_MIN");
+    expect(createAndPostOrder).not.toHaveBeenCalled();
   });
 
   it("placeOrder throws a classified BELOW_MARKET_MIN error when shareSize < min_order_size", async () => {
@@ -495,7 +523,7 @@ describe("PolymarketClobAdapter", () => {
     const errObj = caught as { code?: string; name?: string; message?: string };
     expect(errObj.code).toBe("BELOW_MARKET_MIN");
     expect(errObj.name).toBe("BelowMarketMinError");
-    expect(errObj.message).toMatch(/below market share-min/);
+    expect(errObj.message).toMatch(/below market floor/);
     expect(createAndPostOrder).not.toHaveBeenCalled();
   });
 

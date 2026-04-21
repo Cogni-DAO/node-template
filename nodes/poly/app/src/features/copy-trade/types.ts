@@ -136,6 +136,14 @@ export interface DecideInput {
    * sizing policy skips the market-min guard (legacy behavior). bug.0342.
    */
   min_shares?: number | undefined;
+  /**
+   * Platform-enforced USDC-notional floor for a marketable BUY (e.g.
+   * Polymarket = $1). Applies orthogonally to `min_shares`: on a 1-share-min
+   * market at price 0.49, sharewise sizing gives $0.49 notional but the
+   * platform rejects for USDC-floor. When present, sizing scales to whichever
+   * floor dominates: `targetShares = max(minShares, minUsdcNotional / price)`.
+   */
+  min_usdc_notional?: number | undefined;
 }
 
 /**

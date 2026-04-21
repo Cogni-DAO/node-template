@@ -39,15 +39,19 @@ import type {
 export function applySizingPolicy(
   policy: SizingPolicy,
   price: number,
-  minShares: number | undefined
+  minShares: number | undefined,
+  minUsdcNotional: number | undefined
 ): SizingResult {
   switch (policy.kind) {
     case "fixed": {
       const desiredShares = policy.mirror_usdc / price;
-      const targetShares =
-        minShares === undefined
-          ? desiredShares
-          : Math.max(desiredShares, minShares);
+      // Two orthogonal platform floors: share-count min AND USDC-notional
+      // min. Whichever is more constraining wins. Compute in share-space to
+      // avoid float-associativity rounding (bug.0342 B1).
+      const sharesForUsdcFloor =
+        minUsdcNotional === undefined ? 0 : minUsdcNotional / price;
+      const floorShares = Math.max(minShares ?? 0, sharesForUsdcFloor);
+      const targetShares = Math.max(desiredShares, floorShares);
       const effectiveUsdc = targetShares * price;
       if (effectiveUsdc > policy.max_usdc_per_trade) {
         return { ok: false, reason: "below_market_min" };
@@ -72,7 +76,14 @@ export function applySizingPolicy(
  * which adapter to route to; only the `provider` on `OrderIntent` differs.
  */
 export function decide(input: DecideInput): MirrorDecision {
-  const { fill, config, state, client_order_id, min_shares } = input;
+  const {
+    fill,
+    config,
+    state,
+    client_order_id,
+    min_shares,
+    min_usdc_notional,
+  } = input;
 
   if (!config.enabled) return { action: "skip", reason: "kill_switch_off" };
 
@@ -84,7 +95,12 @@ export function decide(input: DecideInput): MirrorDecision {
   // (below_market_min) when the scaled notional would exceed the user's
   // per-trade ceiling. Runs before the daily-cap check so the cap gates the
   // EFFECTIVE size, not the unscaled one. bug.0342.
-  const sizing = applySizingPolicy(config.sizing, fill.price, min_shares);
+  const sizing = applySizingPolicy(
+    config.sizing,
+    fill.price,
+    min_shares,
+    min_usdc_notional
+  );
   if (!sizing.ok) {
     return { action: "skip", reason: sizing.reason };
   }

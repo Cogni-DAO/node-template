@@ -71,6 +71,7 @@ describe("decide() — sizing policy: kind=fixed (bug.0342)", () => {
       state: CLEAN_STATE,
       client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
       min_shares: 5,
+      min_usdc_notional: 1,
     });
     if (d.action !== "place") throw new Error("expected place");
     expect(d.intent.size_usdc).toBe(5);
@@ -85,6 +86,7 @@ describe("decide() — sizing policy: kind=fixed (bug.0342)", () => {
       state: CLEAN_STATE,
       client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
       min_shares: 5,
+      min_usdc_notional: 1,
     });
     if (d.action !== "place") throw new Error("expected place");
     // SHARE_SPACE_MATH: result / price must be ≥ minShares
@@ -101,6 +103,41 @@ describe("decide() — sizing policy: kind=fixed (bug.0342)", () => {
       state: CLEAN_STATE,
       client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
       min_shares: 5,
+      min_usdc_notional: 1,
+    });
+    expect(d).toEqual({ action: "skip", reason: "below_market_min" });
+  });
+
+  it("scales up to min_usdc_notional floor on 1-share-min cheap-price markets", () => {
+    // 1-share-min market at price 0.49: share-min satisfied at 1.00, but $1
+    // USDC-notional floor forces shareSize to 1/0.49 = 2.04 shares → $1.00
+    // bug.0342 candidate-a 2026-04-21 observation: "$0.9996, min size: $1".
+    const fill = makeFill(0.49);
+    const d = decide({
+      fill,
+      config: makeConfig({ mirror_usdc: 1, max_usdc_per_trade: 5 }),
+      state: CLEAN_STATE,
+      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    if (d.action !== "place") throw new Error("expected place");
+    expect(d.intent.size_usdc).toBeGreaterThanOrEqual(1);
+    // SHARE_SPACE_MATH — the submitted notional must be ≥ $1 (no float ε).
+    expect(d.intent.size_usdc / d.intent.limit_price).toBeCloseTo(1 / 0.49, 10);
+  });
+
+  it("skips when both floors together exceed user ceiling", () => {
+    // 1-share-min cheap market at 0.05: USDC floor → 20 shares = $1.00
+    // ceiling = $0.50 → skip
+    const fill = makeFill(0.05);
+    const d = decide({
+      fill,
+      config: makeConfig({ mirror_usdc: 0.25, max_usdc_per_trade: 0.5 }),
+      state: CLEAN_STATE,
+      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      min_shares: 1,
+      min_usdc_notional: 1,
     });
     expect(d).toEqual({ action: "skip", reason: "below_market_min" });
   });
@@ -131,6 +168,7 @@ describe("decide() — sizing policy: kind=fixed (bug.0342)", () => {
       state: { ...CLEAN_STATE, today_spent_usdc: 7.5 },
       client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
       min_shares: 5,
+      min_usdc_notional: 1,
     });
     expect(d).toEqual({ action: "skip", reason: "daily_cap_hit" });
   });

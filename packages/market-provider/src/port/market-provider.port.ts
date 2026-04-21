@@ -51,12 +51,24 @@ export interface MarketProviderConfig {
 
 /**
  * Mechanical constraints for a single market/token, fetched ahead of order
- * placement so callers can right-size intents. Today ships `minShares`
- * (bug.0342); future fields (tick, fee, negRisk) slot in here without churn.
+ * placement so callers can right-size intents. Two orthogonal floors today,
+ * both platform-enforced on marketable BUYs (bug.0342):
+ *   - `minShares`: from CLOB order-book `min_order_size`; varies per market
+ *     (1–5 shares observed).
+ *   - `minUsdcNotional`: Polymarket platform rule for marketable BUY orders;
+ *     $1 USDC notional floor regardless of share count. A market with
+ *     minShares=1 at price 0.49 still rejects a $0.49 order for this reason.
+ *
+ * Future fields (tick, fee, negRisk) slot in here without widening the port.
  */
 export interface MarketConstraints {
   /** Minimum share count the platform accepts for an order on this token. */
   minShares: number;
+  /**
+   * Minimum USDC notional (`shareSize × price`) for a marketable BUY. Optional
+   * because not all providers expose/enforce this; Polymarket returns 1.
+   */
+  minUsdcNotional?: number;
 }
 
 /**
