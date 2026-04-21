@@ -131,11 +131,16 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         provider: CREDENTIAL_PROVIDER,
       });
 
-      const account = createViemAccount(this.privyClient, {
+      const rawAccount = createViemAccount(this.privyClient, {
         walletId: row.privyWalletId,
         address: row.address as `0x${string}`,
         authorizationContext: this.authorizationContext,
       });
+      // viem version drift between @privy-io/node/viem peerDep and this app's
+      // viem forces a cast (runtime shape matches LocalAccount exactly — same
+      // pattern as poly-trade.ts:696-700).
+      // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
+      const account: any = rawAccount;
 
       return {
         account,
@@ -230,11 +235,13 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           connection_id: row.id,
           provider: CREDENTIAL_PROVIDER,
         });
-        const account = createViemAccount(this.privyClient, {
+        const rawIdemAccount = createViemAccount(this.privyClient, {
           walletId: row.privyWalletId,
           address: row.address as `0x${string}`,
           authorizationContext: this.authorizationContext,
         });
+        // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
+        const account: any = rawIdemAccount;
         return {
           account,
           clobCreds,
@@ -248,11 +255,13 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         .wallets()
         .create({ chain_type: "ethereum" });
 
-      const account = createViemAccount(this.privyClient, {
+      const rawFreshAccount = createViemAccount(this.privyClient, {
         walletId: privyWallet.id,
         address: privyWallet.address as `0x${string}`,
         authorizationContext: this.authorizationContext,
       });
+      // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
+      const account: any = rawFreshAccount;
 
       const clobCreds = await this.clobCredsFactory(account);
 

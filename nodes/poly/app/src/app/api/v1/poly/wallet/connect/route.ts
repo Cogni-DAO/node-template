@@ -24,22 +24,20 @@
 import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import {
-  getPolyTraderWalletAdapter,
-  WalletAdapterUnconfiguredError,
-} from "@/adapters/server/wallet";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import {
+  getPolyTraderWalletAdapter,
+  WalletAdapterUnconfiguredError,
+} from "@/bootstrap/poly-trader-wallet";
 
 export const dynamic = "force-dynamic";
 
 const ConnectRequestSchema = z.object({
   custodialConsentAcknowledged: z.literal(true, {
-    errorMap: () => ({
-      message:
-        "Custodial consent must be explicitly acknowledged — set custodialConsentAcknowledged: true.",
-    }),
+    message:
+      "Custodial consent must be explicitly acknowledged — set custodialConsentAcknowledged: true.",
   }),
   custodialConsentActorKind: z.enum(["user", "agent"]),
   custodialConsentActorId: z.string().min(1),
@@ -78,13 +76,22 @@ export const POST = wrapRouteHandlerWithLogging(
       );
     }
 
-    // Defense-in-depth: if the request claims actor_kind=user, the actor_id
-    // MUST match the session user's id. Agent-kind callers carry their own
-    // id (API-key binding — validated in a follow-up slice).
-    if (
-      parsed.data.custodialConsentActorKind === "user" &&
-      parsed.data.custodialConsentActorId !== sessionUser.id
-    ) {
+    // Agent-actor path requires API-key-bound auth (follow-up slice); until
+    // then, reject with 501 rather than leaving an unguarded enum branch
+    // that a session-authed user could take without any actor-id check.
+    if (parsed.data.custodialConsentActorKind === "agent") {
+      return NextResponse.json(
+        {
+          error: "Agent-actor consent path not yet implemented",
+          reason: "agent API-key auth lands in a follow-up B3 slice",
+        },
+        { status: 501 }
+      );
+    }
+
+    // Defense-in-depth: session-authed user path — actor_id MUST match the
+    // session user's id.
+    if (parsed.data.custodialConsentActorId !== sessionUser.id) {
       return NextResponse.json(
         { error: "Consent actor id mismatches session user" },
         { status: 400 }
@@ -98,10 +105,10 @@ export const POST = wrapRouteHandlerWithLogging(
 
     let adapter: ReturnType<typeof getPolyTraderWalletAdapter>;
     try {
-      adapter = getPolyTraderWalletAdapter(ctx.logger);
+      adapter = getPolyTraderWalletAdapter(ctx.log);
     } catch (err) {
       if (err instanceof WalletAdapterUnconfiguredError) {
-        ctx.logger.warn(
+        ctx.log.warn(
           { err: err.message },
           "poly.wallet.connect rejected — adapter unconfigured"
         );
@@ -133,6 +140,15 @@ export const POST = wrapRouteHandlerWithLogging(
       suggested_usdc: 5,
       suggested_matic: 0.1,
     };
+    ctx.log.info(
+      {
+        billing_account_id: account.id,
+        connection_id: result.connectionId,
+        funder_address: result.funderAddress,
+        actor_kind: parsed.data.custodialConsentActorKind,
+      },
+      "poly.wallet.connect — provisioned per-tenant Polymarket trading wallet"
+    );
     return NextResponse.json(ConnectResponseSchema.parse(payload));
   }
 );

@@ -273,7 +273,27 @@ poly-privy-per-user-spike/
 **If B1 passes**: commit to Privy-per-user, proceed to B2 immediately.
 **If B1 fails**: the failure mode is almost certainly mechanical (Privy API surface, CLOB signature type) rather than strategic — fix in place; no direction change.
 
-### B2-B7 — production decomposition
+### B2-B7 — production decomposition + progress
+
+Shipped on PR [#968](https://github.com/Cogni-DAO/node-template/pull/968):
+
+- [x] B2.1 — `@cogni/poly-wallet` port + types + branded `AuthorizedSigningContext`
+- [x] B2.2 — Migration `0030_poly_wallet_connections.sql` + Drizzle schema (`poly_wallet_connections` table with RLS + partial unique on `billing_account_id` + chain/address unique)
+- [x] B2.3 — `PrivyPolyTraderWalletAdapter` `provision` (advisory-locked) + `resolve` + `getAddress` + `revoke`
+- [x] B2.4 — Bootstrap factory (`nodes/poly/app/src/bootstrap/poly-trader-wallet.ts`) with `SEPARATE_PRIVY_APP` env scope + stub CLOB creds behind `POLY_WALLET_ALLOW_STUB_CREDS=1` gate + loud warn log
+- [x] B2.5 — `POST /api/v1/poly/wallet/connect` route (session-auth, 503 on unconfigured, 501 on `actorKind=agent` placeholder, info log on success)
+- [x] B2.6 — CI secret plumbing: `PRIVY_USER_WALLETS_*` + `POLY_WALLET_AEAD_KEY_*` through `candidate-flight-infra.yml` + `deploy-infra.sh`
+- [x] B2.7 — `.env.local.example` updated; `tsconfig.json` references the new package
+- [x] B2.8 — Runbook: [`docs/guides/poly-wallet-provisioning.md`](../../docs/guides/poly-wallet-provisioning.md) covers user-wallets-app Privy creation, 5 GH secrets, exercise curl, Loki handshake
+- [x] B2.9 — `pnpm check:fast` green on the branch (2026-04-21)
+
+Open within B2 (blocking before merge):
+
+- [ ] B2.10 — Component test: testcontainers PG, two-tenant round-trip `provision → resolve → getAddress → revoke → resolve=null` with RLS + defense-in-depth
+- [ ] B2.11 — Orphan reconciler `scripts/ops/sweep-orphan-poly-wallets.ts` (dry-run + `--apply`) to satisfy `NO_ORPHAN_BACKEND_WALLETS`
+- [ ] B2.12 — Real CLOB L2 creds factory wired (`@polymarket/clob-client createOrDeriveApiKey`); drop the stub gate
+
+Following slices:
 
 | Checkpoint                                                                        | Size  | Ships                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   |
 | --------------------------------------------------------------------------------- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -360,35 +380,46 @@ See [docs/spec/poly-multi-tenant-auth.md § Decisions](../../docs/spec/poly-mult
 
 ## Review Feedback (revision 3 — 2026-04-20, Phase B slice on PR #968)
 
-`/review-implementation` on commits `6224cec8c..32a58aa19` found blocking gaps. Status back to `needs_implement`. Summary:
+`/review-implementation` on commits `6224cec8c..32a58aa19` found blocking gaps. r3 fixes pushed 2026-04-21; 4 of 6 blockers resolved, 2 remain open + blocking before this PR merges.
 
-### Blocking
+### Blocking status
 
-1. **Stub CLOB creds ship silently.** `nodes/poly/app/src/adapters/server/wallet/index.ts:83-91` returns literal `"placeholder-*"` strings on every provision. Once this lands on candidate-a, any caller that then tries to actually trade will hit CLOB auth errors that look like production bugs.
-   - **Fix**: gate the stub behind an explicit `POLY_WALLET_ALLOW_STUB_CREDS=1` env flag. Without it, the factory throws `ClobCredsFactoryNotWiredError`. Add a `logger.warn` inside the stub naming `billing_account_id` + "NOT tradeable, plumbing test only".
+| #   | Gap                                                | State    | Resolution                                                                                                                                                                                                                                   |
+| --- | -------------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Stub CLOB creds ship silently                      | ✅ fixed | Gated behind `POLY_WALLET_ALLOW_STUB_CREDS=1` in `bootstrap/poly-trader-wallet.ts`; without it the factory throws at startup. Stub emits `logger.warn "poly.wallet.provision using STUB CLOB creds — NOT tradeable, plumbing test only"`.    |
+| 2   | Agent-consent path unguarded                       | ✅ fixed | Route rejects `custodialConsentActorKind: "agent"` with 501 Not Implemented until agent-API-key auth lands in B3.                                                                                                                            |
+| 3   | Spec claim about dep-cruiser doesn't match reality | ✅ fixed | `SEPARATE_PRIVY_APP` rewritten to describe the actual enforcement: adapter is constructor-injected with `PrivyClient`, so package source has no reachable path to env vars. Route is in the `@/bootstrap/**` allowlist, not `@/adapters/**`. |
+| 4   | `@cogni/node-shared` barrel export unverified      | ✅ fixed | `pnpm check:fast` green — imports resolve cleanly.                                                                                                                                                                                           |
+| 5   | `pnpm check` not run                               | ✅ fixed | `pnpm check:fast` green on `feat/task-0318-phase-b @ HEAD` (2026-04-21). Full output below.                                                                                                                                                  |
+| 6   | Zero tests                                         | ⛔ open  | Still no component tests. Tracking as B2.10 in the checkpoint table. Blocking before merge.                                                                                                                                                  |
 
-2. **Agent-consent path is unguarded.** `nodes/poly/app/src/app/api/v1/poly/wallet/connect/route.ts:89-97` allows `custodialConsentActorKind: "agent"` through session auth without validating the actor id against any agent-API-key binding. The "agent auth comes later" deferral left a bypass.
-   - **Fix**: reject `actorKind: "agent"` with **501 Not Implemented** until B3 wires agent API keys. Don't ship a half-guarded enum branch.
+### Non-blocking suggestions — status
 
-3. **Spec claim about dep-cruiser doesn't match reality.** `docs/spec/poly-trader-wallet-port.md` § Invariants `SEPARATE_PRIVY_APP` claims "dep-cruiser rule forbids imports of `PRIVY_APP_ID`..." — dep-cruiser enforces import-graph, not source-string identifiers. No such rule could be written; none was written.
-   - **Fix**: rewrite the invariant to reflect the ACTUAL enforcement: the adapter is constructor-injected with `PrivyClient`, so package source has no reachable path to env vars. Acceptance check #3 updates accordingly.
+| Suggestion                                                | State    |
+| --------------------------------------------------------- | -------- |
+| `crypto.randomUUID()` instead of PG roundtrip             | ⛔ open  |
+| Delete `brandAuthorized` dead method                      | ⛔ open  |
+| Move route Zod schemas into `packages/node-contracts/`    | ⛔ open  |
+| `poly.wallet.connect` info log on success                 | ✅ fixed |
+| Hex-format regex validation on `POLY_WALLET_AEAD_KEY_HEX` | ✅ fixed |
+| System-tenant bootstrap decision                          | ⛔ open  |
+| Index on `created_at` for orphan reconciler               | ⛔ open  |
+| `custodial_consent_accepted_at DEFAULT now()`             | ⛔ open  |
+| `deploy-infra.sh` megaline refactor                       | ⛔ open  |
 
-4. **`@cogni/node-shared` import unverified.** `privy-poly-trader-wallet.adapter.ts:40` imports `{ aeadEncrypt, aeadDecrypt, AeadAAD }` from the package root — not verified that the barrel re-exports these. Either verify or use `@cogni/node-shared/crypto/aead` submodule.
+### Architecture footnote (reviewer visibility)
 
-5. **`pnpm check` was not run on this branch.** The worktree has no installed deps from this session and I did not bootstrap + verify. Typecheck correctness is unproven.
-   - **Fix**: bootstrap the phase-b worktree, run `pnpm check`, fix any errors, post the green result on the PR.
+This slice lives across three locations — see [`docs/guides/poly-wallet-provisioning.md` § Architecture (honest accounting)](../../docs/guides/poly-wallet-provisioning.md#architecture-honest-accounting) for the full explanation including the smells (split package/node-local/bootstrap, two `biome-ignore noExplicitAny` comments for cross-peerDep viem type drift, stub CLOB creds, ESLint `@/adapters/**` boundary forcing bootstrap indirection).
 
-6. **Zero tests shipped.** Spec acceptance checks #4–#11 are unimplemented — no component test, no unit test, no type-level compile test, no orphan-reconciler script. The adapter ships to candidate-a completely untested.
-   - **Fix**: at minimum one component test (testcontainers PG) proving `provision → resolve → getAddress → revoke → resolve=null` end-to-end under two tenants with RLS defense-in-depth.
+### check:fast output (2026-04-21 HEAD)
 
-### Non-blocking suggestions
-
-- Use `crypto.randomUUID()` instead of `tx.execute(\`SELECT gen_random_uuid()::text\`)` roundtrip in adapter provision.
-- Delete `brandAuthorized` dead method or document it clearly as the seed for B4's `authorizeIntent`.
-- Move route Zod schemas into `packages/node-contracts/src/poly.wallet.connections.v1.contract.ts` — deviation from every other poly route.
-- Add `poly.wallet.connect` info log on success in route; current implementation only logs failure paths. Validation plan on PR body says Loki query must find this event.
-- Add hex-format regex validation on `POLY_WALLET_AEAD_KEY_HEX` before `Buffer.from(..., "hex")` — current length-check catches short output but not e.g. 64 chars of `"z"`.
-- Decide system-tenant bootstrap: migration 0030 has no seed; § Onboarding claims "same provision code path" but container boot may rely on a system-tenant wallet row existing.
-- Add index on `created_at` to support the B2 orphan reconciler's "older than 24h" query.
-- Migration 0030 could default `custodial_consent_accepted_at` to `now()` as belt-and-suspenders; app-side is authoritative.
-- Consider extracting `deploy-infra.sh` remote-SSH env block from the megaline into a heredoc — typo risk is high today.
+```
+✓ packages:build passed (2s)
+✓ workspace:typecheck passed (1s)
+✓ lint passed (4s)
+✓ workspace:lint passed (0s)
+✓ format passed (12s)
+✓ check:docs passed (2s)
+✓ workspace:test passed (1s)
+✓ All fast checks passed!
+```
