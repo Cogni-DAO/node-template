@@ -2,12 +2,15 @@
 id: bug.0335
 type: bug
 title: "Polymarket CLOB rejects every operator BUY on candidate-a with empty error — mirror pipeline boots clean but places zero orders"
-status: needs_triage
+status: done
 priority: 1
 rank: 51
 estimate: 2
+branch: fix/bug-0335-poly-clob-buy-empty-reject
+pr: https://github.com/Cogni-DAO/node-template/pull/964
+deploy_verified: true
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-20
 summary: 'Candidate-a operator wallet `0x7A33…0aEB` has not landed a successful CLOB order in 20+ hours. Every BUY from the autonomous mirror (5 attempts at $1 each, mix of neg_risk=true and neg_risk=false markets) returns the empty-error signature `success=undefined, orderID=<missing>, errorMsg=""`. Same surface as bug.0329, but distinct: that bug is SELL-on-neg-risk-only; this is BUY on every market type. Blocks all mirror validation on candidate-a until diagnosed.'
 outcome: "Operator wallet `0x7A33…0aEB` places a $1 BUY via `scripts/experiments/privy-polymarket-order.ts` against any active Polymarket market and receives a normal orderID receipt. The candidate-a mirror can then resume placing trades when kill switch is flipped on."
 spec_refs:
@@ -119,6 +122,51 @@ Fixed when the reproducer in §Reproducer returns a normal orderID receipt, AND 
 - **candidate-a mirror is a pure no-op today.** Every detected target fill produces an `error`-status ledger row and spends nothing. Rate cap (5 fills/hr) makes the noise bounded.
 - **Spending caps are intact**: hardcoded $1/trade + $10/day + 5 fills/hr. Even if the underlying cause turns out to be a CLOB regression (not a wallet problem), worst case is we lose $10/day in attempted but-rejected placements until it's diagnosed.
 - **Preview / production**: bug.0318's documented manual-seed recipe copies candidate-a's `POLY_CLOB_*` and `POLY_PROTO_PRIVY_*` values into those envs. If candidate-a's CLOB keys are stale, preview's will be too.
+
+## Live validation — candidate-a 2026-04-21T00:01–00:06Z (post-deploy)
+
+Operator-user's tracked-wallet subscriptions fired 3 placements through the patched adapter. All three logged the new structured fields. `deploy_verified: true`.
+
+| UTC        | result   | market               | price | `error_code`                      | `reason` (was previously `""`)                                      |
+| ---------- | -------- | -------------------- | ----- | --------------------------------- | ------------------------------------------------------------------- |
+| `00:01:04` | rejected | Miami Marlins        | 0.63  | `unknown`→`below_min_order_size`¹ | `Size (1.58) lower than the minimum: 5`                             |
+| `00:06:04` | rejected | Baltimore Orioles    | 0.49  | `unknown`→`below_min_order_size`¹ | `invalid amount for a marketable BUY order ($0.9996), min size: $1` |
+| `00:06:04` | **ok**   | Washington Nationals | 0.20  | —                                 | — (order_id `0x6504f83f…`, status `open`)                           |
+
+¹ First flight classified as `unknown` because the min-size signature wasn't in the enum. Post-flight classifier extension (same branch, commit following this note) adds `below_min_order_size`; re-plays would now carry that label. `response_keys: ["error", "status"]` was the signal for both — the live payload shape differs from documented `{success, errorMsg, orderID}`.
+
+## Follow-ups discovered from live data
+
+1. **`below_min_order_size` classifier** — **landed on this branch** (follow-up commit). Enum expanded, patterns `"minimum"|"min size"|"invalid amount"` added, 2 new tests. Rejection hits alert-routable label directly, pairs with bug.0342's business-logic fix (PR #967).
+2. **`ClobOrderResponseLike` interface** — **landed on this branch**. Added `error?: string; message?: string` to encode the discovered `{error, status}` shape. Keeps callers compile-time-honest about what CLOB can return.
+3. **`error_category` dimension (deferred)** — see Analysis §3 below. Not in this PR; would require dashboard coordination.
+
+## Analysis — design against top-0.1% observability patterns
+
+| #   | Pattern                                                              | This PR                                                        | Gap                                                                                                                                                                                                                                                       |
+| --- | -------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Structured JSON, bounded enum label                                  | ✅ `error_code` is 9-value enum, dashboard-safe                | —                                                                                                                                                                                                                                                         |
+| 2   | Market/request context on success **and** failure                    | ✅ `tick_size`, `neg_risk`, `fee_rate_bps` on both paths       | —                                                                                                                                                                                                                                                         |
+| 3   | Error **category** vs **code** (retryable / caller_fault / upstream) | ❌ single-dimension enum                                       | Add `error_category: "transient"\|"permanent"\|"caller_fault"\|"upstream_fault"` — lets alert routing and retry policy branch without re-parsing `error_code`. Not worth a breaking dashboard change yet; revisit when we wire retry policy.              |
+| 4   | Free-text `reason` is a **temporary bucket**, not a permanent field  | ⚠️ kept as 128-char truncated string                           | Every new `reason` pattern seen in Loki should become a new `error_code`. Track in-flight via `poly_clob_place_total{error_code="unknown"}` — when non-zero, extend the enum. (Did exactly this loop for `below_min_order_size`.)                         |
+| 5   | Response-shape encoded in types once discovered                      | ⚠️ `response_keys` is a bootstrapping tool                     | `ClobOrderResponseLike` now typed with the observed `{error, status}` shape. Keep discovering via `response_keys`, then promote into the interface.                                                                                                       |
+| 6   | Trace correlation across layers                                      | ❌ adapter log lines lack `traceId`                            | Routes carry `reqId + traceId` (confirmed Loki), but adapter's child logger doesn't bind them. Node-app's bootstrap should pass `ctx.log` (which has `reqId`/`traceId` bound) as the adapter's logger instead of a fresh component logger. Separate task. |
+| 7   | Sampling / cardinality budget                                        | ✅ ≤3 logs/request (start + ok\|rejected), enum labels bounded | —                                                                                                                                                                                                                                                         |
+| 8   | SLI — `rate(result="ok") / rate(*)`                                  | ❌ no named SLI / SLO                                          | Recording rule + dashboard for `poly_clob_place_ok_rate_5m`. Separate task.                                                                                                                                                                               |
+| 9   | Event name in registry                                               | ⚠️ inline strings (`event: "poly.clob.place"`)                 | Poly node's `events/` index is empty. Bug for a new task to centralize poly events; not adapter's scope (it's a shared package — the registry belongs at the node).                                                                                       |
+
+**Score:** 5/9 green, 2 yellow (fixed in this follow-up), 2 red (correlation + SLI — deferred, separate tasks).
+
+## Fix note (observability patch — this PR)
+
+Root cause turned out to be orderMinSize × price (tracked as bug.0342 by parallel agent — Option A/B design pending). This PR does **not** close that business-logic gap; it closes the diagnostic gap that made the silent reject unreadable:
+
+- `classifyClobFailure(response)` + `classifyClientError(err)` extract `{error_code, response_keys, http_status, reason}` from whatever CLOB actually returned — no more `(success=undefined, errorMsg="")` blackholes.
+- `ClobRejectionError` carries `ClobFailureDetails`; callers branch on enum, not string-matching.
+- `placeOrder` catch logs those fields + preflight market context (`tick_size`, `neg_risk`, `fee_rate_bps`). Metric labels gain `error_code` (bounded 8-value enum, dashboard-safe).
+- No raw response bodies logged — structured fields + 128-char `reason` only (per `docs/spec/observability.md` rule 5).
+
+When bug.0342 ships and the next silent reject appears, the Loki line will read `error_code: invalid_price_or_tick` (or similar) instead of the opaque empty-string signature.
 
 ## Pointers
 
