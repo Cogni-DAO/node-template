@@ -2,7 +2,7 @@
 id: task.0347
 type: task
 title: "Propagate buildSha surface alignment to skill + guide docs"
-status: needs_implement
+status: needs_merge
 priority: 3
 rank: 50
 estimate: 1

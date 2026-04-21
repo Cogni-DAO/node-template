@@ -2,7 +2,7 @@
 id: task.0345
 type: task
 title: "Align buildSha across /readyz, /api/metrics, .well-known/agent.json"
-status: needs_implement
+status: needs_merge
 priority: 2
 rank: 50
 estimate: 1
@@ -12,6 +12,7 @@ spec_refs:
   - docs/spec/ci-cd.md
   - docs/spec/observability.md
 assignees: []
+pr: https://github.com/Cogni-DAO/node-template/pull/973
 credit:
 project: proj.observability-hardening
 branch: feat/task-0345-buildsha-surfaces

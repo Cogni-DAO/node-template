@@ -2,7 +2,7 @@
 id: task.0346
 type: task
 title: "verify-candidate reads /api/metrics build_info, retires Loki scrape"
-status: needs_implement
+status: needs_merge
 priority: 2
 rank: 50
 estimate: 1
