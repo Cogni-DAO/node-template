@@ -18,6 +18,18 @@ tags: [poly, polymarket, wallets, multi-tenant, privy, port-adapter]
 
 > Per-tenant signing context for Polymarket CLOB orders. Narrow, typed, backend-agnostic. The port sits next to — not inside — the system-role [`OperatorWalletPort`](./operator-wallet.md), and its adapters use a **separate Privy app** from the operator wallet so credential rotation, billing, audit, and compromise blast radius are isolated by construction.
 
+## Goal
+
+Define the contract for a per-tenant Polymarket CLOB signing-context port — `PolyTraderWalletPort` — that resolves `(billing_account_id) → { signer, clob_creds, funder_address }`, enforces grant-scope + caps via a branded `AuthorizedSigningContext`, and isolates user-wallet Privy credentials from the system / operator-wallet Privy app.
+
+## Non-Goals
+
+- Generalizing `OperatorWalletPort` to cover per-tenant signing — the operator wallet is a system-role intent-only actuator and stays unchanged.
+- Multi-wallet-per-tenant — v1 is one active `poly_wallet_connections` row per `billing_account_id`.
+- On-chain allowance flow — approvals (USDC + CTF `setApprovalForAll`) are the onboarding-UX surface's concern (B3), not this port.
+- Mid-flight cancellation or sweep on revoke — revocation is halt-future-only.
+- A second backend this release — `SafePolyTraderWalletAdapter` / `TurnkeyPolyTraderWalletAdapter` are port-level-compatible future work, not in scope here.
+
 ## Why a new port
 
 Phase B needs per-tenant Polymarket trading wallets. Three ways to get there were considered; only one survived review:
@@ -39,6 +51,10 @@ Phase B needs per-tenant Polymarket trading wallets. Three ways to get there wer
 | **Spec** | [packages-architecture](./packages-architecture.md)                      | Capability-package shape this port follows         |
 | **Spec** | [tenant-connections](./tenant-connections.md)                            | AEAD envelope reused for CLOB creds-at-rest        |
 | **Task** | [task.0318](../../work/items/task.0318.poly-wallet-multi-tenant-auth.md) | Phase B lifecycle carrier                          |
+
+## Design
+
+The port lives in `packages/poly-wallet/`. The first adapter (`PrivyPolyTraderWalletAdapter`) lives node-local at `nodes/poly/app/src/adapters/server/wallet/` because it depends on the node-local `@cogni/poly-db-schema` + `@cogni/db-client` service DB handle. Future adapters (Safe+4337, Turnkey) will plug into the same port without caller churn.
 
 ## Port
 
@@ -226,7 +242,11 @@ export interface PolyTraderWalletPort {
 }
 ```
 
-### Invariants (`CODE_REVIEW_CRITERIA`)
+## Invariants
+
+<!-- Required heading: port-level invariants also live inline in `src/port/poly-trader-wallet.port.ts` module header. -->
+
+### Port invariants (`CODE_REVIEW_CRITERIA`)
 
 - `TENANT_SCOPED` — every method takes a `billingAccountId`. No "current" state inside the adapter.
 - `NO_GENERIC_SIGNING` — the port does not expose a free-form `signMessage` / `signTransaction` method.
