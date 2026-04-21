@@ -2,12 +2,12 @@
 id: bug.0344
 type: bug
 title: Hand-curated overlay digests drift on every unrelated flight — adopt a digest-update controller
-status: needs_implement
+status: needs_review
 priority: 0
 rank: 1
 estimate: 5
 summary: "Main's `infra/k8s/overlays/*/<service>/kustomization.yaml` digest fields are hand-maintained seeds. Every flight runs `rsync -a --delete` of main's overlay onto the deploy branch, then `promote-k8s-image.sh` bumps digests only for apps in the affected-targets set (`scripts/ci/detect-affected.sh`). Services not touched by the flight's PR inherit main's seed — if the seed is stale, the deploy branch silently reverts to a pre-feature image on every unrelated flight. Produced #970 (poly-doltgres migrator with missing script → ERR_PNPM_NO_IMPORTER_MANIFEST_FOUND), #971 (scheduler-worker pre-multi-queue → 30–40s silent chat hang on preview + candidate-a), #972 (operator + resy pre-BUILD_SHA → /readyz.version=0 → verify-buildsha fails every flight). Manual per-service bumps are sunk cost on a dying pattern and don't scale past v0."
-outcome: "Git is eventually-consistent with GHCR. Argo CD Image Updater (pinned v0.15.2 — last version tested against Argo CD v2.13.x) watches the `deploy/preview` Applications for new `preview-*` image tags and commits fresh digests back to `main` under the existing `Cogni-1729` PAT identity used by every other automated commit in this repo. Unrelated flights inherit a current seed and never regress a service's digest. `scripts/ci/promote-k8s-image.sh` + hand-bumps disappear from the routine flow. Zero new bespoke GitHub Actions workflows, zero new GitHub App registrations, zero new branch-protection carve-outs."
+outcome: "Git is eventually-consistent with GHCR. Argo CD Image Updater (pinned v0.15.2 — last version tested against Argo CD v2.13.x) watches the `deploy/preview` Applications for new `preview-*` image tags and commits fresh digests back to `main`'s `preview/` overlays under the existing `Cogni-1729` PAT identity used by every other automated commit in this repo. Scope is deliberately narrow for MVP; candidate-a and production overlays on main plus migrator images are follow-up work (see _MVP scope boundaries_ below). `scripts/ci/promote-k8s-image.sh` stays in place as the deploy-branch digest pinner — only the bit that previously required humans to copy digests back to main is automated here. Zero new bespoke GitHub Actions workflows, zero new GitHub App registrations, zero new branch-protection carve-outs."
 spec_refs:
   - ci-cd
 assignees: derekg1729
@@ -17,10 +17,10 @@ branch: design/bug-0344-digest-updater
 pr:
 deploy_verified: false
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
-created: 2026-04-21
-updated: 2026-04-21
+created: 2026-04-20
+updated: 2026-04-20
 labels: [cicd, infra, gitops, drift, argo]
 external_refs:
   - scripts/ci/promote-k8s-image.sh
@@ -71,12 +71,12 @@ Image Updater's default is to write to the Application's source branch (`deploy/
 
 ### Why it doesn't fight with the flight workflow
 
-| Writer                              | Target                          | Trigger                            | Owns                                           |
-| ----------------------------------- | ------------------------------- | ---------------------------------- | ---------------------------------------------- |
-| `promote-k8s-image.sh` (candidate)  | `deploy/candidate-a` overlay    | PR flight                          | Pins the chosen PR's digest on the flight slot |
-| `promote-k8s-image.sh` (preview)    | `deploy/preview` overlay        | merge-to-main flight               | Pins merged code's digest on the preview slot  |
-| `promote-k8s-image.sh` (production) | `deploy/production` overlay     | manual `promote-to-production.yml` | Pins preview's validated digest on production  |
-| **Argo CD Image Updater (new)**     | **`main` overlay (all 3 envs)** | continuous poll of GHCR            | Keeps `main`'s seed fresh for every app        |
+| Writer                              | Target                                     | Trigger                            | Owns                                            |
+| ----------------------------------- | ------------------------------------------ | ---------------------------------- | ----------------------------------------------- |
+| `promote-k8s-image.sh` (candidate)  | `deploy/candidate-a` overlay               | PR flight                          | Pins the chosen PR's digest on the flight slot  |
+| `promote-k8s-image.sh` (preview)    | `deploy/preview` overlay                   | merge-to-main flight               | Pins merged code's digest on the preview slot   |
+| `promote-k8s-image.sh` (production) | `deploy/production` overlay                | manual `promote-to-production.yml` | Pins preview's validated digest on production   |
+| **Argo CD Image Updater (new)**     | **`main` overlay (preview env only, MVP)** | continuous poll of GHCR            | Keeps `main`'s preview seed fresh for every app |
 
 Rsync (`INFRA_K8S_MAIN_DERIVED`, Axiom 17) still wins on deploy branches: `main → deploy/<env>` then `promote-k8s-image.sh` overrides affected apps. The controller's commits to `main` arrive asynchronously — if a flight rsyncs before Image Updater catches up, the next flight will catch it. That's the "eventually-consistent" in the outcome statement.
 
@@ -92,7 +92,7 @@ Rsync (`INFRA_K8S_MAIN_DERIVED`, Axiom 17) still wins on deploy branches: `main 
 <!-- CODE REVIEW CRITERIA -->
 
 - [ ] **NO_BESPOKE_DIGEST_WORKFLOW** — solution is adoption of the existing Image Updater project, not a new `.github/workflows/*.yml` that commits digests. Fail if the PR adds a workflow whose purpose is "commit digest updates to main".
-- [ ] **DIGEST_IMMUTABILITY_PRESERVED** — Image Updater is configured with `update-strategy: digest` (never `latest`). `IMAGE_IMMUTABILITY` axiom (`docs/spec/ci-cd.md`) untouched. Verify: the controller's `allow-tags` regex matches only `^preview-[0-9a-f]{40}$` (post-merge immutable tag class), never `latest` / `stable` / floating tags.
+- [ ] **DIGEST_IMMUTABILITY_PRESERVED** — Image Updater is configured with `update-strategy: newest-build` (pick newest tag by image-manifest creation timestamp, using a tight `allow-tags` regex that only admits the post-merge SHA-bearing tag class). `IMAGE_IMMUTABILITY` axiom (`docs/spec/ci-cd.md`) untouched: every tag admitted by the regex is itself immutable (content-addressed by the merge SHA). The `digest` strategy name in Image Updater implies "track a single mutable tag's digest" which is **not** our model; `newest-build` (a.k.a. `latest` in pre-v0.11 docs) with a tight regex is the correct primitive. Verify: `allow-tags` matches only `^preview-[0-9a-f]{40}(-<suffix>)?$`, never `latest` / `stable` / floating tags.
 - [ ] **COMMIT_PROVENANCE_VIA_MESSAGE_PREFIX** — every digest-update commit on `main` uses commit-message prefix `chore(deps): argocd-image-updater` (configured via Image Updater's `--commit-message-template` flag / `git.commit-message-template` ConfigMap key) so `git log --grep='argocd-image-updater' -- infra/k8s/overlays/` is the audit filter. The commit author is `Cogni-1729` — same as every other automated commit — intentionally consistent with the existing PAT-based automation pattern (`release.yml`, `promote-to-production.yml`, `promote-and-deploy.yml`, `flight-preview.yml`).
 - [ ] **SCOPE_IS_MAIN_ONLY** — Image Updater writes to `main` only. Deploy branch digest promotion (`promote-k8s-image.sh` during candidate/preview/production flights) stays as-is. Verify: no Image Updater annotation points `git-branch` at a `deploy/*` branch.
 - [ ] **PRODUCTION_NOT_AUTO_UPDATED** — production flights require explicit human dispatch via `promote-to-production.yml`. The controller watches only `deploy/preview`'s Applications; annotations on `production-applicationset.yaml` are **not** added. Verify: `infra/k8s/argocd/production-applicationset.yaml` has zero `argocd-image-updater.argoproj.io/*` annotations.
@@ -112,18 +112,19 @@ flight-preview.yml (on merge to main)
 
 Argo CD Image Updater (continuous, every 2m default poll)
   ├─ watches: Applications generated from preview-applicationset.yaml (candidate-a and production intentionally excluded)
-  ├─ registry: ghcr.io/cogni-dao/* with tag filter ^preview-[0-9a-f]{40}$, update-strategy: digest
+  ├─ registry: ghcr.io/cogni-dao/cogni-template with per-Application allow-tags regex
+  │   (^preview-[0-9a-f]{40}{{image_tag_suffix}}$), update-strategy: newest-build
   └─ on new digest:
         write-back-method: git
         git-branch: main                                 ← ✅ writes to main, not deploy/preview
-        write-back-target: kustomization:./infra/k8s/overlays/<env>/<app>/
+        write-back-target: kustomization    (Application source.path: infra/k8s/overlays/preview/{{name}})
         commit author: Cogni-1729 (reuses ACTIONS_AUTOMATION_BOT_PAT)  ← ✅ no new App
         commit message prefix: chore(deps): argocd-image-updater ...  ← ✅ provenance via grep
-        → updates digest: "sha256:..." in all 3 env overlays on main
+        → updates digest: "sha256:..." in main's preview/{{name}}/kustomization.yaml (MVP scope)
 
-next flight (candidate-a or preview)
-  └─ rsync main → deploy/<env>  (Axiom 17)              ← ✅ picks up fresh seed
-     └─ promote-k8s-image.sh bumps affected apps only   ← ✅ non-affected apps now have CURRENT seed, not stale one
+next preview flight
+  └─ rsync main → deploy/preview  (Axiom 17)            ← ✅ main's preview overlay is fresh
+     └─ promote-k8s-image.sh bumps affected apps only   ← ✅ non-affected apps now have CURRENT seed
 ```
 
 ### Files
@@ -139,29 +140,36 @@ next flight (candidate-a or preview)
 **Modify:**
 
 - `infra/k8s/argocd/kustomization.yaml` — add `image-updater/` to `resources:` so the controller is installed alongside the existing `install.yaml`.
-- `infra/k8s/argocd/preview-applicationset.yaml` — add the seven `argocd-image-updater.argoproj.io/*` annotations on the `template.metadata.annotations` block: `image-list`, `<alias>.update-strategy`, `<alias>.allow-tags`, `<alias>.pull-secret`, `write-back-method`, `git-branch`, `write-back-target`. Per-service `image-list` per the target catalog (`operator`, `operator-migrator`, `poly`, `poly-migrator`, `resy`, `resy-migrator`, `scheduler-worker`).
-- `docs/spec/ci-cd.md` § Deploy Branch Rules — replace the current "⚠️ Known anti-pattern: main's overlay digests are hand-curated seeds." callout with a description of the controller's role (seed-keeper on `main`) and a pointer to this bug's PR and the bootstrap runbook.
-- `work/projects/proj.cicd-services-gitops.md` row 21 (Active Blockers) — flip status once controller is in steady-state across `preview-{sha}` bumps for at least 3 consecutive merges.
+- `infra/k8s/argocd/preview-applicationset.yaml` — add the six `argocd-image-updater.argoproj.io/*` annotations on the `template.metadata.annotations` block, parameterized via the catalog generator: `image-list: app=ghcr.io/cogni-dao/cogni-template`, `app.update-strategy: newest-build`, `app.allow-tags: regexp:^preview-[0-9a-f]{40}{{image_tag_suffix}}$`, `app.pull-secret: pullsecret:argocd/argocd-image-updater-ghcr`, `write-back-method: git:secret:argocd/argocd-image-updater-git-creds`, `git-branch: main`.
+- `infra/catalog/{operator,poly,resy,scheduler-worker}.yaml` — add `image_tag_suffix` field (`""` for operator, `"-poly"`, `"-resy"`, `"-scheduler-worker"` respectively), exposing the per-target tag suffix already canonical in `scripts/ci/lib/image-tags.sh` to the ApplicationSet template.
+- `docs/spec/ci-cd.md` § Deploy Branch Rules — replace the current "⚠️ Known anti-pattern: main's overlay digests are hand-curated seeds." callout with a description of the controller's role (seed-keeper on `main`'s preview overlay) and a pointer to this bug's PR, the bootstrap runbook, and the remaining follow-up surfaces (candidate-a / production overlays + migrators).
+- `work/projects/proj.cicd-services-gitops.md` row 21 (Active Blockers) — leave open after this PR lands; only flip once the MVP is extended to cover candidate-a/production overlays and migrators (tracked as separate follow-ups).
+
+**MVP scope boundaries (what this PR intentionally does NOT cover):**
+
+- **Candidate-a & production overlays on `main`** stay manually maintained. Rationale: Image Updater's `write-back-target: kustomization` writes to the Application's single `source.path`. The preview AppSet's source.path is `infra/k8s/overlays/preview/{{name}}` — so only that path is updated. Fan-out to sibling envs needs either (a) annotating the candidate-a AppSet the same way (legal — its Applications also live on `deploy/candidate-a`, so writes redirect to `main` via `git-branch: main`) or (b) a small post-commit script that mirrors the digest across env overlays. Pick one in a follow-up once this MVP is proven in steady state.
+- **Per-node migrator images** (`cogni-template` tags `-poly-migrate`, `-resy-migrate`, `-operator-migrate`) stay maintained by `promote-k8s-image.sh --migrator-digest` on deploy branches. Rationale: the kustomize `images:` block uses two entries (app + migrator) sharing one `newName` but different source `name`s; Image Updater's one-alias-per-image-list model is awkward for this shape. Follow-up: add a second alias (`migrate=ghcr.io/cogni-dao/cogni-template`) per Application with its own `kustomize.image-name: ghcr.io/cogni-dao/cogni-template-migrate` write-back match.
+- **Scheduler-worker + operator coverage in MVP**: both are included (same annotation shape, different `image_tag_suffix`). No node-app migrator dance there — operator has no Kubernetes migrator Job today and scheduler-worker has no migrator image at all.
 
 **Test / Validation:**
 
-- `docs/runbooks/image-updater-bootstrap.md` includes the explicit test: push a trivial change to `nodes/resy/app/...`, merge, observe `flight-preview.yml` re-tag to `preview-<merge-sha>` in GHCR, observe within 5 minutes a bot-authored commit on `main` updating `infra/k8s/overlays/{candidate-a,preview,production}/resy/kustomization.yaml` to the new `sha256:...`.
+- `docs/runbooks/image-updater-bootstrap.md` includes the explicit test: push a trivial change to `nodes/resy/app/...`, merge, observe `flight-preview.yml` re-tag to `preview-<merge-sha>-resy` in GHCR, observe within 5 minutes a `Cogni-1729`-authored commit on `main` updating `infra/k8s/overlays/preview/resy/kustomization.yaml` to the new `sha256:...`.
 
 ## Validation
 
 **exercise:**
 
-1. On `main`, capture current digest for any one service (e.g. `resy` in `infra/k8s/overlays/preview/resy/kustomization.yaml`): `D0`.
-2. Merge a no-op change that touches `nodes/resy/**` (triggers `pr-build` → `flight-preview` → new `preview-{mergeSHA}` tag). Capture new GHCR digest: `D1`.
+1. On `main`, capture current digest for resy in `infra/k8s/overlays/preview/resy/kustomization.yaml`: `D0`.
+2. Merge a no-op change that touches `nodes/resy/**` (triggers `pr-build` → `flight-preview` → new `preview-{mergeSHA}-resy` tag). Capture new GHCR digest: `D1`.
 3. Wait ≤ 5 minutes.
-4. Expect: a new commit on `main` authored by `Cogni-1729` with message prefix `chore(deps): argocd-image-updater`, touching all three overlay files (`candidate-a/resy`, `preview/resy`, `production/resy`) and setting `digest: "D1"`.
-5. Trigger a `candidate-flight.yml` for an **unrelated** PR (e.g. one touching only `nodes/poly/**`). After flight success, inspect `deploy/candidate-a:infra/k8s/overlays/candidate-a/resy/kustomization.yaml`: resy's digest must equal `D1` (fresh seed inherited), not `D0` (the stale pre-Image-Updater value).
+4. Expect: a new commit on `main` authored by `Cogni-1729` with message prefix `chore(deps): argocd-image-updater`, touching `infra/k8s/overlays/preview/resy/kustomization.yaml` and setting the primary app image's `digest:` field to `D1`. (Migrator entry + candidate-a/production overlays on main are explicitly out of MVP scope — they still get bumped the old way during flights.)
+5. Trigger a `flight-preview` run for an **unrelated** PR (e.g. one touching only `nodes/poly/**`). After the flight rsyncs `main → deploy/preview`, inspect `deploy/preview:infra/k8s/overlays/preview/resy/kustomization.yaml`: resy's primary app digest must equal `D1` (fresh seed inherited from main), not `D0` (the stale pre-Image-Updater value).
 
 **observability:**
 
 - `{namespace="argocd",pod=~"argocd-image-updater-.*"}` in Loki shows `level=info msg="Successfully updated image"` for each processed Application, with the target digest in the payload.
-- `git log --grep='chore(deps): argocd-image-updater' --since="1 hour ago" -- infra/k8s/overlays/` returns at least one commit covering the resy update.
-- `argocd app get candidate-a-resy -o json | jq '.status.summary.images'` at rest matches the latest `main` seed for resy.
+- `git log --grep='chore(deps): argocd-image-updater' --since="1 hour ago" -- infra/k8s/overlays/preview/` returns at least one commit covering the resy update.
+- `argocd app get preview-resy -o json | jq '.status.summary.images'` at rest matches the latest `main` preview seed for resy.
 
 ## Blocked by / prerequisites
 

@@ -1,0 +1,33 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Patches argocd-image-updater-config (ConfigMap, bundled in upstream install)
+# with:
+#   1. registries: — how the controller authenticates to ghcr.io to scan tags
+#      and resolve digests. Credentials live in the `argocd-image-updater-ghcr`
+#      Secret (ksops-decrypted from ghcr-secret.enc.yaml at apply-time).
+#   2. git.commit-message-template — stable `chore(deps): argocd-image-updater`
+#      prefix so `git log --grep='argocd-image-updater'` is the audit filter.
+#      Commit author is Cogni-1729 (ACTIONS_AUTOMATION_BOT_PAT), identical to
+#      every other automated commit on main (release.yml, promote-to-production.yml,
+#      promote-and-deploy.yml, flight-preview.yml).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: argocd-image-updater-config
+  namespace: argocd
+data:
+  registries.conf: |
+    registries:
+      - name: GitHub Container Registry
+        api_url: https://ghcr.io
+        prefix: ghcr.io
+        ping: yes
+        credentials: secret:argocd/argocd-image-updater-ghcr#token
+  git.commit-message-template: |
+    chore(deps): argocd-image-updater update {{ range .AppChanges -}}
+    - {{ .Image }} to {{ .NewTag }}@{{ .NewDigest }} (from {{ .OldTag }}@{{ .OldDigest }})
+    {{ end }}
+
+    Automated digest refresh by argocd-image-updater (bug.0344).
+    See docs/runbooks/image-updater-bootstrap.md for rollback.

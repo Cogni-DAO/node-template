@@ -3,3 +3,9 @@ type: node
 port: 3000
 node_id: "4ff8eac1-4eba-4ed0-931b-b1fe4f64713d"
 dockerfile: nodes/operator/app/Dockerfile
+# bug.0344 — tag suffix pushed to GHCR for this target's image, used by
+# argocd-image-updater to distinguish this app's tags from siblings' in the
+# shared ghcr.io/cogni-dao/cogni-template repo. Canonical suffix table is
+# scripts/ci/lib/image-tags.sh:tag_suffix_for_target (operator is unsuffixed
+# for historical reasons).
+image_tag_suffix: ""

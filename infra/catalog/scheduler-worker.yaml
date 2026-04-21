@@ -2,3 +2,5 @@ name: scheduler-worker
 type: service
 port: 9000
 dockerfile: services/scheduler-worker/Dockerfile
+# bug.0344 — see infra/catalog/operator.yaml for why this field exists.
+image_tag_suffix: "-scheduler-worker"
