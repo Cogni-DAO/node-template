@@ -35,7 +35,10 @@ import {
 } from "@/components/reui/data-grid/data-grid";
 import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
-import { WalletQuickJump } from "@/features/wallet-analysis";
+import {
+  WalletDetailDrawer,
+  WalletQuickJump,
+} from "@/features/wallet-analysis";
 
 import { fetchCopyTargets } from "../dashboard/_api/fetchCopyTargets";
 import { fetchTopWallets } from "../dashboard/_api/fetchTopWallets";
@@ -94,6 +97,7 @@ export function ResearchView() {
     useState<ColumnFiltersState>(initialFilters);
   const [sorting, setSorting] = useState<SortingState>(initialSort);
   const [globalFilter, setGlobalFilter] = useState(searchParams.get("q") ?? "");
+  const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
 
   const syncUrl = useCallback(
     (next: {
@@ -272,9 +276,7 @@ export function ResearchView() {
           table={table}
           recordCount={rows.length}
           isLoading={walletsLoading}
-          onRowClick={(row) =>
-            router.push(`/research/w/${row.proxyWallet.toLowerCase()}`)
-          }
+          onRowClick={(row) => setSelectedAddr(row.proxyWallet.toLowerCase())}
           tableLayout={{
             headerSticky: true,
             headerBackground: true,
@@ -293,6 +295,15 @@ export function ResearchView() {
 
       {/* Compact no-fly footer (replaces the old multi-section dossier) */}
       <NoFlyFooter />
+
+      {/* Inline drawer — keeps the table context, skeletons render instantly. */}
+      <WalletDetailDrawer
+        addr={selectedAddr}
+        open={selectedAddr !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedAddr(null);
+        }}
+      />
     </div>
   );
 }
