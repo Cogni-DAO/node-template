@@ -4,7 +4,7 @@
 /**
  * Module: `@cogni/poly-wallet/tsup.config`
  * Purpose: Build configuration for poly-wallet package.
- * Scope: Build tooling only.
+ * Scope: Build tooling configuration only. Does not contain runtime code or exports.
  * Invariants: ESM output with type declarations.
  * Side-effects: IO
  * Links: docs/spec/poly-trader-wallet-port.md
@@ -14,11 +14,7 @@
 import { defineConfig } from "tsup";
 
 export const tsupConfig = defineConfig({
-  entry: [
-    "src/index.ts",
-    "src/port/index.ts",
-    "src/adapters/privy/index.ts",
-  ],
+  entry: ["src/index.ts", "src/port/index.ts", "src/adapters/privy/index.ts"],
   format: ["esm"],
   dts: false,
   clean: false,

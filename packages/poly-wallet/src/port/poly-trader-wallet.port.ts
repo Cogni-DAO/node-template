@@ -3,10 +3,8 @@
 
 /**
  * Module: `@cogni/poly-wallet/port`
- * Purpose: Per-tenant Polymarket CLOB signing-context port — credential broker
- *   + grant-aware intent authorization + intent-typed withdraw. Backend-agnostic.
- * Scope: Interface + types only. No runtime, no lifecycle, no env reads.
- *   Adapters live under `src/adapters/*`.
+ * Purpose: Defines the per-tenant Polymarket CLOB signing-context port (credential broker + grant-aware intent authorization + intent-typed withdraw), backend-agnostic.
+ * Scope: Interface + types only. Does not contain runtime, lifecycle, or env reads; adapters live under `src/adapters/*`.
  * Invariants:
  *   - TENANT_SCOPED — every method takes a `billingAccountId`.
  *   - NO_GENERIC_SIGNING — no `signMessage(bytes)` / `signTransaction(calldata)` surface.
@@ -18,7 +16,7 @@
  *   - SEPARATE_PRIVY_APP — adapters for Privy backends MUST read the
  *     user-wallets Privy app creds (`PRIVY_USER_WALLETS_*`), never the
  *     operator-wallet app creds (`PRIVY_APP_*`).
- * Side-effects: none (interface definition only).
+ * Side-effects: none (interface definition only)
  * Links: docs/spec/poly-trader-wallet-port.md, docs/spec/poly-multi-tenant-auth.md,
  *        work/items/task.0318.poly-wallet-multi-tenant-auth.md
  * @public
@@ -153,7 +151,7 @@ export interface PolyTraderWalletPort {
    */
   authorizeIntent(
     billingAccountId: string,
-    intent: OrderIntentSummary,
+    intent: OrderIntentSummary
   ): Promise<AuthorizeIntentResult>;
 
   /**

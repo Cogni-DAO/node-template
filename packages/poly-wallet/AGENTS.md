@@ -22,7 +22,7 @@ Standalone workspace package (`@cogni/poly-wallet`) providing a per-tenant Polym
 ```json
 {
   "layer": "packages",
-  "may_import": ["viem"],
+  "may_import": [],
   "must_not_import": [
     "app",
     "features",

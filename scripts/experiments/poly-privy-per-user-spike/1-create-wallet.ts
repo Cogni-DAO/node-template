@@ -3,8 +3,7 @@
 
 /**
  * Module: `@scripts/experiments/poly-privy-per-user-spike/1-create-wallet`
- * Purpose: Spike step 1 — provision a FRESH per-user Privy wallet (distinct from the shared operator wallet)
- *   to prove per-user wallet provisioning for task.0318 Phase B.
+ * Purpose: Provisions a FRESH per-user Privy wallet (distinct from the shared operator wallet) to prove the per-user wallet provisioning flow for task.0318 Phase B.
  * Scope: CLI script. Does not modify repo-spec or any persistent state beyond Privy.
  *   Prints the new wallet's `address` + `walletId` for use in spike steps 2-6.
  * Invariants: KEY_NEVER_IN_APP — no private key material emitted or stored.
@@ -29,7 +28,9 @@ async function main(): Promise<void> {
   const client = new PrivyClient({ appId, appSecret });
 
   console.log("[spike] Creating a NEW per-user Privy wallet candidate...");
-  console.log("[spike] This is NOT the operator wallet — it simulates a user's Polymarket wallet.\n");
+  console.log(
+    "[spike] This is NOT the operator wallet — it simulates a user's Polymarket wallet.\n"
+  );
 
   const wallet = await client.wallets().create({ chain_type: "ethereum" });
 
@@ -39,7 +40,9 @@ async function main(): Promise<void> {
   console.log();
   console.log("Next:");
   console.log(`  1. Record address + walletId in evidence/wallet-provision.md`);
-  console.log(`  2. Fund the address with ~$5 USDC.e + ~0.2 MATIC on Polygon (see README)`);
+  console.log(
+    `  2. Fund the address with ~$5 USDC.e + ~0.2 MATIC on Polygon (see README)`
+  );
   console.log(
     `  3. Run approvals with: POLY_PROTO_WALLET_ADDRESS=${wallet.address} PRIVY_WALLET_ID=${wallet.id} tsx scripts/experiments/approve-polymarket-allowances.ts`
   );

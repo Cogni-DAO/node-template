@@ -26,9 +26,8 @@
  * @internal
  */
 
-import type { AuthorizationContext, PrivyClient } from "@privy-io/node";
-import { createViemAccount } from "@privy-io/node/viem";
 import type { Database } from "@cogni/db-client";
+import { type AeadAAD, aeadDecrypt, aeadEncrypt } from "@cogni/node-shared";
 import { polyWalletConnections } from "@cogni/poly-db-schema";
 import type {
   AuthorizedSigningContext,
@@ -38,7 +37,8 @@ import type {
   PolyTraderSigningContext,
   PolyTraderWalletPort,
 } from "@cogni/poly-wallet";
-import { aeadDecrypt, aeadEncrypt, type AeadAAD } from "@cogni/node-shared";
+import type { AuthorizationContext, PrivyClient } from "@privy-io/node";
+import { createViemAccount } from "@privy-io/node/viem";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 import { getAddress, type LocalAccount } from "viem";
@@ -69,9 +69,7 @@ export interface PrivyPolyTraderWalletAdapterConfig {
    * (for plumbing verification on candidate-a). Real derivation swaps in
    * under a follow-up commit that wires @polymarket/clob-client.
    */
-  clobCredsFactory: (
-    signer: LocalAccount,
-  ) => Promise<PolyClobApiKeyCreds>;
+  clobCredsFactory: (signer: LocalAccount) => Promise<PolyClobApiKeyCreds>;
   logger: Logger;
 }
 
@@ -82,7 +80,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   private readonly encryptionKey: Buffer;
   private readonly encryptionKeyId: string;
   private readonly clobCredsFactory: (
-    signer: LocalAccount,
+    signer: LocalAccount
   ) => Promise<PolyClobApiKeyCreds>;
   private readonly log: Logger;
 
@@ -101,7 +99,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   }
 
   async resolve(
-    billingAccountId: string,
+    billingAccountId: string
   ): Promise<PolyTraderSigningContext | null> {
     try {
       const rows = await this.serviceDb
@@ -110,8 +108,8 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         .where(
           and(
             eq(polyWalletConnections.billingAccountId, billingAccountId),
-            isNull(polyWalletConnections.revokedAt),
-          ),
+            isNull(polyWalletConnections.revokedAt)
+          )
         )
         .limit(1);
 
@@ -122,7 +120,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       if (row.billingAccountId !== billingAccountId) {
         this.log.warn(
           { billing_account_id: billingAccountId, connection_id: row.id },
-          "tenant mismatch on poly_wallet_connections SELECT — refusing to resolve",
+          "tenant mismatch on poly_wallet_connections SELECT — refusing to resolve"
         );
         return null;
       }
@@ -151,15 +149,13 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           billing_account_id: billingAccountId,
           err: err instanceof Error ? err.message : String(err),
         },
-        "poly_wallet resolve failed — returning null (fail-closed)",
+        "poly_wallet resolve failed — returning null (fail-closed)"
       );
       return null;
     }
   }
 
-  async getAddress(
-    billingAccountId: string,
-  ): Promise<`0x${string}` | null> {
+  async getAddress(billingAccountId: string): Promise<`0x${string}` | null> {
     const rows = await this.serviceDb
       .select({
         id: polyWalletConnections.id,
@@ -170,8 +166,8 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       .where(
         and(
           eq(polyWalletConnections.billingAccountId, billingAccountId),
-          isNull(polyWalletConnections.revokedAt),
-        ),
+          isNull(polyWalletConnections.revokedAt)
+        )
       )
       .limit(1);
 
@@ -180,7 +176,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     if (row.billingAccountId !== billingAccountId) {
       this.log.warn(
         { billing_account_id: billingAccountId, connection_id: row.id },
-        "tenant mismatch on getAddress — refusing",
+        "tenant mismatch on getAddress — refusing"
       );
       return null;
     }
@@ -200,14 +196,14 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     if (!consent) {
       // CUSTODIAL_CONSENT backstop; API layer is the authoritative gate.
       throw new Error(
-        "CUSTODIAL_CONSENT: provision called without custodialConsent payload",
+        "CUSTODIAL_CONSENT: provision called without custodialConsent payload"
       );
     }
 
     return this.serviceDb.transaction(async (tx) => {
       // PROVISION_IS_IDEMPOTENT: tenant-scoped advisory lock for the whole txn.
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtext(${input.billingAccountId}))`,
+        sql`SELECT pg_advisory_xact_lock(hashtext(${input.billingAccountId}))`
       );
 
       // Idempotency short-circuit.
@@ -217,8 +213,8 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         .where(
           and(
             eq(polyWalletConnections.billingAccountId, input.billingAccountId),
-            isNull(polyWalletConnections.revokedAt),
-          ),
+            isNull(polyWalletConnections.revokedAt)
+          )
         )
         .limit(1);
 
@@ -226,7 +222,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         const row = existing[0];
         if (row.billingAccountId !== input.billingAccountId) {
           throw new Error(
-            "tenant mismatch on provision idempotency check — aborting",
+            "tenant mismatch on provision idempotency check — aborting"
           );
         }
         const clobCreds = this.decryptCreds(row.clobApiKeyCiphertext, {
@@ -262,7 +258,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
 
       // Pre-assign the row id so the AEAD AAD binds to it before INSERT.
       const [{ gen_id }] = (await tx.execute<{ gen_id: string }>(
-        sql`SELECT gen_random_uuid()::text AS gen_id`,
+        sql`SELECT gen_random_uuid()::text AS gen_id`
       )) as unknown as [{ gen_id: string }];
 
       const aad: AeadAAD = {
@@ -273,7 +269,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       const ciphertext = aeadEncrypt(
         JSON.stringify(clobCreds),
         aad,
-        this.encryptionKey,
+        this.encryptionKey
       );
 
       await tx.insert(polyWalletConnections).values({
@@ -297,7 +293,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           connection_id: gen_id,
           funder_address: getAddress(privyWallet.address),
         },
-        "poly.wallet.provision — created per-tenant Privy trading wallet",
+        "poly.wallet.provision — created per-tenant Privy trading wallet"
       );
 
       return {
@@ -322,15 +318,15 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       .where(
         and(
           eq(polyWalletConnections.billingAccountId, input.billingAccountId),
-          isNull(polyWalletConnections.revokedAt),
-        ),
+          isNull(polyWalletConnections.revokedAt)
+        )
       );
     this.log.info(
       {
         billing_account_id: input.billingAccountId,
         revoked_by_user_id: input.revokedByUserId,
       },
-      "poly.wallet.revoke — soft-deleted active connection",
+      "poly.wallet.revoke — soft-deleted active connection"
     );
   }
 
@@ -341,10 +337,10 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
 
   async authorizeIntent(
     _billingAccountId: string,
-    _intent: OrderIntentSummary,
+    _intent: OrderIntentSummary
   ): Promise<AuthorizeIntentResult> {
     throw new Error(
-      "PrivyPolyTraderWalletAdapter.authorizeIntent: not implemented (B4 grants wiring)",
+      "PrivyPolyTraderWalletAdapter.authorizeIntent: not implemented (B4 grants wiring)"
     );
   }
 
@@ -355,7 +351,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     requestedByUserId: string;
   }): Promise<{ txHash: `0x${string}` }> {
     throw new Error(
-      "PrivyPolyTraderWalletAdapter.withdrawUsdc: not implemented (follow-up B3 slice)",
+      "PrivyPolyTraderWalletAdapter.withdrawUsdc: not implemented (follow-up B3 slice)"
     );
   }
 
@@ -363,7 +359,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     billingAccountId: string;
   }): Promise<PolyTraderSigningContext> {
     throw new Error(
-      "PrivyPolyTraderWalletAdapter.rotateClobCreds: not implemented (follow-up ops slice)",
+      "PrivyPolyTraderWalletAdapter.rotateClobCreds: not implemented (follow-up ops slice)"
     );
   }
 
@@ -371,10 +367,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   // Private
   // ────────────────────────────────────────────────────────────────────────
 
-  private decryptCreds(
-    ciphertext: Buffer,
-    aad: AeadAAD,
-  ): PolyClobApiKeyCreds {
+  private decryptCreds(ciphertext: Buffer, aad: AeadAAD): PolyClobApiKeyCreds {
     const plaintext = aeadDecrypt(ciphertext, aad, this.encryptionKey);
     const parsed = JSON.parse(plaintext) as PolyClobApiKeyCreds;
     if (!parsed.key || !parsed.secret || !parsed.passphrase) {
@@ -391,7 +384,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   protected brandAuthorized(
     context: PolyTraderSigningContext,
     grantId: string,
-    intent: OrderIntentSummary,
+    intent: OrderIntentSummary
   ): AuthorizedSigningContext {
     return Object.freeze({
       ...context,

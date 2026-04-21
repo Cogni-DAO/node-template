@@ -24,12 +24,11 @@
 import { toUserId } from "@cogni/ids";
 import { NextResponse } from "next/server";
 import { z } from "zod";
-
-import { getSessionUser } from "@/app/_lib/auth/session";
 import {
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
 } from "@/adapters/server/wallet";
+import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 
@@ -75,7 +74,7 @@ export const POST = wrapRouteHandlerWithLogging(
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Invalid input", issues: parsed.error.issues },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -88,7 +87,7 @@ export const POST = wrapRouteHandlerWithLogging(
     ) {
       return NextResponse.json(
         { error: "Consent actor id mismatches session user" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -97,21 +96,21 @@ export const POST = wrapRouteHandlerWithLogging(
       .accountsForUser(toUserId(sessionUser.id))
       .getOrCreateBillingAccountForUser({ userId: sessionUser.id });
 
-    let adapter;
+    let adapter: ReturnType<typeof getPolyTraderWalletAdapter>;
     try {
       adapter = getPolyTraderWalletAdapter(ctx.logger);
     } catch (err) {
       if (err instanceof WalletAdapterUnconfiguredError) {
         ctx.logger.warn(
           { err: err.message },
-          "poly.wallet.connect rejected — adapter unconfigured",
+          "poly.wallet.connect rejected — adapter unconfigured"
         );
         return NextResponse.json(
           {
             error: "Poly trading wallets not configured on this deployment",
             reason: err.message,
           },
-          { status: 503 },
+          { status: 503 }
         );
       }
       throw err;
@@ -135,5 +134,5 @@ export const POST = wrapRouteHandlerWithLogging(
       suggested_matic: 0.1,
     };
     return NextResponse.json(ConnectResponseSchema.parse(payload));
-  },
+  }
 );

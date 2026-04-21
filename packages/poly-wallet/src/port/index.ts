@@ -3,10 +3,10 @@
 
 /**
  * Module: `@cogni/poly-wallet/port`
- * Purpose: Barrel — re-export the port interface + types.
- * Scope: Types only; no runtime.
- * Invariants: none (re-export).
- * Side-effects: none.
+ * Purpose: Re-exports the PolyTraderWalletPort interface + types from one place.
+ * Scope: Type re-exports only. Does not contain runtime code or export any adapter.
+ * Invariants: none (barrel file).
+ * Side-effects: none
  * Links: docs/spec/poly-trader-wallet-port.md
  * @public
  */

@@ -67,13 +67,13 @@ Commit to `evidence/sell-receipt.json`.
 
 ## Pass criteria (`evidence/verdict.md`)
 
-| # | Criterion                                                                                         | Evidence file            |
-|---|---------------------------------------------------------------------------------------------------|--------------------------|
-| 1 | `walletApi.create` returns a walletId distinct from the operator wallet's                         | `wallet-provision.md`    |
-| 2 | `createViemAccount` + `createWalletClient` produce a working viem LocalAccount for the new wallet | step 3 runs clean        |
-| 3 | USDC + CTF allowances land idempotently against the NEW funder address                            | `approvals-tx.json`      |
-| 4 | CLOB L2 creds are signed by the NEW wallet (not operator)                                         | step-4 signature recovery |
-| 5 | BUY + SELL acks with `maker == new-wallet-address`                                                | `buy-receipt.json` + `sell-receipt.json` |
+| #   | Criterion                                                                                         | Evidence file                            |
+| --- | ------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| 1   | `walletApi.create` returns a walletId distinct from the operator wallet's                         | `wallet-provision.md`                    |
+| 2   | `createViemAccount` + `createWalletClient` produce a working viem LocalAccount for the new wallet | step 3 runs clean                        |
+| 3   | USDC + CTF allowances land idempotently against the NEW funder address                            | `approvals-tx.json`                      |
+| 4   | CLOB L2 creds are signed by the NEW wallet (not operator)                                         | step-4 signature recovery                |
+| 5   | BUY + SELL acks with `maker == new-wallet-address`                                                | `buy-receipt.json` + `sell-receipt.json` |
 
 If all 5 pass: commit to B2 (`poly_wallet_connections` + credential broker).
 

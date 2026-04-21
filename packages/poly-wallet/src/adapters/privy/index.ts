@@ -3,14 +3,10 @@
 
 /**
  * Module: `@cogni/poly-wallet/adapters/privy`
- * Purpose: Privy adapter barrel — populated by a subsequent B2 commit.
- *   The adapter implementation (PrivyPolyTraderWalletAdapter) is deferred
- *   to a follow-up because it requires DB wiring, the AEAD envelope from
- *   `@cogni/connections`, and a CLOB client factory — all of which deserve
- *   their own review slice alongside the migration.
- * Scope: Barrel only; no runtime.
- * Invariants: none (placeholder).
- * Side-effects: none.
+ * Purpose: Reserves the Privy adapter subpath for future in-memory / fake adapters that live in the package (DB-coupled adapters live node-local at `nodes/poly/app/src/adapters/server/wallet/` because they depend on node-local schema).
+ * Scope: Barrel placeholder only. Does not export any runtime today.
+ * Invariants: none (placeholder file).
+ * Side-effects: none
  * Links: docs/spec/poly-trader-wallet-port.md §§ Adapter, Behavior
  * @public
  */

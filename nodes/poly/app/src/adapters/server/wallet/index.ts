@@ -18,8 +18,8 @@
  * @internal
  */
 
-import { PrivyClient } from "@privy-io/node";
 import type { PolyClobApiKeyCreds } from "@cogni/poly-wallet";
+import { PrivyClient } from "@privy-io/node";
 import type { Logger } from "pino";
 import type { LocalAccount } from "viem";
 
@@ -33,7 +33,7 @@ export { PrivyPolyTraderWalletAdapter } from "./privy-poly-trader-wallet.adapter
 export class WalletAdapterUnconfiguredError extends Error {
   constructor(missing: string[]) {
     super(
-      `PolyTraderWalletAdapter not configured: missing env vars: ${missing.join(", ")}`,
+      `PolyTraderWalletAdapter not configured: missing env vars: ${missing.join(", ")}`
     );
     this.name = "WalletAdapterUnconfiguredError";
   }
@@ -48,7 +48,7 @@ let cached: PrivyPolyTraderWalletAdapter | null = null;
  * @throws {WalletAdapterUnconfiguredError} when env is missing.
  */
 export function getPolyTraderWalletAdapter(
-  logger: Logger,
+  logger: Logger
 ): PrivyPolyTraderWalletAdapter {
   if (cached) return cached;
 
@@ -66,7 +66,7 @@ export function getPolyTraderWalletAdapter(
   const encryptionKey = Buffer.from(env.POLY_WALLET_AEAD_KEY_HEX, "hex");
   if (encryptionKey.length !== 32) {
     throw new Error(
-      "POLY_WALLET_AEAD_KEY_HEX must decode to 32 bytes (AES-256-GCM)",
+      "POLY_WALLET_AEAD_KEY_HEX must decode to 32 bytes (AES-256-GCM)"
     );
   }
 
@@ -79,7 +79,7 @@ export function getPolyTraderWalletAdapter(
   // candidate-a can succeed without Polymarket reachability. Real derivation
   // (@polymarket/clob-client createOrDeriveApiKey) lands in a follow-up.
   const stubClobCredsFactory = async (
-    _signer: LocalAccount,
+    _signer: LocalAccount
   ): Promise<PolyClobApiKeyCreds> => ({
     key: "placeholder-key",
     secret: "placeholder-secret",
