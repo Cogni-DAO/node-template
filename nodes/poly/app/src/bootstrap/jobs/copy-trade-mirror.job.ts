@@ -54,7 +54,8 @@ const WARMUP_BACKLOG_SEC = 60;
  * Reasoning:
  * - 30s poll cadence = conservative for copy-trade latency goals; Phase 4
  *   moves to a WS push model and these numbers become irrelevant.
- * - $1 mirror, $10/day, 5/hour = matches the Phase 1 E2E validation scenario
+ * - $1 mirror, $100/day, 50/hour = raised from Phase 1 defaults to allow
+ *   active copy-trade across 10+ target wallets without hitting caps mid-day.
  *   + keeps a misbehaving target from bankrupting the operator prototype.
  */
 const MIRROR_POLL_MS = 30_000;
@@ -68,8 +69,8 @@ const MIRROR_USDC = 1;
  * as a per-tenant column.
  */
 const MIRROR_MAX_USDC_PER_TRADE = 5;
-const MIRROR_MAX_DAILY_USDC = 10;
-const MIRROR_MAX_FILLS_PER_HOUR = 5;
+const MIRROR_MAX_DAILY_USDC = 100;
+const MIRROR_MAX_FILLS_PER_HOUR = 50;
 
 /**
  * Build a `TargetConfig` from an enumerated target wallet + tenant attribution.
