@@ -423,3 +423,7 @@ This slice lives across three locations — see [`docs/guides/poly-wallet-provis
 ✓ workspace:test passed (1s)
 ✓ All fast checks passed!
 ```
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0318.handoff.md)
