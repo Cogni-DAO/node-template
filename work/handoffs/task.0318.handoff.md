@@ -59,19 +59,19 @@ last_commit: 88b28535f
 
 ## Pointers
 
-| File / Resource | Why it matters |
-| --------------- | -------------- |
-| [PR #968](https://github.com/Cogni-DAO/node-template/pull/968) | The slice; PR body lists the smells reviewers have already flagged |
-| [docs/guides/poly-wallet-provisioning.md](../../docs/guides/poly-wallet-provisioning.md) | Runbook: 6-secret setup, curl exercise, Loki handshake, § Architecture (honest accounting) |
-| [docs/spec/poly-trader-wallet-port.md](../../docs/spec/poly-trader-wallet-port.md) | Port/adapter contract + 11 acceptance checks (tests must hit these) |
-| [docs/spec/poly-multi-tenant-auth.md](../../docs/spec/poly-multi-tenant-auth.md) | Tenant-isolation contract + schema |
-| [work/items/task.0318.poly-wallet-multi-tenant-auth.md](../items/task.0318.poly-wallet-multi-tenant-auth.md) | Lifecycle carrier — B2 checkpoint table shows shipped/open, r3 review feedback matrix |
-| `packages/poly-wallet/src/port/poly-trader-wallet.port.ts` | The port interface (branded types) |
-| `nodes/poly/app/src/adapters/server/wallet/privy-poly-trader-wallet.adapter.ts` | The adapter |
-| `nodes/poly/app/src/bootstrap/poly-trader-wallet.ts` | Bootstrap factory + stub-creds gate |
-| `nodes/poly/app/src/app/api/v1/poly/wallet/connect/route.ts` | The route |
-| `nodes/poly/app/src/adapters/server/db/migrations/0030_poly_wallet_connections.sql` | Migration |
-| `nodes/poly/packages/db-schema/src/wallet-connections.ts` | Drizzle schema |
-| `nodes/poly/app/src/bootstrap/capabilities/poly-trade.ts:660-726` | **Reference pattern** — how the operator-wallet Privy flow is wired today; the adapter mirrors this shape |
-| `nodes/poly/app/src/adapters/server/connections/drizzle-broker.adapter.ts` | **Reference pattern** for AEAD + tenant defense-in-depth + RLS-scoped SELECT; the adapter mirrors this |
-| `packages/node-shared/src/crypto/aead.ts` | AEAD envelope helpers used by the adapter |
+| File / Resource                                                                                              | Why it matters                                                                                            |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| [PR #968](https://github.com/Cogni-DAO/node-template/pull/968)                                               | The slice; PR body lists the smells reviewers have already flagged                                        |
+| [docs/guides/poly-wallet-provisioning.md](../../docs/guides/poly-wallet-provisioning.md)                     | Runbook: 6-secret setup, curl exercise, Loki handshake, § Architecture (honest accounting)                |
+| [docs/spec/poly-trader-wallet-port.md](../../docs/spec/poly-trader-wallet-port.md)                           | Port/adapter contract + 11 acceptance checks (tests must hit these)                                       |
+| [docs/spec/poly-multi-tenant-auth.md](../../docs/spec/poly-multi-tenant-auth.md)                             | Tenant-isolation contract + schema                                                                        |
+| [work/items/task.0318.poly-wallet-multi-tenant-auth.md](../items/task.0318.poly-wallet-multi-tenant-auth.md) | Lifecycle carrier — B2 checkpoint table shows shipped/open, r3 review feedback matrix                     |
+| `packages/poly-wallet/src/port/poly-trader-wallet.port.ts`                                                   | The port interface (branded types)                                                                        |
+| `nodes/poly/app/src/adapters/server/wallet/privy-poly-trader-wallet.adapter.ts`                              | The adapter                                                                                               |
+| `nodes/poly/app/src/bootstrap/poly-trader-wallet.ts`                                                         | Bootstrap factory + stub-creds gate                                                                       |
+| `nodes/poly/app/src/app/api/v1/poly/wallet/connect/route.ts`                                                 | The route                                                                                                 |
+| `nodes/poly/app/src/adapters/server/db/migrations/0030_poly_wallet_connections.sql`                          | Migration                                                                                                 |
+| `nodes/poly/packages/db-schema/src/wallet-connections.ts`                                                    | Drizzle schema                                                                                            |
+| `nodes/poly/app/src/bootstrap/capabilities/poly-trade.ts:660-726`                                            | **Reference pattern** — how the operator-wallet Privy flow is wired today; the adapter mirrors this shape |
+| `nodes/poly/app/src/adapters/server/connections/drizzle-broker.adapter.ts`                                   | **Reference pattern** for AEAD + tenant defense-in-depth + RLS-scoped SELECT; the adapter mirrors this    |
+| `packages/node-shared/src/crypto/aead.ts`                                                                    | AEAD envelope helpers used by the adapter                                                                 |
