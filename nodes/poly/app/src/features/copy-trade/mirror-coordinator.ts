@@ -30,7 +30,21 @@ import type { OrderLedger } from "@/features/trading";
 import type { WalletActivitySource } from "@/features/wallet-watch";
 
 import { decide } from "./decide";
-import type { MirrorReason, TargetConfig } from "./types";
+import type { MirrorReason, SizingPolicy, TargetConfig } from "./types";
+
+/**
+ * Extract a representative USDC notional from a sizing policy for uses that
+ * predate per-fill sizing math — SELL-close caps and audit-log skip blobs.
+ * For `kind: "fixed"`, this is the user's target bet size. For future kinds
+ * (proportional, percentile) the call site must be revisited; the switch is
+ * exhaustive, so the compiler will flag it. bug.0342.
+ */
+function nominalSizeUsdc(sizing: SizingPolicy): number {
+  switch (sizing.kind) {
+    case "fixed":
+      return sizing.mirror_usdc;
+  }
+}
 
 /** Minimal position shape needed by the coordinator — subset of PolymarketUserPosition. */
 export interface OperatorPosition {
@@ -56,6 +70,16 @@ export interface MirrorCoordinatorDeps {
   ledger: OrderLedger;
   /** Raw placement seam from `createPolyTradeCapability().placeIntent`. */
   placeIntent: (intent: OrderIntent) => Promise<OrderReceipt>;
+  /**
+   * Market-constraint fetch seam — returns `{ minShares }` for a token id so
+   * the sizing policy can avoid sub-min submissions (bug.0342). Optional: when
+   * absent (unit tests, paper-only flows), the share-min guard is skipped.
+   */
+  getMarketConstraints?:
+    | ((
+        tokenId: string
+      ) => Promise<{ minShares: number; minUsdcNotional?: number }>)
+    | undefined;
   /** Static target config for v0 — P2 swaps for a per-tick DB resolver. */
   target: TargetConfig;
   /** Cursor accessor — bootstrap closures hold the in-memory state for v0. */
@@ -186,7 +210,36 @@ async function processFill(
     return;
   }
 
-  // ── BUY branch: existing path unchanged ─────────────────────────────────────
+  // ── BUY branch ──────────────────────────────────────────────────────────────
+  // Fetch market share-min + USDC-notional floor before decide() so the
+  // sizing policy can scale to whichever floor dominates at this price.
+  // Failures are swallowed → decide runs without constraints (legacy
+  // behavior); defense-in-depth guard in the adapter still catches sub-floor
+  // submissions and throws a classified error. bug.0342.
+  let min_shares: number | undefined;
+  let min_usdc_notional: number | undefined;
+  if (deps.getMarketConstraints) {
+    const tokenId =
+      typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
+    if (tokenId) {
+      try {
+        const constraints = await deps.getMarketConstraints(tokenId);
+        min_shares = constraints.minShares;
+        min_usdc_notional = constraints.minUsdcNotional;
+      } catch (err) {
+        log.warn(
+          {
+            event: "poly.mirror.constraints.fetch_error",
+            fill_id: fill.fill_id,
+            client_order_id,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "mirror coordinator: getMarketConstraints threw; decide() will run without market floors"
+        );
+      }
+    }
+  }
+
   const decision = decide({
     fill,
     config: { ...deps.target, enabled: snapshot.enabled },
@@ -196,6 +249,8 @@ async function processFill(
       already_placed_ids: snapshot.already_placed_ids,
     },
     client_order_id,
+    min_shares,
+    min_usdc_notional,
   });
 
   if (decision.action === "skip") {
@@ -366,7 +421,7 @@ async function processSellFill(args: {
   const closeExecutor = (intent: OrderIntent): Promise<OrderReceipt> =>
     boundClose({
       tokenId: intent.attributes?.token_id as string,
-      max_size_usdc: deps.target.mirror_usdc,
+      max_size_usdc: nominalSizeUsdc(deps.target.sizing),
       limit_price: fill.price,
       client_order_id,
     });
@@ -377,7 +432,7 @@ async function processSellFill(args: {
     market_id: fill.market_id,
     outcome: fill.outcome,
     side: "SELL",
-    size_usdc: deps.target.mirror_usdc,
+    size_usdc: nominalSizeUsdc(deps.target.sizing),
     limit_price: fill.price,
     client_order_id,
     attributes: {
@@ -556,7 +611,7 @@ function buildDecisionIntentBlob(
     side: fill.side,
     fill_size_usdc_target: fill.size_usdc,
     fill_price_target: fill.price,
-    mirror_usdc: target.mirror_usdc,
+    mirror_usdc: nominalSizeUsdc(target.sizing),
     mode: target.mode,
     client_order_id,
     ...extra,

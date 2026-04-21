@@ -54,13 +54,23 @@ const WARMUP_BACKLOG_SEC = 60;
  * Reasoning:
  * - 30s poll cadence = conservative for copy-trade latency goals; Phase 4
  *   moves to a WS push model and these numbers become irrelevant.
- * - $1 mirror, $10/day, 5/hour = matches the Phase 1 E2E validation scenario
+ * - $1 mirror, $100/day, 50/hour = raised from Phase 1 defaults to allow
+ *   active copy-trade across 10+ target wallets without hitting caps mid-day.
  *   + keeps a misbehaving target from bankrupting the operator prototype.
  */
 const MIRROR_POLL_MS = 30_000;
 const MIRROR_USDC = 1;
-const MIRROR_MAX_DAILY_USDC = 10;
-const MIRROR_MAX_FILLS_PER_HOUR = 5;
+/**
+ * Per-intent spend ceiling. The mirror will scale a $1 desired bet UP to the
+ * market's share-minimum (in USDC terms) only when the scaled notional still
+ * fits under this ceiling; otherwise it skips with `below_market_min`. Sized
+ * at $5 because top-volume Polymarket markets require 5 shares min, and 5
+ * shares × max_price (1.0) = $5 worst case. bug.0342. Phase-B surfaces this
+ * as a per-tenant column.
+ */
+const MIRROR_MAX_USDC_PER_TRADE = 5;
+const MIRROR_MAX_DAILY_USDC = 100;
+const MIRROR_MAX_FILLS_PER_HOUR = 50;
 
 /**
  * Build a `TargetConfig` from an enumerated target wallet + tenant attribution.
@@ -80,7 +90,11 @@ export function buildMirrorTargetConfig(params: {
     billing_account_id: params.billingAccountId,
     created_by_user_id: params.createdByUserId,
     mode: "live", // paper adapter body lands in P3; v0 only places live
-    mirror_usdc: MIRROR_USDC,
+    sizing: {
+      kind: "fixed",
+      mirror_usdc: MIRROR_USDC,
+      max_usdc_per_trade: MIRROR_MAX_USDC_PER_TRADE,
+    },
     max_daily_usdc: MIRROR_MAX_DAILY_USDC,
     max_fills_per_hour: MIRROR_MAX_FILLS_PER_HOUR,
     enabled: true, // overwritten per-tick by the runtime kill-switch snapshot
@@ -96,6 +110,8 @@ export interface MirrorJobDeps {
   ledger: OrderLedger;
   /** Raw placement seam from `createPolyTradeCapability().placeIntent`. */
   placeIntent: MirrorCoordinatorDeps["placeIntent"];
+  /** Optional market-constraints fetch; pipes into the coordinator. bug.0342. */
+  getMarketConstraints?: MirrorCoordinatorDeps["getMarketConstraints"];
   /** Structured log sink. */
   logger: LoggerPort;
   /** Metrics sink. */
@@ -152,6 +168,7 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
     source: deps.source,
     ledger: deps.ledger,
     placeIntent: deps.placeIntent,
+    getMarketConstraints: deps.getMarketConstraints,
     target: deps.target,
     getCursor: () => cursor,
     setCursor: (n) => {

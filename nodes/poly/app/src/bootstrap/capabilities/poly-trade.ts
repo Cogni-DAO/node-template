@@ -219,6 +219,14 @@ export interface CreateFromAdapterDeps {
    * GETORDER_NEVER_NULL invariant (task.0328 CP1): must return `GetOrderResult`.
    */
   getOrder?: (orderId: string) => Promise<GetOrderResult>;
+  /**
+   * `getMarketConstraints(tokenId)` — used by the copy-trade coordinator to
+   * pre-flight intent sizing against the market's share-min + USDC-notional
+   * floors. bug.0342.
+   */
+  getMarketConstraints?: (
+    tokenId: string
+  ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
   /** `listPositions(wallet)` — used by `closePosition` + coordinator. */
   listPositions?: (wallet: string) => Promise<PolymarketUserPosition[]>;
   /** Operator EOA (used for the receipt's profile_url and position lookups). */
@@ -248,6 +256,15 @@ export interface CreateFromAdapterDeps {
 export interface PolyTradeBundle {
   capability: PolyTradeCapability;
   placeIntent: (intent: OrderIntent) => Promise<OrderReceipt>;
+  /**
+   * Market-constraints fetch — returns `{ minShares }` for a token id. Used by
+   * the copy-trade coordinator to pre-flight intent sizing against the
+   * market's share-minimum. Raw passthrough to `PolymarketClobAdapter.
+   * getMarketConstraints`. bug.0342.
+   */
+  getMarketConstraints: (
+    tokenId: string
+  ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
   closePosition: (params: ClosePositionParams) => Promise<OrderReceipt>;
   getOrder: (orderId: string) => Promise<GetOrderResult>;
   getOperatorPositions: () => Promise<PolymarketUserPosition[]>;
@@ -435,9 +452,22 @@ export function createPolyTradeCapabilityFromAdapter(
     return deps.listPositions(operatorAddress);
   }
 
+  async function bundleGetMarketConstraints(
+    tokenId: string
+  ): Promise<{ minShares: number; minUsdcNotional?: number }> {
+    if (!deps.getMarketConstraints) {
+      // Safe fallback: unknown market → no floors applied. The adapter's
+      // defense-in-depth guard still catches sub-floor submissions at
+      // placement time; coordinator will observe the classified throw.
+      return { minShares: 0 };
+    }
+    return deps.getMarketConstraints(tokenId);
+  }
+
   return {
     capability,
     placeIntent: executor,
+    getMarketConstraints: bundleGetMarketConstraints,
     closePosition: bundleClosePosition,
     getOrder: bundleGetOrder,
     getOperatorPositions: bundleGetOperatorPositions,
@@ -569,6 +599,9 @@ export function createPolyTradeCapability(
     }) => Promise<OrderReceipt[]>;
     cancelOrder: (orderId: string) => Promise<void>;
     getOrder: (orderId: string) => Promise<GetOrderResult>;
+    getMarketConstraints: (
+      tokenId: string
+    ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
     listPositions: (wallet: string) => Promise<PolymarketUserPosition[]>;
   };
   let cached: AdapterMethods | undefined;
@@ -613,12 +646,19 @@ export function createPolyTradeCapability(
     const m = await ensureMethods();
     return m.listPositions(wallet);
   }
+  async function lazyGetMarketConstraints(
+    tokenId: string
+  ): Promise<{ minShares: number; minUsdcNotional?: number }> {
+    const m = await ensureMethods();
+    return m.getMarketConstraints(tokenId);
+  }
 
   return createPolyTradeCapabilityFromAdapter({
     placeOrder: lazyPlaceOrder,
     listOpenOrders: lazyListOpenOrders,
     cancelOrder: lazyCancelOrder,
     getOrder: lazyGetOrder,
+    getMarketConstraints: lazyGetMarketConstraints,
     listPositions: lazyListPositions,
     operatorWalletAddress,
     logger: config.logger,
@@ -653,6 +693,9 @@ async function buildRealAdapterMethods(
   }) => Promise<OrderReceipt[]>;
   cancelOrder: (orderId: string) => Promise<void>;
   getOrder: (orderId: string) => Promise<GetOrderResult>;
+  getMarketConstraints: (
+    tokenId: string
+  ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
   listPositions: (wallet: string) => Promise<PolymarketUserPosition[]>;
 }> {
   // Dynamic imports — keep `@polymarket/clob-client` + `@privy-io/node` out of
@@ -745,6 +788,7 @@ async function buildRealAdapterMethods(
     listOpenOrders: adapter.listOpenOrders.bind(adapter),
     cancelOrder: adapter.cancelOrder.bind(adapter),
     getOrder: adapter.getOrder.bind(adapter),
+    getMarketConstraints: adapter.getMarketConstraints.bind(adapter),
     listPositions: (wallet: string) => dataApiClient.listUserPositions(wallet),
   };
 }

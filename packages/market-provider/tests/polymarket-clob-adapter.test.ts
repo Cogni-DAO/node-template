@@ -276,12 +276,20 @@ describe("PolymarketClobAdapter", () => {
       getTickSize?: ReturnType<typeof vi.fn>;
       getNegRisk?: ReturnType<typeof vi.fn>;
       getFeeRateBps?: ReturnType<typeof vi.fn>;
+      getOrderBook?: ReturnType<typeof vi.fn>;
     },
     observability?: { logger?: LoggerPort; metrics?: MetricsPort }
   ) {
     stub.getTickSize ??= vi.fn().mockResolvedValue("0.01");
     stub.getNegRisk ??= vi.fn().mockResolvedValue(false);
     stub.getFeeRateBps ??= vi.fn().mockResolvedValue(0);
+    // Default orderBook: minShares=1 so legacy tests (BASE_INTENT size_usdc=1
+    // at price 0.5 = 2 shares ≥ 1) pass through without triggering the
+    // bug.0342 defense-in-depth guard. Tests that exercise the guard override
+    // min_order_size explicitly.
+    stub.getOrderBook ??= vi
+      .fn()
+      .mockResolvedValue({ min_order_size: "1", tick_size: "0.01" });
     const adapter = Object.create(
       PolymarketClobAdapter.prototype
     ) as PolymarketClobAdapter;
@@ -446,6 +454,101 @@ describe("PolymarketClobAdapter", () => {
     const adapter = makeAdapter({});
     await expect(adapter.listMarkets()).rejects.toThrow(/listMarkets/);
   });
+
+  // bug.0342 ----------------------------------------------------------------
+
+  it("getMarketConstraints returns minShares + Polymarket $1 USDC-notional floor", async () => {
+    const getOrderBook = vi.fn().mockResolvedValue({
+      min_order_size: "5",
+      tick_size: "0.01",
+    });
+    const adapter = makeAdapter({ getOrderBook });
+
+    const constraints = await adapter.getMarketConstraints("0xtoken");
+
+    expect(getOrderBook).toHaveBeenCalledWith("0xtoken");
+    expect(constraints).toEqual({ minShares: 5, minUsdcNotional: 1 });
+  });
+
+  it("placeOrder throws BELOW_MARKET_MIN on sub-$1 USDC-notional BUY (1-share-min cheap market)", async () => {
+    const createAndPostOrder = vi.fn(); // must NOT be called
+    // 1-share-min market, price 0.49, size_usdc 1 → shareSize 2.04 ≥ 1
+    // (share-min OK), but effectiveUsdc = 2.04 × 0.49 = 1.000 → right at
+    // boundary. Use a size that yields $0.9996.
+    const getOrderBook = vi.fn().mockResolvedValue({
+      min_order_size: "1",
+      tick_size: "0.01",
+    });
+    const adapter = makeAdapter({ createAndPostOrder, getOrderBook });
+
+    let caught: unknown;
+    try {
+      // 1.02 × 0.98 = 0.9996 USDC — share-min passes (1.04 ≥ 1) but usdc-min fails
+      await adapter.placeOrder({
+        ...BASE_INTENT,
+        size_usdc: 0.9996,
+        limit_price: 0.98,
+        side: "BUY",
+      });
+    } catch (err) {
+      caught = err;
+    }
+    const errObj = caught as { code?: string };
+    expect(errObj.code).toBe("BELOW_MARKET_MIN");
+    expect(createAndPostOrder).not.toHaveBeenCalled();
+  });
+
+  it("placeOrder throws a classified BELOW_MARKET_MIN error when shareSize < min_order_size", async () => {
+    const createAndPostOrder = vi.fn(); // must NOT be called
+    // $1 @ 0.64 → 1.5625 shares, market min 5 shares → rejected
+    const getOrderBook = vi.fn().mockResolvedValue({
+      min_order_size: "5",
+      tick_size: "0.01",
+    });
+    const adapter = makeAdapter({ createAndPostOrder, getOrderBook });
+
+    let caught: unknown;
+    try {
+      await adapter.placeOrder({
+        ...BASE_INTENT,
+        size_usdc: 1,
+        limit_price: 0.64,
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    // Classify via `err.code` not `instanceof` (cross-package bundling safety).
+    expect(caught).toBeInstanceOf(Error);
+    const errObj = caught as { code?: string; name?: string; message?: string };
+    expect(errObj.code).toBe("BELOW_MARKET_MIN");
+    expect(errObj.name).toBe("BelowMarketMinError");
+    expect(errObj.message).toMatch(/below market floor/);
+    expect(createAndPostOrder).not.toHaveBeenCalled();
+  });
+
+  it("placeOrder proceeds when shareSize >= min_order_size", async () => {
+    const createAndPostOrder = vi.fn().mockResolvedValue({
+      orderID: "0xresp",
+      status: "live",
+      makingAmount: "5",
+    });
+    // $5 @ 0.50 → 10 shares ≥ 5-share min
+    const getOrderBook = vi.fn().mockResolvedValue({
+      min_order_size: "5",
+      tick_size: "0.01",
+    });
+    const adapter = makeAdapter({ createAndPostOrder, getOrderBook });
+
+    const receipt = await adapter.placeOrder({
+      ...BASE_INTENT,
+      size_usdc: 5,
+      limit_price: 0.5,
+    });
+
+    expect(createAndPostOrder).toHaveBeenCalledOnce();
+    expect(receipt.order_id).toBe("0xresp");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -493,12 +596,16 @@ describe("PolymarketClobAdapter — observability", () => {
       getTickSize?: ReturnType<typeof vi.fn>;
       getNegRisk?: ReturnType<typeof vi.fn>;
       getFeeRateBps?: ReturnType<typeof vi.fn>;
+      getOrderBook?: ReturnType<typeof vi.fn>;
     },
     observability: { logger?: LoggerPort; metrics?: MetricsPort } = {}
   ) {
     stub.getTickSize ??= vi.fn().mockResolvedValue("0.01");
     stub.getNegRisk ??= vi.fn().mockResolvedValue(false);
     stub.getFeeRateBps ??= vi.fn().mockResolvedValue(0);
+    stub.getOrderBook ??= vi
+      .fn()
+      .mockResolvedValue({ min_order_size: "1", tick_size: "0.01" });
     const adapter = Object.create(
       PolymarketClobAdapter.prototype
     ) as PolymarketClobAdapter;

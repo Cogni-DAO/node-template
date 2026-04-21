@@ -50,18 +50,58 @@ export interface MarketProviderConfig {
 }
 
 /**
+ * Mechanical constraints for a single market/token, fetched ahead of order
+ * placement so callers can right-size intents. Two orthogonal floors today,
+ * both platform-enforced on marketable BUYs (bug.0342):
+ *   - `minShares`: from CLOB order-book `min_order_size`; varies per market
+ *     (1–5 shares observed).
+ *   - `minUsdcNotional`: Polymarket platform rule for marketable BUY orders;
+ *     $1 USDC notional floor regardless of share count. A market with
+ *     minShares=1 at price 0.49 still rejects a $0.49 order for this reason.
+ *
+ * Future fields (tick, fee, negRisk) slot in here without widening the port.
+ */
+export interface MarketConstraints {
+  /** Minimum share count the platform accepts for an order on this token. */
+  minShares: number;
+  /**
+   * Minimum USDC notional (`shareSize × price`) for a marketable BUY. Optional
+   * because not all providers expose/enforce this; Polymarket returns 1.
+   */
+  minUsdcNotional?: number;
+}
+
+/**
+ * Stable code string attached to errors thrown from `placeOrder` when CLOB
+ * rejects an intent whose share count is below the market's share-min.
+ * Callers MUST discriminate via `err.code === "BELOW_MARKET_MIN"` rather than
+ * `instanceof`: class identity fractures across package boundaries after
+ * bundling. bug.0342.
+ */
+export const BELOW_MARKET_MIN_CODE = "BELOW_MARKET_MIN" as const;
+
+/**
  * Thrown by read-only adapters when a Run-phase method is invoked. Preserves the
  * full port surface at compile time without silently allowing misuse at runtime.
  * Adapters that intentionally do not support order placement (Kalshi, paper stub
- * before Phase 3) throw this from `placeOrder` / `cancelOrder` / `getOrder`.
+ * before Phase 3) throw this from `placeOrder` / `cancelOrder` / `getOrder` /
+ * `getMarketConstraints`.
  */
 export class OrderNotSupportedError extends Error {
   readonly provider: MarketProvider;
-  readonly operation: "placeOrder" | "cancelOrder" | "getOrder";
+  readonly operation:
+    | "placeOrder"
+    | "cancelOrder"
+    | "getOrder"
+    | "getMarketConstraints";
 
   constructor(
     provider: MarketProvider,
-    operation: "placeOrder" | "cancelOrder" | "getOrder",
+    operation:
+      | "placeOrder"
+      | "cancelOrder"
+      | "getOrder"
+      | "getMarketConstraints",
     reason?: string
   ) {
     super(
@@ -108,6 +148,17 @@ export interface MarketProviderPort {
    * @throws OrderNotSupportedError if the adapter is read-only.
    */
   cancelOrder(orderId: string): Promise<void>;
+
+  /**
+   * Fetch per-market mechanical constraints for a token. Today returns the
+   * share-denominated minimum order size so the copy-trade coordinator can
+   * scale (or skip) intents before submission (bug.0342). Future fields —
+   * tick size, fee rate, neg-risk flag — can land here without expanding
+   * the port surface further.
+   *
+   * @throws OrderNotSupportedError if the adapter does not support trading.
+   */
+  getMarketConstraints(tokenId: string): Promise<MarketConstraints>;
 
   /**
    * Look up an order's current status by platform `order_id`.
