@@ -142,12 +142,13 @@ rollout_check() {
 
 # Kick a manual sync on an Application by patching an operation into its spec.
 # Argo CD's application-controller picks this up within the reconciliation loop
-# and runs it even if automated sync is disabled or misconfigured.
+# and runs it even if automated sync is disabled or misconfigured. This MUST
+# use hook sync (not apply sync) so PreSync migration jobs still execute.
 trigger_sync() {
   local app_name="$1"
   echo "    ⚡ triggering active sync on ${app_name}"
   kubectl -n argocd patch application "$app_name" --type=merge -p \
-    '{"operation":{"sync":{"syncStrategy":{"apply":{"force":false}}}}}' >/dev/null 2>&1 || true
+    '{"operation":{"sync":{"syncStrategy":{"hook":{"force":false}}}}}' >/dev/null 2>&1 || true
 }
 
 # Poll a single app until it reports EXPECTED_SHA on sync.revision AND is Healthy,
