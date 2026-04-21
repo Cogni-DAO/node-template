@@ -352,12 +352,8 @@ See [docs/spec/poly-multi-tenant-auth.md § Decisions](../../docs/spec/poly-mult
 
 ## Validation
 
-- [ ] Two-user integration test passes: user-A provisions wallet + grant → places mirror order; user-B (separate billing account) SELECTs `poly_copy_trade_fills` and sees zero rows; user-B cancelling user-A's `order_id` returns an RLS-scoped "not found".
-- [ ] Per-tenant kill-switch: flipping user-A's `poly_copy_trade_config.enabled=false` halts user-A's placements within one poll cycle without affecting user-B.
-- [ ] Grant revocation: setting `poly_wallet_grants.revoked_at` halts placement from user-A's next poll cycle; the `poly_copy_trade_decisions` log records skip-reason `no_active_grant`.
-- [ ] Cap enforcement: a mirror target configured above `per_order_usdc_cap` is skipped with reason `cap_exceeded_per_order`; day-two spending past `daily_usdc_cap` is skipped with `cap_exceeded_daily`.
-- [ ] No env fallback: removing `OPERATOR_WALLET_ADDRESS` + `POLY_CLOB_*` from `.env.local` does not regress any test; the env lookup is gone from the executor code path.
-- [ ] `pnpm check` clean; `pnpm check:docs` clean; fresh `db:generate` produces no drift against the new schema.
+- `exercise:` On `candidate-a`, sign into the poly app, visit `/profile`, and click `Create trading wallet` under `Polymarket Trading Wallet`. Expect the row to flip to connected with a tenant wallet address and Polygonscan link. API fallback: `POST /api/v1/poly/wallet/connect` with the signed-in session cookie returns `{ connection_id, funder_address, requires_funding: true, suggested_usdc: 5, suggested_matic: 0.1 }`, and `GET /api/v1/poly/wallet/status` then returns `{ configured: true, connected: true, ... }`.
+- `observability:` Query Loki at the deployed SHA with `{job="poly-node-app",sha="<sha>"} |= "poly.wallet.connect"` and confirm your request logs `billing_account_id`, `connection_id`, and `funder_address`.
 
 ## Review Feedback (revision 1 — 2026-04-19)
 
