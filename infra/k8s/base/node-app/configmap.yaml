@@ -21,3 +21,7 @@ data:
   # Repo-spec baked into image at /app/.cogni/repo-spec.yaml (no git-sync needed).
   # Updated every CI build via COPY in Dockerfile.
   COGNI_REPO_PATH: "/app"
+
+  # Poly MCP Server for advanced market research (AI-powered analysis)
+  # Set via overlay per-env when poly-mcp is deployed
+  POLY_MCP_URL: "http://poly-mcp:8080"

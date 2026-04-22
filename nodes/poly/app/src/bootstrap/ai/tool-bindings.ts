@@ -18,6 +18,7 @@ import type {
   KnowledgeCapability,
   MarketCapability,
   MetricsCapability,
+  PolyMcpConfig,
   PolyTradeCapability,
   RepoCapability,
   ScheduleCapability,
@@ -35,6 +36,7 @@ import {
   createMetricsQueryImplementation,
   createPolyCancelOrderImplementation,
   createPolyListOrdersImplementation,
+  createPolyMcpResearchImplementation,
   createPolyPlaceTradeImplementation,
   createRepoListImplementation,
   createRepoOpenImplementation,
@@ -59,9 +61,11 @@ import {
   METRICS_QUERY_NAME,
   POLY_CANCEL_ORDER_NAME,
   POLY_LIST_ORDERS_NAME,
+  POLY_MCP_RESEARCH_NAME,
   POLY_PLACE_TRADE_NAME,
   polyCancelOrderStubImplementation,
   polyListOrdersStubImplementation,
+  polyMcpResearchStubImplementation,
   polyPlaceTradeStubImplementation,
   REPO_LIST_NAME,
   REPO_OPEN_NAME,
@@ -87,6 +91,12 @@ export interface ToolBindingDeps {
   readonly knowledgeCapability: KnowledgeCapability;
   readonly marketCapability: MarketCapability;
   readonly metricsCapability: MetricsCapability;
+  /**
+   * Poly MCP config — optional URL to the Polymarket MCP server container.
+   * Format: http://poly-mcp:8080 (Docker) or http://localhost:8080 (dev).
+   * When undefined, core__poly_mcp_research uses stub implementation.
+   */
+  readonly polyMcpConfig?: PolyMcpConfig | undefined;
   /**
    * Optional — when undefined the `core__poly_place_trade` tool is registered
    * with a stub that throws a clear error on invocation. Happens when
@@ -174,6 +184,12 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
           polyTradeCapability: deps.polyTradeCapability,
         })
       : polyCancelOrderStubImplementation) as AnyToolImplementation,
+
+    [POLY_MCP_RESEARCH_NAME]: (deps.polyMcpConfig
+      ? createPolyMcpResearchImplementation({
+          polyMcpConfig: deps.polyMcpConfig,
+        })
+      : polyMcpResearchStubImplementation) as AnyToolImplementation,
 
     [WEB_SEARCH_NAME]: createWebSearchImplementation({
       webSearchCapability: deps.webSearchCapability,

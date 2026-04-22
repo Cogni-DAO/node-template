@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+apiVersion: v1
+kind: Service
+metadata:
+  name: poly-mcp
+  labels:
+    app.kubernetes.io/name: poly-mcp
+    app.kubernetes.io/part-of: cogni
+spec:
+  selector:
+    app.kubernetes.io/name: poly-mcp
+  ports:
+    - port: 8080
+      targetPort: http
+      protocol: TCP
+      name: http

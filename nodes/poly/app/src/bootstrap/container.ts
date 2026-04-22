@@ -846,6 +846,7 @@ function createContainer(): Container {
     knowledgeCapability,
     marketCapability,
     metricsCapability,
+    polyMcpConfig: env.POLY_MCP_URL ? { baseUrl: env.POLY_MCP_URL } : undefined,
     polyTradeCapability: polyTradeBundle?.capability,
     webSearchCapability,
     repoCapability,

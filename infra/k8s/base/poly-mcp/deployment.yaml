@@ -1,0 +1,54 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: poly-mcp
+  labels:
+    app.kubernetes.io/name: poly-mcp
+    app.kubernetes.io/part-of: cogni
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: poly-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: poly-mcp
+        app.kubernetes.io/part-of: cogni
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+        - name: poly-mcp
+          image: ghcr.io/caiovicentino/polymarket-mcp-server:latest
+          ports:
+            - containerPort: 8080
+              name: http
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            exec:
+              command: ["python", "-c", "import sys; sys.exit(0)"]
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          env:
+            - name: DEMO_MODE
+              value: "true"
+            - name: POLY_MCP_URL
+              value: "http://localhost:8080"
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "250m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"

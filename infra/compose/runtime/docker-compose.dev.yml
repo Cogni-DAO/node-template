@@ -579,6 +579,30 @@ services:
         condition: service_healthy
 
   # =============================================================================
+  # Poly MCP Dashboard (HTTP web APIs for poly-brain research)
+  # Provides market research HTTP APIs (not MCP protocol)
+  # Uses demo mode: DEMO_MODE=true (read-only, no credentials)
+  # =============================================================================
+
+  poly-mcp:
+    image: ghcr.io/caiovicentino/polymarket-mcp-server:latest
+    container_name: poly-mcp
+    restart: unless-stopped
+    profiles: [poly]
+    networks:
+      - internal
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - DEMO_MODE=true
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # =============================================================================
   # Scheduler Worker (Temporal)
   # Per SCHEDULER_SPEC.md: Executes scheduled graph runs via internal API
   # =============================================================================

@@ -209,6 +209,20 @@ export {
   polyListOrdersStubImplementation,
 } from "./tools/poly-list-orders";
 export {
+  createPolyMcpResearchImplementation,
+  POLY_MCP_RESEARCH_NAME,
+  type PolyMcpConfig,
+  type PolyMcpResearchDeps,
+  type PolyMcpResearchInput,
+  PolyMcpResearchInputSchema,
+  type PolyMcpResearchOutput,
+  PolyMcpResearchOutputSchema,
+  type PolyMcpResearchRedacted,
+  polyMcpResearchBoundTool,
+  polyMcpResearchContract,
+  polyMcpResearchStubImplementation,
+} from "./tools/poly-mcp-research";
+export {
   createPolyPlaceTradeImplementation,
   POLY_PLACE_TRADE_NAME,
   type PolyClosePositionRequest,

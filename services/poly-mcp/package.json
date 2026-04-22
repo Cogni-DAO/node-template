@@ -1,0 +1,11 @@
+{
+  "name": "@cogni/poly-mcp-service",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "echo 'no build needed - using upstream Docker image'",
+    "start": "python -m polymarket_mcp.server",
+    "dev": "python -m polymarket_mcp.server",
+    "typecheck": "echo 'no typecheck for Python service in v0'"
+  }
+}

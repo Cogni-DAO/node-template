@@ -1,0 +1,4 @@
+name: poly-mcp
+type: service
+port: 8080
+dockerfile: infra/k8s/base/poly-mcp/Dockerfile

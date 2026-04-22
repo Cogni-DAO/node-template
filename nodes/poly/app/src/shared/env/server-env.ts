@@ -211,6 +211,12 @@ export const serverSchema = z.object({
   KALSHI_API_KEY: z.string().min(1).optional(),
   KALSHI_API_SECRET: z.string().min(1).optional(),
 
+  // Poly MCP Server - Optional
+  // HTTP URL to Polymarket MCP server for advanced research (AI-powered analysis).
+  // Format: http://poly-mcp:8080 (Docker network) or http://localhost:8080 (dev)
+  // When not set, core__poly_mcp_research tool uses stub implementation.
+  POLY_MCP_URL: z.string().url().optional(),
+
   // Redis (stream plane — ephemeral only)
   // Per unified-graph-launch spec: REDIS_IS_STREAM_PLANE
   // Default: localhost for host-mode dev; docker-compose overrides to redis://redis:6379

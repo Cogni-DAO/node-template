@@ -22,6 +22,7 @@ import { marketListBoundTool } from "./tools/market-list";
 import { metricsQueryBoundTool } from "./tools/metrics-query";
 import { polyCancelOrderBoundTool } from "./tools/poly-cancel-order";
 import { polyListOrdersBoundTool } from "./tools/poly-list-orders";
+import { polyMcpResearchBoundTool } from "./tools/poly-mcp-research";
 import { polyPlaceTradeBoundTool } from "./tools/poly-place-trade";
 import { repoListBoundTool } from "./tools/repo-list";
 import { repoOpenBoundTool } from "./tools/repo-open";
@@ -117,6 +118,7 @@ export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
   metricsQueryBoundTool as CatalogBoundTool,
   polyCancelOrderBoundTool as CatalogBoundTool,
   polyListOrdersBoundTool as CatalogBoundTool,
+  polyMcpResearchBoundTool as CatalogBoundTool,
   polyPlaceTradeBoundTool as CatalogBoundTool,
   repoListBoundTool as CatalogBoundTool,
   repoOpenBoundTool as CatalogBoundTool,
