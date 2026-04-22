@@ -18,8 +18,10 @@ import { FakeOrderLedger } from "@/adapters/test/trading/fake-order-ledger";
 import { startOrderReconciler } from "@/bootstrap/jobs/order-reconciler.job";
 import { makeNoopLogger } from "@/shared/observability/server";
 
-const OPERATOR = "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" as `0x${string}`;
 const LOGGER = makeNoopLogger();
+
+/** No-op per-tenant getOrder for these lifecycle tests. */
+const NOOP_GET_ORDER_FOR_TENANT = vi.fn();
 
 describe("startOrderReconciler — getLastTickAt", () => {
   const handles: Array<{ stop: () => void }> = [];
@@ -45,8 +47,7 @@ describe("startOrderReconciler — getLastTickAt", () => {
 
     const handle = startOrderReconciler({
       ledger,
-      getOrder: vi.fn(),
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: NOOP_GET_ORDER_FOR_TENANT,
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,
@@ -66,8 +67,7 @@ describe("startOrderReconciler — getLastTickAt", () => {
 
     const handle = startOrderReconciler({
       ledger,
-      getOrder: vi.fn(),
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: NOOP_GET_ORDER_FOR_TENANT,
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,

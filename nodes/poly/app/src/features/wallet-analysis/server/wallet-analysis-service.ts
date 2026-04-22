@@ -39,6 +39,21 @@ import type {
 import pLimit from "p-limit";
 import { coalesce } from "./coalesce";
 
+/**
+ * Balance-history extras for `getExecutionSlice`. Injected by callers that can
+ * resolve cash context (available + locked USDC) for the supplied address —
+ * e.g. a future per-tenant resolver that reads `PolyTraderWalletPort.getBalances`
+ * + open-order notional for the session wallet. Kept as a type-only
+ * injection hook because the single-operator helper that used to live at
+ * `@/app/_lib/poly/operator-extras` was purged in task.0318 Phase B3.
+ */
+type FetchOperatorExtras = (addr: `0x${string}`) => Promise<{
+  available: number | null;
+  locked: number | null;
+  polGas: number | null;
+  errors: string[];
+}>;
+
 /** Cache TTL for every slice. Matches design doc 30 s. */
 const SLICE_TTL_MS = 30_000;
 
@@ -50,12 +65,6 @@ const TRADE_FETCH_LIMIT = 500;
 const EXECUTION_TRADE_FETCH_LIMIT = 10_000;
 const EXECUTION_POSITION_LIMIT = 18;
 const EXECUTION_HISTORY_WINDOW_DAYS = 14;
-
-/** Operator wallet from env, lowercased (or undefined when unset). Read once per call to stay test-friendly. */
-function getOperatorAddrLower(): string | undefined {
-  // biome-ignore lint/style/noProcessEnv: hot-read for test isolation; full env framework would be over-engineering for one var
-  return process.env.POLY_PROTO_WALLET_ADDRESS?.toLowerCase();
-}
 
 /**
  * Module-singleton clients — created lazily so test code can `vi.mock` either of them
@@ -199,21 +208,17 @@ export async function getSnapshotSlice(
 }
 
 /**
- * Dependency-injected hook for operator-only balance signals (USDC.e available, open-order
- * locked, POL gas). App layer owns this because it needs `getContainer()` + viem, which
- * feature layer can't import. Returns `null` fields when the caller can't or shouldn't read.
+ * Balance slice — positions for any wallet.
+ *
+ * Post-Stage-4 (OPERATOR_BRANCH_DORMANT): the single-operator "available +
+ * locked" breakdown that used to run for `addr === POLY_PROTO_WALLET_ADDRESS`
+ * has been purged. `isOperator` stays in the contract shape as `false` so
+ * callers that still branch on it compile — a per-tenant replacement lives
+ * with the Money page rework and will go through `PolyTradeExecutor`, not
+ * this helper.
  */
-export type FetchOperatorExtras = (operatorAddr: `0x${string}`) => Promise<{
-  available: number | null;
-  locked: number | null;
-  polGas: number | null;
-  errors: string[];
-}>;
-
-/** Balance slice — positions for any wallet; operator-only breakdown via injected fetcher. */
 export async function getBalanceSlice(
-  addr: string,
-  fetchOperatorExtras?: FetchOperatorExtras
+  addr: string
 ): Promise<SliceResult<WalletAnalysisBalance>> {
   try {
     const positions = await coalesce(
@@ -225,26 +230,13 @@ export async function getBalanceSlice(
       (s, p) => s + (p.currentValue ?? 0),
       0
     );
-    const operator = getOperatorAddrLower();
-    const isOperator = !!operator && operator === addr.toLowerCase();
 
-    let available: number | undefined;
-    let locked: number | undefined;
-    if (isOperator && fetchOperatorExtras) {
-      const extras = await fetchOperatorExtras(addr as `0x${string}`);
-      if (extras.available !== null) available = extras.available;
-      if (extras.locked !== null) locked = extras.locked;
-    }
-
-    const total = (available ?? 0) + (locked ?? 0) + positionsValue;
     return {
       kind: "ok",
       value: {
-        ...(available !== undefined && { available }),
-        ...(locked !== undefined && { locked }),
         positions: positionsValue,
-        total,
-        isOperator,
+        total: positionsValue,
+        isOperator: false,
         computedAt: new Date().toISOString(),
       },
     };

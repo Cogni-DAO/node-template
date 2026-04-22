@@ -269,6 +269,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         synced_at: r.syncedAt,
         created_at: r.createdAt,
         updated_at: r.updatedAt,
+        billing_account_id: r.billingAccountId,
       }));
     },
 
@@ -301,6 +302,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         synced_at: r.syncedAt,
         created_at: r.createdAt,
         updated_at: r.updatedAt,
+        billing_account_id: r.billingAccountId,
       }));
     },
 
