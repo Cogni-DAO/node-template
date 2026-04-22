@@ -210,12 +210,6 @@ export function ExecutionActivityCard(): ReactElement {
       })),
     [executionData?.positions]
   );
-  const openPositions = positions.filter(
-    (position) => position.status === "open"
-  );
-  const redeemablePositions = positions.filter(
-    (position) => position.status === "redeemable"
-  );
   const historyRows = useMemo(
     () => filterHistoryOrders(orders, historyFilter).slice(0, 60),
     [orders, historyFilter]
@@ -225,16 +219,10 @@ export function ExecutionActivityCard(): ReactElement {
     <Card>
       <CardHeader className="px-5 py-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-1">
+          <div>
             <CardTitle className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
               Execution
             </CardTitle>
-            <p className="text-muted-foreground text-xs">
-              {openPositions.length} open · {redeemablePositions.length}{" "}
-              redeemable
-              {" · "}
-              {positions.length} positions · {orders.length} orders
-            </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -324,9 +312,6 @@ function PositionsPanel({
         <h3 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
           Positions
         </h3>
-        <p className="text-muted-foreground text-xs">
-          Price traces use Polymarket trades plus public CLOB price history.
-        </p>
         {warnings.length > 0 ? (
           <p className="text-muted-foreground text-xs">
             Some upstream data is temporarily unavailable, so a few rows may

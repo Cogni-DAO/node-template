@@ -58,6 +58,7 @@ import { fetchRuns } from "./_api/fetchRuns";
 import { CopyTradedWalletsCard } from "./_components/CopyTradedWalletsCard";
 import { ExecutionActivityCard } from "./_components/ExecutionActivityCard";
 import { OperatorWalletCard } from "./_components/OperatorWalletCard";
+import { OperatorWalletChartsRow } from "./_components/OperatorWalletChartsRow";
 
 type Tab = "user" | "system";
 
@@ -287,6 +288,7 @@ export function DashboardView(): ReactElement {
 
       {/* Polymarket primary section (top of fold) */}
       <OperatorWalletCard />
+      <OperatorWalletChartsRow />
       <ExecutionActivityCard />
       <div className="flex flex-col gap-2">
         <h2 className="font-semibold text-muted-foreground text-xs uppercase tracking-widest">

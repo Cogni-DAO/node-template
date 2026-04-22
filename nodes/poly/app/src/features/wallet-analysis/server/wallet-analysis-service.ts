@@ -23,6 +23,7 @@ import {
   computeWalletMetrics,
   type MarketResolutionInput,
   mapExecutionPositions,
+  mapWalletBalanceHistory,
 } from "@cogni/market-provider/analysis";
 import type {
   PolyWalletExecutionOutput,
@@ -30,6 +31,8 @@ import type {
   WalletAnalysisSnapshot,
   WalletAnalysisTrades,
   WalletAnalysisWarning,
+  WalletExecutionBalanceHistoryPoint,
+  WalletExecutionDailyCount,
   WalletExecutionPosition,
   WalletExecutionWarning,
 } from "@cogni/node-contracts";
@@ -46,6 +49,7 @@ const upstreamLimit = pLimit(4);
 const TRADE_FETCH_LIMIT = 500;
 const EXECUTION_TRADE_FETCH_LIMIT = 10_000;
 const EXECUTION_POSITION_LIMIT = 18;
+const EXECUTION_HISTORY_WINDOW_DAYS = 14;
 
 /** Operator wallet from env, lowercased (or undefined when unset). Read once per call to stay test-friendly. */
 function getOperatorAddrLower(): string | undefined {
@@ -253,10 +257,12 @@ export async function getBalanceSlice(
 }
 
 export async function getExecutionSlice(
-  addr: string
+  addr: string,
+  fetchOperatorExtras?: FetchOperatorExtras
 ): Promise<PolyWalletExecutionOutput> {
   const capturedAt = new Date().toISOString();
   const warnings: WalletExecutionWarning[] = [];
+  let balanceHistory: WalletExecutionBalanceHistoryPoint[] = [];
 
   const [positionsResult, tradesResult] = await Promise.allSettled([
     coalesce(
@@ -299,12 +305,22 @@ export async function getExecutionSlice(
     });
   }
 
+  const dailyTradeCountsResult = buildDailyCounts(
+    trades,
+    EXECUTION_HISTORY_WINDOW_DAYS
+  );
+
   const preview = mapExecutionPositions({
     positions,
     trades,
     asOfIso: capturedAt,
   }).slice(0, EXECUTION_POSITION_LIMIT);
+  const historyAssets = collectHistoryAssets(positions, trades, capturedAt);
   const priceHistoryByAsset = new Map<
+    string,
+    Awaited<ReturnType<PolymarketClobPublicClient["getPriceHistory"]>>
+  >();
+  const balanceHistoryPriceByAsset = new Map<
     string,
     Awaited<ReturnType<PolymarketClobPublicClient["getPriceHistory"]>>
   >();
@@ -338,6 +354,57 @@ export async function getExecutionSlice(
     })
   );
 
+  await Promise.all(
+    historyAssets.map(async (asset) => {
+      const endTs = Math.floor(new Date(capturedAt).getTime() / 1000);
+      const startTs =
+        endTs - (EXECUTION_HISTORY_WINDOW_DAYS - 1) * 86_400 - 3_600;
+      const history = await coalesce(
+        `execution-balance-history:${asset}:${startTs}:${endTs}`,
+        () =>
+          upstreamLimit(() =>
+            getClobPublicClient().getPriceHistory(asset, {
+              startTs,
+              endTs,
+              fidelity: 1440,
+            })
+          ),
+        SLICE_TTL_MS
+      );
+      if (history.length > 0) {
+        balanceHistoryPriceByAsset.set(asset, history);
+      }
+    })
+  );
+
+  if (fetchOperatorExtras) {
+    const extras = await fetchOperatorExtras(addr as `0x${string}`);
+    if (extras.errors.length > 0) {
+      for (const error of extras.errors) {
+        warnings.push({
+          code: "operator_extras_unavailable",
+          message: error,
+        });
+      }
+    }
+    if (extras.available !== null || extras.locked !== null) {
+      balanceHistory = mapWalletBalanceHistory({
+        positions,
+        trades,
+        priceHistoryByAsset: balanceHistoryPriceByAsset,
+        currentCash: Math.max(
+          0,
+          (extras.available ?? 0) + (extras.locked ?? 0)
+        ),
+        asOfIso: capturedAt,
+        windowDays: EXECUTION_HISTORY_WINDOW_DAYS,
+      }).map((point) => ({
+        ts: point.ts,
+        total: point.total,
+      }));
+    }
+  }
+
   const mapped = mapExecutionPositions({
     positions,
     trades,
@@ -349,6 +416,8 @@ export async function getExecutionSlice(
   return {
     address: addr.toLowerCase() as PolyWalletExecutionOutput["address"],
     capturedAt,
+    balanceHistory,
+    dailyTradeCounts: dailyTradeCountsResult,
     positions: mapped.map(toExecutionContractPosition),
     warnings,
   };
@@ -368,7 +437,7 @@ function warning(
 function buildDailyCounts(
   trades: ReadonlyArray<{ timestamp: number }>,
   windowDays: number
-): Array<{ day: string; n: number }> {
+): WalletExecutionDailyCount[] {
   const SEC_PER_DAY = 86_400;
   const nowSec = Math.floor(Date.now() / 1000);
   const buckets = new Map<string, number>();
@@ -384,6 +453,25 @@ function buildDailyCounts(
     out.push({ day, n: buckets.get(day) ?? 0 });
   }
   return out;
+}
+
+function collectHistoryAssets(
+  positions: readonly { asset: string }[],
+  trades: readonly { asset: string; timestamp: number }[],
+  capturedAt: string
+): string[] {
+  const endTs = Math.floor(new Date(capturedAt).getTime() / 1000);
+  const startTs = endTs - (EXECUTION_HISTORY_WINDOW_DAYS - 1) * 86_400;
+  const assets = new Set<string>();
+  for (const position of positions) {
+    if (position.asset) assets.add(position.asset);
+  }
+  for (const trade of trades) {
+    if (trade.asset && trade.timestamp >= startTs) {
+      assets.add(trade.asset);
+    }
+  }
+  return [...assets];
 }
 
 function toExecutionContractPosition(

@@ -26,13 +26,26 @@ export function TradesPerDayChart({
   daily,
   isLoading,
 }: TradesPerDayChartProps): ReactElement {
-  if (isLoading || !daily || daily.length === 0) {
+  if (isLoading) {
     return (
       <div className="flex flex-col gap-3">
         <h4 className="font-semibold text-sm uppercase tracking-widest">
           Trades / day, last 14 days
         </h4>
         <div className="h-28 animate-pulse rounded bg-muted" />
+      </div>
+    );
+  }
+
+  if (!daily || daily.length === 0) {
+    return (
+      <div className="flex flex-col gap-3">
+        <h4 className="font-semibold text-sm uppercase tracking-widest">
+          Trades / day, last 14 days
+        </h4>
+        <div className="flex h-28 items-center justify-center text-muted-foreground text-sm">
+          No trade history yet.
+        </div>
       </div>
     );
   }

@@ -152,9 +152,9 @@ export function PositionTimelineChart({
           dataKey="price"
           type="linear"
           stroke="var(--color-price)"
-          strokeWidth={2}
+          strokeWidth={1.5}
           dot={false}
-          activeDot={{ r: 3.5 }}
+          activeDot={{ r: 3 }}
         />
 
         {lastPoint ? (

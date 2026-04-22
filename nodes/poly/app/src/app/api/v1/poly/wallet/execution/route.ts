@@ -18,6 +18,7 @@ import {
 } from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
+import { fetchOperatorExtras } from "@/app/_lib/poly/operator-extras";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import { getExecutionSlice } from "@/features/wallet-analysis/server/wallet-analysis-service";
 import { serverEnv } from "@/shared/env/server-env";
@@ -38,6 +39,8 @@ export const GET = wrapRouteHandlerWithLogging(
         polyWalletExecutionOperation.output.parse({
           address: "0x0000000000000000000000000000000000000000",
           capturedAt: new Date().toISOString(),
+          balanceHistory: [],
+          dailyTradeCounts: [],
           positions: [],
           warnings: [
             {
@@ -50,7 +53,9 @@ export const GET = wrapRouteHandlerWithLogging(
     }
 
     return NextResponse.json(
-      PolyWalletExecutionOutputSchema.parse(await getExecutionSlice(address))
+      PolyWalletExecutionOutputSchema.parse(
+        await getExecutionSlice(address, fetchOperatorExtras)
+      )
     );
   }
 );

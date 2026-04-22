@@ -3,7 +3,7 @@
 
 /**
  * Module: `@contracts/poly.wallet.execution.v1.contract`
- * Purpose: Defines the operator-wallet execution route contract for the dashboard Positions view.
+ * Purpose: Defines the operator-wallet execution route contract for the dashboard wallet charts and Positions view.
  * Scope: GET /api/v1/poly/wallet/execution. Read-only; does not mutate operator state.
  * Invariants:
  *   - Address is always the configured operator wallet (or zero-address when unconfigured).
@@ -88,9 +88,27 @@ export type WalletExecutionWarning = z.infer<
   typeof WalletExecutionWarningSchema
 >;
 
+export const WalletExecutionBalanceHistoryPointSchema = z.object({
+  ts: z.string(),
+  total: z.number(),
+});
+export type WalletExecutionBalanceHistoryPoint = z.infer<
+  typeof WalletExecutionBalanceHistoryPointSchema
+>;
+
+export const WalletExecutionDailyCountSchema = z.object({
+  day: z.string(),
+  n: z.number().int().nonnegative(),
+});
+export type WalletExecutionDailyCount = z.infer<
+  typeof WalletExecutionDailyCountSchema
+>;
+
 export const PolyWalletExecutionOutputSchema = z.object({
   address: PolyAddressSchema,
   capturedAt: z.string(),
+  balanceHistory: z.array(WalletExecutionBalanceHistoryPointSchema),
+  dailyTradeCounts: z.array(WalletExecutionDailyCountSchema),
   positions: z.array(WalletExecutionPositionSchema),
   warnings: z.array(WalletExecutionWarningSchema),
 });
@@ -100,9 +118,10 @@ export type PolyWalletExecutionOutput = z.infer<
 
 export const polyWalletExecutionOperation = {
   id: "poly.wallet.execution.v1",
-  summary: "Operator wallet execution positions with traceable price timelines",
+  summary:
+    "Operator wallet charts and execution positions with traceable price timelines",
   description:
-    "Returns the operator wallet's live execution positions derived from Polymarket Data API trades and positions plus public CLOB price history.",
+    "Returns the operator wallet's live balance-history estimate, daily trade counts, and execution positions derived from Polymarket Data API trades and positions plus public CLOB price history.",
   input: z.object({}),
   output: PolyWalletExecutionOutputSchema,
 } as const;

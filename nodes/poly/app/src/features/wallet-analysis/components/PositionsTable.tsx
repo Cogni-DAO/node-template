@@ -18,6 +18,7 @@
 import type { ReactElement } from "react";
 
 import {
+  Button,
   Table,
   TableBody,
   TableCell,
@@ -67,6 +68,7 @@ export function PositionsTable({
           <TableHead className="text-right">Current</TableHead>
           <TableHead className="text-right">P/L</TableHead>
           <TableHead className="text-right">P/L %</TableHead>
+          <TableHead className="w-28 text-right">Action</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -93,7 +95,7 @@ export function PositionsTable({
                     </span>
                   )}
                   <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
-                    {position.outcome} · {position.status}
+                    {position.outcome}
                   </span>
                 </div>
               </TableCell>
@@ -121,6 +123,19 @@ export function PositionsTable({
                 className={`text-right text-sm tabular-nums ${pnlClass}`}
               >
                 {formatSignedPct(position.pnlPct)}
+              </TableCell>
+              <TableCell className="text-right">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  title={`${actionLabel(position.status)} actions land next`}
+                  aria-label={`${actionLabel(position.status)} ${position.marketTitle}`}
+                  onClick={(event) => event.preventDefault()}
+                  className="w-20 border-border/70 text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                >
+                  {actionLabel(position.status)}
+                </Button>
               </TableCell>
             </TableRow>
           );
@@ -153,4 +168,10 @@ function formatHeldDuration(heldMinutes: number): string {
     return `${hours}h ${minutes}m`;
   }
   return `${minutes}m`;
+}
+
+function actionLabel(status: WalletPosition["status"]): string {
+  if (status === "redeemable") return "Redeem";
+  if (status === "closed") return "Exit";
+  return "Close";
 }
