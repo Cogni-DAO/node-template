@@ -3,8 +3,9 @@ id: task.0318
 type: task
 title: "Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables"
 status: needs_implement
-revision: 6
+revision: 7
 pr_b: https://github.com/Cogni-DAO/node-template/pull/968
+pr_b3: TBD
 priority: 2
 estimate: 5
 rank: 5
@@ -23,8 +24,8 @@ project: proj.poly-copy-trading
 pr: https://github.com/Cogni-DAO/node-template/pull/944
 created: 2026-04-17
 updated: 2026-04-22
-branch: feat/task-0318-phase-b
-deploy_verified: true
+branch: feat/task-0318-phase-b3-trade-execution
+deploy_verified: false
 labels: [poly, polymarket, wallets, auth, rls, multi-tenant, privy, security]
 external_refs:
   - work/items/task.0315.poly-copy-trade-prototype.md
@@ -352,8 +353,15 @@ See [docs/spec/poly-multi-tenant-auth.md § Decisions](../../docs/spec/poly-mult
 
 ## Validation
 
+### Phase B2 (shipped — PR #968)
+
 - `exercise:` On `candidate-a`, sign into the poly app, visit `/profile`, and click `Create trading wallet` under `Polymarket Trading Wallet`. Expect the row to flip to connected with a tenant wallet address and Polygonscan link. API fallback: `POST /api/v1/poly/wallet/connect` with the signed-in session cookie returns `{ connection_id, funder_address, requires_funding: true, suggested_usdc: 5, suggested_matic: 0.1 }`, and `GET /api/v1/poly/wallet/status` then returns `{ configured: true, connected: true, ... }`.
 - `observability:` Query Loki at the deployed SHA with `{job="poly-node-app",sha="<sha>"} |= "poly.wallet.connect"` and confirm your request logs `billing_account_id`, `connection_id`, and `funder_address`.
+
+### Phase B3 (this PR — per-tenant trade execution + prototype purge)
+
+- `exercise:` On `candidate-a`, (1) sign into the poly app and call `POST /api/v1/poly/wallet/connect` on a tenant that has never provisioned before — verify the response carries a `defaultGrant` block (`{ id, scopes: ["poly:place_intent", "poly:close_position"], max_per_trade_usdc, max_per_day_usdc, expires_at }`) alongside the connection fields. (2) Visit `/profile` and confirm the two horizontal sliders for **Max per trade** and **Max per day** render against real data and round-trip edits through `PATCH /api/v1/poly/wallet/grants/default`. (3) From the same tenant, fund the Privy wallet with ~$5 USDC.e + ~$0.1 MATIC and wait for the autonomous mirror pipeline tick (≤30 s). The place-intent path MUST go through `PolyTradeExecutorFactory.getPolyTradeExecutorFor(billing_account_id)` — no more shared operator wallet. Validate by calling `GET /api/v1/poly/copy-trade/orders` and confirming a new row exists with a Polymarket `order_id`.
+- `observability:` Query Loki at the deployed SHA with `{job="poly-node-app",sha="<sha>"} |= "mirror_pipeline.placed"` and confirm each placement log line carries `billing_account_id=<your tenant>`, `executor_source="per_tenant"`, and a non-null `order_id`. Secondary gate: `{job="poly-node-app",sha="<sha>"} |= "poly.wallet.authorize_intent"` shows the grant-id + scope check fired **before** the Polymarket CLOB call. Negative signal: zero occurrences of `polyTradeBundle` or `POLY_PROTO_WALLET_ADDRESS` in any log line at the deployed SHA — the prototype is fully purged.
 
 ## Review Feedback (revision 1 — 2026-04-19)
 
