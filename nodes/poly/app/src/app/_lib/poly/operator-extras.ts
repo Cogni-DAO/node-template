@@ -5,8 +5,7 @@
  * Module: `@app/_lib/poly/operator-extras`
  * Purpose: Single source of truth for the operator-only balance signals that can't be read
  *          via the public Data-API alone — USDC.e on-chain balance (Polygon RPC), POL gas
- *          (Polygon RPC), and open-order notional locked (Polymarket CLOB via the operator's
- *          API key held by `polyTradeBundle.capability`).
+ *          (Polygon RPC), and open-order notional locked (Polymarket CLOB).
  * Scope: App-layer facade. Does not compute metrics, does not touch positions (that flows
  *        through the Data-API client in the feature service). Does not format for any contract.
  * Invariants:
@@ -15,14 +14,18 @@
  *     this helper does not gate by address.
  *   - PARTIAL_FAILURE_NEVER_THROWS: individual upstream failures land in `errors[]` and the
  *     corresponding field is left `null`.
- * Side-effects: IO (Polygon RPC + Polymarket CLOB via operator's signed capability).
+ *   - LOCKED_IS_DORMANT: locked-notional read is dormant post-Stage-4 purge. The single-operator
+ *     CLOB capability it used (`polyTradeBundle`) has been deleted. The field stays in the
+ *     response shape (null + `poly_capability_unconfigured` error) so the balance route + UI
+ *     keep their contract. A per-tenant replacement goes through the Money page's per-user
+ *     Privy-backed `PolyTradeExecutor`, not this operator-only helper.
+ * Side-effects: IO (Polygon RPC only; locked-notional is a no-op).
  * Links: docs/design/wallet-analysis-components.md, nodes/poly/app/src/app/api/v1/poly/wallet/balance/route.ts
  * @public
  */
 
 import { createPublicClient, formatUnits, http, parseAbi } from "viem";
 import { polygon } from "viem/chains";
-import { getContainer } from "@/bootstrap/container";
 import { coalesce } from "@/features/wallet-analysis/server/coalesce";
 import { serverEnv } from "@/shared/env/server-env";
 
@@ -55,7 +58,7 @@ export async function fetchOperatorExtras(
   const errors: string[] = [];
 
   const [available, polGas] = await readPolygonBalances(operatorAddr, errors);
-  const locked = await readLockedNotional(operatorAddr, errors);
+  const locked = readLockedNotional(operatorAddr, errors);
 
   return { available, locked, polGas, errors };
 }
@@ -98,33 +101,19 @@ async function readPolygonBalances(
   }
 }
 
-async function readLockedNotional(
-  addr: `0x${string}`,
+/**
+ * Dormant post-Stage-4 (LOCKED_IS_DORMANT): the single-operator CLOB capability
+ * that backed this read was purged. Returns `null` + a stable
+ * `poly_capability_unconfigured` marker so the balance route keeps its
+ * contract (stale=true, locked=0) without a runtime error. A per-tenant
+ * replacement — route the caller's `billing_account_id` through
+ * `PolyTradeExecutor.listOpenOrders` — lives with the Money page rework, not
+ * this operator-only helper.
+ */
+function readLockedNotional(
+  _addr: `0x${string}`,
   errors: string[]
-): Promise<number | null> {
-  try {
-    const container = getContainer();
-    const capability = container.polyTradeBundle?.capability;
-    if (!capability) {
-      errors.push("poly_capability_unconfigured");
-      return null;
-    }
-    return await coalesce(
-      `operator-locked:${addr.toLowerCase()}`,
-      async () => {
-        const orders = await capability.listOpenOrders();
-        return orders.reduce((sum, o) => {
-          const remaining =
-            (o.original_size_shares ?? 0) - (o.filled_size_shares ?? 0);
-          return sum + Math.max(remaining, 0) * (o.price ?? 0);
-        }, 0);
-      },
-      SLICE_TTL_MS
-    );
-  } catch (err) {
-    errors.push(
-      `poly_open_orders: ${err instanceof Error ? err.message : String(err)}`
-    );
-    return null;
-  }
+): number | null {
+  errors.push("poly_capability_unconfigured");
+  return null;
 }

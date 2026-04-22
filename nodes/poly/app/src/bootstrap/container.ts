@@ -111,7 +111,6 @@ import {
   createMetricsCapability,
   derivePrometheusQueryUrl,
 } from "@/bootstrap/capabilities/metrics";
-import { createPolyTradeCapability } from "@/bootstrap/capabilities/poly-trade";
 import {
   createPolyTradeExecutorFactory,
   type PolyTradeExecutor,
@@ -254,14 +253,6 @@ export interface Container {
   modelCatalog: ModelCatalogPort;
   /** Provider resolver — resolves providerKey to ModelProviderPort for runtime dispatch */
   providerResolver: ModelProviderResolverPort;
-  /**
-   * Polymarket copy-trade bundle — agent-callable capability + raw placeIntent
-   * seam + operator wallet address. Undefined when Polymarket env is incomplete.
-   * Consumed by the autonomous mirror poll AND the /api/v1/poly/* read APIs.
-   */
-  polyTradeBundle:
-    | import("@/bootstrap/capabilities/poly-trade").PolyTradeBundle
-    | undefined;
   /**
    * Copy-trade target source — strongly-typed seam for "which wallets is each
    * user monitoring right now?". Always DB-backed (`dbTargetSource`) against
@@ -670,39 +661,6 @@ function createContainer(): Container {
   // WalletCapability for AI tools (Polymarket wallet scoreboard — public Data API)
   const walletCapability = createWalletCapability();
 
-  const hasPolyProtoPrivy = Boolean(
-    env.POLY_PROTO_PRIVY_APP_ID &&
-      env.POLY_PROTO_PRIVY_APP_SECRET &&
-      env.POLY_PROTO_PRIVY_SIGNING_KEY
-  );
-  const hasPolyClob = Boolean(
-    env.POLY_CLOB_API_KEY &&
-      env.POLY_CLOB_API_SECRET &&
-      env.POLY_CLOB_PASSPHRASE
-  );
-  const polyTradeBundle = createPolyTradeCapability({
-    logger: log,
-    isTestMode: env.isTestMode,
-    host: env.POLY_CLOB_HOST,
-    operatorWalletAddress: env.POLY_PROTO_WALLET_ADDRESS as
-      | `0x${string}`
-      | undefined,
-    creds: hasPolyClob
-      ? {
-          apiKey: env.POLY_CLOB_API_KEY as string,
-          apiSecret: env.POLY_CLOB_API_SECRET as string,
-          passphrase: env.POLY_CLOB_PASSPHRASE as string,
-        }
-      : undefined,
-    privy: hasPolyProtoPrivy
-      ? {
-          appId: env.POLY_PROTO_PRIVY_APP_ID as string,
-          appSecret: env.POLY_PROTO_PRIVY_APP_SECRET as string,
-          signingKey: env.POLY_PROTO_PRIVY_SIGNING_KEY as string,
-        }
-      : undefined,
-  });
-
   // Copy-trade target source — always DB-backed. Component + stack tests
   // have a real Postgres (testcontainers), so there's no need to fall back to
   // an in-memory env impl. Pure unit tests that want a deterministic list
@@ -722,9 +680,9 @@ function createContainer(): Container {
   // `PolyTradeExecutor` for a given `billingAccountId`. Uses the per-user
   // Privy app (`PRIVY_USER_WALLETS_*`) — distinct from the operator-wallet
   // Privy app used by `OperatorWalletPort`. Undefined when any of those
-  // envs are missing; callers degrade gracefully (no mirror polls for
-  // user-scoped tenants; legacy `polyTradeBundle` still covers the old
-  // system-tenant path until Stage 4 migrates it away).
+  // envs are missing; callers degrade gracefully (no mirror polls, no
+  // order reconciler). Sole placement path post Stage 4 purge — the former
+  // single-operator `polyTradeBundle` is gone and will not come back.
   const polyTradeExecutorFactory:
     | ReturnType<typeof createPolyTradeExecutorFactory>
     | undefined = (() => {
@@ -749,20 +707,22 @@ function createContainer(): Container {
     }
   })();
 
-  // Autonomous 30s mirror poll per target wallet (task.0315 CP4.3e, @scaffolding).
-  // Starts when Polymarket creds are present (polyTradeBundle defined). A
-  // target-set reconciler ticks `copyTradeTargetSource.listAllActive()` every
-  // 30s and diffs the result against running per-target polls — so a user
-  // POSTing a tracked wallet begins copy-trading within one tick, with no pod
-  // restart (bug.0338 / POLL_RECONCILES_PER_TICK). One `startMirrorPoll` per
-  // active wallet; exactly one `startOrderReconciler` regardless of target
-  // count (operator-wide CLOB reconciliation, not per-target). Size + cadence
-  // are hardcoded in the job shim; daily/hourly USDC caps live in the
-  // tenant's `poly_wallet_grants` and are enforced by `authorizeIntent` on
-  // the hot path inside `PolyTradeExecutor.placeIntent`.
-  // `poly_copy_trade_config.enabled` remains the per-tenant kill-switch
-  // between "polls are running" and "polls actually place orders."
-  if (polyTradeBundle !== undefined) {
+  // Autonomous 30s mirror poll per target wallet. A target-set reconciler
+  // ticks `copyTradeTargetSource.listAllActive()` every 30s and diffs the
+  // result against running per-target polls — so a user POSTing a tracked
+  // wallet begins copy-trading within one tick, with no pod restart
+  // (bug.0338 / POLL_RECONCILES_PER_TICK). One `startMirrorPoll` per active
+  // (tenant × wallet); exactly one `startOrderReconciler` process-wide
+  // (per-tenant dispatch is internal, routed through the executor factory).
+  //
+  // Post-cutover gate: the poll + reconciler start iff
+  // `polyTradeExecutorFactory` exists, i.e. `PRIVY_USER_WALLETS_*` and
+  // `POLY_WALLET_AEAD_*` are configured. Daily/hourly USDC caps live in
+  // each tenant's `poly_wallet_grants` and are enforced by `authorizeIntent`
+  // on the hot path inside `PolyTradeExecutor.placeIntent`.
+  // `poly_copy_trade_config.enabled` remains the per-tenant kill-switch.
+  if (polyTradeExecutorFactory !== undefined) {
+    const executorFactory = polyTradeExecutorFactory;
     // Lazy-load the poll wiring so its transitive imports (Data-API HTTP
     // client, Drizzle queries) don't run on pods without Polymarket creds.
     void (async () => {
@@ -793,18 +753,7 @@ function createContainer(): Container {
         // `billing_account_id`; the reconciler routes `getOrder` through the
         // per-tenant `PolyTradeExecutor` so we hit the right CLOB API creds
         // (each tenant's creds are derived from their Privy signer). One
-        // reconciler runs on the operator pod; per-tenant dispatch is
-        // internal. (task.0323 §2, @scaffolding, Deleted-in-phase: 4)
-        if (!polyTradeExecutorFactory) {
-          // Defense in depth: we only enter this branch when
-          // polyTradeBundle !== undefined. The factory is built from the same
-          // env vars as the mirror path, so in full-cutover this throw is
-          // purely a guard against a future refactor regression.
-          throw new Error(
-            "polyTradeExecutorFactory missing — PRIVY_USER_WALLETS_* must be configured alongside prototype env while we complete Stage 4 purge"
-          );
-        }
-        const executorFactory = polyTradeExecutorFactory;
+        // reconciler runs on the pod; per-tenant dispatch is internal.
         _reconcilerHandle = startOrderReconciler({
           ledger: orderLedger,
           getOrderForTenant: async (billingAccountId, orderId) => {
@@ -821,14 +770,13 @@ function createContainer(): Container {
         // per-wallet polls to match. First tick fires immediately. See
         // docs/spec/poly-multi-tenant-auth.md § POLL_RECONCILES_PER_TICK.
         //
-        // Phase B3: `listAllActive` now joins `poly_wallet_connections` +
+        // `listAllActive` joins `poly_wallet_connections` +
         // `poly_wallet_grants`, so the reconciler only hands us tenants that
-        // have (a) an active trading wallet and (b) an active grant. The
-        // system-tenant prototype drops out here until Stage 4 back-fills a
-        // grant for it. Each per-tenant poll routes placements through the
-        // per-tenant `PolyTradeExecutor`, which wraps every `placeOrder`
-        // with `authorizeIntent` so scope + cap + grant-revoke checks run
-        // on the hot path.
+        // have (a) an active trading wallet and (b) an active grant. Each
+        // per-tenant poll routes placements through the per-tenant
+        // `PolyTradeExecutor`, which wraps every `placeOrder` with
+        // `authorizeIntent` so scope + cap + grant-revoke checks run on the
+        // hot path.
         _targetsReconcilerStop = startCopyTradeReconciler({
           targetSource: copyTradeTargetSource,
           startPollForTarget: (enumeratedTarget) => {
@@ -850,15 +798,9 @@ function createContainer(): Container {
             let cachedExecutor: PolyTradeExecutor | null = null;
             const getExecutor = async (): Promise<PolyTradeExecutor> => {
               if (cachedExecutor) return cachedExecutor;
-              if (!polyTradeExecutorFactory) {
-                throw new Error(
-                  "polyTradeExecutorFactory is unavailable — listAllActive returned a tenant but PRIVY_USER_WALLETS_* are missing"
-                );
-              }
-              cachedExecutor =
-                await polyTradeExecutorFactory.getPolyTradeExecutorFor(
-                  enumeratedTarget.billingAccountId
-                );
+              cachedExecutor = await executorFactory.getPolyTradeExecutorFor(
+                enumeratedTarget.billingAccountId
+              );
               return cachedExecutor;
             };
 
@@ -907,9 +849,9 @@ function createContainer(): Container {
     log.info(
       {
         event: EVENT_NAMES.POLY_MIRROR_POLL_SKIPPED,
-        has_bundle: false,
+        has_executor_factory: false,
       },
-      "mirror poll not started (Polymarket creds missing)"
+      "mirror poll + order reconciler not started (PRIVY_USER_WALLETS_* or POLY_WALLET_AEAD_* missing)"
     );
   }
 
@@ -942,12 +884,19 @@ function createContainer(): Container {
     log.warn("Knowledge store not configured (DOLTGRES_URL_POLY not set)");
   }
 
-  // ToolSource with real implementations (per CAPABILITY_INJECTION)
+  // ToolSource with real implementations (per CAPABILITY_INJECTION).
+  // `polyTradeCapability` is intentionally omitted post-cutover: the
+  // single-operator `PolyTradeCapability` (place/list/cancel/close) is a
+  // v0 regression on the agent tool surface. Tool bindings substitute a
+  // "not configured" stub for `core__poly_{place_trade,list_orders,cancel_order}`.
+  // Re-enabling the surface means dispatching through the per-tenant
+  // `PolyTradeExecutor` with the invoking user's `billing_account_id` — a
+  // follow-up once the agent runtime surfaces actor identity at tool
+  // invocation time.
   const toolBindings = createToolBindings({
     knowledgeCapability,
     marketCapability,
     metricsCapability,
-    polyTradeCapability: polyTradeBundle?.capability,
     webSearchCapability,
     repoCapability,
     scheduleCapability,
@@ -1157,7 +1106,6 @@ function createContainer(): Container {
         providerResolver: new ProviderResolver(providers),
       };
     })(),
-    polyTradeBundle,
     copyTradeTargetSource,
     orderLedger,
     serviceDb,

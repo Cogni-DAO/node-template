@@ -32,7 +32,7 @@ Capability factories bridging ai-tools interfaces to adapters. Creates environme
 - **Env/Config keys:** PROMETHEUS_REMOTE_WRITE_URL, PROMETHEUS_QUERY_URL, PROMETHEUS_READ_USERNAME, PROMETHEUS_READ_PASSWORD, COGNI_REPO_PATH, COGNI_REPO_ROOT, TAVILY_API_KEY via ServerEnv
 - **Files considered API:** `metrics.ts`, `repo.ts`, `web-search.ts`
 
-**poly-trade.ts** — `createPolyTradeCapability(config) → PolyTradeBundle`. Bundle's `getOrder` returns `GetOrderResult` (typed discriminated union; never null — GETORDER_NEVER_NULL invariant, task.0328 CP1). Test mode substitutes `FakePolymarketClobAdapter`. Also exports `createOrDerivePolymarketApiKeyForSigner({ signer, polygonRpcUrl?, host? })` as the sole app-local `@polymarket/clob-client` dynamic-import boundary for live signer bootstrapping.
+**poly-trade-executor.ts** — `createPolyTradeExecutorFactory(config) → PolyTradeExecutorFactory`. The factory's `getPolyTradeExecutorFor(billingAccountId)` returns a per-tenant `PolyTradeExecutor` that wraps every `placeIntent` / `closePosition` through `PolyTraderWalletPort.authorizeIntent` (scope + cap + grant-revoke checks on the hot path). `getOrder` returns `GetOrderResult` (typed discriminated union; never null — GETORDER_NEVER_NULL, task.0328 CP1). Sole app-local `@polymarket/clob-client` dynamic-import boundary; also exports `createOrDerivePolymarketApiKeyForSigner({ signer, polygonRpcUrl?, host? })` for CLOB L2 cred derivation at provision time. The pre-Stage-4 single-operator `createPolyTradeCapability` + `PolyTradeBundle` + `FakePolymarketClobAdapter` have been purged (full cutover).
 
 ## Responsibilities
 
