@@ -12,8 +12,8 @@
  *   - The `tracked` column doubles as the row-action control. When the caller
  *     passes `renderActions`, the cell renders it (click to track/untrack);
  *     otherwise it renders a read-only Radio/em-dash indicator.
- *   - `statsSource === "snapshot-fallback"` cells render a small "all-time est."
- *     pill so the UI is honest that the row came from the non-windowed snapshot.
+ *   - `statsSource === "fallback"` cells render a small "all-time" pill so the
+ *     UI is honest that the row came from the non-windowed all-time leaderboard.
  * Side-effects: none
  * @internal
  */
@@ -105,7 +105,15 @@ export function makeColumns(opts: {
         <DataGridColumnHeader
           column={column}
           title=""
-          icon={<Eye className="size-3.5 text-muted-foreground" aria-hidden />}
+          icon={
+            <>
+              <Eye
+                className="size-3.5 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="sr-only">Tracked</span>
+            </>
+          }
           visibility
           filter={
             <DataGridColumnFilter
@@ -156,6 +164,7 @@ export function makeColumns(opts: {
       header: ({ column }) => (
         <DataGridColumnHeader column={column} title="Wallet" visibility />
       ),
+      enableSorting: false,
       minSize: 240,
       cell: ({ row }) => {
         const r = row.original;
