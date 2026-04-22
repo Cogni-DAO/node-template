@@ -9,7 +9,7 @@ resources:
 namePrefix: poly-
 images:
 - name: ghcr.io/cogni-dao/cogni-template
-  newTag: preview-12fa1c3f14162492422aa221b8eae1f58c73428b-poly
+    digest: "sha256:39ab7b0e49da93064b449a2a873f2115f9a4c04fc80930c3d0439023c86b9335"
 - name: ghcr.io/cogni-dao/cogni-template-migrate
   newTag: preview-12fa1c3f14162492422aa221b8eae1f58c73428b-poly-migrate
 patches:

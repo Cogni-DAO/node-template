@@ -8,7 +8,7 @@ resources:
 namePrefix: resy-
 images:
 - name: ghcr.io/cogni-dao/cogni-template
-  newTag: preview-12fa1c3f14162492422aa221b8eae1f58c73428b-resy
+    digest: "sha256:469576cff7e5a8a461516289169c287c0939d0faf68e161beae42251227dc4fd"
 - name: ghcr.io/cogni-dao/cogni-template-migrate
   newTag: preview-12fa1c3f14162492422aa221b8eae1f58c73428b-resy-migrate
 patches:
