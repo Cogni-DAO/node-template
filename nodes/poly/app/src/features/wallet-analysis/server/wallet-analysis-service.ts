@@ -22,12 +22,19 @@ import {
 import {
   computeWalletMetrics,
   type MarketResolutionInput,
+  mapExecutionPositions,
+  mapWalletBalanceHistory,
 } from "@cogni/market-provider/analysis";
 import type {
+  PolyWalletExecutionOutput,
   WalletAnalysisBalance,
   WalletAnalysisSnapshot,
   WalletAnalysisTrades,
   WalletAnalysisWarning,
+  WalletExecutionBalanceHistoryPoint,
+  WalletExecutionDailyCount,
+  WalletExecutionPosition,
+  WalletExecutionWarning,
 } from "@cogni/node-contracts";
 import pLimit from "p-limit";
 import { coalesce } from "./coalesce";
@@ -40,6 +47,9 @@ const upstreamLimit = pLimit(4);
 
 /** Trades fetched per analysis request (`computeWalletMetrics` accepts up to ~500 per the Data API cap). */
 const TRADE_FETCH_LIMIT = 500;
+const EXECUTION_TRADE_FETCH_LIMIT = 10_000;
+const EXECUTION_POSITION_LIMIT = 18;
+const EXECUTION_HISTORY_WINDOW_DAYS = 14;
 
 /** Operator wallet from env, lowercased (or undefined when unset). Read once per call to stay test-friendly. */
 function getOperatorAddrLower(): string | undefined {
@@ -246,6 +256,173 @@ export async function getBalanceSlice(
   }
 }
 
+export async function getExecutionSlice(
+  addr: string,
+  fetchOperatorExtras?: FetchOperatorExtras
+): Promise<PolyWalletExecutionOutput> {
+  const capturedAt = new Date().toISOString();
+  const warnings: WalletExecutionWarning[] = [];
+  let balanceHistory: WalletExecutionBalanceHistoryPoint[] = [];
+
+  const [positionsResult, tradesResult] = await Promise.allSettled([
+    coalesce(
+      `positions:${addr}`,
+      () => upstreamLimit(() => getDataApiClient().listUserPositions(addr)),
+      SLICE_TTL_MS
+    ),
+    coalesce(
+      `execution-trades:${addr}`,
+      () =>
+        upstreamLimit(() =>
+          getDataApiClient().listUserTrades(addr, {
+            limit: EXECUTION_TRADE_FETCH_LIMIT,
+          })
+        ),
+      SLICE_TTL_MS
+    ),
+  ]);
+
+  const positions =
+    positionsResult.status === "fulfilled" ? positionsResult.value : [];
+  const trades = tradesResult.status === "fulfilled" ? tradesResult.value : [];
+
+  if (positionsResult.status === "rejected") {
+    warnings.push({
+      code: "positions_unavailable",
+      message:
+        positionsResult.reason instanceof Error
+          ? positionsResult.reason.message
+          : String(positionsResult.reason),
+    });
+  }
+  if (tradesResult.status === "rejected") {
+    warnings.push({
+      code: "trades_unavailable",
+      message:
+        tradesResult.reason instanceof Error
+          ? tradesResult.reason.message
+          : String(tradesResult.reason),
+    });
+  }
+
+  const dailyTradeCountsResult = buildDailyCounts(
+    trades,
+    EXECUTION_HISTORY_WINDOW_DAYS
+  );
+
+  const preview = mapExecutionPositions({
+    positions,
+    trades,
+    asOfIso: capturedAt,
+  }).slice(0, EXECUTION_POSITION_LIMIT);
+  const historyAssets = collectHistoryAssets(positions, trades, capturedAt);
+  const priceHistoryByAsset = new Map<
+    string,
+    Awaited<ReturnType<PolymarketClobPublicClient["getPriceHistory"]>>
+  >();
+  const balanceHistoryPriceByAsset = new Map<
+    string,
+    Awaited<ReturnType<PolymarketClobPublicClient["getPriceHistory"]>>
+  >();
+
+  await Promise.all(
+    preview.map(async (position) => {
+      const startTs = Math.max(
+        0,
+        Math.floor(new Date(position.openedAt).getTime() / 1000) - 3600
+      );
+      const endTs = position.closedAt
+        ? Math.floor(new Date(position.closedAt).getTime() / 1000) + 3600
+        : Math.floor(new Date(capturedAt).getTime() / 1000);
+      const fidelity = pickPriceHistoryFidelity(startTs, endTs);
+
+      const history = await coalesce(
+        `execution-price-history:${position.asset}:${startTs}:${endTs}:${fidelity}`,
+        () =>
+          upstreamLimit(() =>
+            getClobPublicClient().getPriceHistory(position.asset, {
+              startTs,
+              endTs,
+              fidelity,
+            })
+          ),
+        SLICE_TTL_MS
+      );
+      if (history.length > 0) {
+        priceHistoryByAsset.set(position.asset, history);
+      }
+    })
+  );
+
+  await Promise.all(
+    historyAssets.map(async (asset) => {
+      const endTs = Math.floor(new Date(capturedAt).getTime() / 1000);
+      const startTs =
+        endTs - (EXECUTION_HISTORY_WINDOW_DAYS - 1) * 86_400 - 3_600;
+      const history = await coalesce(
+        `execution-balance-history:${asset}:${startTs}:${endTs}`,
+        () =>
+          upstreamLimit(() =>
+            getClobPublicClient().getPriceHistory(asset, {
+              startTs,
+              endTs,
+              fidelity: 1440,
+            })
+          ),
+        SLICE_TTL_MS
+      );
+      if (history.length > 0) {
+        balanceHistoryPriceByAsset.set(asset, history);
+      }
+    })
+  );
+
+  if (fetchOperatorExtras) {
+    const extras = await fetchOperatorExtras(addr as `0x${string}`);
+    if (extras.errors.length > 0) {
+      for (const error of extras.errors) {
+        warnings.push({
+          code: "operator_extras_unavailable",
+          message: error,
+        });
+      }
+    }
+    if (extras.available !== null || extras.locked !== null) {
+      balanceHistory = mapWalletBalanceHistory({
+        positions,
+        trades,
+        priceHistoryByAsset: balanceHistoryPriceByAsset,
+        currentCash: Math.max(
+          0,
+          (extras.available ?? 0) + (extras.locked ?? 0)
+        ),
+        asOfIso: capturedAt,
+        windowDays: EXECUTION_HISTORY_WINDOW_DAYS,
+      }).map((point) => ({
+        ts: point.ts,
+        total: point.total,
+      }));
+    }
+  }
+
+  const mapped = mapExecutionPositions({
+    positions,
+    trades,
+    priceHistoryByAsset,
+    asOfIso: capturedAt,
+    assets: preview.map((position) => position.asset),
+  });
+
+  return {
+    address: addr.toLowerCase() as PolyWalletExecutionOutput["address"],
+    capturedAt,
+    balanceHistory,
+    dailyTradeCounts: dailyTradeCountsResult,
+    positions: mapped.map(toExecutionContractPosition),
+    warnings,
+  };
+}
+
 function warning(
   slice: WalletAnalysisWarning["slice"],
   err: unknown
@@ -260,7 +437,7 @@ function warning(
 function buildDailyCounts(
   trades: ReadonlyArray<{ timestamp: number }>,
   windowDays: number
-): Array<{ day: string; n: number }> {
+): WalletExecutionDailyCount[] {
   const SEC_PER_DAY = 86_400;
   const nowSec = Math.floor(Date.now() / 1000);
   const buckets = new Map<string, number>();
@@ -276,6 +453,61 @@ function buildDailyCounts(
     out.push({ day, n: buckets.get(day) ?? 0 });
   }
   return out;
+}
+
+function collectHistoryAssets(
+  positions: readonly { asset: string }[],
+  trades: readonly { asset: string; timestamp: number }[],
+  capturedAt: string
+): string[] {
+  const endTs = Math.floor(new Date(capturedAt).getTime() / 1000);
+  const startTs = endTs - (EXECUTION_HISTORY_WINDOW_DAYS - 1) * 86_400;
+  const assets = new Set<string>();
+  for (const position of positions) {
+    if (position.asset) assets.add(position.asset);
+  }
+  for (const trade of trades) {
+    if (trade.asset && trade.timestamp >= startTs) {
+      assets.add(trade.asset);
+    }
+  }
+  return [...assets];
+}
+
+function toExecutionContractPosition(
+  position: ReturnType<typeof mapExecutionPositions>[number]
+): WalletExecutionPosition {
+  return {
+    positionId: position.positionId,
+    conditionId: position.conditionId,
+    asset: position.asset,
+    marketTitle: position.marketTitle,
+    marketSlug: position.marketSlug,
+    eventSlug: position.eventSlug,
+    marketUrl: position.marketUrl,
+    outcome: position.outcome,
+    status: position.status,
+    openedAt: position.openedAt,
+    closedAt: position.closedAt ?? null,
+    heldMinutes: position.heldMinutes,
+    entryPrice: position.entryPrice,
+    currentPrice: position.currentPrice,
+    size: position.size,
+    currentValue: position.currentValue,
+    pnlUsd: position.pnlUsd,
+    pnlPct: position.pnlPct,
+    timeline: [...position.timeline],
+    events: [...position.events],
+  };
+}
+
+function pickPriceHistoryFidelity(startTs: number, endTs: number): number {
+  const spanDays = Math.max(1, (endTs - startTs) / 86_400);
+  if (spanDays > 365) return 4320;
+  if (spanDays > 90) return 1440;
+  if (spanDays > 21) return 360;
+  if (spanDays > 3) return 60;
+  return 5;
 }
 
 function buildTopMarkets(

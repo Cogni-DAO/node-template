@@ -92,6 +92,14 @@ export {
   type CopyAddressButtonProps,
   formatShortWallet,
 } from "./kit/wallet";
+export {
+  type ChartConfig,
+  ChartContainer,
+  ChartLegend,
+  ChartLegendContent,
+  ChartTooltip,
+  ChartTooltipContent,
+} from "./vendor/shadcn/chart";
 export { Checkbox } from "./vendor/shadcn/checkbox";
 export {
   Dialog,

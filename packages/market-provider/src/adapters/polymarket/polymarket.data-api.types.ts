@@ -71,7 +71,11 @@ export const PolymarketUserTradeSchema = z
     price: z.coerce.number(),
     timestamp: z.coerce.number(),
     title: z.string().optional().default(""),
+    slug: z.string().optional().nullable().default(""),
+    eventSlug: z.string().optional().nullable().default(""),
+    icon: z.string().optional().nullable().default(""),
     outcome: z.string().optional().default(""),
+    outcomeIndex: z.coerce.number().optional().default(0),
     transactionHash: z.string().optional().default(""),
   })
   .passthrough();
@@ -96,11 +100,23 @@ export const PolymarketUserPositionSchema = z
     currentValue: z.coerce.number(),
     cashPnl: z.coerce.number(),
     percentPnl: z.coerce.number(),
+    totalBought: z.coerce.number().optional().default(0),
     realizedPnl: z.coerce.number(),
+    percentRealizedPnl: z.coerce.number().optional().default(0),
     curPrice: z.coerce.number(),
     redeemable: z.boolean().default(false),
+    mergeable: z.boolean().default(false),
     title: z.string().optional().default(""),
+    slug: z.string().optional().nullable().default(""),
+    icon: z.string().optional().nullable().default(""),
+    eventId: z.string().optional().nullable().default(""),
+    eventSlug: z.string().optional().nullable().default(""),
     outcome: z.string().optional().default(""),
+    outcomeIndex: z.coerce.number().optional().default(0),
+    oppositeOutcome: z.string().optional().nullable().default(""),
+    oppositeAsset: z.string().optional().nullable().default(""),
+    endDate: z.string().optional().nullable().default(""),
+    negativeRisk: z.boolean().optional().default(false),
   })
   .passthrough();
 export type PolymarketUserPosition = z.infer<

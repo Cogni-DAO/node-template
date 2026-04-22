@@ -11,7 +11,10 @@
 
 export { useWalletAnalysis } from "./client/use-wallet-analysis";
 export { BalanceBar } from "./components/BalanceBar";
+export { BalanceOverTimeChart } from "./components/BalanceOverTimeChart";
 export { EdgeHypothesis } from "./components/EdgeHypothesis";
+export { PositionsTable } from "./components/PositionsTable";
+export { PositionTimelineChart } from "./components/PositionTimelineChart";
 export { RecentTradesTable } from "./components/RecentTradesTable";
 export { StatGrid } from "./components/StatGrid";
 export { TopMarketsList } from "./components/TopMarketsList";
@@ -25,8 +28,14 @@ export type {
   WalletAnalysisSize,
   WalletAnalysisVariant,
   WalletBalance,
+  WalletBalanceHistoryPoint,
   WalletDailyCount,
   WalletIdentity,
+  WalletPosition,
+  WalletPositionEvent,
+  WalletPositionEventKind,
+  WalletPositionStatus,
+  WalletPositionTimelinePoint,
   WalletSnapshot,
   WalletTrade,
   WalletTradeSide,

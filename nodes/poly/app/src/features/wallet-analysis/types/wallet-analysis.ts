@@ -3,8 +3,10 @@
 
 /**
  * Module: `@features/wallet-analysis/types/wallet-analysis`
- * Purpose: Shared shape for `WalletAnalysisView` and its molecules.
- * Scope: Pure type definitions; no logic. Mirrors the v1 wallet-analysis HTTP contract (Checkpoint B).
+ * Purpose: Shared shape for `WalletAnalysisView`, dashboard execution
+ * positions, and their supporting molecules.
+ * Scope: Pure type definitions; no logic. Broadly aligned with the wallet-analysis
+ * contract, plus reusable position-trace fields used by the dashboard.
  * Invariants: All slices independently optional — molecules render skeletons when their slice is absent.
  * Side-effects: none
  * @public
@@ -23,6 +25,59 @@ export type WalletTrade = {
 export type WalletDailyCount = {
   d: string;
   n: number;
+};
+
+export type WalletBalanceHistoryPoint = {
+  ts: string;
+  total: number;
+  available?: number;
+  locked?: number;
+  positions?: number;
+};
+
+export type WalletPositionStatus = "open" | "closed" | "redeemable";
+
+export type WalletPositionTimelinePoint = {
+  ts: string;
+  price: number;
+  size: number;
+};
+
+export type WalletPositionEventKind =
+  | "entry"
+  | "add"
+  | "reduce"
+  | "close"
+  | "redeemable";
+
+export type WalletPositionEvent = {
+  ts: string;
+  kind: WalletPositionEventKind;
+  price: number;
+  shares: number;
+};
+
+export type WalletPosition = {
+  positionId: string;
+  conditionId: string;
+  asset: string;
+  marketTitle: string;
+  marketSlug?: string | null;
+  eventSlug?: string | null;
+  marketUrl?: string | null;
+  outcome: string;
+  status: WalletPositionStatus;
+  openedAt: string;
+  closedAt?: string | null;
+  heldMinutes: number;
+  entryPrice: number;
+  currentPrice: number;
+  size: number;
+  currentValue: number;
+  pnlUsd: number;
+  pnlPct: number;
+  timeline: readonly WalletPositionTimelinePoint[];
+  events: readonly WalletPositionEvent[];
 };
 
 /**
@@ -70,6 +125,8 @@ export type WalletAnalysisData = {
   snapshot?: WalletSnapshot;
   trades?: WalletTrades;
   balance?: WalletBalance;
+  balanceHistory?: readonly WalletBalanceHistoryPoint[];
+  positions?: readonly WalletPosition[];
 };
 
 export type WalletAnalysisVariant = "page" | "drawer" | "compact";

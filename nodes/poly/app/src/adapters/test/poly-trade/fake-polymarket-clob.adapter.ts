@@ -158,11 +158,23 @@ export class FakePolymarketClobAdapter {
           currentValue: size * curPrice,
           cashPnl: 0,
           percentPnl: 0,
+          totalBought: size,
           realizedPnl: 0,
+          percentRealizedPnl: 0,
           curPrice,
           redeemable: false,
+          mergeable: false,
           title: "",
+          slug: "",
+          icon: "",
+          eventId: "",
+          eventSlug: "",
           outcome: "",
+          outcomeIndex: 0,
+          oppositeOutcome: "",
+          oppositeAsset: "",
+          endDate: "",
+          negativeRisk: false,
         });
       }
     }

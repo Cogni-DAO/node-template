@@ -1,0 +1,39 @@
+{
+  "recoveredFromSession": "/Users/derek/.codex/sessions/2026/04/22/rollout-2026-04-22T00-50-21-019db386-6115-7e93-83c0-c4fa75c8e4aa.jsonl",
+  "regeneratedAt": "2026-04-22T08:30:20.621Z",
+  "samples": [
+    {
+      "name": "open_trump_2028_yes",
+      "kind": "open",
+      "file": "docs/research/fixtures/poly-dashboard-position-timelines/open_trump_2028_yes.json",
+      "capturedAt": "2026-04-22T08:30:17.372Z",
+      "openPosition": true,
+      "closedPosition": false,
+      "trades": 14,
+      "priceHistory": 110,
+      "eventSlug": "republican-presidential-nominee-2028"
+    },
+    {
+      "name": "closed_aston_villa_yes_roundtrip",
+      "kind": "closed",
+      "file": "docs/research/fixtures/poly-dashboard-position-timelines/closed_aston_villa_yes_roundtrip.json",
+      "capturedAt": "2026-04-22T08:30:18.907Z",
+      "openPosition": false,
+      "closedPosition": false,
+      "trades": 13,
+      "priceHistory": 2,
+      "eventSlug": "epl-ast-eve-2026-01-18"
+    },
+    {
+      "name": "resolved_trail_blazers_spurs_total_over",
+      "kind": "resolved",
+      "file": "docs/research/fixtures/poly-dashboard-position-timelines/resolved_trail_blazers_spurs_total_over.json",
+      "capturedAt": "2026-04-22T08:30:19.976Z",
+      "openPosition": true,
+      "closedPosition": false,
+      "trades": 3,
+      "priceHistory": 1,
+      "eventSlug": "nba-por-sas-2026-04-21"
+    }
+  ]
+}
