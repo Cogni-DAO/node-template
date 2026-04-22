@@ -16,10 +16,13 @@
 #      different PR head SHAs (affected-only CI rebuilt a subset; production
 #      copies preview's mixed overlay state). Caller passes SOURCE_SHA_MAP
 #      pointing to .promote-state/source-sha-by-app.json — the script asserts
-#      each node's /readyz.version matches that node's entry in the map.
+#      each node's /readyz.buildSha matches that node's entry in the map.
 #
-# Contract (both modes): `/readyz.version` equals the expected SHA for this
-# node. Any mismatch is a hard failure regardless of prior workflow status.
+# Contract (both modes): `/readyz.buildSha` equals the expected SHA for this
+# node. (Field was previously `.version`; renamed to `.buildSha` for parity
+# with `/metrics` and `agent.json` per task.0345 / PR #978 — this verifier
+# now reads the new field.) Any mismatch is a hard failure regardless of
+# prior workflow status.
 #
 # Env (single-SHA mode):
 #   DOMAIN              (required) base domain (operator Ingress host)
@@ -126,7 +129,7 @@ fi
 # don't need a real HTTPS endpoint to cover the polling logic.
 CURL_CMD="${CURL_CMD:-curl -sk --max-time 10}"
 
-# Poll $url/readyz until .version matches $expected or CUTOVER_TIMEOUT elapses.
+# Poll $url/readyz until .buildSha matches $expected or CUTOVER_TIMEOUT elapses.
 # Returns 0 on match, 1 on timeout. Prints the final line outcome.
 check_node() {
   local node="$1" expected="$2" url="$3"
@@ -136,19 +139,25 @@ check_node() {
   while :; do
     attempts=$((attempts + 1))
     body=$($CURL_CMD "$url" 2>/dev/null || echo "")
-    actual=$(printf '%s' "$body" | python3 -c 'import json,sys; print(json.loads(sys.stdin.read()).get("version",""))' 2>/dev/null || echo "")
+    # Read .buildSha (current field). Fall back to .version for graceful
+    # transition: if a node hasn't yet rolled out PR #978's rename, the
+    # verifier shouldn't red-flag a correctly-deployed prior SHA. Post-
+    # universal-rollout we can drop the fallback; it's harmless until then.
+    actual=$(printf '%s' "$body" | python3 -c 'import json,sys
+d=json.loads(sys.stdin.read())
+print(d.get("buildSha") or d.get("version") or "")' 2>/dev/null || echo "")
     actual=$(printf '%s' "$actual" | tr '[:upper:]' '[:lower:]')
 
     if [ "$actual" = "$expected" ] && [ -n "$actual" ]; then
-      echo "  ✅ ${node}: version=${actual:0:12} matches expected ${expected:0:12} (attempt ${attempts})"
+      echo "  ✅ ${node}: buildSha=${actual:0:12} matches expected ${expected:0:12} (attempt ${attempts})"
       return 0
     fi
 
     if [ "$SECONDS" -ge "$deadline" ]; then
       if [ -z "$actual" ]; then
-        echo "  ❌ ${node}: ${url} returned no parseable version after ${CUTOVER_TIMEOUT}s / ${attempts} attempts (body: ${body:0:120})"
+        echo "  ❌ ${node}: ${url} returned no parseable buildSha/version after ${CUTOVER_TIMEOUT}s / ${attempts} attempts (body: ${body:0:120})"
       else
-        echo "  ❌ ${node}: version=${actual:0:12} != expected ${expected:0:12} after ${CUTOVER_TIMEOUT}s / ${attempts} attempts"
+        echo "  ❌ ${node}: buildSha=${actual:0:12} != expected ${expected:0:12} after ${CUTOVER_TIMEOUT}s / ${attempts} attempts"
       fi
       return 1
     fi
