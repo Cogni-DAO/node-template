@@ -39,6 +39,21 @@ import type {
 import pLimit from "p-limit";
 import { coalesce } from "./coalesce";
 
+/**
+ * Balance-history extras for `getExecutionSlice`. Injected by callers that can
+ * resolve cash context (available + locked USDC) for the supplied address —
+ * e.g. a future per-tenant resolver that reads `PolyTraderWalletPort.getBalances`
+ * + open-order notional for the session wallet. Kept as a type-only
+ * injection hook because the single-operator helper that used to live at
+ * `@/app/_lib/poly/operator-extras` was purged in task.0318 Phase B3.
+ */
+type FetchOperatorExtras = (addr: `0x${string}`) => Promise<{
+  available: number | null;
+  locked: number | null;
+  polGas: number | null;
+  errors: string[];
+}>;
+
 /** Cache TTL for every slice. Matches design doc 30 s. */
 const SLICE_TTL_MS = 30_000;
 
