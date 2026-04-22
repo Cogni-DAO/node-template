@@ -204,6 +204,7 @@
 | 2 | 20 | 2 | needs_closeout | bug.0342 | poly copy-trade places sub-min orders — CLOB rejects silently (success=undefined, orderID=<missing>, errorMsg="") | Cogni Poly | proj.poly-copy-trading |
 | 2 | 20 | 3 | needs_triage | task.0351 | Poly trading wallet withdrawal — backend + UI | Cogni Poly | proj.poly-copy-trading |
 | 2 | 21 | 3 | needs_design | task.0352 | Poly trading wallet one-click fund flow (RainbowKit + Polygon) | Cogni Poly | proj.poly-copy-trading |
+| 2 | 25 | 3 | needs_triage | task.0354 | Poly trading hardening — post-B3 cleanup + executor cache + cap-source robustness | Cogni Poly | proj.poly-copy-trading |
 | 2 | 30 | 1 | needs_implement | bug.0168 | App container uses seccomp=unconfined for TigerBeetle io_uring — replace with targeted profile | AI Operator Wallet | proj.ai-operator-wallet |
 | 2 | 30 | 1 | needs_merge | bug.0339 | Tenant context missing from request-envelope logs — Loki can't slice by user/billing |  |  |
 | 2 | 50 | 2 | needs_implement | task.0134 | EIP-4824 daoURI v0 — lightweight DAOstar metadata endpoint | Financial Ledger | proj.financial-ledger |

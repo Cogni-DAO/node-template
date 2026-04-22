@@ -59,6 +59,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 | Trading wallet withdrawal — `withdrawUsdc` adapter + route + dialog (replaces stubbed button on Money) | Needs Triage   | 3   | [task.0351](../items/task.0351.poly-trading-wallet-withdrawal.md)         |
 | Trading wallet one-click fund flow — Polygon in wagmi + `trading_wallet_funding` repo-spec + dialog    | Needs Design   | 3   | [task.0352](../items/task.0352.poly-trading-wallet-fund-flow.md)          |
 | Money page v0 — hybrid AI-credits + trading-wallet panel; nav label Money, route `/credits`            | Done           | 2   | [task.0353](../items/task.0353.poly-money-page-v0.md)                     |
+| Trading hardening — executor cache, cap-source column, prototype residue, agent tool re-enable         | Needs Triage   | 3   | [task.0354](../items/task.0354.poly-trading-hardening-followups.md)       |
 
 ### Phase 4 (P4) — Streaming + adversarial-robust ranking
 
