@@ -10,7 +10,7 @@ summary: "Autonomous mirror of selected Polymarket wallets from a Cogni-controll
 outcome: "A Cogni node autonomously mirrors N Polymarket target wallets onto M per-user operator wallets with sub-30s latency, RLS-enforced tenancy, at-most-once idempotency, and real-money caps enforced in code. DAO treasury earns measurable realized PnL tracked against a counterfactual baseline."
 assignees: derekg1729
 created: 2026-04-19
-updated: 2026-04-19
+updated: 2026-04-22
 labels: [poly, polymarket, copy-trading, mirror, privy, rls, multi-tenant]
 ---
 
@@ -47,12 +47,17 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 ### Phase 3 (P3) — Multi-tenant: per-user operator wallets + RLS
 
-> **Needs design.** The current single-operator env-directed model ships one Cogni instance = one Polymarket EOA. Users cannot bring their own wallet; copy-trade tables have no tenant column. Phase 3 replaces env with `poly_wallet_connections` + `poly_wallet_grants` + RLS on `poly_copy_trade_*`.
+> **Active.** Phase A already shipped tenant-scoped copy-trade rows + RLS. Phase B pivots to Privy-per-user and is partially landed in PR #968: port, schema, adapter, route, env plumbing, and B2.10 component coverage are in. The remaining v0-critical step is real CLOB creds (B2.12). Orphan cleanup is now tracked separately as follow-up ops work.
 
-| Deliverable                                                                                                   | Status       | Est | Work Item                                                                |
-| ------------------------------------------------------------------------------------------------------------- | ------------ | --- | ------------------------------------------------------------------------ |
-| Per-user operator wallet binding + durable `WalletGrant` (RLS on copy-trade tables shipped in Phase A)        | Needs Design | 5   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase B |
-| Signing-backend decision (Safe+4337 vs Privy-per-user vs Turnkey) — see task.0318 §signing-backend-comparison | Needs Design | 2   | (inline in task.0318)                                                    |
+| Deliverable                                                                                            | Status       | Est | Work Item                                                                |
+| ------------------------------------------------------------------------------------------------------ | ------------ | --- | ------------------------------------------------------------------------ |
+| Per-user operator wallet binding + durable `WalletGrant` (RLS on copy-trade tables shipped in Phase A) | In Review    | 5   | [task.0318](../items/task.0318.poly-wallet-multi-tenant-auth.md) Phase B |
+| Signing-backend decision (Safe+4337 vs Privy-per-user vs Turnkey) — resolved to Privy-per-user for v0  | Done         | 2   | (inline in task.0318)                                                    |
+| User-wallet orphan sweep for the dedicated Privy app (ops hygiene, not v0 trading path)                | Needs Design | 2   | [task.0348](../items/task.0348.poly-wallet-orphan-sweep.md)              |
+| Per-tenant wallet preferences + copy-trade sizing config (retire hardcoded funding + caps)             | Needs Design | 3   | [task.0347](../items/task.0347.poly-wallet-preferences-sizing-config.md) |
+| Trading wallet withdrawal — `withdrawUsdc` adapter + route + dialog (replaces stubbed button on Money) | Needs Triage | 3   | [task.0351](../items/task.0351.poly-trading-wallet-withdrawal.md)        |
+| Trading wallet one-click fund flow — Polygon in wagmi + `trading_wallet_funding` repo-spec + dialog    | Needs Design | 3   | [task.0352](../items/task.0352.poly-trading-wallet-fund-flow.md)         |
+| Money page v0 — hybrid AI-credits + trading-wallet panel; nav label Money, route `/credits`            | Done         | 2   | [task.0353](../items/task.0353.poly-money-page-v0.md)                    |
 
 ### Phase 4 (P4) — Streaming + adversarial-robust ranking
 
@@ -71,7 +76,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 ## Constraints
 
-- **Live-money caps are hardcoded in v0/v1**: $1/trade, $10/day, 5 fills/hr. Any lift requires code change + redeploy + scorecard review.
+- **Live-money caps are hardcoded in v0/v1**: $1/trade, $10/day, 5 fills/hr. Any lift requires code change + redeploy + scorecard review. Per-tenant config lift tracked as [task.0347](../items/task.0347.poly-wallet-preferences-sizing-config.md).
 - **INSERT_BEFORE_PLACE is the correctness gate**: ledger row must land before CLOB submit. Skipping it breaks at-most-once mirroring.
 - **Idempotency is always `keccak256(target_id + ':' + fill_id)` → client_order_id.** No alternatives.
 - **`fill_id` shape is frozen** at `data-api:<tx>:<asset>:<side>:<ts>`. Phase 4 adds `clob-ws:…` — never mix schemes within one fill.
@@ -91,12 +96,13 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 ## As-Built Specs
 
 - [Poly Copy-Trade Phase 1](../../docs/spec/poly-copy-trade-phase1.md) — layer boundaries, invariants, fill_id shape (as-built v0)
+- [Poly Trader Wallet Port](../../docs/spec/poly-trader-wallet-port.md) — `PolyTraderWalletPort` including read-only `getBalances` + HTTP `poly.wallet.balances.v1` (Money page surface)
 - [Poly Multi-Tenant Auth](../../docs/spec/poly-multi-tenant-auth.md) — tenant-scoped copy-trade tables, `CopyTradeTargetSource` port, Phase A implemented; `WalletSignerPort` + `poly_wallet_{connections,grants}` pending Phase B
 - [Polymarket Account Setup](../../docs/guides/polymarket-account-setup.md) — Privy operator onboarding runbook (guide, not spec)
 
 ## Design Notes
 
-- **Operator / target / test wallet roles**: three disjoint jobs. Operator places all autonomous mirror trades via Privy HSM. Target is the wallet being monitored (its trades flow through the mirror). Test is a raw-PK wallet in `.env.test` used for scripted validation — it doubles as a target in some flows. See `.claude/skills/poly-dev-expert/SKILL.md` for the full runbook.
+- **Operator / target / test wallet roles**: three disjoint jobs. Operator places all autonomous mirror trades via Privy HSM. Target is the wallet being monitored (its trades flow through the mirror). Test is a raw-PK wallet in `.env.test` used for scripted validation — it doubles as a target in some flows. See `.claude/skills/poly-dev-manager/SKILL.md` for the poly-node overview and routing to the specialty runbooks (copy-trading, market-data, auth/wallets).
 
 - **Two-approval onboarding**: a wallet that can BUY but not SELL is useless for copy-trading. USDC.e allowance on {Exchange, Neg-Risk Exchange, Neg-Risk Adapter} enables BUY. CTF `setApprovalForAll(operator, true)` on {Exchange, Neg-Risk Exchange} enables SELL. Skipping either is a latent bug that only surfaces on close-position.
 
