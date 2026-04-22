@@ -294,7 +294,7 @@ Open within B2 (blocking before merge):
 
 Deferred out of this PR / v0 path:
 
-- [ ] B2.11 — Orphan reconciler `scripts/ops/sweep-orphan-poly-wallets.ts` moved to [task.0345](task.0345.poly-wallet-orphan-sweep.md). Useful ops hygiene, but not required to prove per-tenant wallet provisioning or real CLOB trading in v0.
+- [ ] B2.11 — Orphan reconciler `scripts/ops/sweep-orphan-poly-wallets.ts` moved to [task.0346](task.0346.poly-wallet-orphan-sweep.md). Useful ops hygiene, but not required to prove per-tenant wallet provisioning or real CLOB trading in v0.
 
 Following slices:
 
@@ -314,7 +314,7 @@ Following slices:
 - `poly_wallet_connections.backend` CHECK constraint (`privy|safe_4337|turnkey`) — Phase B is single-backend (Privy). The column lands when a second adapter lands.
 - Safe + 4337 + self-hosted bundler (`SafePolyTraderWalletAdapter`) — filed as a separate OSS-hardening task that spans the repo. The port is designed to accept it without caller churn.
 - Hardware / BYO-imported EOA support — user asked for Privy-reuse.
-- [task.0345](task.0345.poly-wallet-orphan-sweep.md) — Privy user-wallet orphan sweep. Kept separate from v0 wallet provisioning / real-creds work so Phase B can ship the trading path first.
+- [task.0346](task.0346.poly-wallet-orphan-sweep.md) — Privy user-wallet orphan sweep. Kept separate from v0 wallet provisioning / real-creds work so Phase B can ship the trading path first.
 - Renaming `OperatorWalletPort` → `WalletPort`: rejected at /design per [poly-trader-wallet-port § Why a new port](../../docs/spec/poly-trader-wallet-port.md#why-a-new-port). Operator wallet is a system-role intent-only actuator; merging it with the per-tenant signing port would weaken the security model.
 
 ## Invariants
@@ -380,7 +380,7 @@ See [docs/spec/poly-multi-tenant-auth.md § Decisions](../../docs/spec/poly-mult
 
 ## Review Feedback (revision 3 — 2026-04-20, Phase B slice on PR #968)
 
-`/review-implementation` on commits `6224cec8c..32a58aa19` found blocking gaps. r3/r4 follow-up truth-sync on 2026-04-21 resolved the test gap, and the final v0 blocker (B2.12 real CLOB creds) is now implemented. The orphan sweep is deferred to [task.0345](task.0345.poly-wallet-orphan-sweep.md) instead of quietly inflating the Phase B merge bar.
+`/review-implementation` on commits `6224cec8c..32a58aa19` found blocking gaps. r3/r4 follow-up truth-sync on 2026-04-21 resolved the test gap, and the final v0 blocker (B2.12 real CLOB creds) is now implemented. The orphan sweep is deferred to [task.0346](task.0346.poly-wallet-orphan-sweep.md) instead of quietly inflating the Phase B merge bar.
 
 ### Blocking status
 
