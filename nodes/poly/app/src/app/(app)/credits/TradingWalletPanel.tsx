@@ -4,9 +4,8 @@
 /**
  * Module: `@app/(app)/credits/TradingWalletPanel`
  * Purpose: Money page panel for the user's Polymarket trading wallet —
- *   shows the funder address (with copy + Polygonscan link), USDC.e + POL
- *   balances, and stub Fund / Withdraw buttons linked to the backlog tasks
- *   that will wire them up end-to-end.
+ *   funder address (copy + explorer), compact USDC.e | POL readout, stub
+ *   Fund | Withdraw row (task.0351 / task.0352), single card.
  * Scope: Client component. React Query fetches `/wallet/status` + `/wallet/balances`.
  *   Does not own the page container. Funding + withdrawal are stubbed until
  *   task.0351 / task.0352 land.
@@ -30,7 +29,7 @@ import type {
 import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import type { ReactElement } from "react";
-import { AddressChip, Card, HintText, SectionCard } from "@/components";
+import { AddressChip, Card, HintText } from "@/components";
 
 async function fetchWalletStatus(): Promise<PolyWalletStatusOutput> {
   const res = await fetch("/api/v1/poly/wallet/status", {
@@ -60,6 +59,9 @@ function formatDecimal(n: number | null, fractionDigits: number): string {
   });
 }
 
+const stubBtn =
+  "w-full cursor-not-allowed rounded-md border border-border/60 bg-muted/50 px-3 py-2 font-medium text-muted-foreground text-sm";
+
 export function TradingWalletPanel(): ReactElement {
   const statusQuery = useQuery({
     queryKey: ["poly-wallet-status"],
@@ -85,91 +87,86 @@ export function TradingWalletPanel(): ReactElement {
   const balances = balancesQuery.data;
 
   return (
-    <div className="flex flex-col gap-4">
-      <Card className="flex flex-col gap-4 p-6">
-        <div className="flex items-center justify-between gap-3">
-          <span className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
-            Trading Wallet
-          </span>
-          {status?.funder_address ? (
-            <AddressChip address={status.funder_address} />
-          ) : null}
-        </div>
+    <Card className="flex flex-col gap-4 p-5 md:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+          Trading wallet
+        </span>
+        {status?.funder_address ? (
+          <AddressChip address={status.funder_address} />
+        ) : null}
+      </div>
 
-        {statusQuery.isLoading ? (
-          <div className="h-14 animate-pulse rounded bg-muted" />
-        ) : !status?.configured ? (
+      {statusQuery.isLoading ? (
+        <div className="h-14 animate-pulse rounded bg-muted" />
+      ) : !status?.configured ? (
+        <p className="text-muted-foreground text-sm">
+          Trading wallet not enabled on this deployment.
+        </p>
+      ) : !connected ? (
+        <div className="flex flex-col gap-2">
           <p className="text-muted-foreground text-sm">
-            Trading wallets aren't configured on this deployment yet.
+            Create a wallet in Profile to deposit.
           </p>
-        ) : !connected ? (
-          <div className="flex flex-col gap-2">
-            <p className="text-muted-foreground text-sm">
-              No trading wallet yet. Create one from your Profile to start
-              funding.
-            </p>
-            <a
-              href="/profile"
-              className="w-fit rounded-md bg-primary px-3 py-1.5 text-primary-foreground text-sm hover:bg-primary/90"
-            >
-              Go to Profile
-            </a>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="rounded-md bg-muted/40 p-3">
-                <div className="text-muted-foreground text-xs uppercase tracking-wider">
-                  USDC.e
-                </div>
-                <div className="font-bold text-2xl">
-                  {formatDecimal(balances?.usdc_e ?? null, 2)}
-                </div>
+          <a
+            href="/profile"
+            className="w-fit rounded-md bg-primary px-3 py-1.5 text-primary-foreground text-sm hover:bg-primary/90"
+          >
+            Profile
+          </a>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {/* Balances immediately above stub actions — compact, no semantic mix-up */}
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-md bg-muted/40 px-3 py-2">
+              <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                USDC.e
               </div>
-              <div className="rounded-md bg-muted/40 p-3">
-                <div className="text-muted-foreground text-xs uppercase tracking-wider">
-                  POL (gas)
-                </div>
-                <div className="font-bold text-2xl">
-                  {formatDecimal(balances?.pol ?? null, 4)}
-                </div>
+              <div className="font-semibold text-xl tabular-nums tracking-tight">
+                {formatDecimal(balances?.usdc_e ?? null, 2)}
               </div>
             </div>
-            {balances && balances.errors.length > 0 ? (
-              <HintText icon={<Info size={16} />}>
-                Partial read — some balances failed to fetch and will retry.
-              </HintText>
-            ) : null}
+            <div className="rounded-md bg-muted/40 px-3 py-2">
+              <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                POL
+              </div>
+              <div className="font-semibold text-xl tabular-nums tracking-tight">
+                {formatDecimal(balances?.pol ?? null, 4)}
+              </div>
+            </div>
           </div>
-        )}
-      </Card>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled
+              title="Coming soon — task.0352"
+              className={stubBtn}
+            >
+              Fund
+            </button>
+            <button
+              type="button"
+              disabled
+              title="Coming soon — task.0351"
+              className={stubBtn}
+            >
+              Withdraw
+            </button>
+          </div>
 
-      <SectionCard title="Fund & Withdraw">
-        <div className="flex flex-col gap-2">
-          <button
-            type="button"
-            disabled
-            title="Coming soon — task.0352 wires one-click funding from your connected wallet"
-            className="w-full cursor-not-allowed rounded-md bg-muted px-4 py-2 text-muted-foreground"
-          >
-            Fund trading wallet (coming soon)
-          </button>
-          <button
-            type="button"
-            disabled
-            title="Coming soon — task.0351 wires withdrawal to an external Polygon address"
-            className="w-full cursor-not-allowed rounded-md bg-muted px-4 py-2 text-muted-foreground"
-          >
-            Withdraw USDC.e (coming soon)
-          </button>
+          {balances && balances.errors.length > 0 ? (
+            <HintText icon={<Info size={16} />}>
+              Partial read — retrying.
+            </HintText>
+          ) : null}
+
+          <p className="text-muted-foreground text-xs leading-snug">
+            Deposit USDC.e + POL on Polygon from any wallet; one-click flows
+            next.
+          </p>
         </div>
-
-        <HintText icon={<Info size={16} />}>
-          For now, copy your trading wallet address above and send USDC.e + a
-          small amount of POL (for gas) on the Polygon network. One-click
-          funding and withdrawal are landing in follow-up tasks.
-        </HintText>
-      </SectionCard>
-    </div>
+      )}
+    </Card>
   );
 }

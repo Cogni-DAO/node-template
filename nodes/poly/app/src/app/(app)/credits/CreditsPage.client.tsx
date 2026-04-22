@@ -3,11 +3,11 @@
 
 /**
  * Module: `@app/(app)/credits/CreditsPage.client`
- * Purpose: "💰 Money" page composed of two panels — AI Credits (USDC top-up)
+ * Purpose: Money page composed of two panels — AI Credits (USDC top-up)
  *   and the Polymarket Trading Wallet (per-tenant Privy wallet balances +
- *   stubbed fund/withdraw). Two columns on desktop, a simple toggle between
- *   the two on mobile. Route stays `/credits` so existing links and the
- *   footer nav don't break.
+ *   stubbed fund/withdraw). Two columns on desktop; mobile uses Credits /
+ *   Wallet pill toggle. Route stays `/credits` so existing links and footer
+ *   nav stay stable.
  * Scope: Client layout shell only. Panels own their own data fetching.
  * Invariants: No URL rename — relabel-only per the project charter.
  * Side-effects: none (panels perform their own IO).
@@ -45,7 +45,7 @@ export function CreditsPageClient(): ReactElement {
           )}
           aria-pressed={mobileTab === "credits"}
         >
-          AI Credits
+          Credits
         </button>
         <button
           type="button"
@@ -58,7 +58,7 @@ export function CreditsPageClient(): ReactElement {
           )}
           aria-pressed={mobileTab === "wallet"}
         >
-          Trading Wallet
+          Wallet
         </button>
       </div>
 

@@ -9,12 +9,12 @@
 
 ## Purpose
 
-Protected "💰 Money" page (served from the `/credits` route — URL is stable; the page is relabelled, not renamed). Composes two panels:
+Protected Money page (served from the `/credits` route — URL is stable; the page is relabelled, not renamed). Composes two panels:
 
 - `AiCreditsPanel` — AI credits balance + USDC top-up flow (unchanged behaviour from the single-column credits page).
 - `TradingWalletPanel` — per-tenant Polymarket trading-wallet balances (USDC.e + POL) driven by `/api/v1/poly/wallet/status` + `/api/v1/poly/wallet/balances`; fund + withdraw are stubbed buttons linked to [task.0352](../../../../../../work/items/task.0352.poly-trading-wallet-fund-flow.md) and [task.0351](../../../../../../work/items/task.0351.poly-trading-wallet-withdrawal.md).
 
-Desktop renders both panels as a two-column grid; mobile uses a simple two-button toggle above a single-column stack.
+Desktop renders both panels as a two-column grid; mobile uses a **Credits** / **Wallet** pill toggle above a single-column stack.
 
 ## Pointers
 
@@ -44,7 +44,7 @@ Desktop renders both panels as a two-column grid; mobile uses a simple two-butto
 ## Public Surface
 
 - **Exports:** none
-- **Route:** `/credits` (server page + client composition; label in nav is "💰 Money")
+- **Route:** `/credits` (server page + client composition; label in nav is "Money", Lucide `Coins` icon)
 - **Files considered API:** `page.tsx`, `CreditsPage.client.tsx`, `AiCreditsPanel.tsx`, `TradingWalletPanel.tsx`
 
 ## Responsibilities

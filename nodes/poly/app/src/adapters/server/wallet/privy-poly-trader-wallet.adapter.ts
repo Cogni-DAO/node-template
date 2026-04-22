@@ -7,6 +7,7 @@
  *   Polymarket trading wallets by delegating custody to a DEDICATED user-wallets
  *   Privy app (SEPARATE_PRIVY_APP) — never the operator-wallet system app.
  * Scope: `provision` (advisory-locked idempotent), `resolve`, `getAddress`,
+ *   `getBalances` (DB address + optional Polygon RPC via `POLYGON_RPC_URL`),
  *   `revoke`. Other port methods (`authorizeIntent`, `withdrawUsdc`,
  *   `rotateClobCreds`) are stubbed until a follow-up commit lands the grants
  *   table + withdraw flow + CLOB rotation wiring.
