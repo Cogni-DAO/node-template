@@ -175,6 +175,7 @@ export interface PolyTraderWalletPort {
   provision(input: {
     billingAccountId: string;
     createdByUserId: string;
+    custodialConsent: CustodialConsent;
   }): Promise<PolyTraderSigningContext>;
 
   /**
@@ -260,7 +261,7 @@ export interface PolyTraderWalletPort {
 - `AUTHORIZED_SIGNING_ONLY` — `PolymarketClobAdapter.placeOrder` accepts `AuthorizedSigningContext` (branded), not `PolyTraderSigningContext`. Grant scope + cap enforcement is compile-checked at the call site, not left to coordinator discipline.
 - `NO_ORPHAN_BACKEND_WALLETS` — `provision` MUST pass a deterministic `idempotencyKey` (derived from `billing_account_id` + a monotonically-increasing per-tenant generation counter) to the backend wallet-create call. This makes retries converge on the same backend wallet even if the DB transaction fails mid-provision, so a crash between backend-create and DB-commit is self-healing on the next retry. `task.0346` (`scripts/ops/sweep-orphan-poly-wallets.ts`) remains as defense-in-depth for out-of-band drift (admin deletes, cross-environment mistakes) but is NOT the primary correctness mechanism.
 - `WITHDRAW_BEFORE_REVOKE` — the dashboard MUST expose manual `withdrawUsdc` before offering `revoke`. Stranding funds at a revoked address is a UX failure mode, not an acceptable edge case.
-- `CUSTODIAL_CONSENT` — a plain-English disclosure screen ("Cogni creates and holds this trading wallet via our custody provider Privy; only you can trigger trades and withdrawals through this app; if you lose access to your Cogni account, wallet recovery requires Cogni operator assistance") ships in the B3 onboarding flow. The tenant's acknowledgement is persisted (`poly_wallet_connections.custodial_consent_accepted_at`) before `provision` is permitted to run.
+- `CUSTODIAL_CONSENT` — a plain-English disclosure screen ("Cogni creates and holds this trading wallet via our custody provider Privy; only you can trigger trades and withdrawals through this app; if you lose access to your Cogni account, wallet recovery requires Cogni operator assistance") ships in the B3 onboarding flow. The tenant's acknowledgement is persisted (`poly_wallet_connections.custodial_consent_accepted_at`) before `provision` is permitted to run. The invariant is enforced at **two layers**: the HTTP Zod contract (`poly.wallet.connection.v1`) requires `custodialConsentAcknowledged: true` on the wire, and the port's `provision({ custodialConsent: CustodialConsent })` makes the server-stamped consent envelope a compile-time obligation. Zod at the trust boundary (HTTP); TypeScript at the internal port boundary (adapter) — same single source of truth, two layers of enforcement.
 
 ## Adapter: `PrivyPolyTraderWalletAdapter`
 

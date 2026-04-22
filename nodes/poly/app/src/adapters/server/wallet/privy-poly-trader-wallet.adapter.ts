@@ -44,6 +44,7 @@ import { type AeadAAD, aeadDecrypt, aeadEncrypt } from "@cogni/node-shared";
 import { polyWalletConnections } from "@cogni/poly-db-schema";
 import type {
   AuthorizeIntentResult,
+  CustodialConsent,
   OrderIntentSummary,
   PolyClobApiKeyCreds,
   PolyTraderSigningContext,
@@ -203,19 +204,9 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   async provision(input: {
     billingAccountId: string;
     createdByUserId: string;
-    custodialConsent?: {
-      acceptedAt: Date;
-      actorKind: "user" | "agent";
-      actorId: string;
-    };
+    custodialConsent: CustodialConsent;
   }): Promise<PolyTraderSigningContext> {
     const consent = input.custodialConsent;
-    if (!consent) {
-      // CUSTODIAL_CONSENT backstop; API layer is the authoritative gate.
-      throw new Error(
-        "CUSTODIAL_CONSENT: provision called without custodialConsent payload"
-      );
-    }
 
     return this.serviceDb.transaction(async (tx) => {
       // PROVISION_IS_IDEMPOTENT: tenant-scoped advisory lock for the whole txn.

@@ -102,6 +102,30 @@ export type AuthorizeIntentResult =
   | { readonly ok: false; readonly reason: AuthorizationFailure };
 
 /**
+ * CUSTODIAL_CONSENT envelope. Every `provision` call MUST carry an explicit
+ * consent record; the adapter persists it on the row as an audit trail.
+ *
+ * The HTTP contract (`@cogni/node-contracts/poly.wallet.connection.v1`)
+ * validates the client-supplied fields (`actorKind`, `actorId`,
+ * `acknowledged`); the route adds a server-stamped `acceptedAt` before
+ * handing the merged shape to this port. That's the right split:
+ *   - Zod = wire-boundary trust (HTTP payload).
+ *   - TS  = internal contract between app and adapter (this port).
+ *
+ * v0 narrows `actorKind` to `"user"` at the HTTP contract; this type keeps
+ * the DB-shape union (`"user" | "agent"`) so widening to agent-API-key auth
+ * later is a contract-only change, no port migration.
+ */
+export interface CustodialConsent {
+  /** Server-stamped at the time the route handler received the request. */
+  readonly acceptedAt: Date;
+  /** Matches `poly_wallet_connections.custodial_consent_actor_kind`. */
+  readonly actorKind: "user" | "agent";
+  /** Matches `poly_wallet_connections.custodial_consent_actor_id`. */
+  readonly actorId: string;
+}
+
+/**
  * Per-tenant signing context for Polymarket CLOB trading.
  * See `docs/spec/poly-trader-wallet-port.md` for the full contract.
  */
@@ -123,8 +147,15 @@ export interface PolyTraderWalletPort {
   /**
    * Provision a brand-new wallet for a tenant.
    * Idempotent under concurrency via a Postgres advisory lock on
-   * `billing_account_id`. Partial failures roll back so no orphan backend
-   * wallets are ever linked to a missing DB row.
+   * `billing_account_id` + a deterministic idempotency key on the backend
+   * custody call, so a crash mid-provision converges on the same backend
+   * wallet on retry (PROVISION_NO_ORPHAN).
+   *
+   * `custodialConsent` is REQUIRED — the port enforces the
+   * `CUSTODIAL_CONSENT` invariant at the type level so callers can't forget
+   * it. The route is the authoritative gate (validates the HTTP contract +
+   * stamps `acceptedAt`); the port type makes consent a compile-time
+   * obligation for every implementation.
    *
    * External deps at provision time: backend custody API (Privy) AND
    * Polymarket CLOB `/auth/api-key`. Either unreachable → throws; callers
@@ -133,6 +164,7 @@ export interface PolyTraderWalletPort {
   provision(input: {
     billingAccountId: string;
     createdByUserId: string;
+    custodialConsent: CustodialConsent;
   }): Promise<PolyTraderSigningContext>;
 
   /**

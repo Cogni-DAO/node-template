@@ -3,7 +3,7 @@ id: task.0318
 type: task
 title: "Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables"
 status: needs_implement
-revision: 5
+revision: 6
 pr_b: https://github.com/Cogni-DAO/node-template/pull/968
 priority: 2
 estimate: 5
@@ -527,6 +527,112 @@ _(S-1 reclassified to D-5 after impact audit — see Deferred.)_
 ### check:fast output (2026-04-21 r4 HEAD)
 
 Green at `HEAD = 94d053932` before this review's code changes ship. Will re-run after.
+
+## Review Feedback (revision 6 — 2026-04-22, post-revision-5 critical review)
+
+Second pass after revision-5 changes shipped (idempotency key + generation counter,
+`/connect` rate limit, revoke WARNING JSDoc, contract narrowing to `user`, dead
+`brandAuthorized` removal, RLS pivot to `billing_accounts.owner_user_id` EXISTS-join).
+Full `pnpm check` green (43s, all 10 tasks: packages:build / workspace:typecheck /
+workspace:lint / lint / format / ui-tokens / workspace:test / check:docs /
+check:root-layout / arch:check). One blocking issue remains; everything else is
+non-blocking.
+
+### Blocking
+
+- [x] **B-5 — Port `provision()` doesn't model `custodialConsent` but the adapter requires it.**
+      **Fixed in-branch.** Added `CustodialConsent` type to the port
+      (`packages/poly-wallet/src/port/poly-trader-wallet.port.ts`) and made it a required field
+      on `provision`'s input. Dropped the optional `?` + runtime `consent ?? throw` guard on the
+      adapter — `CUSTODIAL_CONSENT` is now a compile-time invariant every implementation has to
+      honour. Exported the new type from both barrel files. Zod-vs-TS split kept correctly:
+      the HTTP Zod contract (`poly.wallet.connection.v1`) validates the wire payload; the port
+      TS type receives the merged shape (client fields + server-stamped `acceptedAt`). Spec
+      updated to document the two-layer enforcement.
+
+### Suggestions
+
+- [ ] **S-5 — `checkConnectRateLimit` bypasses the adapter's DI pattern.**
+      `nodes/poly/app/src/bootstrap/poly-trader-wallet.ts:166-193` reads `getServiceDb()` at
+      module scope. The adapter itself takes `serviceDb` as a constructor dep (testable); the
+      rate-limit helper doesn't, so it can only be exercised via component tests that spin up a
+      real DB. Accept `db: Database = getServiceDb()` as a second param (or factory it like the
+      adapter) so a unit test can pass a seeded stub. Matches the rest of the architecture.
+
+- [ ] **S-6 — No direct unit test for `checkConnectRateLimit`.**
+      Security-sensitive abuse bound has zero direct coverage — only incidental exercise via the
+      concurrent-provision component test. At minimum: unit-test the three return branches
+      (no rows → allow, active row → allow, revoked inside window → 429) with a stubbed DB.
+      Gated on S-5 landing first (singleton → DI).
+
+- [ ] **S-7 — Provision holds the DB transaction across two external HTTP calls (2-10 s).**
+      `adapter.ts:220-343` runs inside `serviceDb.transaction(...)` which wraps both the Privy
+      `wallets().create(...)` and the CLOB `createOrDeriveApiKey(...)` call. Under load this
+      pins a pooled connection and the advisory lock for the whole round-trip. Idempotency-key
+      already makes retries converge so orphans are not a concern, which means the fix is a
+      perf / connection-pool hygiene question, not correctness: consider splitting into
+      (1) short tx: acquire lock + compute `generation` + commit, (2) outside-tx: Privy + CLOB
+      calls, (3) short tx: re-acquire lock + verify no active row + INSERT. Defer unless
+      candidate-a shows pool exhaustion. Flag here so it doesn't get lost.
+
+- [ ] **S-8 — `/connect` output hardcodes `requires_funding: true` + fixed suggestions.**
+      `route.ts:137-143` returns `{ requires_funding: true, suggested_usdc: 5,
+    suggested_matic: 0.1 }` on every call — including idempotent re-hits where the wallet
+      already has balance. Same gap on `/status` (no balance field). UI will say "fund me with 5
+      USDC" even when the wallet has 50. Real fix requires a Polygon RPC balance read; belongs
+      with the withdraw-UX work (B3) or its own micro-task. Note, not blocking.
+
+### Good — preserve these patterns
+
+- **G-1 — Idempotency-key + generation counter is a clean orphan-prevention design.**
+  Deterministic `poly-wallet:${billingAccountId}:${generation}` key under the advisory lock
+  means a mid-provision crash either (a) converges on the same Privy wallet on retry or
+  (b) falls through to the `existing[0]` short-circuit. No orphans. Component test at
+  `adapter.int.test.ts:342-416` verifies both the initial `:1` key and the `:2` increment
+  across a revoke cycle.
+
+- **G-2 — RLS `EXISTS`-pivot via `billing_accounts.owner_user_id` is principal-agnostic.**
+  Migration `0030_poly_wallet_connections.sql:83-97` keys tenant isolation on the
+  billing-account owner, not on the row's creator. Any actor whose session resolves to
+  `app.current_user_id = owner` gets access. Forward-compatible with agent API keys
+  (same policy, no migration) and multi-user billing (swap `EXISTS` clause only, no column
+  change). Mirrors `llm_charge_details` so the pattern is already battle-tested.
+
+- **G-3 — Belt-and-suspenders concurrency safety.** Advisory lock on `hashtext(billing_account_id)`
+  inside the tx + partial unique index `WHERE revoked_at IS NULL` at the schema level. If
+  the lock ever gave up (it can't in Postgres — xact lock auto-releases on commit/rollback),
+  the unique index rejects the second insert.
+
+- **G-4 — AEAD AAD binding verified end-to-end.** `(billing_account_id, connection_id,
+    provider)` pinned into the AAD envelope; component test
+  `adapter.int.test.ts:282-292` explicitly proves that re-binding ciphertext to a different
+  `billing_account_id` causes `aeadDecrypt` to throw.
+
+- **G-5 — Fail-closed `resolve()` with an explicit warn log on every error path.**
+  Never returns a partial context; never silently swallows an error.
+
+- **G-6 — `revoke()` JSDoc now screams about the funds-still-spendable gap.**
+  `adapter.ts:345-359` explicitly enumerates what revoke does NOT do (no Privy delete, no
+  withdraw, no balance check) and names the caller (UI) as the party that MUST enforce
+  `WITHDRAW_BEFORE_REVOKE`. Good documentation of a real caller obligation.
+
+- **G-7 — Tests cover the hard cases.** Three-way concurrent provision collapses to one Privy
+  call + one row; revoke cycle increments generation; cross-tenant RLS scoped + unscoped
+  reads return expected counts; AEAD rebind throws. That's the actual threat model.
+
+### Check Results
+
+- `pnpm check`: **PASS** (43 s; 10/10 tasks green).
+- component tests: not run locally this pass (covered in revision 5; no component-level code
+  changed since).
+- `pnpm check:docs`: PASS (inside `pnpm check`).
+
+### Verdict
+
+**APPROVE (post-B-5 fix)** — B-5 fixed in this revision (port now models `CustodialConsent`
+as a required type; adapter runtime guard deleted). `pnpm check:fast` green. S-5 / S-6 /
+S-7 / S-8 are explicit non-blocking suggestions and tracked here for follow-up. Ready to
+flight.
 
 ## PR / Links
 

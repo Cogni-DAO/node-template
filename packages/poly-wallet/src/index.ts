@@ -17,6 +17,7 @@ export type {
   AuthorizationFailure,
   AuthorizedSigningContext,
   AuthorizeIntentResult,
+  CustodialConsent,
   OrderIntentSummary,
   PolyClobApiKeyCreds,
   PolyTraderSigningContext,
