@@ -3,23 +3,23 @@
 
 /**
  * Module: `@app/(app)/research/view`
- * Purpose: Wallets research portal — search, faceted filters, sort, pagination, track/untrack
- *          actions, and the side-sheet drawer drill-in. Full discovery surface for Polymarket
- *          wallets. Renders the app-wide `WalletsTable` component (variant="full").
- * Scope: Client view. Joins live leaderboard (`fetchTopWallets`) with the user's tracked
- *        targets (`fetchCopyTargets`) and passes rows into the shared table. Track/untrack
- *        mutations moved from the dashboard to this page, where wallet discovery lives.
- *        Does not place orders.
+ * Purpose: Wallets research portal — search, per-column sort/filter, pagination,
+ *          track/untrack actions, and the side-sheet drawer drill-in. Full
+ *          discovery surface for Polymarket wallets. Renders the app-wide
+ *          `WalletsTable` component (variant="full").
+ * Scope: Client view. Joins live leaderboard (`fetchTopWallets`) with the user's
+ *        tracked targets (`fetchCopyTargets`) and passes rows into the shared
+ *        table. Track/untrack mutations live here. Does not place orders.
  * Invariants:
- *   - WALLET_TABLE_SINGLETON: renders via `@app/(app)/_components/wallets-table`, never
- *     hand-rolls a table.
- *   - URL_DRIVEN_STATE: q / period / category / tracked / sort all round-trip through
+ *   - WALLET_TABLE_SINGLETON: renders via `@app/(app)/_components/wallets-table`.
+ *     Sort/filter/hide controls live in each column header (reui kit) —
+ *     no parallel toolbar chips.
+ *   - URL_DRIVEN_STATE: q / period / tracked / sort all round-trip through
  *     the URL for shareable views.
- *   - COPY_TARGETS_QUERY_KEY shared with the dashboard's CopyTradedWalletsCard so flips
- *     reflect across surfaces.
- * Side-effects: IO (React Query — fetchTopWallets, fetchCopyTargets, createCopyTarget,
- *               deleteCopyTarget).
- * Links: [ResearchPage](./page.tsx), work/items/task.0343.wallets-dashboard-page.md
+ *   - COPY_TARGETS_QUERY_KEY shared with the dashboard's CopyTradedWalletsCard so
+ *     flips reflect across surfaces.
+ * Side-effects: IO (React Query — fetchTopWallets, fetchCopyTargets,
+ *               createCopyTarget, deleteCopyTarget).
  * @public
  */
 
@@ -34,11 +34,10 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
 import {
   buildWalletRows,
-  WALLET_CATEGORIES,
   type WalletRow,
   WalletsTable,
 } from "@/app/(app)/_components/wallets-table";
-import { Input } from "@/components";
+import { Input, ToggleGroup, ToggleGroupItem } from "@/components";
 import {
   WalletDetailDrawer,
   WalletQuickJump,
@@ -50,7 +49,6 @@ import {
   fetchCopyTargets,
 } from "../dashboard/_api/fetchCopyTargets";
 import { fetchTopWallets } from "../dashboard/_api/fetchTopWallets";
-import { FacetedFilter } from "../work/_components/FacetedFilter";
 
 const COPY_TARGETS_QUERY_KEY = ["dashboard-copy-targets"] as const;
 
@@ -60,7 +58,6 @@ const PERIOD_OPTIONS: readonly WalletTimePeriod[] = [
   "MONTH",
   "ALL",
 ] as const;
-const TRACKED_OPTIONS = ["Tracked", "Not tracked"] as const;
 const TOP_N = 100;
 
 export function ResearchView() {
@@ -78,8 +75,6 @@ export function ResearchView() {
 
   const initialFilters = useMemo<ColumnFiltersState>(() => {
     const out: ColumnFiltersState = [];
-    const cat = searchParams.get("category");
-    if (cat) out.push({ id: "category", value: cat.split(",") });
     const trk = searchParams.get("tracked");
     if (trk) out.push({ id: "tracked", value: trk.split(",") });
     return out;
@@ -195,7 +190,7 @@ export function ResearchView() {
               e.stopPropagation();
               deleteTargetMutation.mutate(target.target_id);
             }}
-            className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-success/20 hover:text-success disabled:cursor-wait disabled:opacity-40"
+            className="inline-flex size-7 items-center justify-center rounded text-success hover:bg-destructive/10 hover:text-destructive disabled:cursor-wait disabled:opacity-40"
           >
             <Minus className="size-3.5" />
           </button>
@@ -236,18 +231,6 @@ export function ResearchView() {
       ? addressMatch.data
       : null;
 
-  const setFacet = (id: string, values: string[]): void => {
-    const next = columnFilters.filter((f) => f.id !== id);
-    if (values.length > 0) next.push({ id, value: values });
-    setColumnFilters(next);
-    syncUrl({ filters: next });
-  };
-
-  const activeCategoryFilter =
-    (columnFilters.find((f) => f.id === "category")?.value as string[]) ?? [];
-  const activeTrackedFilter =
-    (columnFilters.find((f) => f.id === "tracked")?.value as string[]) ?? [];
-
   return (
     <div className="flex flex-col gap-4 p-5 md:p-6">
       {/* Header */}
@@ -256,15 +239,16 @@ export function ResearchView() {
           Wallets · Research
         </h1>
         <p className="max-w-2xl text-muted-foreground text-sm">
-          Browse top Polymarket wallets. Filter by category or tracked status,
-          search by address. Click any row to open its full live analysis.
+          Browse top Polymarket wallets. Click any column header to sort,
+          filter, or hide — all controls live on the column itself.
         </p>
       </div>
 
       {/* Quick-jump for off-roster addresses (persistent affordance) */}
       <WalletQuickJump className="max-w-xl" />
 
-      {/* Toolbar */}
+      {/* Minimal toolbar: search + period (drives the leaderboard query).
+          Sort/filter/hide are in the column headers — not here. */}
       <div className="flex flex-wrap items-center gap-2">
         <Input
           data-search-input
@@ -276,42 +260,23 @@ export function ResearchView() {
             syncUrl({ q: e.target.value });
           }}
         />
-        <FacetedFilter
-          title="Period"
-          options={[...PERIOD_OPTIONS]}
-          selected={[period]}
-          onChange={(v) => {
-            const next = (v[0] as WalletTimePeriod | undefined) ?? "WEEK";
+        <ToggleGroup
+          type="single"
+          value={period}
+          onValueChange={(v) => {
+            const next = (v as WalletTimePeriod | "") || "WEEK";
+            if (!PERIOD_OPTIONS.includes(next)) return;
             setPeriod(next);
             syncUrl({ period: next });
           }}
-        />
-        <FacetedFilter
-          title="Category"
-          options={[...WALLET_CATEGORIES]}
-          selected={activeCategoryFilter}
-          onChange={(v) => setFacet("category", v)}
-        />
-        <FacetedFilter
-          title="Tracked"
-          options={[...TRACKED_OPTIONS]}
-          selected={activeTrackedFilter}
-          onChange={(v) => setFacet("tracked", v)}
-        />
-        {(columnFilters.length > 0 || globalFilter || period !== "WEEK") && (
-          <button
-            type="button"
-            className="text-muted-foreground text-xs underline hover:text-foreground"
-            onClick={() => {
-              setColumnFilters([]);
-              setGlobalFilter("");
-              setPeriod("WEEK");
-              router.replace("/research", { scroll: false });
-            }}
-          >
-            Clear filters
-          </button>
-        )}
+          className="rounded-lg border"
+        >
+          {PERIOD_OPTIONS.map((p) => (
+            <ToggleGroupItem key={p} value={p} className="px-3 text-xs">
+              {p === "ALL" ? "All" : p.charAt(0) + p.slice(1).toLowerCase()}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
       </div>
 
       {/* Off-roster address hint — "you pasted a valid 0x, open its analysis" */}

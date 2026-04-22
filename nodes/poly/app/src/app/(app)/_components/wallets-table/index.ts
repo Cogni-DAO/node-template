@@ -14,9 +14,7 @@ export {
   buildCopyTradedWalletRows,
   buildWalletRows,
 } from "./buildWalletRows";
-export type { WalletCategory } from "./category";
-export { inferWalletCategory, WALLET_CATEGORIES } from "./category";
-export type { WalletRow } from "./columns";
+export type { WalletRow, WalletStatsSource } from "./columns";
 export {
   WalletsTable,
   type WalletsTableFullState,

@@ -7,8 +7,13 @@
  * Scope: Pure column descriptors + inline cells. No fetching, no router.
  * Invariants:
  *   - Column ids are stable identifiers used for filter-state URL serialization on /research.
- *   - The actions column is always present; pages inject row-specific buttons via `renderActions`.
- *   - `outsideWindow` rows render `—` for metric columns so they sort to the bottom under normal orderings.
+ *   - Every header renders via reui `DataGridColumnHeader` → sort + filter + hide
+ *     live inside the column's own dropdown; there is no bespoke toolbar anywhere.
+ *   - The `tracked` column doubles as the row-action control. When the caller
+ *     passes `renderActions`, the cell renders it (click to track/untrack);
+ *     otherwise it renders a read-only Radio/em-dash indicator.
+ *   - `statsSource === "snapshot-fallback"` cells render a small "all-time est."
+ *     pill so the UI is honest that the row came from the non-windowed snapshot.
  * Side-effects: none
  * @internal
  */
@@ -27,79 +32,143 @@ import {
   formatShortWallet,
   formatUsdc,
 } from "@/app/(app)/dashboard/_components/wallet-format";
+import { Skeleton } from "@/components";
+import { DataGridColumnFilter } from "@/components/reui/data-grid/data-grid-column-filter";
+import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
+
+export type WalletStatsSource = "leaderboard" | "fallback" | "none";
 
 export type WalletRow = WalletTopTraderItem & {
   /** True when the calling user has this wallet in poly_copy_trade_targets. */
   tracked: boolean;
-  /** v0 heuristic label; replaced by Dolt-stored category in task.0333. */
-  category: string;
   /** Present when the row maps to a `poly_copy_trade_targets` row (copy-traded variant). */
   targetId?: string | undefined;
-  /** Copy-traded wallet not present in the current leaderboard window — metrics should render as `—`. */
-  outsideWindow?: boolean | undefined;
+  /**
+   * Where the metrics came from. `leaderboard` = windowed (trustworthy for the
+   * selected period). `fallback` = all-time leaderboard enrichment (labeled
+   * "all-time est." in the UI). `none` = no data available.
+   */
+  statsSource?: WalletStatsSource;
 };
 
 const col = createColumnHelper<WalletRow>();
 
 const em = <span className="text-muted-foreground/60">—</span>;
 
+const allTimePill = (
+  <span
+    className="ms-1 rounded bg-muted px-1 py-px align-middle font-normal text-muted-foreground text-xs uppercase tracking-wide"
+    title="All-time estimate from the wallet snapshot — this wallet is not in the current window's top leaderboard."
+  >
+    all-time
+  </span>
+);
+
+function isFallback(row: WalletRow): boolean {
+  return row.statsSource === "fallback";
+}
+
+function hasStats(row: WalletRow): boolean {
+  return row.statsSource !== "none";
+}
+
 export function makeColumns(opts: {
-  /** Renders per-row action buttons (track/untrack). Optional; omitted → empty cell. */
+  /** Renders per-row tracked-column content (track/untrack button). */
   renderActions?: (row: WalletRow) => ReactNode;
 }) {
   const { renderActions } = opts;
 
   return [
     col.accessor("rank", {
-      header: "#",
+      id: "rank",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="#" visibility />
+      ),
       size: 50,
       cell: (info) => (
         <span className="font-mono text-muted-foreground text-xs tabular-nums">
-          {info.row.original.outsideWindow ? "★" : info.getValue()}
+          {hasStats(info.row.original) ? info.getValue() : "—"}
         </span>
       ),
-      meta: { headerTitle: "Rank" },
+      meta: {
+        headerTitle: "Rank",
+        skeleton: <Skeleton className="h-3.5 w-6" />,
+      },
     }),
 
+    // Merged tracked + actions column. Header is an eye icon with a faceted
+    // filter popover; the cell is the click-to-track/untrack control (or a
+    // read-only indicator when no callback is provided).
     col.accessor("tracked", {
       id: "tracked",
-      header: () => (
-        <Eye className="size-3.5 text-muted-foreground" aria-hidden />
+      header: ({ column }) => (
+        <DataGridColumnHeader
+          column={column}
+          title=""
+          icon={<Eye className="size-3.5 text-muted-foreground" aria-hidden />}
+          visibility
+          filter={
+            <DataGridColumnFilter
+              column={column}
+              title="Tracked"
+              options={[
+                { label: "Tracked", value: "Tracked" },
+                { label: "Not tracked", value: "Not tracked" },
+              ]}
+            />
+          }
+        />
       ),
-      size: 36,
-      cell: (info) =>
-        info.getValue() ? (
-          <Radio
-            className="size-3.5 animate-pulse text-success"
-            aria-label="Copy-trading this wallet"
-          />
+      size: 48,
+      enableSorting: true,
+      cell: ({ row }) => {
+        if (renderActions) {
+          return (
+            <div className="flex justify-center">
+              {renderActions(row.original)}
+            </div>
+          );
+        }
+        return row.original.tracked ? (
+          <div className="flex justify-center">
+            <Radio
+              className="size-3.5 animate-pulse text-success"
+              aria-label="Copy-trading this wallet"
+            />
+          </div>
         ) : (
-          <span className="text-muted-foreground/40">—</span>
-        ),
+          <div className="flex justify-center text-muted-foreground/40">—</div>
+        );
+      },
       filterFn: (row, _id, value: string[]) => {
         if (!value || value.length === 0) return true;
         const t = row.getValue<boolean>("tracked");
         return value.includes(t ? "Tracked" : "Not tracked");
       },
-      meta: { headerTitle: "Tracked" },
+      meta: {
+        headerTitle: "Tracked",
+        skeleton: <Skeleton className="mx-auto size-3.5 rounded-full" />,
+      },
     }),
 
     col.display({
       id: "wallet",
-      header: "Wallet",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="Wallet" visibility />
+      ),
       minSize: 240,
       cell: ({ row }) => {
         const r = row.original;
         const display = r.userName?.trim()
           ? r.userName
-          : r.outsideWindow
-            ? "(outside window)"
+          : !hasStats(r)
+            ? "(no activity)"
             : "(anonymous)";
         return (
           <div className="flex flex-col gap-0.5 py-0.5">
             <span
               className={`line-clamp-1 text-sm ${
-                r.outsideWindow ? "text-muted-foreground italic" : ""
+                !hasStats(r) ? "text-muted-foreground italic" : ""
               }`}
             >
               {display}
@@ -117,94 +186,107 @@ export function makeColumns(opts: {
           </div>
         );
       },
-      meta: { headerTitle: "Wallet" },
-    }),
-
-    col.accessor("category", {
-      header: "Category",
-      size: 110,
-      cell: (info) => (
-        <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground text-xs">
-          {info.getValue()}
-        </span>
-      ),
-      filterFn: "arrIncludesSome",
-      meta: { headerTitle: "Category" },
+      meta: {
+        headerTitle: "Wallet",
+        skeleton: (
+          <div className="flex flex-col gap-1 py-0.5">
+            <Skeleton className="h-3.5 w-28" />
+            <Skeleton className="h-3 w-20" />
+          </div>
+        ),
+      },
     }),
 
     col.accessor("volumeUsdc", {
-      header: "Volume",
-      size: 100,
-      cell: (info) =>
-        info.row.original.outsideWindow ? (
-          em
-        ) : (
-          <span className="text-right text-sm tabular-nums">
+      id: "volumeUsdc",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="Volume" visibility />
+      ),
+      size: 120,
+      cell: (info) => {
+        const r = info.row.original;
+        if (!hasStats(r)) return <div className="text-right">{em}</div>;
+        return (
+          <div className="text-right text-sm tabular-nums">
             {formatUsdc(info.getValue())}
-          </span>
-        ),
-      meta: { headerTitle: "Volume" },
+            {isFallback(r) ? allTimePill : null}
+          </div>
+        );
+      },
+      meta: {
+        headerTitle: "Volume",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-16" />,
+      },
     }),
 
     col.accessor("pnlUsdc", {
-      header: "PnL (MTM)",
-      size: 110,
+      id: "pnlUsdc",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="PnL (MTM)" visibility />
+      ),
+      size: 130,
       cell: (info) => {
-        if (info.row.original.outsideWindow) return em;
+        const r = info.row.original;
+        if (!hasStats(r)) return <div className="text-right">{em}</div>;
         const v = info.getValue();
         return (
-          <span
+          <div
             className={`text-right text-sm tabular-nums ${
               v >= 0 ? "text-success" : "text-destructive"
             }`}
           >
             {formatPnl(v)}
-          </span>
+            {isFallback(r) ? allTimePill : null}
+          </div>
         );
       },
-      meta: { headerTitle: "PnL (MTM)" },
+      meta: {
+        headerTitle: "PnL (MTM)",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-20" />,
+      },
     }),
 
     col.accessor("roiPct", {
-      header: "ROI",
-      size: 80,
-      cell: (info) =>
-        info.row.original.outsideWindow ? (
-          em
-        ) : (
-          <span className="text-right text-muted-foreground text-sm tabular-nums">
+      id: "roiPct",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="ROI" visibility />
+      ),
+      size: 90,
+      cell: (info) => {
+        const r = info.row.original;
+        if (!hasStats(r)) return <div className="text-right">{em}</div>;
+        return (
+          <div className="text-right text-muted-foreground text-sm tabular-nums">
             {formatRoi(info.getValue())}
-          </span>
-        ),
-      meta: { headerTitle: "ROI" },
+          </div>
+        );
+      },
+      meta: {
+        headerTitle: "ROI",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-12" />,
+      },
     }),
 
     col.accessor("numTrades", {
-      header: "# Trades",
-      size: 90,
-      cell: ({ row }) =>
-        row.original.outsideWindow ? (
-          em
-        ) : (
-          <span className="text-right text-muted-foreground text-sm tabular-nums">
-            {formatNumTrades(
-              row.original.numTrades,
-              row.original.numTradesCapped
-            )}
-          </span>
-        ),
-      meta: { headerTitle: "# Trades" },
-    }),
-
-    col.display({
-      id: "actions",
-      header: "",
-      size: 60,
-      cell: ({ row }) =>
-        renderActions ? (
-          <div className="flex justify-end">{renderActions(row.original)}</div>
-        ) : null,
-      meta: { headerTitle: "Actions" },
+      id: "numTrades",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="# Trades" visibility />
+      ),
+      size: 100,
+      cell: ({ row }) => {
+        const r = row.original;
+        if (!hasStats(r)) return <div className="text-right">{em}</div>;
+        return (
+          <div className="text-right text-muted-foreground text-sm tabular-nums">
+            {formatNumTrades(r.numTrades, r.numTradesCapped)}
+            {isFallback(r) ? allTimePill : null}
+          </div>
+        );
+      },
+      meta: {
+        headerTitle: "# Trades",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-10" />,
+      },
     }),
   ];
 }

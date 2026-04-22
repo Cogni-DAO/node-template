@@ -6,18 +6,21 @@
  * Purpose: THE single wallets-table organism. Any surface that renders a list of
  *          Polymarket wallets (dashboard copy-traded card, research discovery grid,
  *          future admin views) MUST render this component — no hand-rolled tables.
- * Scope: Client component. Wraps TanStack + `DataGrid` with a variant switch that
- *        toggles column visibility, pagination, and search. Does not fetch data;
- *        callers pass pre-built `WalletRow[]` and state.
+ * Scope: Client component. Thin wrapper over the vendored `reui` DataGrid kit
+ *        (`components/reui/data-grid`) — sort, filter, and column-visibility
+ *        controls live inside each column header via `DataGridColumnHeader`,
+ *        not in a bespoke toolbar. Does not fetch data; callers pass pre-built
+ *        `WalletRow[]` and state.
  * Invariants:
  *   - WALLET_TABLE_SINGLETON: every table-of-wallets in the app renders via this module.
- *   - variant="full": rank + tracked + category + pagination + search visible.
- *   - variant="copy-traded": drops rank/tracked/category/pagination; list is the user's
- *     copy-trade targets, nothing more.
- *   - Row click bubbles up via `onRowClick`; the actions column stops propagation so
- *     track/untrack buttons do not also open a detail drawer.
+ *   - HEADER_OWNS_CONTROLS: sort + filter + hide live on the column header dropdown;
+ *     no parallel toolbar chips. Add new controls there, not as top-bar buttons.
+ *   - variant="full": rank + tracked + pagination + search visible.
+ *   - variant="copy-traded": drops rank + pagination; list is the user's copy-trade
+ *     targets, nothing more.
+ *   - Row click bubbles up via `onRowClick`; the tracked-action cell stops propagation
+ *     so track/untrack buttons do not also open a detail drawer.
  * Side-effects: none (pure render; caller owns fetching)
- * Links: work/items (unify-wallets-table-research design)
  * @public
  */
 
@@ -26,6 +29,7 @@
 import {
   type ColumnFiltersState,
   getCoreRowModel,
+  getFacetedUniqueValues,
   getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
@@ -62,7 +66,7 @@ export type WalletsTableProps = {
   variant: WalletsTableVariant;
   isLoading?: boolean;
   onRowClick?: (row: WalletRow) => void;
-  /** Per-row action buttons (e.g. track/untrack). Rendered in the last column. */
+  /** Per-row action content for the Tracked column (click to track/untrack). */
   renderActions?: (row: WalletRow) => ReactNode;
   /** Required for `variant="full"` — drives URL-synced sorting/filters/search. */
   fullState?: WalletsTableFullState;
@@ -73,24 +77,20 @@ const FULL_COLUMN_VISIBILITY: VisibilityState = {
   rank: true,
   tracked: true,
   wallet: true,
-  category: true,
   volumeUsdc: true,
   pnlUsdc: true,
   roiPct: true,
   numTrades: true,
-  actions: true,
 };
 
 const COPY_TRADED_COLUMN_VISIBILITY: VisibilityState = {
   rank: false,
-  tracked: false,
+  tracked: true,
   wallet: true,
-  category: false,
   volumeUsdc: true,
   pnlUsdc: true,
   roiPct: true,
   numTrades: true,
-  actions: true,
 };
 
 export function WalletsTable(props: WalletsTableProps) {
@@ -152,6 +152,7 @@ export function WalletsTable(props: WalletsTableProps) {
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
+    getFacetedUniqueValues: getFacetedUniqueValues(),
     globalFilterFn: (row, _id, filterValue: string) => {
       const q = (filterValue ?? "").toLowerCase().trim();
       if (!q) return true;
@@ -169,12 +170,14 @@ export function WalletsTable(props: WalletsTableProps) {
       table={table}
       recordCount={rows.length}
       isLoading={isLoading}
+      loadingMode="skeleton"
       {...(onRowClick && { onRowClick })}
       tableLayout={{
         headerSticky: true,
         headerBackground: true,
         rowBorder: true,
         dense: true,
+        columnsVisibility: true,
       }}
       tableClassNames={{ bodyRow: onRowClick ? "cursor-pointer" : "" }}
       emptyMessage={emptyMessage ?? "No wallets to show."}

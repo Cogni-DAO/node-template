@@ -4,30 +4,35 @@
 /**
  * Module: `@app/(app)/dashboard/_components/CopyTradedWalletsCard`
  * Purpose: Dashboard card that shows ONLY the wallets the calling user is copy-trading
- *          (rows from `poly_copy_trade_targets`), enriched with current-window leaderboard
- *          metrics when available. Discovery lives on /research — this card is a readout.
- * Scope: Client component. Fetches copy targets + top wallets for the selected window,
- *        merges them via the shared `buildCopyTradedWalletRows` helper, and renders via
- *        the app-wide `WalletsTable` (variant="copy-traded"). No track/+ button here —
- *        new wallets are discovered and added from /research.
+ *          (rows from `poly_copy_trade_targets`), enriched with current-week leaderboard
+ *          metrics when available and falling back to the all-time leaderboard for
+ *          copy-traded wallets that are not in this week's top-50 (clearly labeled).
+ *          Discovery lives on /research — this card is a readout.
+ * Scope: Client component. Renders via the app-wide `WalletsTable` (variant="copy-traded").
+ *        No per-row navigation: clicking a row opens the shared `WalletDetailDrawer` in
+ *        place, matching the /research interaction. The green Radio icon in the Tracked
+ *        column IS the untrack button — one cell, one affordance.
  * Invariants:
  *   - WALLET_TABLE_SINGLETON: renders through `@/app/(app)/_components/wallets-table`.
  *   - COPY_TARGETS_ONLY: every row maps to a `poly_copy_trade_targets` row. No Polymarket
  *     leaderboard bleed-through.
+ *   - HONEST_STATS_LABELING: rows sourced from the all-time fallback render an "all-time"
+ *     pill instead of pretending to be weekly numbers.
  *   - RLS-scoped: reads go through `/api/v1/poly/copy-trade/targets`; operator sees only
  *     their own targets.
- * Side-effects: IO (React Query — fetchCopyTargets, fetchTopWallets, deleteCopyTarget).
- * Links: [fetchCopyTargets](../_api/fetchCopyTargets.ts), [fetchTopWallets](../_api/fetchTopWallets.ts),
- *        docs/spec/poly-multi-tenant-auth.md
+ * Side-effects: IO (React Query — fetchCopyTargets, fetchTopWallets ×2, deleteCopyTarget).
+ * Follow-up: work/items/task.XXXX.poly-wallet-stats-data-api-first.md replaces the two
+ *            leaderboard fan-outs with a single batched Data-API-first per-wallet
+ *            windowed-stats endpoint. Until then the two-tier fallback is the honest
+ *            compromise.
  * @public
  */
 
 "use client";
 
-import type { WalletTimePeriod, WalletTopTraderItem } from "@cogni/ai-tools";
+import type { WalletTopTraderItem } from "@cogni/ai-tools";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Minus } from "lucide-react";
-import { useRouter } from "next/navigation";
+import { Radio } from "lucide-react";
 import type { ReactElement } from "react";
 import { useMemo, useState } from "react";
 
@@ -36,41 +41,18 @@ import {
   type WalletRow,
   WalletsTable,
 } from "@/app/(app)/_components/wallets-table";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  ToggleGroup,
-  ToggleGroupItem,
-} from "@/components";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components";
+import { WalletDetailDrawer } from "@/features/wallet-analysis";
 
 import { deleteCopyTarget, fetchCopyTargets } from "../_api/fetchCopyTargets";
 import { fetchTopWallets } from "../_api/fetchTopWallets";
 
-const TIME_PERIOD_OPTIONS: readonly {
-  value: WalletTimePeriod;
-  label: string;
-}[] = [
-  { value: "DAY", label: "Day" },
-  { value: "WEEK", label: "Week" },
-  { value: "MONTH", label: "Month" },
-  { value: "ALL", label: "All" },
-] as const;
-
-// Enrich copy-traded wallets with leaderboard data when they happen to be in the
-// top of the window. Size chosen to cover the common case without enlarging the
-// Polymarket fan-out beyond what we already do.
-const LEADERBOARD_ENRICHMENT_LIMIT = 50;
+const WEEK_ENRICHMENT_LIMIT = 50;
+const ALLTIME_FALLBACK_LIMIT = 200;
 
 export function CopyTradedWalletsCard(): ReactElement {
-  const router = useRouter();
   const queryClient = useQueryClient();
-  const [timePeriod, setTimePeriod] = useState<WalletTimePeriod>("WEEK");
-
-  const navigateToWallet = (addr: string): void => {
-    router.push(`/research/w/${addr.toLowerCase()}`);
-  };
+  const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
 
   const COPY_TARGETS_KEY = ["dashboard-copy-targets"] as const;
 
@@ -82,15 +64,21 @@ export function CopyTradedWalletsCard(): ReactElement {
     retry: 1,
   });
 
-  const { data: walletsData } = useQuery({
-    queryKey: ["dashboard-copy-traded-enrichment", timePeriod],
+  const { data: weekData } = useQuery({
+    queryKey: ["dashboard-copy-traded-week", WEEK_ENRICHMENT_LIMIT],
     queryFn: () =>
-      fetchTopWallets({
-        timePeriod,
-        limit: LEADERBOARD_ENRICHMENT_LIMIT,
-      }),
+      fetchTopWallets({ timePeriod: "WEEK", limit: WEEK_ENRICHMENT_LIMIT }),
     staleTime: 60_000,
     gcTime: 5 * 60_000,
+    retry: 1,
+  });
+
+  const { data: allTimeData } = useQuery({
+    queryKey: ["dashboard-copy-traded-alltime", ALLTIME_FALLBACK_LIMIT],
+    queryFn: () =>
+      fetchTopWallets({ timePeriod: "ALL", limit: ALLTIME_FALLBACK_LIMIT }),
+    staleTime: 5 * 60_000,
+    gcTime: 30 * 60_000,
     retry: 1,
   });
 
@@ -100,20 +88,26 @@ export function CopyTradedWalletsCard(): ReactElement {
       queryClient.invalidateQueries({ queryKey: COPY_TARGETS_KEY }),
   });
 
-  const tradersByWallet = useMemo(() => {
-    const m = new Map<string, WalletTopTraderItem>();
-    for (const t of walletsData?.traders ?? []) {
-      m.set(t.proxyWallet.toLowerCase(), t);
-    }
-    return m;
-  }, [walletsData]);
+  const weekByWallet = useMemo(
+    () => toLowerMap(weekData?.traders ?? []),
+    [weekData]
+  );
+  const allTimeByWallet = useMemo(
+    () => toLowerMap(allTimeData?.traders ?? []),
+    [allTimeData]
+  );
 
   const rows = useMemo(
     () =>
-      buildCopyTradedWalletRows(targetsData?.targets ?? [], tradersByWallet),
-    [targetsData, tradersByWallet]
+      buildCopyTradedWalletRows(
+        targetsData?.targets ?? [],
+        weekByWallet,
+        allTimeByWallet
+      ),
+    [targetsData, weekByWallet, allTimeByWallet]
   );
 
+  // Merged tracked column owns the untrack button; clicking it unfollows.
   const renderActions = (row: WalletRow): ReactElement | null => {
     if (!row.targetId) return null;
     const targetId = row.targetId;
@@ -121,15 +115,15 @@ export function CopyTradedWalletsCard(): ReactElement {
       <button
         type="button"
         aria-label={`Untrack ${row.proxyWallet}`}
-        title="Stop copy-trading this wallet"
+        title="Stop copy-trading this wallet (click the green icon to unfollow)"
         disabled={deleteTargetMutation.isPending}
         onClick={(e) => {
           e.stopPropagation();
           deleteTargetMutation.mutate(targetId);
         }}
-        className="inline-flex size-7 items-center justify-center rounded text-muted-foreground hover:bg-success/20 hover:text-success disabled:cursor-wait disabled:opacity-40"
+        className="inline-flex size-7 items-center justify-center rounded text-success hover:bg-destructive/10 hover:text-destructive disabled:cursor-wait disabled:opacity-40"
       >
-        <Minus className="size-3.5" />
+        <Radio className="size-3.5 animate-pulse" />
       </button>
     );
   };
@@ -139,26 +133,8 @@ export function CopyTradedWalletsCard(): ReactElement {
       <CardHeader className="px-5 py-3">
         <div className="flex items-center justify-between gap-3">
           <CardTitle className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
-            Copy-Traded Wallets
+            Copy-Traded Wallets · this week
           </CardTitle>
-          <ToggleGroup
-            type="single"
-            value={timePeriod}
-            onValueChange={(v) => {
-              if (v) setTimePeriod(v as WalletTimePeriod);
-            }}
-            className="rounded-lg border"
-          >
-            {TIME_PERIOD_OPTIONS.map((opt) => (
-              <ToggleGroupItem
-                key={opt.value}
-                value={opt.value}
-                className="px-3 text-xs"
-              >
-                {opt.label}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
         </div>
       </CardHeader>
       <CardContent className="p-0">
@@ -178,11 +154,27 @@ export function CopyTradedWalletsCard(): ReactElement {
           rows={rows}
           variant="copy-traded"
           isLoading={targetsLoading}
-          onRowClick={(row) => navigateToWallet(row.proxyWallet)}
+          onRowClick={(row) => setSelectedAddr(row.proxyWallet.toLowerCase())}
           renderActions={renderActions}
           emptyMessage="No copy-traded wallets yet. Track some from Research."
         />
       </CardContent>
+
+      <WalletDetailDrawer
+        addr={selectedAddr}
+        open={selectedAddr !== null}
+        onOpenChange={(open) => {
+          if (!open) setSelectedAddr(null);
+        }}
+      />
     </Card>
   );
+}
+
+function toLowerMap(
+  traders: ReadonlyArray<WalletTopTraderItem>
+): Map<string, WalletTopTraderItem> {
+  const m = new Map<string, WalletTopTraderItem>();
+  for (const t of traders) m.set(t.proxyWallet.toLowerCase(), t);
+  return m;
 }
