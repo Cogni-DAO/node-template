@@ -582,6 +582,25 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
     marketConditionId: "0xmarket",
   } satisfies OrderIntentSummary;
 
+  /**
+   * APPROVALS_BEFORE_PLACE test fixture. `authorizeIntent` now fails closed
+   * with `trading_not_ready` when `trading_approvals_ready_at` is null. Most
+   * tests below are about cap/scope/grant semantics, NOT the readiness
+   * check, so they pre-stamp here. The dedicated `trading_not_ready` case
+   * skips this helper on purpose.
+   */
+  async function markTradingReady(): Promise<void> {
+    await seedDb
+      .update(polyWalletConnections)
+      .set({ tradingApprovalsReadyAt: new Date() })
+      .where(
+        and(
+          eq(polyWalletConnections.billingAccountId, tenant.billingAccountId),
+          isNull(polyWalletConnections.revokedAt)
+        )
+      );
+  }
+
   async function insertFill(opts: {
     fillId: string;
     status: "pending" | "open" | "filled" | "partial" | "canceled" | "error";
@@ -612,6 +631,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       custodialConsent: { ...consent, actorId: tenant.userId },
       defaultGrant: { perOrderUsdcCap: 5, dailyUsdcCap: 20 },
     });
+    await markTradingReady();
 
     const grants = await seedDb
       .select()
@@ -666,6 +686,9 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       createdByUserId: tenant.userId,
       custodialConsent: { ...consent, actorId: tenant.userId },
     });
+    // Skip APPROVALS_BEFORE_PLACE for this test; we want to reach the grant
+    // check specifically.
+    await markTradingReady();
     const result = await adapter.authorizeIntent(
       tenant.billingAccountId,
       BUY_INTENT
@@ -683,6 +706,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       custodialConsent: { ...consent, actorId: tenant.userId },
       defaultGrant: { perOrderUsdcCap: 5, dailyUsdcCap: 20 },
     });
+    await markTradingReady();
     await seedDb
       .update(polyWalletGrants)
       .set({ expiresAt: new Date(Date.now() - 60_000) })
@@ -704,6 +728,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       custodialConsent: { ...consent, actorId: tenant.userId },
       defaultGrant: { perOrderUsdcCap: 5, dailyUsdcCap: 20 },
     });
+    await markTradingReady();
     await seedDb
       .update(polyWalletGrants)
       .set({ scopes: ["poly:trade:buy"] })
@@ -725,6 +750,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       custodialConsent: { ...consent, actorId: tenant.userId },
       defaultGrant: { perOrderUsdcCap: 1, dailyUsdcCap: 10 },
     });
+    await markTradingReady();
     const result = await adapter.authorizeIntent(tenant.billingAccountId, {
       ...BUY_INTENT,
       usdcAmount: 2,
@@ -741,6 +767,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       custodialConsent: { ...consent, actorId: tenant.userId },
       defaultGrant: { perOrderUsdcCap: 5, dailyUsdcCap: 10 },
     });
+    await markTradingReady();
 
     // Each status that commits USDC contributes independently.
     await insertFill({ fillId: "f1", status: "pending", sizeUsdc: 3 });
@@ -774,6 +801,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       custodialConsent: { ...consent, actorId: tenant.userId },
       defaultGrant: { perOrderUsdcCap: 5, dailyUsdcCap: 100 },
     });
+    await markTradingReady();
     // Narrow hourly cap to make the test deterministic.
     await seedDb
       .update(polyWalletGrants)
@@ -826,6 +854,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
       custodialConsent: { ...consent, actorId: tenant.userId },
       defaultGrant: { perOrderUsdcCap: 5, dailyUsdcCap: 20 },
     });
+    await markTradingReady();
 
     await adapter.revoke({
       billingAccountId: tenant.billingAccountId,
@@ -839,12 +868,48 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
     // Cascade landed: grant row has revoked_at set.
     expect(grants[0]?.revokedAt).toBeInstanceOf(Date);
 
+    // The connection row is ALSO flipped in the same transaction, and its
+    // `trading_approvals_ready_at` is cleared. The APPROVALS_BEFORE_PLACE
+    // gate sees no active connection first, so we get `no_connection`.
     const result = await adapter.authorizeIntent(
       tenant.billingAccountId,
       BUY_INTENT
     );
     if (result.ok) throw new Error("expected deny");
-    // No active grant (cascade marked it revoked) → no_active_grant.
-    expect(result.reason).toBe("no_active_grant");
+    expect(result.reason).toBe("no_connection");
+
+    // Sanity: the readiness stamp was cleared on revoke so a fresh
+    // post-revoke connection starts un-approved (REVOKE_CASCADES_FROM_CONNECTION
+    // extends to the APPROVALS_BEFORE_PLACE stamp).
+    const revokedConn = await seedDb
+      .select({
+        revokedAt: polyWalletConnections.revokedAt,
+        tradingApprovalsReadyAt: polyWalletConnections.tradingApprovalsReadyAt,
+      })
+      .from(polyWalletConnections)
+      .where(
+        eq(polyWalletConnections.billingAccountId, tenant.billingAccountId)
+      );
+    expect(revokedConn[0]?.revokedAt).toBeInstanceOf(Date);
+    expect(revokedConn[0]?.tradingApprovalsReadyAt).toBeNull();
+  });
+
+  it("trading_not_ready — provisioned + granted but approvals not run denies", async () => {
+    const { adapter } = makeAdapter();
+    await adapter.provisionWithGrant({
+      billingAccountId: tenant.billingAccountId,
+      createdByUserId: tenant.userId,
+      custodialConsent: { ...consent, actorId: tenant.userId },
+      defaultGrant: { perOrderUsdcCap: 5, dailyUsdcCap: 20 },
+    });
+    // Deliberately DO NOT call markTradingReady() — this is the bug.0335
+    // class of failure: fresh wallet, no approvals, must not reach the CLOB.
+
+    const result = await adapter.authorizeIntent(
+      tenant.billingAccountId,
+      BUY_INTENT
+    );
+    if (result.ok) throw new Error("expected deny");
+    expect(result.reason).toBe("trading_not_ready");
   });
 });

@@ -2,7 +2,7 @@
 id: task.0355
 type: task
 title: "Poly trading wallet — Enable Trading (token approvals + readiness gate)"
-status: needs_design
+status: needs_review
 priority: 1
 rank: 10
 estimate: 5
@@ -17,7 +17,7 @@ spec_refs:
 assignees: []
 credit:
 project: proj.poly-copy-trading
-branch:
+branch: design/task-0355-enable-trading-approvals
 pr:
 reviewer:
 revision: 0

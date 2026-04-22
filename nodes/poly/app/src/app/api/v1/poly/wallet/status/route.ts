@@ -55,6 +55,7 @@ export const GET = wrapRouteHandlerWithLogging(
           connected: false,
           connection_id: null,
           funder_address: null,
+          trading_ready: false,
         };
         return NextResponse.json(
           polyWalletStatusOperation.output.parse(payload)
@@ -63,19 +64,23 @@ export const GET = wrapRouteHandlerWithLogging(
       throw err;
     }
 
-    const resolved = await adapter.resolve(account.id);
-    const payload: PolyWalletStatusOutput = resolved
+    // DB-only summary (no Privy round-trip). Keeps the page-render cost low
+    // and surfaces `trading_ready` for the Money-page "Enable Trading" CTA.
+    const summary = await adapter.getConnectionSummary(account.id);
+    const payload: PolyWalletStatusOutput = summary
       ? {
           configured: true,
           connected: true,
-          connection_id: resolved.connectionId,
-          funder_address: resolved.funderAddress,
+          connection_id: summary.connectionId,
+          funder_address: summary.funderAddress,
+          trading_ready: summary.tradingApprovalsReadyAt !== null,
         }
       : {
           configured: true,
           connected: false,
           connection_id: null,
           funder_address: null,
+          trading_ready: false,
         };
 
     return NextResponse.json(polyWalletStatusOperation.output.parse(payload));

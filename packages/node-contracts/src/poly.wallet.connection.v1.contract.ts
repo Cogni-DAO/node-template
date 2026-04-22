@@ -74,13 +74,20 @@ export const polyWalletStatusOperation = {
   id: "poly.wallet.status.v1",
   summary: "Read the calling user's Polymarket trading wallet status",
   description:
-    "Returns whether per-tenant trading wallets are configured on this deployment and whether the calling user already has a resolvable trading wallet connection.",
+    "Returns whether per-tenant trading wallets are configured on this deployment, whether the calling user already has a resolvable trading wallet connection, and whether the wallet has completed the Polymarket on-chain approvals ceremony (APPROVALS_BEFORE_PLACE).",
   input: z.object({}),
   output: z.object({
     configured: z.boolean(),
     connected: z.boolean(),
     connection_id: z.string().uuid().nullable(),
     funder_address: walletAddressSchema.nullable(),
+    /**
+     * True iff `poly_wallet_connections.trading_approvals_ready_at IS NOT
+     * NULL` on the active connection. When false and `connected` is true,
+     * the user needs to run Enable Trading on the Money page; `authorizeIntent`
+     * will fail-closed with `trading_not_ready` until this flips.
+     */
+    trading_ready: z.boolean(),
   }),
 } as const;
 
