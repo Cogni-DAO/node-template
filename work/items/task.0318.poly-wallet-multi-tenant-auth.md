@@ -5,7 +5,7 @@ title: "Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS
 status: needs_merge
 revision: 8
 pr_b: https://github.com/Cogni-DAO/node-template/pull/968
-pr_b3: TBD
+pr_b3: https://github.com/Cogni-DAO/node-template/pull/990
 priority: 2
 estimate: 5
 rank: 5
