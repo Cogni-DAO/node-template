@@ -115,6 +115,7 @@ export class FakeOrderLedger implements OrderLedger {
       synced_at: null,
       created_at: now,
       updated_at: now,
+      billing_account_id: input.billing_account_id,
     });
   }
 

@@ -22,8 +22,8 @@ import {
   type OrderIntent,
   type OrderReceipt,
 } from "@cogni/market-provider";
+import { COGNI_SYSTEM_BILLING_ACCOUNT_ID, TEST_USER_ID_1 } from "@tests/_fakes";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-
 import { FakeOrderLedger } from "@/adapters/test";
 import {
   MIRROR_PIPELINE_METRICS,
@@ -39,8 +39,8 @@ const TARGET_WALLET = "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
 const BASE_TARGET: MirrorTargetConfig = {
   target_id: TARGET_ID,
   target_wallet: TARGET_WALLET,
-  billing_account_id: "00000000-0000-4000-b000-000000000000",
-  created_by_user_id: "00000000-0000-4000-a000-000000000001",
+  billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+  created_by_user_id: TEST_USER_ID_1,
   mode: "live",
   sizing: {
     kind: "fixed",
@@ -114,6 +114,8 @@ describe("mirror-pipeline.runMirrorTick — idempotent re-run", () => {
           attributes: { size_usdc: 5 },
           created_at: new Date(),
           updated_at: new Date(),
+          synced_at: null,
+          billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         },
       ],
     });

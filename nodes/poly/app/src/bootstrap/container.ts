@@ -788,14 +788,30 @@ function createContainer(): Container {
         const mirrorLogger =
           log as unknown as import("@cogni/market-provider").LoggerPort;
 
-        // Ledger reconciler — syncs open/pending rows from CLOB getOrder.
-        // Operator-wide (not per-target), so it runs exactly once at boot
-        // independent of the target-set reconciler below.
-        // (task.0323 §2, @scaffolding, Deleted-in-phase: 4)
+        // Ledger reconciler — syncs open/pending rows from CLOB getOrder,
+        // dispatched per tenant. Each ledger row carries its
+        // `billing_account_id`; the reconciler routes `getOrder` through the
+        // per-tenant `PolyTradeExecutor` so we hit the right CLOB API creds
+        // (each tenant's creds are derived from their Privy signer). One
+        // reconciler runs on the operator pod; per-tenant dispatch is
+        // internal. (task.0323 §2, @scaffolding, Deleted-in-phase: 4)
+        if (!polyTradeExecutorFactory) {
+          // Defense in depth: we only enter this branch when
+          // polyTradeBundle !== undefined. The factory is built from the same
+          // env vars as the mirror path, so in full-cutover this throw is
+          // purely a guard against a future refactor regression.
+          throw new Error(
+            "polyTradeExecutorFactory missing — PRIVY_USER_WALLETS_* must be configured alongside prototype env while we complete Stage 4 purge"
+          );
+        }
+        const executorFactory = polyTradeExecutorFactory;
         _reconcilerHandle = startOrderReconciler({
           ledger: orderLedger,
-          getOrder: polyTradeBundle.getOrder,
-          operatorWalletAddress: polyTradeBundle.operatorWalletAddress,
+          getOrderForTenant: async (billingAccountId, orderId) => {
+            const executor =
+              await executorFactory.getPolyTradeExecutorFor(billingAccountId);
+            return executor.getOrder(orderId);
+          },
           logger: mirrorLogger,
           metrics: noopMetrics,
           notFoundGraceMs: env.POLY_CLOB_NOT_FOUND_GRACE_MS,

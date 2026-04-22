@@ -11,8 +11,8 @@
  * @internal
  */
 
+import { COGNI_SYSTEM_BILLING_ACCOUNT_ID } from "@tests/_fakes";
 import { describe, expect, it } from "vitest";
-
 import { FakeOrderLedger } from "@/adapters/test/trading/fake-order-ledger";
 import type { LedgerRow } from "@/features/trading";
 
@@ -29,6 +29,7 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
     synced_at: null,
     created_at: now,
     updated_at: now,
+    billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
     ...overrides,
   };
 }

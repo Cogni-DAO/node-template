@@ -43,6 +43,12 @@ export interface LedgerRow {
   synced_at: Date | null;
   created_at: Date;
   updated_at: Date;
+  /**
+   * Tenant the row belongs to. Required by the per-tenant order-reconciler so
+   * it can route `getOrder` through the correct `PolyTradeExecutor` (each
+   * tenant has their own CLOB API creds derived from their Privy signer).
+   */
+  billing_account_id: string;
 }
 
 /**

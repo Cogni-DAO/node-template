@@ -15,8 +15,8 @@
 
 import type { GetOrderResult, OrderReceipt } from "@cogni/market-provider";
 import { noopMetrics } from "@cogni/market-provider";
+import { COGNI_SYSTEM_BILLING_ACCOUNT_ID } from "@tests/_fakes";
 import { describe, expect, it, vi } from "vitest";
-
 import { FakeOrderLedger } from "@/adapters/test/trading/fake-order-ledger";
 import {
   ORDER_RECONCILER_METRICS,
@@ -29,7 +29,6 @@ import { makeNoopLogger } from "@/shared/observability/server";
 // Helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-const OPERATOR = "0xAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" as `0x${string}`;
 const LOGGER = makeNoopLogger();
 
 /** Build a minimal LedgerRow seeded into FakeOrderLedger. */
@@ -46,8 +45,22 @@ function makeRow(overrides: Partial<LedgerRow> = {}): LedgerRow {
     synced_at: null,
     created_at: now,
     updated_at: now,
+    billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
     ...overrides,
   };
+}
+
+/**
+ * Wrap a flat `(orderId) => Promise<GetOrderResult>` fn in the per-tenant
+ * shape the reconciler expects. Assertions on `getOrder` still work — tests
+ * typically don't care which tenant dispatched.
+ */
+function perTenant(
+  fn: (
+    orderId: string
+  ) => Promise<import("@cogni/market-provider").GetOrderResult>
+) {
+  return (_billingAccountId: string, orderId: string) => fn(orderId);
 }
 
 /** Build a minimal OrderReceipt. */
@@ -99,8 +112,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder,
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(getOrder),
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,
@@ -122,8 +134,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder,
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(getOrder),
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,
@@ -140,8 +151,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder,
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(getOrder),
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,
@@ -183,8 +193,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder,
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(getOrder),
       logger: LOGGER,
       metrics,
       notFoundGraceMs: 900_000,
@@ -214,8 +223,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder,
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(getOrder),
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,
@@ -232,8 +240,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder: vi.fn(),
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(vi.fn()),
       logger: LOGGER,
       metrics,
       notFoundGraceMs: 900_000,
@@ -258,8 +265,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder: vi.fn().mockResolvedValue(NOT_FOUND),
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(vi.fn().mockResolvedValue(NOT_FOUND)),
       logger: LOGGER,
       metrics,
       notFoundGraceMs: 10 * 60 * 1000, // 10 min grace
@@ -289,8 +295,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder: vi.fn().mockResolvedValue(NOT_FOUND),
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(vi.fn().mockResolvedValue(NOT_FOUND)),
       logger: LOGGER,
       metrics,
       notFoundGraceMs: 15 * 60 * 1000, // 15 min grace
@@ -319,8 +324,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder: vi.fn().mockResolvedValue(NOT_FOUND),
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(vi.fn().mockResolvedValue(NOT_FOUND)),
       logger: LOGGER,
       metrics,
       notFoundGraceMs: 0,
@@ -373,8 +377,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder,
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(getOrder),
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,
@@ -397,8 +400,7 @@ describe("runReconcileOnce", () => {
 
     await runReconcileOnce({
       ledger,
-      getOrder: vi.fn(),
-      operatorWalletAddress: OPERATOR,
+      getOrderForTenant: perTenant(vi.fn()),
       logger: LOGGER,
       metrics: noopMetrics,
       notFoundGraceMs: 900_000,

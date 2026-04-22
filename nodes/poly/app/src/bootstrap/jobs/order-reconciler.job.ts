@@ -84,11 +84,20 @@ const DEFAULT_LIMIT = 200;
 export interface OrderReconcilerDeps {
   ledger: OrderLedger;
   /**
-   * `PolyTradeBundle.getOrder` — returns a discriminated `GetOrderResult`.
-   * GETORDER_NEVER_NULL invariant (task.0328 CP1): null is never returned.
+   * Per-tenant `getOrder`. Each ledger row is attributed to a
+   * `billing_account_id`, and each tenant has its own CLOB API creds derived
+   * from their Privy signer — so the reconciler must dispatch through the
+   * per-tenant `PolyTradeExecutor`. The container wires this by calling
+   * `polyTradeExecutorFactory.getPolyTradeExecutorFor(billing_account_id)`
+   * and delegating to `executor.getOrder(order_id)`.
+   *
+   * GETORDER_NEVER_NULL invariant (task.0328 CP1): returns a discriminated
+   * `GetOrderResult` — null is never returned.
    */
-  getOrder: (orderId: string) => Promise<GetOrderResult>;
-  operatorWalletAddress: `0x${string}`;
+  getOrderForTenant: (
+    billing_account_id: string,
+    order_id: string
+  ) => Promise<GetOrderResult>;
   logger: LoggerPort;
   metrics: MetricsPort;
   /**
@@ -175,7 +184,10 @@ export async function runReconcileOnce(
     }
 
     try {
-      const result = await deps.getOrder(row.order_id);
+      const result = await deps.getOrderForTenant(
+        row.billing_account_id,
+        row.order_id
+      );
       // getOrder returned a typed response — mark as synced regardless of branch.
       syncedIds.push(row.client_order_id);
 
@@ -280,7 +292,6 @@ export function startOrderReconciler(
 ): OrderReconcilerHandle {
   const log = deps.logger.child({
     component: "order-reconciler-job",
-    operator_wallet: deps.operatorWalletAddress,
   });
 
   log.info(
@@ -288,7 +299,7 @@ export function startOrderReconciler(
       event: EVENT_NAMES.POLY_MIRROR_RECONCILE_SINGLETON_CLAIM,
       poll_ms: RECONCILE_POLL_MS,
     },
-    "order reconciler starting (SINGLE_WRITER — alert on duplicate pods running this)"
+    "order reconciler starting (SINGLE_WRITER — alert on duplicate pods running this; dispatches getOrder per tenant via billing_account_id)"
   );
 
   // In-memory last-tick timestamp. Updated at the END of each successful tick
