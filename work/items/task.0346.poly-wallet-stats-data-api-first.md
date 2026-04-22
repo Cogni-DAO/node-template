@@ -1,5 +1,5 @@
 ---
-id: task.0345
+id: task.0346
 type: task
 title: "Poly wallet stats: Data-API-first windowed stats + batched endpoint"
 status: needs_design
@@ -24,7 +24,7 @@ deploy_verified: false
 labels: [poly, wallet-analysis, data-api, performance, contracts]
 ---
 
-# task.0345 — Poly wallet stats: Data-API-first windowed stats
+# task.0346 — Poly wallet stats: Data-API-first windowed stats
 
 ## Problem
 

@@ -21,7 +21,7 @@
  *   - RLS-scoped: reads go through `/api/v1/poly/copy-trade/targets`; operator sees only
  *     their own targets.
  * Side-effects: IO (React Query — fetchCopyTargets, fetchTopWallets ×2, deleteCopyTarget).
- * Follow-up: work/items/task.0345.poly-wallet-stats-data-api-first.md replaces the two
+ * Follow-up: work/items/task.0346.poly-wallet-stats-data-api-first.md replaces the two
  *            leaderboard fan-outs with a single batched Data-API-first per-wallet
  *            windowed-stats endpoint. Until then the two-tier fallback is the honest
  *            compromise.
