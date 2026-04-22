@@ -9,8 +9,13 @@
  *   - TENANT_SCOPED: both operations are session-authenticated and derive the
  *     tenant from the authenticated user; request bodies cannot override it.
  *   - CUSTODIAL_CONSENT: connect requires explicit acknowledgement.
- *   - STATUS_REFLECTS_RUNTIME_RESOLVE: `connected=true` means the runtime can
- *     resolve the full signing context, not just that a row exists in the DB.
+ *   - STATUS_REFLECTS_ACTIVE_CONNECTION: `connected=true` means there is an
+ *     un-revoked `poly_wallet_connections` row for the tenant (DB-only read via
+ *     `PolyTraderWalletPort.getConnectionSummary`). It does **not** assert Privy
+ *     or Polygon RPC reachability on that GET — signing paths (`resolve`,
+ *     `authorizeIntent`, `ensureTradingApprovals`) validate custody + RPC when
+ *     they run. `trading_ready` is true iff `trading_approvals_ready_at` is set
+ *     on that row (task.0355, APPROVALS_BEFORE_PLACE).
  * Side-effects: none
  * Links: docs/spec/poly-trader-wallet-port.md, work/items/task.0318
  * @public
@@ -74,7 +79,7 @@ export const polyWalletStatusOperation = {
   id: "poly.wallet.status.v1",
   summary: "Read the calling user's Polymarket trading wallet status",
   description:
-    "Returns whether per-tenant trading wallets are configured on this deployment, whether the calling user already has a resolvable trading wallet connection, and whether the wallet has completed the Polymarket on-chain approvals ceremony (APPROVALS_BEFORE_PLACE).",
+    "Returns whether per-tenant trading wallets are configured on this deployment, whether the calling user has an active (non-revoked) trading-wallet connection row (`connected`), and whether Polymarket on-chain approvals are stamped (`trading_ready`, APPROVALS_BEFORE_PLACE). The GET handler uses a DB-only summary for fast page loads; it does not call Privy or decrypt CLOB credentials — those are exercised on signing paths (`resolve` / `authorizeIntent`).",
   input: z.object({}),
   output: z.object({
     configured: z.boolean(),

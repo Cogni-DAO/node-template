@@ -129,6 +129,12 @@ export const polyWalletConnections = pgTable(
     byUser: index("poly_wallet_connections_created_by_user_idx").on(
       table.createdByUserId,
     ),
+    /** Matches migration `0032_poly_wallet_trading_approvals.sql`. */
+    tradingReadyIdx: index("poly_wallet_connections_trading_ready_idx")
+      .on(table.billingAccountId)
+      .where(
+        sql`${table.revokedAt} IS NULL AND ${table.tradingApprovalsReadyAt} IS NOT NULL`,
+      ),
   }),
 );
 
