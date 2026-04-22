@@ -31,6 +31,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import {
+  checkConnectRateLimit,
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
 } from "@/bootstrap/poly-trader-wallet";
@@ -60,21 +61,9 @@ export const POST = wrapRouteHandlerWithLogging(
       );
     }
 
-    // Agent-actor path requires API-key-bound auth (follow-up slice); until
-    // then, reject with 501 rather than leaving an unguarded enum branch
-    // that a session-authed user could take without any actor-id check.
-    if (parsed.data.custodialConsentActorKind === "agent") {
-      return NextResponse.json(
-        {
-          error: "Agent-actor consent path not yet implemented",
-          reason: "agent API-key auth lands in a follow-up B3 slice",
-        },
-        { status: 501 }
-      );
-    }
-
-    // Defense-in-depth: session-authed user path — actor_id MUST match the
-    // session user's id.
+    // Contract narrows `custodialConsentActorKind` to the literal `"user"` in
+    // v0 (agent-API-key auth lands in B3 and widens it then). Defense-in-depth:
+    // session-authed user path — actor_id MUST match the session user's id.
     if (parsed.data.custodialConsentActorId !== sessionUser.id) {
       return NextResponse.json(
         { error: "Consent actor id mismatches session user" },
@@ -86,6 +75,34 @@ export const POST = wrapRouteHandlerWithLogging(
     const account = await container
       .accountsForUser(toUserId(sessionUser.id))
       .getOrCreateBillingAccountForUser({ userId: sessionUser.id });
+
+    // Rate-limit: bound the connect→revoke→connect churn path. Only 429 when
+    // the tenant's most-recent row is both revoked and still inside the cooldown
+    // window. Idempotent re-hits with an active row fall through to the adapter,
+    // which short-circuits inside the advisory lock without calling Privy.
+    const rateLimit = await checkConnectRateLimit(account.id);
+    if (rateLimit.limited) {
+      ctx.log.warn(
+        {
+          billing_account_id: account.id,
+          user_id: sessionUser.id,
+          retry_after_seconds: rateLimit.retryAfterSeconds,
+        },
+        "poly.wallet.connect rate-limited — recent revoke in cooldown window"
+      );
+      return NextResponse.json(
+        {
+          error: "Too many wallet provisioning attempts",
+          retry_after_seconds: rateLimit.retryAfterSeconds,
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(rateLimit.retryAfterSeconds),
+          },
+        }
+      );
+    }
 
     let adapter: ReturnType<typeof getPolyTraderWalletAdapter>;
     try {

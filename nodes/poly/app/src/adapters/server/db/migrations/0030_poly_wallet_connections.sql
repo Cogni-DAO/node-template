@@ -70,6 +70,11 @@ CREATE INDEX "poly_wallet_connections_created_by_user_idx"
 ALTER TABLE "poly_wallet_connections" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "poly_wallet_connections" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
 
+-- Known-limitation (v0): policy keyed on `created_by_user_id`, NOT `billing_account_id`.
+-- Correct today because every billing account has exactly one owner, so the two keys
+-- identify the same principal. When multi-user billing accounts land, swap this policy
+-- to key on billing-account membership — see `docs/spec/poly-trader-wallet-port.md §
+-- Known-limitation: RLS policy keyed on created_by_user_id`.
 CREATE POLICY "tenant_isolation" ON "poly_wallet_connections"
   USING ("created_by_user_id" = current_setting('app.current_user_id', true))
   WITH CHECK ("created_by_user_id" = current_setting('app.current_user_id', true));--> statement-breakpoint

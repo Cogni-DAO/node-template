@@ -338,4 +338,139 @@ describe("PrivyPolyTraderWalletAdapter (component, RLS)", () => {
     )[0] as SeededConnectionRow | undefined;
     expect(revokedRowA?.revokedAt).toBeInstanceOf(Date);
   });
+
+  it("passes a deterministic idempotencyKey to Privy and increments generation across revoke cycles (PROVISION_NO_ORPHAN)", async () => {
+    const createWalletMock = vi
+      .fn()
+      .mockResolvedValueOnce(USER_WALLET_A)
+      .mockResolvedValueOnce(USER_WALLET_B);
+    const clobCredsFactory = vi.fn(async () => ({
+      key: "k",
+      secret: "s",
+      passphrase: "p",
+    }));
+
+    const adapter = new PrivyPolyTraderWalletAdapter({
+      privyClient: {
+        wallets: () => ({ create: createWalletMock }),
+      } as unknown as PrivyClient,
+      privySigningKey: "wallet-auth:test-signing-key",
+      serviceDb: seedDb,
+      encryptionKey: ENCRYPTION_KEY,
+      encryptionKeyId: ENCRYPTION_KEY_ID,
+      clobCredsFactory,
+      logger: log,
+    });
+
+    // First provision: generation=1.
+    await adapter.provision({
+      billingAccountId: tenantA.billingAccountId,
+      createdByUserId: tenantA.userId,
+      custodialConsent: {
+        acceptedAt: new Date("2026-04-21T10:00:00.000Z"),
+        actorKind: "user",
+        actorId: tenantA.userId,
+      },
+    });
+
+    expect(createWalletMock).toHaveBeenCalledTimes(1);
+    expect(createWalletMock).toHaveBeenNthCalledWith(
+      1,
+      { chain_type: "ethereum" },
+      { idempotencyKey: `poly-wallet:${tenantA.billingAccountId}:1` }
+    );
+
+    await adapter.revoke({
+      billingAccountId: tenantA.billingAccountId,
+      revokedByUserId: tenantA.userId,
+    });
+
+    // Second provision after revoke: generation=2 (revoked row still counted).
+    await adapter.provision({
+      billingAccountId: tenantA.billingAccountId,
+      createdByUserId: tenantA.userId,
+      custodialConsent: {
+        acceptedAt: new Date("2026-04-21T10:05:00.000Z"),
+        actorKind: "user",
+        actorId: tenantA.userId,
+      },
+    });
+
+    expect(createWalletMock).toHaveBeenCalledTimes(2);
+    expect(createWalletMock).toHaveBeenNthCalledWith(
+      2,
+      { chain_type: "ethereum" },
+      { idempotencyKey: `poly-wallet:${tenantA.billingAccountId}:2` }
+    );
+
+    const rows = await seedDb
+      .select()
+      .from(polyWalletConnections)
+      .where(
+        eq(polyWalletConnections.billingAccountId, tenantA.billingAccountId)
+      );
+    expect(rows).toHaveLength(2);
+    const active = rows.filter((r) => r.revokedAt === null);
+    expect(active).toHaveLength(1);
+    expect(active[0]?.privyWalletId).toBe(USER_WALLET_B.id);
+  });
+
+  it("serializes concurrent provision calls under the advisory lock (PROVISION_IS_IDEMPOTENT)", async () => {
+    const createWalletMock = vi.fn().mockResolvedValue(USER_WALLET_A);
+    const clobCredsFactory = vi.fn(async () => ({
+      key: "k",
+      secret: "s",
+      passphrase: "p",
+    }));
+
+    const adapter = new PrivyPolyTraderWalletAdapter({
+      privyClient: {
+        wallets: () => ({ create: createWalletMock }),
+      } as unknown as PrivyClient,
+      privySigningKey: "wallet-auth:test-signing-key",
+      serviceDb: seedDb,
+      encryptionKey: ENCRYPTION_KEY,
+      encryptionKeyId: ENCRYPTION_KEY_ID,
+      clobCredsFactory,
+      logger: log,
+    });
+
+    const consent = {
+      acceptedAt: new Date("2026-04-21T10:00:00.000Z"),
+      actorKind: "user" as const,
+      actorId: tenantA.userId,
+    };
+
+    const results = await Promise.all([
+      adapter.provision({
+        billingAccountId: tenantA.billingAccountId,
+        createdByUserId: tenantA.userId,
+        custodialConsent: consent,
+      }),
+      adapter.provision({
+        billingAccountId: tenantA.billingAccountId,
+        createdByUserId: tenantA.userId,
+        custodialConsent: consent,
+      }),
+      adapter.provision({
+        billingAccountId: tenantA.billingAccountId,
+        createdByUserId: tenantA.userId,
+        custodialConsent: consent,
+      }),
+    ]);
+
+    expect(createWalletMock).toHaveBeenCalledTimes(1);
+    expect(clobCredsFactory).toHaveBeenCalledTimes(1);
+
+    const connectionIds = new Set(results.map((r) => r.connectionId));
+    expect(connectionIds.size).toBe(1);
+
+    const rows = await seedDb
+      .select()
+      .from(polyWalletConnections)
+      .where(
+        eq(polyWalletConnections.billingAccountId, tenantA.billingAccountId)
+      );
+    expect(rows).toHaveLength(1);
+  });
 });

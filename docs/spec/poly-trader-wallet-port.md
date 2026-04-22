@@ -258,7 +258,7 @@ export interface PolyTraderWalletPort {
 - `REVOKE_IS_DURABLE` — `revoked_at` is the authoritative kill-switch; the executor's `resolve` call is the only enforcement point. Revocation is halt-future-only: in-flight orders complete, funds on the revoked address remain until the user withdraws.
 - `SEPARATE_PRIVY_APP` — the Privy adapter MUST NOT read `PRIVY_APP_ID` / `PRIVY_APP_SECRET` / `PRIVY_SIGNING_KEY` (those are the system / operator-wallet app). It reads a distinct env scope; see § Env below. Enforcement: the adapter is constructor-injected with a `PrivyClient` and signing key, so it stays env-free; bootstrap loads only `PRIVY_USER_WALLETS_*`, and routes import bootstrap rather than `@/adapters/**` directly.
 - `AUTHORIZED_SIGNING_ONLY` — `PolymarketClobAdapter.placeOrder` accepts `AuthorizedSigningContext` (branded), not `PolyTraderSigningContext`. Grant scope + cap enforcement is compile-checked at the call site, not left to coordinator discipline.
-- `NO_ORPHAN_BACKEND_WALLETS` — provisioning failures may still leave bounded backend-wallet orphans because Privy wallet creation happens before the DB row commits. Cleanup is handled by a follow-up ops task (`task.0346` / `scripts/ops/sweep-orphan-poly-wallets.ts`), not by the runtime path. The v0 requirement is to keep the orphan set bounded and make it sweepable later, not to block trading on shipping the sweep first.
+- `NO_ORPHAN_BACKEND_WALLETS` — `provision` MUST pass a deterministic `idempotencyKey` (derived from `billing_account_id` + a monotonically-increasing per-tenant generation counter) to the backend wallet-create call. This makes retries converge on the same backend wallet even if the DB transaction fails mid-provision, so a crash between backend-create and DB-commit is self-healing on the next retry. `task.0346` (`scripts/ops/sweep-orphan-poly-wallets.ts`) remains as defense-in-depth for out-of-band drift (admin deletes, cross-environment mistakes) but is NOT the primary correctness mechanism.
 - `WITHDRAW_BEFORE_REVOKE` — the dashboard MUST expose manual `withdrawUsdc` before offering `revoke`. Stranding funds at a revoked address is a UX failure mode, not an acceptable edge case.
 - `CUSTODIAL_CONSENT` — a plain-English disclosure screen ("Cogni creates and holds this trading wallet via our custody provider Privy; only you can trigger trades and withdrawals through this app; if you lose access to your Cogni account, wallet recovery requires Cogni operator assistance") ships in the B3 onboarding flow. The tenant's acknowledgement is persisted (`poly_wallet_connections.custodial_consent_accepted_at`) before `provision` is permitted to run.
 
@@ -304,13 +304,17 @@ interface PrivyPolyTraderWalletAdapterDeps {
   1. `BEGIN` a transaction.
   2. `SELECT pg_advisory_xact_lock(hashtext($1))` — tenant-scoped lock; held until COMMIT/ROLLBACK.
   3. `SELECT` existing un-revoked row for this tenant; if present, COMMIT + return the signing context (idempotent, no Privy call).
-  4. `privyClient.wallets().create({ chain_type: "ethereum" })` → `{ walletId, address }`. **External dependency: Privy HSM must be reachable.**
-  5. `createViemAccount(...)` → `LocalAccount`.
-  6. `clobFactory(account)` → `ApiKeyCreds` via Polymarket `/auth/api-key`. The production implementation lives at the bootstrap boundary: wrap the Privy `LocalAccount` in `createWalletClient({ account, chain: polygon, transport: http() })`, dynamically import `ClobClient`, then call `createOrDeriveApiKey()`. **External dependency: CLOB API must be reachable.**
-  7. `credentialEnvelope.encrypt(JSON.stringify(creds))` → `{ ciphertext, encryptionKeyId }`.
-  8. `INSERT INTO poly_wallet_connections(...) VALUES (...)`.
-  9. `COMMIT` and return the `PolyTraderSigningContext`.
-  - **Any failure at steps 4–8** rolls back the transaction, releasing the advisory lock. The unsued Privy wallet from step 4 is _not_ automatically deleted — an out-of-band reconciler (follow-up ops task `task.0346`) sweeps Privy wallets with no matching DB row older than 24h. This is the cheapest correctness story: callers retry `provision`; retries either hit step 3 (if a prior attempt committed) or get a fresh wallet (if not); orphans are bounded and cleaned asynchronously.
+  4. Derive the per-tenant **generation counter** `g = count(rows_for_billing_account) + 1` (includes revoked rows; monotonic). Compute `idempotencyKey = "poly-wallet:${billingAccountId}:${g}"`.
+  5. `privyClient.wallets().create({ chain_type: "ethereum" }, { idempotencyKey })` → `{ walletId, address }`. Privy honors `privy-idempotency-key` at the HTTP layer: repeated calls with the same key return the same wallet rather than minting a new one. **External dependency: Privy HSM must be reachable.**
+  6. `createViemAccount(...)` → `LocalAccount`.
+  7. `clobFactory(account)` → `ApiKeyCreds` via Polymarket `/auth/api-key`. The production implementation lives at the bootstrap boundary: wrap the Privy `LocalAccount` in `createWalletClient({ account, chain: polygon, transport: http() })`, dynamically import `ClobClient`, then call `createOrDeriveApiKey()` — which is itself idempotent per signer. **External dependency: CLOB API must be reachable.**
+  8. `credentialEnvelope.encrypt(JSON.stringify(creds))` → `{ ciphertext, encryptionKeyId }`.
+  9. `INSERT INTO poly_wallet_connections(...) VALUES (...)`.
+  10. `COMMIT` and return the `PolyTraderSigningContext`.
+  - **Any failure at steps 5–9** rolls back the transaction. On retry: the generation counter is recomputed from the same DB state → the same `idempotencyKey` → Privy returns the **same** wallet (no new wallet minted), CLOB returns the **same** creds, INSERT succeeds. Retries converge; orphans cannot be created from crash-mid-provision.
+  - After a successful `revoke`, the revoked row still counts toward the generation counter, so the next `provision` computes a higher `g` and receives a **new** Privy wallet — the connect→revoke→connect cycle intentionally does not reuse the revoked wallet.
+  - `task.0346` (`scripts/ops/sweep-orphan-poly-wallets.ts`) remains as defense-in-depth for the narrow case where a Privy admin-side delete or cross-environment drift leaves a dangling wallet without a matching idempotency record. Not a load-bearing dependency of the v0 trading path.
+  - **Connect-route abuse bounding.** Steps 5–9 are cheap for Privy to re-serve (same idempotency key → cached response), but every `/connect` call still requires the advisory lock + a live DB/Privy round trip. To avoid pathological churn under an attacker session, the HTTP layer imposes a per-tenant rate limit (default: at most one provision or revoke within a 5-minute window per `billing_account_id`). Enforced in `app/api/v1/poly/wallet/connect/route.ts`, not in the port — the port must remain idempotent under arbitrary retry pressure.
 
 - `revoke({ billingAccountId, revokedByUserId })`:
   1. `UPDATE poly_wallet_connections SET revoked_at = now(), revoked_by_user_id = $2 WHERE billing_account_id = $1 AND revoked_at IS NULL`.
@@ -369,6 +373,26 @@ Relevant columns:
 - `clob_api_key_ciphertext` + `encryption_key_id` — encrypted L2 creds
 - `created_by_user_id`, `revoked_at`, `revoked_by_user_id`
 - Unique: one un-revoked row per `billing_account_id`
+
+### Known-limitation: RLS policy keyed on `created_by_user_id`
+
+Migration `0030_poly_wallet_connections.sql` keys the `tenant_isolation` policy on
+`created_by_user_id` rather than `billing_account_id`. This is correct in v0 (every billing
+account today has exactly one owner, so `created_by_user_id` and the billing account owner
+are the same principal), but it is a latent limitation: when multi-user billing accounts land,
+co-owners will not be able to read each other's wallet rows through the app role. The fix at
+that time is a policy swap:
+
+```sql
+USING (billing_account_id IN (
+  SELECT id FROM billing_accounts
+  WHERE owner_user_id = current_setting('app.current_user_id', true)
+     OR id IN (SELECT billing_account_id FROM billing_account_members
+                WHERE user_id = current_setting('app.current_user_id', true))
+))
+```
+
+Tracked under the multi-user-billing follow-up; not in the v0 Phase B scope.
 
 ## Env — separation of system and user-wallet Privy apps
 

@@ -3,7 +3,7 @@ id: task.0318
 type: task
 title: "Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables"
 status: needs_implement
-revision: 4
+revision: 5
 pr_b: https://github.com/Cogni-DAO/node-template/pull/968
 priority: 2
 estimate: 5
@@ -22,7 +22,7 @@ assignees: derekg1729
 project: proj.poly-copy-trading
 pr: https://github.com/Cogni-DAO/node-template/pull/944
 created: 2026-04-17
-updated: 2026-04-21
+updated: 2026-04-22
 branch: feat/task-0318-phase-b
 deploy_verified: false
 labels: [poly, polymarket, wallets, auth, rls, multi-tenant, privy, security]
@@ -423,6 +423,109 @@ This slice lives across three locations — see [`docs/guides/poly-wallet-provis
 ✓ workspace:test passed (1s)
 ✓ All fast checks passed!
 ```
+
+## Review Feedback (revision 4 — 2026-04-21, Phase B v0 pre-merge)
+
+`/review-implementation` pass against PR #968 `HEAD = 94d053932` after `candidate-flight-infra` green.
+Verdict: **REQUEST CHANGES**. Surface is sound, but three provisioning-path issues block merge
+because this is the security-sensitive slice the rest of Phase B rides on.
+
+### Blocking (must fix before merge)
+
+- [x] **B-1 — Provisioning is not atomic; orphan Privy wallets + CLOB API keys can be minted on
+      every failed attempt.** `adapters/server/wallet/privy-poly-trader-wallet.adapter.ts:254-297`
+      creates a Privy wallet and derives a Polymarket L2 creds **inside** the DB transaction but
+      **before** the `INSERT`. Any post-Privy failure (CLOB derive throws, AEAD throws,
+      connection drop, INSERT fails) rolls back the DB but leaves a paid, spendable Privy wallet
+      with CLOB creds — untracked by the app. Combined with B-2, an authenticated user can mint an
+      unbounded number of orphans via retry loops. **Fix (atomic + idempotent v0 foundation)**:
+      pass a deterministic `idempotencyKey` to `privyClient.wallets().create(..., { idempotencyKey })`
+      so retries converge on the same Privy wallet (Privy SDK honors `privy-idempotency-key`
+      header; `@privy-io/node` `RequestOptions.idempotencyKey` maps to it). Key formula: a
+      per-tenant generation counter (`count(all_rows_for_tenant) + 1`) so (a) retries of a
+      single attempt always get the same wallet, (b) a new attempt after revoke increments
+      generation and gets a fresh wallet. `createOrDeriveApiKey()` is already idempotent per
+      signer. With both external calls idempotent, crash-mid-provision self-heals on retry and
+      no new orphans can be created. `task.0346` sweep remains defense-in-depth, not a load-bearing
+      dependency.
+
+- [x] **B-2 — `/connect` has no per-tenant rate limit.** `app/api/v1/poly/wallet/connect/route.ts:86-118`
+      calls `adapter.provision` on every request. Even without B-1, a user can call
+      `connect → revoke → connect → revoke …` in a tight loop to churn Privy wallets + CLOB API
+      keys until Privy rate-limits the whole app. **Fix (v0)**: in the route, before calling
+      `adapter.provision`, SELECT from `poly_wallet_connections` filtered by `billing_account_id`
+      with `created_at > now() - interval '5 minutes'`; if any row is present, return 429 with a
+      `retry_after_seconds`. Simple, DB-native, no new dependencies. Tighten the window
+      downstream once we have abuse data.
+
+- [x] **B-3 — `revoke` silently strands funds.** Adapter soft-deletes the row (L317-340) without
+      checking on-chain balance. The port spec already pushes this to the UX layer
+      (`WITHDRAW_BEFORE_REVOKE` is a caller invariant, not a port invariant), so the real v0 fix
+      is: (a) strengthen JSDoc on the port + adapter so this is unmistakable at the call site,
+      (b) leave the real `withdrawUsdc` + balance-guard for B3. Live Polygon RPC + balance
+      reading is not this PR's scope, but callers must not be able to claim the port gave them
+      safe revoke semantics.
+
+- [x] **B-4 — RLS policy is keyed on `created_by_user_id`, not `billing_account_id`.**
+      `migrations/0030_poly_wallet_connections.sql:73-75`. If/when multi-user billing accounts
+      land, co-owners won't be able to access the wallet rows through the app role. Not a v0
+      bug (every billing account today has one owner), but it's a latent correctness trap.
+      **Fix (v0)**: document in the spec + migration comment as a known limitation with a
+      pointer to how to swap the policy when multi-user accounts ship. No schema rewrite now —
+      that belongs to the multi-user billing task.
+
+### Suggestions (cheap wins, land in this PR)
+
+_(S-1 reclassified to D-5 after impact audit — see Deferred.)_
+
+- [x] **S-2 — Narrow contract `custodialConsentActorKind` to `z.literal("user")`.**
+      `packages/node-contracts/src/poly.wallet.connection.v1.contract.ts:33` allows `"agent"`
+      but the route immediately 501s on that branch. Narrow the contract to match v0 capability;
+      widen when agent-API-key auth lands in B3.
+
+- [x] **S-3 — Delete dead `brandAuthorized` method.** The adapter's `brandAuthorized` (L393-403)
+      is unreachable — `authorizeIntent` throws. Ship branding logic alongside the grants-table
+      code when it lands (B4). Dead code in security paths is noise.
+
+- [x] **S-4 — Fix `KEY_NEVER_IN_APP` JSDoc.** Adapter module header (L17) says raw keys never
+      enter app memory, but `this.authorizationContext` holds the Privy app's **signing key**
+      in process memory. Clarify: raw EOA private keys never reach the app; the Privy HSM
+      _authorization_ key is required in-process to issue signing requests — that's a different
+      key with a different threat model. Misleading doc on a security path is worse than no doc.
+
+### Deferred — follow-up tasks (NOT in this PR)
+
+- [ ] **D-1 — `/status` creates billing accounts as a side effect.**
+      `app/api/v1/poly/wallet/status/route.ts:43-46` uses `getOrCreateBillingAccountForUser`,
+      creating rows on read. Existing pattern across the codebase, but on a read-only status
+      route it's unexpected. Add a `getBillingAccountForUser` variant that returns `null` and
+      switch status to that. File as its own task — touches shared `AccountService`.
+
+- [ ] **D-2 — Encryption key rotation (keyring).** We store `encryption_key_id` per row but
+      never consult a keyring; rotating `POLY_WALLET_AEAD_KEY_HEX` immediately breaks
+      decryption of all existing rows. Out of scope for v0. File as ops-hygiene task alongside
+      CLOB L2 rotation (`rotateClobCreds` stub).
+
+- [ ] **D-3 — HTTP route-level component tests.** Adapter has good component coverage (RLS,
+      AEAD, multi-tenant round-trip); routes have zero. Not a merge blocker for v0 because the
+      adapter is the surface that carries the security invariants, but cover `/connect` happy
+      path + validation-error + rate-limit + unconfigured-503 + consent-actor-mismatch-400 in a
+      follow-up.
+
+- [ ] **D-4 — Live balance-guard on revoke.** When B3 lands withdraw UX + Polygon RPC wiring,
+      add `withdrawUsdc` + a pre-revoke balance check. Tracked by existing B3 scope in the
+      roadmap above.
+
+- [ ] **D-5 — Canonical AAD serialization (cross-node).** `packages/node-shared/src/crypto/aead.ts`
+      uses `JSON.stringify(aad)` for AEAD AAD, which is implicitly key-ordering-dependent. A fixed
+      canonical form (pipe-concat) would remove a silent source of ordering drift. Reclassified
+      from a v0 suggestion to a deferred task after impact audit: `aead.ts` already backs
+      tenant-connections ciphertext on `operator`, `resy`, `node-template`, and `poly` (OpenAI + Codex creds in prod), so changing the format requires a coordinated migration with key
+      rotation, not a drop-in code change. File as its own cross-node crypto-ops task.
+
+### check:fast output (2026-04-21 r4 HEAD)
+
+Green at `HEAD = 94d053932` before this review's code changes ship. Will re-run after.
 
 ## PR / Links
 

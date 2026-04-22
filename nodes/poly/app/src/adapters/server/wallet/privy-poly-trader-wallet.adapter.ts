@@ -14,12 +14,25 @@
  *   - SEPARATE_PRIVY_APP: constructor takes a PrivyClient built from
  *     PRIVY_USER_WALLETS_* env. The operator-wallet triple is never read here.
  *   - TENANT_SCOPED: every method takes or derives `billingAccountId`.
- *   - KEY_NEVER_IN_APP: raw key material is held by Privy HSM.
+ *   - KEY_NEVER_IN_APP: raw *EOA private keys* are never held in app memory —
+ *     Privy HSM owns signing material. The Privy-app *authorization private key*
+ *     (`privySigningKey`) is required in process to authenticate signing calls
+ *     to Privy; this is a different key with a different threat model (losing
+ *     it locks the app out of its own user-wallets app, it does not leak user
+ *     EOAs). Do not confuse the two.
  *   - FAIL_CLOSED_ON_RESOLVE: returns null on any error.
  *   - TENANT_DEFENSE_IN_DEPTH: post-SELECT equality check on billing_account_id.
  *   - CREDS_ENCRYPTED_AT_REST: clobApiKeyCiphertext is AEAD(aes-256-gcm) with
  *     AAD bound to (billing_account_id, connection_id, provider).
- *   - PROVISION_IS_IDEMPOTENT: pg_advisory_xact_lock on hashtext(billing_account_id).
+ *   - PROVISION_IS_IDEMPOTENT: pg_advisory_xact_lock on hashtext(billing_account_id)
+ *     serializes concurrent attempts; a deterministic `idempotencyKey` passed
+ *     to Privy `wallets().create` makes retries converge on the same backend
+ *     wallet so crash-mid-provision cannot create orphans (see PROVISION_NO_ORPHAN).
+ *   - PROVISION_NO_ORPHAN: idempotency key formula
+ *     `poly-wallet:${billing_account_id}:${generation}` where
+ *     `generation = count(all rows for tenant) + 1` (includes revoked rows,
+ *     so monotonic across revoke cycles). Retries converge; a new provision
+ *     after revoke gets a fresh wallet by incrementing generation.
  * Side-effects: IO (Privy API, DB reads/writes, AEAD crypto).
  * Links: docs/spec/poly-trader-wallet-port.md,
  *        docs/spec/poly-multi-tenant-auth.md
@@ -30,7 +43,6 @@ import type { Database } from "@cogni/db-client";
 import { type AeadAAD, aeadDecrypt, aeadEncrypt } from "@cogni/node-shared";
 import { polyWalletConnections } from "@cogni/poly-db-schema";
 import type {
-  AuthorizedSigningContext,
   AuthorizeIntentResult,
   OrderIntentSummary,
   PolyClobApiKeyCreds,
@@ -39,7 +51,7 @@ import type {
 } from "@cogni/poly-wallet";
 import type { AuthorizationContext, PrivyClient } from "@privy-io/node";
 import { createViemAccount } from "@privy-io/node/viem";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 import { getAddress, type LocalAccount } from "viem";
 
@@ -250,10 +262,25 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         };
       }
 
-      // Fresh provision path.
+      // PROVISION_NO_ORPHAN: derive a deterministic generation counter from
+      // the tenant's full row history (active + revoked). Under the advisory
+      // lock this is race-free; on retry after crash the count is unchanged
+      // so the idempotency key resolves to the same Privy wallet.
+      const [generationRow] = await tx
+        .select({ c: count() })
+        .from(polyWalletConnections)
+        .where(
+          eq(polyWalletConnections.billingAccountId, input.billingAccountId)
+        );
+      const generation = Number(generationRow?.c ?? 0) + 1;
+      const idempotencyKey = `poly-wallet:${input.billingAccountId}:${generation}`;
+
+      // Fresh provision path. The idempotencyKey option maps to the
+      // `privy-idempotency-key` HTTP header; Privy returns the same wallet
+      // for repeated calls with the same key instead of minting a new one.
       const privyWallet = await this.privyClient
         .wallets()
-        .create({ chain_type: "ethereum" });
+        .create({ chain_type: "ethereum" }, { idempotencyKey });
 
       const rawFreshAccount = createViemAccount(this.privyClient, {
         walletId: privyWallet.id,
@@ -301,6 +328,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           billing_account_id: input.billingAccountId,
           connection_id: gen_id,
           funder_address: getAddress(privyWallet.address),
+          generation,
         },
         "poly.wallet.provision — created per-tenant Privy trading wallet"
       );
@@ -314,6 +342,21 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     });
   }
 
+  /**
+   * Soft-delete the tenant's active connection row.
+   *
+   * WARNING — this is a halt-future kill-switch ONLY. It does NOT:
+   *   - delete the Privy backend wallet (funds at that address remain spendable),
+   *   - move USDC.e / MATIC off the address (no on-chain transfer),
+   *   - verify the address is empty before marking revoked.
+   *
+   * Callers (UI, API route handlers) MUST enforce `WITHDRAW_BEFORE_REVOKE`: show
+   * the current on-chain balance and require explicit "proceed with non-zero
+   * balance" confirmation from the user. Skipping that check strands funds.
+   *
+   * A real balance-guard lands with B3 (withdraw UX + Polygon RPC wiring); for
+   * v0 the port stays halt-future-only and enforcement lives in the caller.
+   */
   async revoke(input: {
     billingAccountId: string;
     revokedByUserId: string;
@@ -335,7 +378,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         billing_account_id: input.billingAccountId,
         revoked_by_user_id: input.revokedByUserId,
       },
-      "poly.wallet.revoke — soft-deleted active connection"
+      "poly.wallet.revoke — soft-deleted active connection (funds NOT moved; caller must have enforced withdraw)"
     );
   }
 
@@ -383,22 +426,5 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       throw new Error("decrypted CLOB creds missing required fields");
     }
     return parsed;
-  }
-
-  /**
-   * Narrow `PolyTraderSigningContext` → `AuthorizedSigningContext` by adding
-   * the grant brand. Marked for use by `authorizeIntent` once the grants
-   * table lands. Kept here so the branding logic lives in one place.
-   */
-  protected brandAuthorized(
-    context: PolyTraderSigningContext,
-    grantId: string,
-    intent: OrderIntentSummary
-  ): AuthorizedSigningContext {
-    return Object.freeze({
-      ...context,
-      grantId,
-      authorizedIntent: intent,
-    }) as AuthorizedSigningContext;
   }
 }

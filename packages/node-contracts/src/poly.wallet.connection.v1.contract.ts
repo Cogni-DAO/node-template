@@ -30,7 +30,12 @@ export const polyWalletConnectOperation = {
       message:
         "Custodial consent must be explicitly acknowledged — set custodialConsentAcknowledged: true.",
     }),
-    custodialConsentActorKind: z.enum(["user", "agent"]),
+    // v0: session-authed user path only. Agent-API-key auth lands in B3 and
+    // will widen this to `z.enum(["user", "agent"])` once actor-id binding
+    // from the API-key is enforced. The DB CHECK constraint on
+    // `poly_wallet_connections.custodial_consent_actor_kind` already allows
+    // both values so no schema change is needed when we widen.
+    custodialConsentActorKind: z.literal("user"),
     custodialConsentActorId: z.string().min(1),
   }),
   output: z.object({

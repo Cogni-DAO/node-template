@@ -14,7 +14,9 @@
  * @internal
  */
 
+import { polyWalletConnections } from "@cogni/poly-db-schema";
 import { PrivyClient } from "@privy-io/node";
+import { desc, eq } from "drizzle-orm";
 import type { Logger } from "pino";
 import type { LocalAccount } from "viem";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
@@ -133,4 +135,59 @@ export function getPolyTraderWalletAdapter(
 /** For tests only — clears the memoized instance. */
 export function __resetPolyTraderWalletAdapterForTests(): void {
   cached = null;
+}
+
+/**
+ * Minimum window between consecutive `/connect` attempts for a single tenant
+ * whose latest wallet is *revoked*. Bounds the connect→revoke→connect churn
+ * path; idempotent re-hits with an active row do NOT hit this limit.
+ */
+export const POLY_WALLET_CONNECT_RATE_LIMIT_MS = 5 * 60 * 1000;
+
+export interface ConnectRateLimitResult {
+  /** True when the caller should return 429 instead of invoking `provision`. */
+  limited: boolean;
+  /** Seconds until the cooldown expires; only meaningful when `limited`. */
+  retryAfterSeconds: number;
+}
+
+/**
+ * Check whether a new `/connect` attempt for the given tenant should be
+ * rate-limited. Returns `{ limited: false }` when:
+ *   - the tenant has no rows yet (first-ever provision), OR
+ *   - the tenant's most-recent row is still active (idempotent re-hit), OR
+ *   - the tenant's most-recent row was revoked more than the cooldown ago.
+ * Returns `{ limited: true, retryAfterSeconds }` when the most-recent row is
+ * revoked AND still inside the cooldown window.
+ *
+ * Kept in bootstrap (not in the route / not in the adapter) so route handlers
+ * can consume it without crossing the `@/adapters/**` boundary.
+ */
+export async function checkConnectRateLimit(
+  billingAccountId: string,
+  nowMs: number = Date.now()
+): Promise<ConnectRateLimitResult> {
+  const db = getServiceDb();
+  const [latest] = await db
+    .select({
+      revokedAt: polyWalletConnections.revokedAt,
+    })
+    .from(polyWalletConnections)
+    .where(eq(polyWalletConnections.billingAccountId, billingAccountId))
+    .orderBy(desc(polyWalletConnections.createdAt))
+    .limit(1);
+
+  if (!latest?.revokedAt) {
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+  const revokedMsAgo = nowMs - latest.revokedAt.getTime();
+  if (revokedMsAgo >= POLY_WALLET_CONNECT_RATE_LIMIT_MS) {
+    return { limited: false, retryAfterSeconds: 0 };
+  }
+  return {
+    limited: true,
+    retryAfterSeconds: Math.ceil(
+      (POLY_WALLET_CONNECT_RATE_LIMIT_MS - revokedMsAgo) / 1000
+    ),
+  };
 }
