@@ -185,9 +185,9 @@ const DEFAULT_GRANT_SCOPES = ["poly:trade:buy", "poly:trade:sell"] as const;
  * Fills-per-hour rate limit baked into every default grant. Not surfaced in
  * the consent UI (the plan intentionally narrows the slider set to per-order
  * + daily USDC only, per `.cursor/plans/poly-per-tenant-trade-execution_92073c70.plan.md`).
- * Value mirrors today's `MIRROR_MAX_FILLS_PER_HOUR` in copy-trade-mirror.job.ts.
+ * Kept high for dev / stress testing; existing tenant rows keep their stored cap.
  */
-const DEFAULT_GRANT_HOURLY_FILLS_CAP = 50;
+const DEFAULT_GRANT_HOURLY_FILLS_CAP = 10_000;
 
 /**
  * Fill statuses that commit (or already committed) USDC to the exchange. Used

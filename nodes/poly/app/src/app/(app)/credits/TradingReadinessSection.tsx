@@ -84,7 +84,7 @@ export function TradingReadinessSection(
         <CheckCircle2 size={16} />
         <span className="font-medium">Trading enabled</span>
         <span className="text-success/70 text-xs">
-          · Polymarket approvals set
+          · Approvals signed in-app
         </span>
       </div>
     );
@@ -99,8 +99,8 @@ export function TradingReadinessSection(
           </span>
           <span className="text-muted-foreground text-xs leading-snug">
             {derivedReady
-              ? "All 5 Polymarket approvals are set. Your wallet can BUY and SELL."
-              : "One-click: sign 5 on-chain approvals so Polymarket can settle your trades."}
+              ? "Polymarket approvals are on-chain. We signed them from your trading wallet—no browser wallet."
+              : "~5 approval txs from this wallet, server-signed. No extension popup."}
           </span>
         </div>
         <button
@@ -124,8 +124,7 @@ export function TradingReadinessSection(
 
       {insufficientGas ? (
         <div className="rounded-md bg-warning/15 px-3 py-2 text-warning text-xs">
-          Add at least {MIN_POL_FOR_ENABLE} POL to this wallet for gas, then
-          click Enable trading.
+          At least {MIN_POL_FOR_ENABLE} POL for gas (enable sends several txs).
         </div>
       ) : null}
 

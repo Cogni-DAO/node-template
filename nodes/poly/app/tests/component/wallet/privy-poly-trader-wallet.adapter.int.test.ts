@@ -641,7 +641,7 @@ describe("PrivyPolyTraderWalletAdapter.authorizeIntent + provisionWithGrant (com
     expect(grants[0]?.scopes).toEqual(["poly:trade:buy", "poly:trade:sell"]);
     expect(Number(grants[0]?.perOrderUsdcCap)).toBe(5);
     expect(Number(grants[0]?.dailyUsdcCap)).toBe(20);
-    expect(grants[0]?.hourlyFillsCap).toBe(50);
+    expect(grants[0]?.hourlyFillsCap).toBe(10_000);
 
     const result = await adapter.authorizeIntent(
       tenant.billingAccountId,
