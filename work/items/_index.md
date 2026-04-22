@@ -29,7 +29,6 @@
 | 0 | 1 | 1 | needs_implement | bug.0307 | Operator OOM on candidate-a — memory limit too low, manual canary bump never landed in overlay | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 4 | needs_design | task.0309 | QA agent — reads work item, exercises feature, confirms observability post-flight | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 3 | needs_merge | bug.0334 | Overlay EndpointSlice IPs via env-state.yaml + workflow rsync — establish INFRA_K8S_MAIN_DERIVED | CI/CD Pipeline | proj.cicd-services-gitops |
-| 0 | 1 | 5 | needs_design | bug.0344 | Hand-curated overlay digests drift on every unrelated flight — adopt a digest-update controller | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -75,6 +74,7 @@
 | 1 | 1 | 1 | needs_merge | bug.0320 | flight-preview silently skips every auto-triggered run — gh api commits/{sha}/pulls is eventually consistent | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 2 | needs_merge | bug.0321 | CICD silent-green: remaining paths that report success without verifying deploy state | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_closeout | task.0341 | verify-buildsha polling: close the pod-cutover race | Observability Hardening | proj.observability-hardening |
+| 1 | 1 | 0 | needs_closeout | task.0345 | candidate-flight-infra: default to dispatch ref so PR branches can be flown | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -292,6 +292,7 @@
 | 0 | task.0292 | Deploy branches: switch preview/production to direct commits (kill PR noise) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | task.0293 | Flight merged-PR digests to preview with lock-gate | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | task.0314 | Decouple infra flighting from app flighting — two independent levers | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | bug.0344 | Hand-curated overlay digests drift on every unrelated flight — adopt a digest-update controller | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | task.0006 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0007 | Billing enforcement decorator at GraphExecutorPort level | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0010 | OpenClaw gateway model selection — session-level override or agent-per-specialty | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
