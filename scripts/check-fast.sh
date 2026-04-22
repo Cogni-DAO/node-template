@@ -48,9 +48,13 @@ compute_tree_hash() {
 }
 
 INITIAL_HASH=""
-HAS_GIT=false
-if command -v git >/dev/null 2>&1 && git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  HAS_GIT=true
+DRIFT_DETECTION=true
+if ! command -v git >/dev/null 2>&1 || ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  DRIFT_DETECTION=false
+elif ! command -v shasum >/dev/null 2>&1; then
+  echo "warning: shasum not found; drift detection disabled" >&2
+  DRIFT_DETECTION=false
+else
   INITIAL_HASH=$(compute_tree_hash)
 fi
 
@@ -110,13 +114,15 @@ run_check "workspace:typecheck" "bash scripts/run-turbo-checks.sh typecheck"
 
 if [ "$FIX_MODE" = true ]; then
   run_check "lint" "pnpm lint:fix"
-  run_check "format" "pnpm format"
 else
   run_check "lint" "pnpm lint"
+fi
+run_check "workspace:lint" "bash scripts/run-turbo-checks.sh lint"
+if [ "$FIX_MODE" = true ]; then
+  run_check "format" "pnpm format"
+else
   run_check "format" "pnpm format:check"
 fi
-
-run_check "workspace:lint" "bash scripts/run-turbo-checks.sh lint"
 run_check "check:docs" "pnpm -s check:docs"
 run_check "workspace:test" "bash scripts/run-turbo-checks.sh test --concurrency=1"
 
@@ -124,7 +130,7 @@ run_check "workspace:test" "bash scripts/run-turbo-checks.sh test --concurrency=
 # In strict mode this catches check:docs regenerating _index.md or other surprise writes.
 # In --fix mode this catches auto-fix producing changes the developer hasn't staged yet.
 DRIFTED=false
-if [ "$HAS_GIT" = true ]; then
+if [ "$DRIFT_DETECTION" = true ]; then
   FINAL_HASH=$(compute_tree_hash)
   if [ "$INITIAL_HASH" != "$FINAL_HASH" ]; then
     EXIT_CODE=1
