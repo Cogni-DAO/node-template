@@ -88,6 +88,7 @@ export type AuthorizedSigningContext = PolyTraderSigningContext & {
  */
 export type AuthorizationFailure =
   | "no_connection"
+  | "trading_not_ready"
   | "no_active_grant"
   | "grant_expired"
   | "grant_revoked"
@@ -100,6 +101,64 @@ export type AuthorizationFailure =
 export type AuthorizeIntentResult =
   | { readonly ok: true; readonly context: AuthorizedSigningContext }
   | { readonly ok: false; readonly reason: AuthorizationFailure };
+
+/**
+ * Kind of a single Polymarket on-chain approval step. One row per target
+ * contract × operator pair; shape is intentionally flat so the UI can render
+ * progress pills without cross-referencing a lookup table.
+ */
+export type TradingApprovalStepKind =
+  | "erc20_approve"
+  | "ctf_set_approval_for_all";
+
+export type TradingApprovalStepState =
+  /** Before run: target was already at MaxUint256 / approved. Written as-is. */
+  | "satisfied"
+  /** After run: we submitted a tx and confirmed the post-state. */
+  | "set"
+  /** After run: submit or confirm failed. `txHash` may be null or present. */
+  | "failed"
+  /** Pre-run gate rejected (e.g. insufficient POL gas). No tx submitted. */
+  | "skipped";
+
+export interface TradingApprovalStep {
+  readonly kind: TradingApprovalStepKind;
+  /** Human-readable label. Example: `"USDC.e → Exchange"`. */
+  readonly label: string;
+  /** The token contract being approved from (USDC.e or CTF). */
+  readonly tokenContract: `0x${string}`;
+  /** The spender / operator being authorized. */
+  readonly operator: `0x${string}`;
+  readonly state: TradingApprovalStepState;
+  /** Present when a tx was submitted; null otherwise. */
+  readonly txHash: `0x${string}` | null;
+  /** Populated on `failed` / `skipped`. Short constant-ish code + reason. */
+  readonly error: string | null;
+}
+
+/**
+ * Outcome of `ensureTradingApprovals`. Idempotent: safe to call repeatedly.
+ * Shape is JSON-friendly so the route can serialize it directly.
+ */
+export interface TradingApprovalsState {
+  /** True iff all 5 targets ended the run at `satisfied` | `set`. */
+  readonly ready: boolean;
+  readonly address: `0x${string}`;
+  /** Decimal POL balance used for gas. `null` when RPC unconfigured. */
+  readonly polBalance: number | null;
+  readonly steps: readonly TradingApprovalStep[];
+  /** ISO timestamp when `trading_approvals_ready_at` was stamped; null if not. */
+  readonly readyAt: Date | null;
+}
+
+/**
+ * Reason `ensureTradingApprovals` could not even start. Thrown (not returned
+ * as a step error) so the route returns a structured 4xx/5xx body.
+ */
+export type EnableTradingPreflightError =
+  | "no_connection"
+  | "polygon_rpc_unconfigured"
+  | "backend_unreachable";
 
 /**
  * CUSTODIAL_CONSENT envelope. Every `provision` call MUST carry an explicit
@@ -143,6 +202,20 @@ export interface PolyTraderWalletPort {
    * No Privy call, no decryption. Cheap enough for every page render.
    */
   getAddress(billingAccountId: string): Promise<`0x${string}` | null>;
+
+  /**
+   * Read-only summary of the tenant's active connection — connection id,
+   * funder address, and the APPROVALS_BEFORE_PLACE readiness stamp.
+   * DB-only (no Privy, no RPC, no decryption) so the Money / Profile pages
+   * can render the "Enable Trading" / "✓ Trading enabled" state on every
+   * load without a round-trip. Returns `null` when no active connection
+   * exists for the tenant (PROVISION_FIRST).
+   */
+  getConnectionSummary(billingAccountId: string): Promise<{
+    readonly connectionId: string;
+    readonly funderAddress: `0x${string}`;
+    readonly tradingApprovalsReadyAt: Date | null;
+  } | null>;
 
   /**
    * Read-only on-chain balance snapshot for the tenant's trading wallet on
@@ -230,4 +303,30 @@ export interface PolyTraderWalletPort {
   rotateClobCreds(input: {
     billingAccountId: string;
   }): Promise<PolyTraderSigningContext>;
+
+  /**
+   * Idempotently drive the tenant's trading wallet to "ready to trade" by
+   * running the five Polymarket onboarding approvals:
+   *   - USDC.e `approve(MaxUint256)` on Exchange, Neg-Risk Exchange,
+   *     Neg-Risk Adapter (enables BUY)
+   *   - CTF `setApprovalForAll(true)` on Exchange + Neg-Risk Exchange
+   *     (enables SELL on neg_risk)
+   *
+   * On full success, stamps `poly_wallet_connections.trading_approvals_ready_at`
+   * so subsequent calls no-op and `authorizeIntent`'s `APPROVALS_BEFORE_PLACE`
+   * gate opens.
+   *
+   * Pre-flight: requires the tenant to have a non-revoked connection AND at
+   * least `polMinAtomic` native POL on Polygon for gas; short-balance returns
+   * `{ ready: false, steps: all-skipped, error: "insufficient_pol_gas" }`
+   * without submitting any tx. Any step failure stops the sequence and the
+   * DB stamp is NOT written — safe to retry.
+   *
+   * Throws `EnableTradingPreflightError` ONLY when the call can't start
+   * (no connection, RPC unconfigured, backend unreachable). Step-level
+   * failures surface inside the returned `steps[]` array.
+   */
+  ensureTradingApprovals(
+    billingAccountId: string
+  ): Promise<TradingApprovalsState>;
 }

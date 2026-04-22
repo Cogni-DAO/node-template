@@ -3,15 +3,17 @@
 
 /**
  * Module: `@app/api/v1/poly/wallet/status`
- * Purpose: HTTP GET — read whether the calling user already has a resolvable
- *   Polymarket trading wallet connection on this deployment.
- * Scope: Read-only status surface for the `/profile` page and API validation.
- *   Does not provision wallets, set allowances, or move funds.
+ * Purpose: HTTP GET — read whether the calling user has an active (non-revoked)
+ *   `poly_wallet_connections` row and whether Polymarket approvals are stamped
+ *   (`trading_ready`). DB-only via `getConnectionSummary` — no Privy round-trip.
+ * Scope: Read-only status surface for the `/profile` and Money pages and API
+ *   validation. Does not provision wallets, set allowances, or move funds.
  * Invariants:
  *   - TENANT_SCOPED: tenant derived from the authenticated session's billing account.
- *   - STATUS_REFLECTS_RUNTIME_RESOLVE: `connected=true` only when the runtime can
- *     resolve the full signing context for this tenant.
- * Side-effects: IO (DB reads, Privy-backed signing-context resolve).
+ *   - STATUS_REFLECTS_ACTIVE_CONNECTION: `connected=true` when an un-revoked
+ *     connection row exists; `trading_ready` from `trading_approvals_ready_at`.
+ *     Privy / decrypt validation happens on `resolve` / `authorizeIntent`, not here.
+ * Side-effects: IO (DB reads only).
  * Links: docs/spec/poly-trader-wallet-port.md, work/items/task.0318
  * @public
  */
@@ -55,6 +57,7 @@ export const GET = wrapRouteHandlerWithLogging(
           connected: false,
           connection_id: null,
           funder_address: null,
+          trading_ready: false,
         };
         return NextResponse.json(
           polyWalletStatusOperation.output.parse(payload)
@@ -63,19 +66,23 @@ export const GET = wrapRouteHandlerWithLogging(
       throw err;
     }
 
-    const resolved = await adapter.resolve(account.id);
-    const payload: PolyWalletStatusOutput = resolved
+    // DB-only summary (no Privy round-trip). Keeps the page-render cost low
+    // and surfaces `trading_ready` for the Money-page "Enable Trading" CTA.
+    const summary = await adapter.getConnectionSummary(account.id);
+    const payload: PolyWalletStatusOutput = summary
       ? {
           configured: true,
           connected: true,
-          connection_id: resolved.connectionId,
-          funder_address: resolved.funderAddress,
+          connection_id: summary.connectionId,
+          funder_address: summary.funderAddress,
+          trading_ready: summary.tradingApprovalsReadyAt !== null,
         }
       : {
           configured: true,
           connected: false,
           connection_id: null,
           funder_address: null,
+          trading_ready: false,
         };
 
     return NextResponse.json(polyWalletStatusOperation.output.parse(payload));

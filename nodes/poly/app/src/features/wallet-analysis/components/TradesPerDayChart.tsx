@@ -50,9 +50,12 @@ export function TradesPerDayChart({
     );
   }
 
-  const maxN = Math.max(...daily.map((d) => d.n), 1);
+  const rawMax = daily.reduce((m, d) => Math.max(m, d.n), 0);
+  /** Bar scale floor only — must not be shown as a "user cap" when all days are 0. */
+  const scaleMax = Math.max(rawMax, 1);
   const total = daily.reduce((s, d) => s + d.n, 0);
   const today = daily.at(-1);
+  const summarySuffix = rawMax > 0 ? ` · peak ${rawMax}/day` : "";
 
   return (
     <div className="flex flex-col gap-3">
@@ -61,7 +64,7 @@ export function TradesPerDayChart({
           Trades / day, last 14 days
         </h4>
         <span className="font-mono text-muted-foreground text-xs">
-          {total} total · max {maxN}/day
+          {total} total{summarySuffix}
         </span>
       </div>
       <div className="flex h-32 items-end gap-1">
@@ -70,7 +73,9 @@ export function TradesPerDayChart({
           // for an inline count label so it never clips the upper edge.
           const CHART_PX = 112;
           const heightPx =
-            d.n === 0 ? 4 : Math.max(8, Math.round((d.n / maxN) * CHART_PX));
+            d.n === 0
+              ? 4
+              : Math.max(8, Math.round((d.n / scaleMax) * CHART_PX));
           const isToday = i === daily.length - 1;
           return (
             <div

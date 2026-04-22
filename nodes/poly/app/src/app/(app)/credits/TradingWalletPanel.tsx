@@ -4,17 +4,23 @@
 /**
  * Module: `@app/(app)/credits/TradingWalletPanel`
  * Purpose: Money page panel for the user's Polymarket trading wallet —
- *   funder address (copy + explorer), compact USDC.e | POL readout, stub
- *   Fund | Withdraw row (task.0351 / task.0352), single card.
+ *   funder address, USDC.e | POL readout, the 1-click `TradingReadinessSection`
+ *   Enable Trading call-to-action (task.0355), and stubbed Fund | Withdraw
+ *   (task.0351 / task.0352).
  * Scope: Client component. React Query fetches `/wallet/status` + `/wallet/balances`.
- *   Does not own the page container. Funding + withdrawal are stubbed until
- *   task.0351 / task.0352 land.
+ *   Delegates the Enable Trading ceremony to `TradingReadinessSection`. Funding
+ *   and withdrawal remain stubbed.
  * Invariants:
- *   - READ_ONLY_V0: no trading-wallet write actions (withdraw, fund-with-siwe) in v0.
+ *   - ENABLE_TRADING_VISIBLE: when connected AND `trading_ready=false`, the
+ *     readiness section is the primary above-the-fold CTA on this card.
+ *     Without it the user cannot reach the CLOB — APPROVALS_BEFORE_PLACE
+ *     blocks `authorizeIntent`. Losing this CTA bricks every trade.
  *   - PARTIAL_FAILURE_VISIBLE: render USDC.e/POL as "—" when the RPC errored.
  * Side-effects: IO (fetch API via React Query).
  * Links: packages/node-contracts/src/poly.wallet.connection.v1.contract.ts,
  *        packages/node-contracts/src/poly.wallet.balances.v1.contract.ts,
+ *        packages/node-contracts/src/poly.wallet.enable-trading.v1.contract.ts,
+ *        work/items/task.0355.poly-trading-wallet-enable-trading.md,
  *        work/items/task.0351.poly-trading-wallet-withdrawal.md,
  *        work/items/task.0352.poly-trading-wallet-fund-flow.md
  * @public
@@ -30,6 +36,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Info } from "lucide-react";
 import type { ReactElement } from "react";
 import { AddressChip, Card, HintText } from "@/components";
+import { TradingReadinessSection } from "./TradingReadinessSection";
 
 async function fetchWalletStatus(): Promise<PolyWalletStatusOutput> {
   const res = await fetch("/api/v1/poly/wallet/status", {
@@ -136,6 +143,12 @@ export function TradingWalletPanel(): ReactElement {
               </div>
             </div>
           </div>
+          <TradingReadinessSection
+            tradingReady={status.trading_ready}
+            polBalance={balances?.pol ?? null}
+            usdcBalance={balances?.usdc_e ?? null}
+          />
+
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"

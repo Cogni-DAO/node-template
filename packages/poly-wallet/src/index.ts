@@ -18,8 +18,13 @@ export type {
   AuthorizedSigningContext,
   AuthorizeIntentResult,
   CustodialConsent,
+  EnableTradingPreflightError,
   OrderIntentSummary,
   PolyClobApiKeyCreds,
   PolyTraderSigningContext,
   PolyTraderWalletPort,
+  TradingApprovalStep,
+  TradingApprovalStepKind,
+  TradingApprovalStepState,
+  TradingApprovalsState,
 } from "./port";

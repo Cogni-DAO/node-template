@@ -225,6 +225,13 @@
       "when": 1777262400000,
       "tag": "0031_poly_wallet_grants",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1777478400000,
+      "tag": "0032_poly_wallet_trading_approvals",
+      "breakpoints": true
     }
   ]
 }

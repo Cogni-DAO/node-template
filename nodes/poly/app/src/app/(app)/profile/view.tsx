@@ -962,6 +962,9 @@ export function ProfileView(): ReactElement {
               connected: true,
               connection_id: wallet.connection_id,
               funder_address: wallet.funder_address,
+              // A freshly-provisioned wallet has not run the approvals
+              // ceremony yet — the Money page surfaces Enable Trading.
+              trading_ready: false,
             });
             setTradingWalletExpanded(false);
           }}
