@@ -20,9 +20,9 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Git ref to source infra/compose/** from (default: the dispatch ref, typically main)"
+        description: "Git ref to source infra/compose/** from (blank = use the dispatch ref, typically main)"
         required: false
-        default: ${{ github.ref_name }}
+        default: ""
         type: string
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
       DEPLOY_ENVIRONMENT: candidate-a
       APP_ENV: production
       COGNI_REPO_URL: https://github.com/${{ github.repository }}.git
-      COGNI_REPO_REF: ${{ inputs.ref }}
+      COGNI_REPO_REF: ${{ inputs.ref || github.ref_name }}
       GIT_READ_USERNAME: Cogni-1729
       GIT_READ_TOKEN: ${{ secrets.GIT_READ_TOKEN }}
       DATABASE_URL: ${{ secrets.DATABASE_URL }}
