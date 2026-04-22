@@ -3,8 +3,10 @@
 
 /**
  * Module: `@features/wallet-analysis/types/wallet-analysis`
- * Purpose: Shared shape for `WalletAnalysisView` and its molecules.
- * Scope: Pure type definitions; no logic. Mirrors the v1 wallet-analysis HTTP contract (Checkpoint B).
+ * Purpose: Shared shape for `WalletAnalysisView`, dashboard execution
+ * positions, and their supporting molecules.
+ * Scope: Pure type definitions; no logic. Broadly aligned with the wallet-analysis
+ * contract, plus reusable position-trace fields used by the dashboard.
  * Invariants: All slices independently optional — molecules render skeletons when their slice is absent.
  * Side-effects: none
  * @public
@@ -33,21 +35,26 @@ export type WalletBalanceHistoryPoint = {
   positions?: number;
 };
 
-export type WalletPositionStatus = "open" | "closed";
+export type WalletPositionStatus = "open" | "closed" | "redeemable";
 
 export type WalletPositionTimelinePoint = {
   ts: string;
-  value: number;
+  price: number;
+  size: number;
 };
 
-export type WalletPositionMarkerKind = "entry" | "scale" | "current" | "close";
+export type WalletPositionEventKind =
+  | "entry"
+  | "add"
+  | "reduce"
+  | "close"
+  | "redeemable";
 
-export type WalletPositionMarkerTone = "neutral" | "positive" | "negative";
-
-export type WalletPositionMarker = {
+export type WalletPositionEvent = {
   ts: string;
-  kind: WalletPositionMarkerKind;
-  tone?: WalletPositionMarkerTone;
+  kind: WalletPositionEventKind;
+  price: number;
+  shares: number;
 };
 
 export type WalletPosition = {
@@ -55,17 +62,22 @@ export type WalletPosition = {
   conditionId: string;
   asset: string;
   marketTitle: string;
+  marketSlug?: string | null;
+  eventSlug?: string | null;
+  marketUrl?: string | null;
   outcome: string;
-  side: WalletTradeSide;
   status: WalletPositionStatus;
   openedAt: string;
-  closedAt?: string;
+  closedAt?: string | null;
   heldMinutes: number;
+  entryPrice: number;
+  currentPrice: number;
+  size: number;
   currentValue: number;
   pnlUsd: number;
   pnlPct: number;
   timeline: readonly WalletPositionTimelinePoint[];
-  markers: readonly WalletPositionMarker[];
+  events: readonly WalletPositionEvent[];
 };
 
 /**

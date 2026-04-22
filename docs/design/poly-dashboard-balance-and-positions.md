@@ -53,38 +53,24 @@ For dashboard and wallet-analysis UI, a position is:
 
 This gives us one honest row model for open, exiting, and closed positions.
 
-## Immediately needed components
+## Immediately needed component
 
-### 1. Balance over time
-
-Use a new `BalanceOverTimeChart` molecule, then compose it into a future `BalanceHistoryCard`.
-
-- Input: `WalletBalanceHistoryPoint[]`
-- Render tech: `recharts` `AreaChart`
-- Placement: directly above the current orders card on `/dashboard`
-- Reuse target: dashboard, wallet drawer, full wallet page
-
-Why this shape:
-
-- `BalanceBar` is a point-in-time snapshot.
-- The dashboard needs the trend card to answer "are we compounding or bleeding?"
-- Keeping the chart molecule separate from the card shell lets us reuse it inside the wallet-analysis page later.
-
-### 2. Position table upgrade
+### Position table upgrade
 
 Do **not** mutate `Active Orders` into `Positions`. Orders and positions are different entities.
 
 Instead add:
 
-- `PositionTimelineSparkline` molecule
+- `PositionTimelineChart` molecule
 - `PositionsTable` organism
 
-`PositionTimelineSparkline` responsibilities:
+`PositionTimelineChart` responsibilities:
 
-- normalize one row's lifecycle into a compact line
-- draw entry marker as blue vertical bar
-- draw current/open marker as green
-- draw close marker as green or red depending on realized outcome
+- normalize one row's lifecycle into a compact price trace
+- draw an entry basis as a horizontal reference
+- draw an entry marker as a vertical bar
+- draw a close marker only when the position is actually closed
+- support hover/cursor on the same chart stack as the larger dashboard charts
 
 `PositionsTable` responsibilities:
 
@@ -99,11 +85,10 @@ Instead add:
 
 ### Balance history
 
-V0 can be honest and useful without pretending we already have full historical marks.
+Do not ship a synthetic balance curve on the execution card.
 
-- Source of truth: Data API trades + current positions MTM
-- V0 curve: deterministic wallet-equity series derived from trade cashflows and current mark-to-market
-- Labeling rule: if unresolved historical marks are synthetic, say so in the UI or docs
+- Source of truth for a future balance card: Data API trades + current positions + operator cash/locked history
+- Until that history is deterministic, the execution surface should stay positions-first and omit the chart
 
 ### Positions
 
@@ -118,14 +103,12 @@ Important constraint on current `main`:
 - `packages/market-provider/src/adapters/polymarket/polymarket.data-api.types.ts` explicitly treats `/positions` as **open positions only**
 - so close markers and held duration for closed rows must be derived from the trade feed
 
-## Recommended rollout
+## Current direction
 
-1. Finish `task.0346` so windowed stats are authoritative and named correctly as Data-API-first.
-2. Add a new wallet-analysis `positions` slice that joins trades + positions into the first-class row model above.
-3. Add a new wallet-analysis `balanceHistory` slice for the balance-over-time chart.
-4. Wire `BalanceOverTimeChart` above the dashboard orders card.
-5. Add a separate `PositionsCard` below it, rather than overloading `Active Orders`.
-6. Later, reuse the same components inside the drawer and `/research/w/[addr]`.
+- Use Data API `positions` + `trades` for lifecycle semantics.
+- Use CLOB public `prices-history` for the actual row trace.
+- Keep the execution card positions-first, with history in a sibling tab.
+- Revisit a balance card only after we have deterministic cash + locked + MTM history.
 
 ## Reuse rules
 

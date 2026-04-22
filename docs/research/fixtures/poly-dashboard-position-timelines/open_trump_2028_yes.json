@@ -1,0 +1,780 @@
+{
+  "name": "open_trump_2028_yes",
+  "capturedAt": "2026-04-22T08:30:17.372Z",
+  "source": {
+    "wallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+    "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+    "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+    "positionsUrl": "https://data-api.polymarket.com/positions?user=0xc2e7800b5af46e6093872b177b7a5e7f0563be51&market=0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4&limit=10",
+    "closedPositionsUrl": "https://data-api.polymarket.com/closed-positions?user=0xc2e7800b5af46e6093872b177b7a5e7f0563be51&limit=200",
+    "tradesUrl": "https://data-api.polymarket.com/trades?user=0xc2e7800b5af46e6093872b177b7a5e7f0563be51&market=0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4&limit=1000",
+    "pricesHistoryUrl": "https://clob.polymarket.com/prices-history?market=3039641309958397001906153616677074061284510636204155275446291716739429262374&interval=max&fidelity=1440&startTs=1765741803"
+  },
+  "openPosition": {
+    "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+    "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+    "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+    "size": 248651.2632,
+    "avgPrice": 0.0402,
+    "initialValue": 10014.6782,
+    "currentValue": 4600.0483,
+    "cashPnl": -5414.6299,
+    "percentPnl": -54.0669,
+    "totalBought": 248651.2632,
+    "realizedPnl": 0,
+    "percentRealizedPnl": -54.0669,
+    "curPrice": 0.0185,
+    "redeemable": false,
+    "mergeable": false,
+    "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+    "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+    "eventId": "31875",
+    "eventSlug": "republican-presidential-nominee-2028",
+    "outcome": "Yes",
+    "outcomeIndex": 0,
+    "oppositeOutcome": "No",
+    "oppositeAsset": "27828976648682466778776999076215423777766972981338264154049603024771135223200",
+    "endDate": "2028-11-07",
+    "negativeRisk": true
+  },
+  "closedPosition": null,
+  "trades": [
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 9561.377406,
+      "price": 0.05229372063968918,
+      "timestamp": 1765741803,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x31de174faa5f5207a81199ade47e8b591a71c8d4e6e6194e30e27ddd503fb458"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 39795.999832,
+      "price": 0.05025630735357975,
+      "timestamp": 1766518999,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0xf4dd847d62bd190e26209ba0fa83bf9640b400d2768bbe82cd7ade36c2f7e373"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 10025.119614,
+      "price": 0.04987471653722256,
+      "timestamp": 1767117055,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x32f4d3ff3ca61a6e6925fccbcb47b7bfe560c02635a4596e3319c7371a981c4a"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 19366.0844,
+      "price": 0.049054831135611494,
+      "timestamp": 1767460715,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x3b10db86393634d44ff08d3b26037e010d45e1c16eec01b75da296900e9aebd3"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 2272.727271,
+      "price": 0.043999999593439997,
+      "timestamp": 1767545737,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x0f7277abdf39f35a799918d34dfadf3cd8679e832c7435bab90e883770c85ce0"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 57687.12,
+      "price": 0.035,
+      "timestamp": 1767657247,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0xb228f976a59f351c07d2d983e9ac0a8aa44efc9f450124486518ae8976fe30ef"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 48624.07,
+      "price": 0.03400089153376096,
+      "timestamp": 1768182878,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x3011b1727c77f03906a0f651fed56083b847590a1f67b17a48c43a49a964bfab"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 25793.77,
+      "price": 0.03698001881849765,
+      "timestamp": 1768182890,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x69b61255dc61fc1d98b18f4388d90a319090f9a8200576b953fb0eaeaaa56d1c"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 5001.84,
+      "price": 0.0389897817603122,
+      "timestamp": 1768182906,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x32ef73d34b21073171dda3719bdd60519f4cd6a2074f83d83979a08d01fe1075"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 1791.72,
+      "price": 0.047,
+      "timestamp": 1768748332,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x1d36a21fef469c5171a66eecf260f0fd6339b745753169e2ce52ffd9bbde952e"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 2330.964771,
+      "price": 0.04290069084017058,
+      "timestamp": 1769810738,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x9088203af28ea597976589b1b43603a31c7e4b48e8131ec430d6b6cc344f71c0"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 2972.05,
+      "price": 0.04876097643040998,
+      "timestamp": 1770580627,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x35d00f4891cc16b2e86b4879297fdaeff0b53f9885fb29825ea7842a8c1783cf"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 7603.08,
+      "price": 0.04837370776053915,
+      "timestamp": 1770693017,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x263aa0ce7077fa0e3927fa672c27e1f8654ed2b7fbfecd67beb6b83b371f92db"
+    },
+    {
+      "proxyWallet": "0xc2e7800b5af46e6093872b177b7a5e7f0563be51",
+      "side": "BUY",
+      "asset": "3039641309958397001906153616677074061284510636204155275446291716739429262374",
+      "conditionId": "0x895e01dbf3e6a33cd9a44ca0f8cdb5df1bd2b0b6ebed5300d28f8da7145145e4",
+      "size": 15825.34,
+      "price": 0.028321775077186334,
+      "timestamp": 1771980458,
+      "title": "Will Donald Trump win the 2028 Republican presidential nomination?",
+      "slug": "will-donald-trump-win-the-2028-republican-presidential-nomination",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-donald-trump-win-the-2028-us-presidential-election-4gVusUQRi_GG.png",
+      "eventSlug": "republican-presidential-nominee-2028",
+      "outcome": "Yes",
+      "outcomeIndex": 0,
+      "name": "beachboy4",
+      "pseudonym": "Threadbare-Skunk",
+      "bio": "",
+      "profileImage": "",
+      "profileImageOptimized": "",
+      "transactionHash": "0x565aa351e4d22e47a300bf196a8ce81af437d63a68dce3e95e63bdc635923c76"
+    }
+  ],
+  "priceHistory": [
+    {
+      "t": 1765756809,
+      "p": 0.053
+    },
+    {
+      "t": 1765843208,
+      "p": 0.0475
+    },
+    {
+      "t": 1765929605,
+      "p": 0.0455
+    },
+    {
+      "t": 1765929631,
+      "p": 0.0455
+    },
+    {
+      "t": 1766016019,
+      "p": 0.047
+    },
+    {
+      "t": 1766102409,
+      "p": 0.0475
+    },
+    {
+      "t": 1766188808,
+      "p": 0.049
+    },
+    {
+      "t": 1766275209,
+      "p": 0.047
+    },
+    {
+      "t": 1766361608,
+      "p": 0.0445
+    },
+    {
+      "t": 1766448009,
+      "p": 0.0435
+    },
+    {
+      "t": 1766534409,
+      "p": 0.052
+    },
+    {
+      "t": 1766620819,
+      "p": 0.0495
+    },
+    {
+      "t": 1766707208,
+      "p": 0.048
+    },
+    {
+      "t": 1766793610,
+      "p": 0.0475
+    },
+    {
+      "t": 1766880010,
+      "p": 0.047
+    },
+    {
+      "t": 1766966426,
+      "p": 0.047
+    },
+    {
+      "t": 1767052813,
+      "p": 0.048
+    },
+    {
+      "t": 1767139210,
+      "p": 0.0475
+    },
+    {
+      "t": 1767225610,
+      "p": 0.048
+    },
+    {
+      "t": 1767312010,
+      "p": 0.0455
+    },
+    {
+      "t": 1767398410,
+      "p": 0.0455
+    },
+    {
+      "t": 1767484811,
+      "p": 0.0475
+    },
+    {
+      "t": 1767571211,
+      "p": 0.0415
+    },
+    {
+      "t": 1767657613,
+      "p": 0.035
+    },
+    {
+      "t": 1767744011,
+      "p": 0.0335
+    },
+    {
+      "t": 1767830426,
+      "p": 0.0335
+    },
+    {
+      "t": 1767916810,
+      "p": 0.033
+    },
+    {
+      "t": 1768003212,
+      "p": 0.0355
+    },
+    {
+      "t": 1768089611,
+      "p": 0.0335
+    },
+    {
+      "t": 1768176013,
+      "p": 0.0335
+    },
+    {
+      "t": 1768262412,
+      "p": 0.0345
+    },
+    {
+      "t": 1768348812,
+      "p": 0.0355
+    },
+    {
+      "t": 1768435213,
+      "p": 0.033
+    },
+    {
+      "t": 1768521615,
+      "p": 0.0355
+    },
+    {
+      "t": 1768608013,
+      "p": 0.0365
+    },
+    {
+      "t": 1768694415,
+      "p": 0.0465
+    },
+    {
+      "t": 1768780811,
+      "p": 0.047
+    },
+    {
+      "t": 1768867212,
+      "p": 0.044
+    },
+    {
+      "t": 1768953613,
+      "p": 0.0445
+    },
+    {
+      "t": 1769040015,
+      "p": 0.0445
+    },
+    {
+      "t": 1769126428,
+      "p": 0.0455
+    },
+    {
+      "t": 1769212817,
+      "p": 0.0385
+    },
+    {
+      "t": 1769299230,
+      "p": 0.0385
+    },
+    {
+      "t": 1769385627,
+      "p": 0.0365
+    },
+    {
+      "t": 1769472025,
+      "p": 0.0385
+    },
+    {
+      "t": 1769558415,
+      "p": 0.0445
+    },
+    {
+      "t": 1769644830,
+      "p": 0.0415
+    },
+    {
+      "t": 1769731217,
+      "p": 0.0435
+    },
+    {
+      "t": 1769817617,
+      "p": 0.043
+    },
+    {
+      "t": 1769904020,
+      "p": 0.0405
+    },
+    {
+      "t": 1769990416,
+      "p": 0.046
+    },
+    {
+      "t": 1770076816,
+      "p": 0.0465
+    },
+    {
+      "t": 1770163228,
+      "p": 0.0475
+    },
+    {
+      "t": 1770249615,
+      "p": 0.048
+    },
+    {
+      "t": 1770336017,
+      "p": 0.0465
+    },
+    {
+      "t": 1770422421,
+      "p": 0.046
+    },
+    {
+      "t": 1770508818,
+      "p": 0.0465
+    },
+    {
+      "t": 1770595218,
+      "p": 0.047
+    },
+    {
+      "t": 1770681618,
+      "p": 0.0475
+    },
+    {
+      "t": 1770768018,
+      "p": 0.0495
+    },
+    {
+      "t": 1770854431,
+      "p": 0.048
+    },
+    {
+      "t": 1770940819,
+      "p": 0.0475
+    },
+    {
+      "t": 1771027221,
+      "p": 0.0475
+    },
+    {
+      "t": 1771113620,
+      "p": 0.0475
+    },
+    {
+      "t": 1771200031,
+      "p": 0.0475
+    },
+    {
+      "t": 1771286420,
+      "p": 0.045
+    },
+    {
+      "t": 1771372822,
+      "p": 0.0425
+    },
+    {
+      "t": 1771459222,
+      "p": 0.0355
+    },
+    {
+      "t": 1771545623,
+      "p": 0.0325
+    },
+    {
+      "t": 1771632019,
+      "p": 0.034
+    },
+    {
+      "t": 1771718419,
+      "p": 0.03
+    },
+    {
+      "t": 1771804820,
+      "p": 0.0305
+    },
+    {
+      "t": 1771891219,
+      "p": 0.025
+    },
+    {
+      "t": 1771977621,
+      "p": 0.0245
+    },
+    {
+      "t": 1772064021,
+      "p": 0.0265
+    },
+    {
+      "t": 1772150424,
+      "p": 0.026
+    },
+    {
+      "t": 1772236826,
+      "p": 0.024
+    },
+    {
+      "t": 1772323228,
+      "p": 0.0235
+    },
+    {
+      "t": 1772409638,
+      "p": 0.0235
+    },
+    {
+      "t": 1772496026,
+      "p": 0.025
+    },
+    {
+      "t": 1772582429,
+      "p": 0.0235
+    },
+    {
+      "t": 1772668827,
+      "p": 0.0225
+    },
+    {
+      "t": 1772755226,
+      "p": 0.0215
+    },
+    {
+      "t": 1772841629,
+      "p": 0.021
+    },
+    {
+      "t": 1772928025,
+      "p": 0.021
+    },
+    {
+      "t": 1773014421,
+      "p": 0.0195
+    },
+    {
+      "t": 1773100825,
+      "p": 0.0195
+    },
+    {
+      "t": 1773187228,
+      "p": 0.0195
+    },
+    {
+      "t": 1773273627,
+      "p": 0.019
+    },
+    {
+      "t": 1773360044,
+      "p": 0.0195
+    },
+    {
+      "t": 1773446426,
+      "p": 0.0175
+    },
+    {
+      "t": 1773532826,
+      "p": 0.0185
+    },
+    {
+      "t": 1773619242,
+      "p": 0.0185
+    },
+    {
+      "t": 1773705628,
+      "p": 0.0185
+    },
+    {
+      "t": 1773792028,
+      "p": 0.018
+    },
+    {
+      "t": 1773878430,
+      "p": 0.0185
+    },
+    {
+      "t": 1773964834,
+      "p": 0.0175
+    },
+    {
+      "t": 1774051230,
+      "p": 0.0165
+    },
+    {
+      "t": 1774137628,
+      "p": 0.0165
+    },
+    {
+      "t": 1774224023,
+      "p": 0.0175
+    },
+    {
+      "t": 1774310421,
+      "p": 0.0175
+    },
+    {
+      "t": 1774396825,
+      "p": 0.0175
+    },
+    {
+      "t": 1774483228,
+      "p": 0.0175
+    },
+    {
+      "t": 1774569645,
+      "p": 0.0175
+    },
+    {
+      "t": 1774656048,
+      "p": 0.0175
+    },
+    {
+      "t": 1774742452,
+      "p": 0.0175
+    },
+    {
+      "t": 1775692828,
+      "p": 0.0185
+    },
+    {
+      "t": 1776470421,
+      "p": 0.0175
+    },
+    {
+      "t": 1776816017,
+      "p": 0.0185
+    },
+    {
+      "t": 1776846484,
+      "p": 0.0185
+    }
+  ]
+}

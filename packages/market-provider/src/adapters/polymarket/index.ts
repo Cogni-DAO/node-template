@@ -31,11 +31,15 @@ export {
 } from "./polymarket.clob.adapter.js";
 export {
   type ClobMarketResolutionConfig,
+  type ClobPriceHistoryParams,
+  type ClobPriceHistoryPoint,
   PolymarketClobPublicClient,
 } from "./polymarket.clob-public.client.js";
 export {
   type ListTopTradersParams,
   type ListUserActivityParams,
+  type ListUserPositionsParams,
+  type ListUserTradesParams,
   PolymarketDataApiClient,
   type PolymarketDataApiClientConfig,
 } from "./polymarket.data-api.client.js";

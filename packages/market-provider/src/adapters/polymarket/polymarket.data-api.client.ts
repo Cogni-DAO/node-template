@@ -56,6 +56,20 @@ export interface ListUserActivityParams {
   sinceTs?: number;
 }
 
+export interface ListUserTradesParams {
+  /** Rows per page (Polymarket supports up to 10k for `/trades`). Default: 1000. */
+  limit?: number;
+  /** Only return trades at or after this unix-seconds timestamp. */
+  sinceTs?: number;
+}
+
+export interface ListUserPositionsParams {
+  /** Optional conditionId filter. */
+  market?: string;
+  /** Optional position cap. */
+  limit?: number;
+}
+
 /**
  * Polymarket Data API client.
  *
@@ -94,10 +108,17 @@ export class PolymarketDataApiClient {
     wallet: string,
     params?: ListUserActivityParams
   ): Promise<PolymarketUserTrade[]> {
+    return this.listUserTrades(wallet, params);
+  }
+
+  async listUserTrades(
+    wallet: string,
+    params?: ListUserTradesParams
+  ): Promise<PolymarketUserTrade[]> {
     assertWallet(wallet);
     const url = new URL("/trades", this.baseUrl);
     url.searchParams.set("user", wallet);
-    url.searchParams.set("limit", String(params?.limit ?? 100));
+    url.searchParams.set("limit", String(params?.limit ?? 1000));
 
     const json = await this.fetchJson(url);
     const trades = PolymarketUserTradesResponseSchema.parse(json);
@@ -109,10 +130,17 @@ export class PolymarketDataApiClient {
     return trades;
   }
 
-  async listUserPositions(wallet: string): Promise<PolymarketUserPosition[]> {
+  async listUserPositions(
+    wallet: string,
+    params?: ListUserPositionsParams
+  ): Promise<PolymarketUserPosition[]> {
     assertWallet(wallet);
     const url = new URL("/positions", this.baseUrl);
     url.searchParams.set("user", wallet);
+    if (params?.market) url.searchParams.set("market", params.market);
+    if (params?.limit !== undefined) {
+      url.searchParams.set("limit", String(params.limit));
+    }
 
     const json = await this.fetchJson(url);
     return PolymarketUserPositionsResponseSchema.parse(json);

@@ -31,7 +31,7 @@ Shared shape `WalletAnalysisData` mirrors the v1 wallet-analysis HTTP contract t
 
 ## Public Surface
 
-- **Exports:** `WalletAnalysisView`, `WalletIdentityHeader`, `StatGrid`, `BalanceBar`, `BalanceOverTimeChart`, `TradesPerDayChart`, `RecentTradesTable`, `PositionsTable`, `PositionTimelineSparkline`, `TopMarketsList`, `EdgeHypothesis`, `derivePositionsFromCopyTradeOrders`, `deriveBalanceHistoryFromCopyTradeOrders`, type `WalletAnalysisData` and supporting types.
+- **Exports:** `WalletAnalysisView`, `WalletIdentityHeader`, `StatGrid`, `BalanceBar`, `BalanceOverTimeChart`, `TradesPerDayChart`, `RecentTradesTable`, `PositionsTable`, `PositionTimelineChart`, `TopMarketsList`, `EdgeHypothesis`, type `WalletAnalysisData` and supporting types.
 - **Routes:** none directly; consumed by `/research`, `/research/w/[addr]` (Checkpoint B), and the dashboard drawer (Checkpoint C).
 - **Files considered API:** `index.ts`, `types/wallet-analysis.ts`.
 
@@ -56,4 +56,4 @@ Shared shape `WalletAnalysisData` mirrors the v1 wallet-analysis HTTP contract t
 
 - `useWalletAnalysis` hook + the data plane (snapshot table, API route, dynamic page) ship in Checkpoint B. Today some components are still fed via hardcoded or derived data on `/research`.
 - Drawer + compact variants ship in Checkpoint C.
-- Position lifecycle visuals and balance-history charts are reusable UI primitives first; their real data slices can land in follow-up dashboard work without redesigning the view layer.
+- Position lifecycle visuals are reusable UI primitives first. Dashboard-specific execution fetching belongs in app routes/services, not on the wallet-analysis public barrel.

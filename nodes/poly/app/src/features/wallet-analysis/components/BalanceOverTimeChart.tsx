@@ -161,7 +161,7 @@ export function BalanceOverTimeChart({
           />
           <Area
             dataKey="total"
-            type="natural"
+            type="linear"
             stroke="var(--color-total)"
             strokeWidth={3}
             fill="url(#fill-balance-total)"

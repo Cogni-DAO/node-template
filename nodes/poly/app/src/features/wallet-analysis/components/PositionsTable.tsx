@@ -3,12 +3,12 @@
 
 /**
  * Module: `@features/wallet-analysis/components/PositionsTable`
- * Purpose: Reusable table for wallet positions with a compact lifecycle sparkline and holding-time columns.
+ * Purpose: Reusable table for wallet positions with an interactive price trace and holding-time columns.
  * Scope: Presentational only. Callers pass already-computed position rows.
  * Invariants:
- *   - The sparkline is supplemental; P/L truth comes from the numeric columns.
- *   - Time-held formatting matches the dashboard sketch: `(x hr) N min` when >= 1 hour.
- *   - Open and closed positions share one table shape so the caller can filter without swapping components.
+ *   - The chart is supplemental; P/L truth comes from the numeric columns.
+ *   - Market links open the actual Polymarket event/market URL when upstream slugs are present.
+ *   - Open, redeemable, and closed positions share one table shape so the caller can filter without swapping components.
  * Side-effects: none
  * @public
  */
@@ -26,7 +26,7 @@ import {
   TableRow,
 } from "@/components";
 import type { WalletPosition } from "../types/wallet-analysis";
-import { PositionTimelineSparkline } from "./PositionTimelineSparkline";
+import { PositionTimelineChart } from "./PositionTimelineChart";
 
 export type PositionsTableProps = {
   positions?: readonly WalletPosition[] | undefined;
@@ -62,7 +62,7 @@ export function PositionsTable({
       <TableHeader>
         <TableRow>
           <TableHead>Market</TableHead>
-          <TableHead className="w-56">Timeline</TableHead>
+          <TableHead className="w-72">Trace</TableHead>
           <TableHead className="text-right">Held</TableHead>
           <TableHead className="text-right">Current</TableHead>
           <TableHead className="text-right">P/L</TableHead>
@@ -78,18 +78,32 @@ export function PositionsTable({
             <TableRow key={position.positionId}>
               <TableCell>
                 <div className="flex flex-col gap-0.5">
-                  <span className="font-medium text-sm">
-                    {position.marketTitle}
-                  </span>
+                  {position.marketUrl ? (
+                    <a
+                      href={position.marketUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="font-medium text-sm underline-offset-4 hover:underline"
+                    >
+                      {position.marketTitle}
+                    </a>
+                  ) : (
+                    <span className="font-medium text-sm">
+                      {position.marketTitle}
+                    </span>
+                  )}
                   <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
-                    {position.outcome} · {position.side} · {position.status}
+                    {position.outcome} · {position.status}
                   </span>
                 </div>
               </TableCell>
               <TableCell>
-                <PositionTimelineSparkline
+                <PositionTimelineChart
                   points={position.timeline}
-                  markers={position.markers}
+                  events={position.events}
+                  entryPrice={position.entryPrice}
+                  status={position.status}
+                  pnlUsd={position.pnlUsd}
                 />
               </TableCell>
               <TableCell className="text-right text-muted-foreground text-sm tabular-nums">
@@ -136,7 +150,7 @@ function formatHeldDuration(heldMinutes: number): string {
   const minutes = totalMinutes % 60;
 
   if (hours > 0) {
-    return `(${hours} hr) ${minutes} min`;
+    return `${hours}h ${minutes}m`;
   }
-  return `${minutes} min`;
+  return `${minutes}m`;
 }

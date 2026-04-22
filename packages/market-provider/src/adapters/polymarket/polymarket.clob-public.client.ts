@@ -25,6 +25,18 @@ export type ClobMarketResolutionConfig = {
   readonly timeoutMs?: number;
 };
 
+export type ClobPriceHistoryPoint = {
+  readonly t: number;
+  readonly p: number;
+};
+
+export type ClobPriceHistoryParams = {
+  readonly startTs?: number;
+  readonly endTs?: number;
+  readonly fidelity?: number;
+  readonly interval?: string;
+};
+
 export class PolymarketClobPublicClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -64,6 +76,47 @@ export class PolymarketClobPublicClient {
       };
     } catch {
       return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async getPriceHistory(
+    asset: string,
+    params?: ClobPriceHistoryParams
+  ): Promise<ClobPriceHistoryPoint[]> {
+    const url = new URL("/prices-history", this.baseUrl);
+    url.searchParams.set("market", asset);
+    url.searchParams.set("interval", params?.interval ?? "max");
+    if (params?.fidelity !== undefined) {
+      url.searchParams.set("fidelity", String(params.fidelity));
+    }
+    if (params?.startTs !== undefined) {
+      url.searchParams.set("startTs", String(params.startTs));
+    }
+    if (params?.endTs !== undefined) {
+      url.searchParams.set("endTs", String(params.endTs));
+    }
+
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs);
+    try {
+      const response = await this.fetchImpl(url.toString(), {
+        signal: controller.signal,
+      });
+      if (!response.ok) return [];
+      const json = (await response.json()) as {
+        history?: Array<{ t?: unknown; p?: unknown }>;
+      };
+      const history = json.history ?? [];
+      return history.flatMap((point) => {
+        const t = Number(point.t);
+        const p = Number(point.p);
+        if (!Number.isFinite(t) || !Number.isFinite(p)) return [];
+        return [{ t, p }];
+      });
+    } catch {
+      return [];
     } finally {
       clearTimeout(timer);
     }

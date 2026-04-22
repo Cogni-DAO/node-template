@@ -3,15 +3,18 @@
 
 /**
  * Module: `@app/(app)/dashboard/_components/ExecutionActivityCard`
- * Purpose: Unified Polymarket execution surface for the dashboard — derived positions as the primary view, with recent mirror-order history one tab away for HFT inspection.
- * Scope: Client component. Read-only. Position visuals are derived v0 from recent ledger rows + current operator balance; history is sourced from the copy-trade order ledger.
+ * Purpose: Unified Polymarket execution surface for the dashboard — real
+ * operator-wallet positions as the primary view, with recent mirror-order
+ * history one tab away for HFT inspection.
+ * Scope: Client component. Read-only. Positions are sourced from the operator
+ * wallet execution route; history is sourced from the copy-trade order ledger.
  * Invariants:
  *   - LEGACY_ACTIVE_ORDERS_REMOVED: the old Active Orders card no longer stands alone on the dashboard.
  *   - HISTORY_ALWAYS_AVAILABLE: recent mirror orders remain accessible behind the History tab with the same status filters and copy payload affordance.
- *   - POSITION_VIEW_IS_DERIVED_V0: balance trend + positions are computed from recent mirror rows until first-class position/balance-history slices land.
- *   - VISUAL_RESTRAINT: P/L carries color; explanatory copy stays muted.
+ *   - POSITION_VIEW_IS_DATA_BACKED: position rows reflect Data API trades and positions plus CLOB public price history.
+ *   - NO_FAKE_BALANCE_CURVE: the card does not render a fabricated balance chart.
  * Side-effects: IO (React Query), clipboard (user-triggered).
- * Links: [fetchOrders](../_api/fetchOrders.ts), [fetchWalletBalance](../_api/fetchWalletBalance.ts), [BalanceOverTimeChart](@/features/wallet-analysis/components/BalanceOverTimeChart.tsx)
+ * Links: [fetchExecution](../_api/fetchExecution.ts), [fetchOrders](../_api/fetchOrders.ts)
  * @public
  */
 
@@ -35,16 +38,12 @@ import {
   ToggleGroupItem,
 } from "@/components";
 import {
-  BalanceOverTimeChart,
-  deriveBalanceHistoryFromCopyTradeOrders,
-  derivePositionsFromCopyTradeOrders,
   PositionsTable,
-  type WalletBalanceHistoryPoint,
   type WalletPosition,
 } from "@/features/wallet-analysis";
 import { cn } from "@/shared/util/cn";
+import { fetchExecution } from "../_api/fetchExecution";
 import { fetchOrders, type OrdersStatusFilter } from "../_api/fetchOrders";
-import { fetchWalletBalance } from "../_api/fetchWalletBalance";
 import { formatPrice, formatUsdc, timeAgo } from "./wallet-format";
 
 type ExecutionView = "positions" | "history";
@@ -167,7 +166,24 @@ export function ExecutionActivityCard(): ReactElement {
   const [view, setView] = useState<ExecutionView>("positions");
   const [historyFilter, setHistoryFilter] = useState<OrdersStatusFilter>("all");
 
-  const { data, isLoading, isError } = useQuery({
+  const {
+    data: executionData,
+    isLoading: isExecutionLoading,
+    isError: isExecutionError,
+  } = useQuery({
+    queryKey: ["dashboard-wallet-execution"],
+    queryFn: fetchExecution,
+    refetchInterval: 30_000,
+    staleTime: 10_000,
+    gcTime: 60_000,
+    retry: 1,
+  });
+
+  const {
+    data: ordersData,
+    isLoading: isOrdersLoading,
+    isError: isOrdersError,
+  } = useQuery({
     queryKey: ["dashboard-execution-orders"],
     queryFn: () => fetchOrders({ status: "all", limit: 120 }),
     refetchInterval: 10_000,
@@ -176,28 +192,29 @@ export function ExecutionActivityCard(): ReactElement {
     retry: 1,
   });
 
-  const { data: balanceData } = useQuery({
-    queryKey: ["dashboard-operator-wallet"],
-    queryFn: fetchWalletBalance,
-    refetchInterval: 15_000,
-    staleTime: 10_000,
-    gcTime: 60_000,
-    retry: 1,
-  });
-
-  const orders = data?.orders ?? [];
-
-  const positions = useMemo(
-    () => derivePositionsFromCopyTradeOrders(orders),
-    [orders]
+  const orders = ordersData?.orders ?? [];
+  const positions = useMemo<WalletPosition[]>(
+    () =>
+      (executionData?.positions ?? []).map((position) => ({
+        ...position,
+        ...(position.marketSlug !== null
+          ? { marketSlug: position.marketSlug }
+          : {}),
+        ...(position.eventSlug !== null
+          ? { eventSlug: position.eventSlug }
+          : {}),
+        ...(position.marketUrl !== null
+          ? { marketUrl: position.marketUrl }
+          : {}),
+        ...(position.closedAt !== null ? { closedAt: position.closedAt } : {}),
+      })),
+    [executionData?.positions]
   );
   const openPositions = positions.filter(
     (position) => position.status === "open"
   );
-  const balanceHistory = useMemo(
-    () =>
-      deriveBalanceHistoryFromCopyTradeOrders(orders, balanceData?.usdc_total),
-    [orders, balanceData?.usdc_total]
+  const redeemablePositions = positions.filter(
+    (position) => position.status === "redeemable"
   );
   const historyRows = useMemo(
     () => filterHistoryOrders(orders, historyFilter).slice(0, 60),
@@ -213,8 +230,10 @@ export function ExecutionActivityCard(): ReactElement {
               Execution
             </CardTitle>
             <p className="text-muted-foreground text-xs">
-              {openPositions.length} open · {positions.length} positions ·{" "}
-              {orders.length} orders
+              {openPositions.length} open · {redeemablePositions.length}{" "}
+              redeemable
+              {" · "}
+              {positions.length} positions · {orders.length} orders
             </p>
           </div>
 
@@ -263,15 +282,15 @@ export function ExecutionActivityCard(): ReactElement {
         {view === "positions" ? (
           <PositionsPanel
             positions={positions}
-            history={balanceHistory}
-            isLoading={isLoading}
-            isError={isError}
+            warnings={executionData?.warnings ?? []}
+            isLoading={isExecutionLoading}
+            isError={isExecutionError}
           />
         ) : (
           <HistoryPanel
             rows={historyRows}
-            isLoading={isLoading}
-            isError={isError}
+            isLoading={isOrdersLoading}
+            isError={isOrdersError}
             filter={historyFilter}
           />
         )}
@@ -282,12 +301,12 @@ export function ExecutionActivityCard(): ReactElement {
 
 function PositionsPanel({
   positions,
-  history,
+  warnings,
   isLoading,
   isError,
 }: {
   positions: readonly WalletPosition[];
-  history: readonly WalletBalanceHistoryPoint[];
+  warnings: readonly { code: string; message: string }[];
   isLoading: boolean;
   isError: boolean;
 }): ReactElement {
@@ -300,19 +319,20 @@ function PositionsPanel({
   }
 
   return (
-    <div className="space-y-5 px-5 pb-4">
-      <div className="rounded-lg border border-border/60 bg-muted/10 p-4">
-        <BalanceOverTimeChart
-          history={history}
-          isLoading={isLoading}
-          rangeLabel="Recent"
-        />
-      </div>
-
+    <div className="space-y-3 px-5 pb-4">
       <div className="space-y-2">
         <h3 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
           Positions
         </h3>
+        <p className="text-muted-foreground text-xs">
+          Price traces use Polymarket trades plus public CLOB price history.
+        </p>
+        {warnings.length > 0 ? (
+          <p className="text-muted-foreground text-xs">
+            Some upstream data is temporarily unavailable, so a few rows may
+            render with a shorter trace.
+          </p>
+        ) : null}
         <PositionsTable
           positions={positions}
           isLoading={isLoading}
