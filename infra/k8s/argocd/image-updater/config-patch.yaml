@@ -22,8 +22,12 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
+  # No `namespace:` here on purpose. Strategic-merge patches match against the
+  # upstream resource's *pre-transform* identity; upstream install.yaml omits
+  # `namespace:`, so specifying it here would mismatch (kustomize looks for
+  # `argocd-image-updater-config.argocd` but upstream is `argocd-image-updater-config.`).
+  # The top-level `namespace: argocd` in kustomization.yaml applies to both.
   name: argocd-image-updater-config
-  namespace: argocd
 data:
   registries.conf: |
     # prefix: ghcr.io is deliberately registry-wide, not per-package. It
