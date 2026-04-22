@@ -180,7 +180,7 @@
 | 2 | 5 | 2 | needs_design | task.0310 | Rename k8s staging namespace and overlays to preview | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 5 | 5 | needs_implement | task.0315 | Poly copy-trade prototype — v0 top-wallet scoreboard, v0.1 shadow 1-wallet mirror | Cogni Poly | proj.poly-copy-trading |
 | 2 | 5 | 3 | needs_design | task.0317 | Per-node LangGraph catalogs — factory library + node-owned catalog registry |  |  |
-| 2 | 5 | 5 | needs_merge | task.0318 | Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables | Cogni Poly | proj.poly-copy-trading |
+| 2 | 5 | 5 | needs_implement | task.0318 | Poly wallet multi-tenant auth — per-user operator-wallet binding + RLS on copy-trade tables | Cogni Poly | proj.poly-copy-trading |
 | 2 | 5 | 4 | needs_review | task.0329 | Wallet analysis — reusable component + live data plane (any wallet) + Monitored drawer | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 5 | 5 | needs_design | task.0333 | Wallet analyst agent — AI qualitative judgments, Dolt-stored, DAO-funded | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 5 | 1 | needs_implement | task.0335 | Wallet analysis — clickable Monitored Wallets rows + paste-any-wallet search | Cogni Poly | proj.poly-prediction-bot |
@@ -198,6 +198,7 @@
 | 2 | 15 | 3 | needs_implement | task.0192 | Walk: Per-tenant BYO-AI — Profile page OAuth + DrizzleConnectionBroker | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 2 | 16 | 3 | needs_design | task.0003 | Sweep stale doc references across the codebase | Maximize OSS Tools | proj.maximize-oss-tools |
 | 2 | 17 | 1 | needs_research | spike.0037 | Research Tailscale/Headscale mesh VPN for Cogni infrastructure |  |  |
+| 2 | 19 | 3 | needs_design | task.0347 | Poly wallet — per-tenant preferences + copy-trade sizing config | Cogni Poly | proj.poly-copy-trading |
 | 2 | 20 | 3 | needs_design | task.0211 | BYO-AI ChatGPT — auth manager + Codex CLI in Docker image | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 2 | 20 | 2 | needs_closeout | bug.0342 | poly copy-trade places sub-min orders — CLOB rejects silently (success=undefined, orderID=<missing>, errorMsg="") | Cogni Poly | proj.poly-copy-trading |
 | 2 | 30 | 1 | needs_implement | bug.0168 | App container uses seccomp=unconfined for TigerBeetle io_uring — replace with targeted profile | AI Operator Wallet | proj.ai-operator-wallet |
@@ -222,6 +223,7 @@
 | 3 | 7 | 2 | needs_triage | bug.0034 | Secrets redaction uses regex on serialized JSON — adopt fast-redact for structured fields |  |  |
 | 3 | 7 | 2 | needs_design | task.0327 | Drain legacy Temporal queue + add HTTP circuit breaker on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |
 | 3 | 10 | 2 | needs_design | bug.0262 | Operator Postgres env vars lack _OPERATOR suffix — inconsistent with multi-node pattern | Cogni Poly | proj.poly-prediction-bot |
+| 3 | 18 | 2 | needs_design | task.0348 | Poly wallet — orphan sweep for user-wallets Privy app | Cogni Poly | proj.poly-copy-trading |
 | 3 | 20 | 2 | needs_design | task.0274 | Wire NodeAppConfig into sidebar + layout components | Operator Plane | proj.operator-plane |
 | 3 | 30 | 3 | needs_merge | task.0207 | Run: BYO-AI hosted OSS provider — user connects their OpenAI-compatible endpoint | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 3 | 80 | 3 | needs_design | task.0146 | Extract payments application orchestration + billing ports into packages | AI Operator Wallet | proj.ai-operator-wallet |
