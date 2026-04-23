@@ -23,6 +23,19 @@ import type { BoundTool, ToolContract, ToolImplementation } from "../types";
 // Capability interface (injected at runtime)
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Per-wallet windowed stats — returned by getWalletWindowStats. */
+export interface WalletWindowStats {
+  proxyWallet: string;
+  timePeriod: "DAY" | "WEEK" | "MONTH" | "ALL";
+  volumeUsdc: number;
+  pnlUsdc: number;
+  pnlKind: "authoritative" | "estimated";
+  roiPct: number | null;
+  numTrades: number;
+  numTradesCapped: boolean;
+  computedAt: string;
+}
+
 /**
  * Wallet capability — thin interface over the Polymarket Data API.
  * Resolved at runtime from the container; tools never import adapters directly.
@@ -33,6 +46,11 @@ export interface WalletCapability {
     orderBy?: "PNL" | "VOL";
     limit?: number;
   }): Promise<WalletTopTradersOutput>;
+
+  getWalletWindowStats(params: {
+    address: string;
+    timePeriod: "DAY" | "WEEK" | "MONTH" | "ALL";
+  }): Promise<WalletWindowStats>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

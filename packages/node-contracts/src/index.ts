@@ -82,6 +82,7 @@ export * from "./poly.wallet.execution.v1.contract";
 export * from "./poly.wallet.overview.v1.contract";
 export * from "./poly.wallet.position-actions.v1.contract";
 export * from "./poly.wallet-analysis.v1.contract";
+export * from "./poly.wallet-window-stats.v1.contract";
 // ── Runs ────────────────────────────────────────────────────────────────────
 export * from "./run-stream.contract";
 export * from "./runs.stream.v1.contract";

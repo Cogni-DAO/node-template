@@ -376,6 +376,7 @@ export {
   type WalletTopTradersOutput,
   WalletTopTradersOutputSchema,
   type WalletTopTradersRedacted,
+  type WalletWindowStats,
   walletTopTradersBoundTool,
   walletTopTradersContract,
   walletTopTradersStubImplementation,

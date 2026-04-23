@@ -34,6 +34,10 @@ const QuerySchema = z.object({
 export const dynamic = "force-dynamic";
 export const maxDuration = 10; // seconds — bounds the Polymarket Data API leaderboard fetch
 
+// Singleton: survives across requests in the same worker, sharing the module-level
+// stats cache in wallet.ts. Leaderboard enrichment cache hits are free on repeat calls.
+const walletCapability = createWalletCapability();
+
 export const GET = wrapRouteHandlerWithLogging(
   {
     routeId: "poly.top-wallets",
@@ -54,7 +58,6 @@ export const GET = wrapRouteHandlerWithLogging(
       );
     }
 
-    const walletCapability = createWalletCapability();
     const result = await walletCapability.listTopTraders({
       timePeriod: parsed.data.timePeriod ?? "WEEK",
       orderBy: parsed.data.orderBy ?? "PNL",
