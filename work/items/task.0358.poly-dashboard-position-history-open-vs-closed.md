@@ -143,35 +143,42 @@ Users see a clean "Open Positions" / "Position History" split on the dashboard e
 
 The domain split is already fully computed by `mapExecutionPositions` — every position already carries `status: "open" | "closed" | "redeemable"`. The only missing pieces are:
 
-1. A contract-level split so separate per-tab limits can be applied (avoiding the 18-row cap cutting off closed history when there are many open positions).
+1. A contract-level split so separate per-tab limits can be applied (avoiding the 18-row total cap cutting off closed history when many open positions exist).
 2. A UI rename from "Positions / History (orders)" to "Open / History (closed positions)".
-3. Client-side pending suppression: after a successful close, exclude the just-closed row from the Open tab until the next successful refetch confirms it gone (avoids the open→close→open flicker during Data API lag).
+3. Client-side pending suppression: after a successful close, exclude the just-closed row from the Open tab until the refetched `live_positions` no longer contains it (per-item eviction, not clear-whole-set).
+4. CLOB price history fetched only for `live_positions` — closed positions have a complete timeline from trades; CLOB history adds no P/L correctness for closed rows.
 
 **Reuses**:
 
 - `mapExecutionPositions` in `packages/market-provider` — already computes status correctly; no change needed
-- `PositionsTable` — already handles all three statuses and the action button; close/redeem buttons already guard on `status === "open" || "redeemable"`
-- `invalidateWalletAnalysisCaches` — already called on close/redeem success; evicts server-side process cache so next refetch is fresh
-- `positionAction` mutation + query invalidation pattern — already in `ExecutionActivityCard`; extend with `recentlyClosedIds` set
+- `PositionsTable` — reused for both tabs; history tab passes `variant="history"` to swap "Current/Action" columns for "Closed At"
+- `invalidateWalletAnalysisCaches` — already called on close/redeem success; evicts server-side process cache
+- `positionAction` mutation + query invalidation pattern — already in `ExecutionActivityCard`; extend with per-item `recentlyClosedIds` eviction
 
 **Rejected**:
 
-- Keep raw order log as "History" — violates position-model requirement; orders are copy-trade pipeline artifacts, not user-facing history
-- Single `positions` array + UI filter — the `EXECUTION_POSITION_LIMIT = 18` total cap means closed history gets crowded out when there are many open positions; fixing this cleanly requires splitting limits at the service level
-- Add server-side `pending_actions` to contract — unnecessary for this scope; client-side `recentlyClosedIds` set handles the UI continuity case without a backend change
+- Keep raw order log as "History" — orders are copy-trade pipeline artifacts, not user-facing position history
+- Single `positions` array + UI filter — 18-row total cap starves closed history when many open positions exist
+- Add server-side `pending_actions` to contract — client-side `recentlyClosedIds` set handles UI continuity without a backend change
+- Fetch CLOB history for closed positions — closed timelines are fully determined by trade events; no additional accuracy from market price history
+
+**`recentlyClosedIds` correctness**: The set uses per-item eviction. On mutation success, add `positionId` to the set. On each successful `live_positions` refetch, remove any id that is no longer present in the returned `live_positions`. Do not clear the whole set on a successful query — that reintroduces the stale row during Data API lag windows.
+
+**`PositionsTable` history variant**: The existing `PositionsTable` columns (Current $, Action) don't make sense for closed rows. Pass `variant="history"` to replace those two columns with "Closed" (timestamp). This is a prop addition to `PositionsTable`, no new component needed.
 
 ### Invariants
 
 <!-- CODE REVIEW CRITERIA -->
 
 - [ ] `LIVE_POSITIONS_ONLY_IN_OPEN_TAB`: The "Open" tab renders only from `live_positions` (status `open` or `redeemable`). Closed rows must never appear there, even transiently.
-- [ ] `CLOSE_BUTTON_ONLY_ON_OPEN_TAB`: Close/Redeem action buttons are attached to the Open tab only. The History tab is read-only.
-- [ ] `NO_STALE_OPEN_ROW_AFTER_CLOSE`: After a successful close mutation, the closed position's `positionId` is added to `recentlyClosedIds` and filtered out of the Open tab until the next successful server refetch removes it naturally. The set is cleared on each successful query.
-- [ ] `SEPARATE_LIMITS`: Service applies `EXECUTION_OPEN_LIMIT` (12) for `live_positions` and `EXECUTION_HISTORY_LIMIT` (30) for `closed_positions` independently. Open limit does not starve closed history.
-- [ ] `CONTRACT_FIRST`: Contract is updated before the route and UI. The `positions` field is removed; callers use `live_positions` and `closed_positions`.
-- [ ] `NO_ROUTE_LOCAL_FETCH`: All Polymarket reads stay in `packages/market-provider` clients via the service layer. No `fetch()` calls in route or component files.
-- [ ] `SIMPLE_SOLUTION`: No new components — reuse `PositionsTable` for both tabs with the appropriate position subset.
-- [ ] `ARCHITECTURE_ALIGNMENT`: Contract in `packages/node-contracts`, mapping in `packages/market-provider`, service in `features/wallet-analysis/server`, UI in dashboard `_components`. No layer violations.
+- [ ] `CLOSE_BUTTON_ONLY_ON_OPEN_TAB`: Close/Redeem action buttons are attached to the Open tab only. The History tab renders `variant="history"` — read-only, no action column.
+- [ ] `NO_STALE_OPEN_ROW_AFTER_CLOSE`: After a successful close mutation, `positionId` is added to `recentlyClosedIds`. It is removed from the set only when the refetched `live_positions` no longer contains that id. The set is never cleared wholesale.
+- [ ] `SEPARATE_LIMITS`: Service applies `EXECUTION_OPEN_LIMIT` (18) for `live_positions` and `EXECUTION_HISTORY_LIMIT` (30) for `closed_positions` independently.
+- [ ] `CLOB_HISTORY_OPEN_ONLY`: CLOB `getPriceHistory` is fetched only for open/redeemable positions. Closed positions use trade-derived timelines only.
+- [ ] `CONTRACT_FIRST`: Contract is updated before route and UI. The `positions` field is removed; callers use `live_positions` and `closed_positions`.
+- [ ] `NO_ROUTE_LOCAL_FETCH`: All Polymarket reads stay in `packages/market-provider` clients via the service layer.
+- [ ] `NO_DEAD_CODE`: `fetchOrders` and `HistoryPanel` are deleted, not commented out or kept as dead imports.
+- [ ] `ARCHITECTURE_ALIGNMENT`: Contract in `packages/node-contracts`, mapping in `packages/market-provider`, service in `features/wallet-analysis/server`, UI in dashboard `_components`.
 
 ### Files
 
@@ -181,18 +188,25 @@ The domain split is already fully computed by `mapExecutionPositions` — every 
 
 **Service** (`nodes/poly/app/src/features/wallet-analysis/server`)
 
-- Modify: `wallet-analysis-service.ts` — in `getExecutionSlice`, split `mapped` by status: open/redeemable go to `livePositions` (capped at `EXECUTION_OPEN_LIMIT = 12`), closed go to `closedPositions` (capped at `EXECUTION_HISTORY_LIMIT = 30`). Fetch CLOB price history for both sets (same bounded approach as today). Return `live_positions` + `closed_positions` instead of `positions`.
+- Modify: `wallet-analysis-service.ts` — in `getExecutionSlice`, split `mapped` by status: open/redeemable → `livePositions` (capped at `EXECUTION_OPEN_LIMIT = 18`), closed → `closedPositions` (capped at `EXECUTION_HISTORY_LIMIT = 30`). Fetch CLOB price history for `livePositions` only. Return `live_positions` + `closed_positions`.
 
 **Route** (`nodes/poly/app/src/app/api/v1/poly/wallet/execution`)
 
 - Modify: `route.ts` — update `emptyPayload` to use `live_positions: []` + `closed_positions: []`
 
+**Wallet-analysis components** (`nodes/poly/app/src/features/wallet-analysis/components`)
+
+- Modify: `PositionsTable.tsx` — add optional `variant?: "default" | "history"` prop. In history variant: replace "Current" column with "Closed" (formatted `closedAt` timestamp), omit the Action column entirely.
+
 **Dashboard UI** (`nodes/poly/app/src/app/(app)/dashboard/_components`)
 
-- Modify: `ExecutionActivityCard.tsx` — rename tabs to "Open" / "History"; map `executionData.live_positions` → `openPositions`; map `executionData.closed_positions` → `closedPositions`; add `recentlyClosedIds` Set (cleared on successful query); filter open positions by that set; replace `HistoryPanel` with `ClosedPositionsPanel` using `PositionsTable` in read-only mode (no `onPositionAction`).
-- Delete: the `fetchOrders` query + `HistoryPanel` raw-orders table. Keep `fetchOrders` in `_api/` as a diagnostic utility (do not delete the file); just stop wiring it into the main tabs.
+- Modify: `ExecutionActivityCard.tsx` — rename tabs to "Open" / "History"; map `executionData.live_positions` → `openPositions`; map `executionData.closed_positions` → `closedPositions`; implement per-item `recentlyClosedIds` eviction (add on mutation success, remove per-id on successful refetch); replace `HistoryPanel` with `ClosedPositionsPanel` using `PositionsTable variant="history"` with no `onPositionAction`.
+- Delete: `fetchOrders` import and query, `HistoryPanel` component, `HISTORY_FILTERS`, `HISTORY_STATUS_BUCKETS`, `OrdersStatusFilter` import, `historyFilter` state.
+
+**Dashboard API** (`nodes/poly/app/src/app/(app)/dashboard/_api`)
+
+- Delete: `fetchOrders.ts` — no longer wired anywhere; delete the file per CLAUDE.md "delete unused code" rule.
 
 **Tests**
 
-- Modify: `nodes/poly/app/tests/unit/packages/market-provider/position-timelines.test.ts` — verify open/closed/redeemable status assignment still passes
-- Create: `nodes/poly/app/tests/unit/features/wallet-analysis/wallet-analysis-service.test.ts` — unit test `getExecutionSlice` split: given N open + M closed positions, `live_positions` has ≤ 12 open/redeemable rows and `closed_positions` has ≤ 30 closed rows
+- Create: `nodes/poly/app/tests/unit/features/wallet-analysis/wallet-analysis-service.test.ts` — unit test `getExecutionSlice` split: `live_positions` ≤ 18 open/redeemable, `closed_positions` ≤ 30 closed; CLOB history only fetched for open assets.
