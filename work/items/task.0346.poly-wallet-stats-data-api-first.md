@@ -2,12 +2,12 @@
 id: task.0346
 type: task
 title: "Poly wallet stats: Data-API-first windowed stats + batched endpoint"
-status: needs_design
+status: needs_review
 priority: 2
 rank: 5
 estimate: 3
 created: 2026-04-21
-updated: 2026-04-21
+updated: 2026-04-23
 summary: "Unify per-wallet windowed stats behind a single Polymarket Data-API-first endpoint with a batched request shape and short-TTL server cache. Replaces today's split-brain (leaderboard `volumeUsdc`/`pnlUsdc` are windowed but `numTrades` is length of an all-time `/trades?limit=500` call; `/wallets/[addr]` ignores `timePeriod` entirely; `CopyTradedWalletsCard` works around this with a two-tier leaderboard fallback that's honest but inconsistent)."
 outcome: "One authoritative per-wallet, per-window stats shape used by the dashboard, the research table, and the drawer. `numTrades` matches the selected window across surfaces. Non-top-N copy-traded wallets get real windowed numbers without N+1 per-render fan-out. P&L is position-aware or clearly labeled when estimated."
 spec_refs:
@@ -15,7 +15,7 @@ spec_refs:
 assignees: [derekg1729]
 credit:
 project: proj.poly-prediction-bot
-branch:
+branch: feat/poly-windowed-wallet-stats
 pr:
 reviewer:
 revision: 0
@@ -118,3 +118,31 @@ See "Out" above. Not owned by this task: category UX, historical backfill, CLOB 
 - Blocks work that wants a reliable `numTrades` per window on `/research` and any future "leaderboard at our own time window" UI.
 - Blocked by: nothing — can start immediately after PR #976 merges. The two-tier leaderboard fallback in `CopyTradedWalletsCard` is the temporary bridge until this ships.
 - Naming: stay precise. "CLOB" = `clob.polymarket.com` (pricing/orderbook/execution). "Data API" = `data-api.polymarket.com` (positions/trades/activity/leaderboards). Wallet research is Data API-first.
+
+## Validation
+
+### exercise
+
+```bash
+# 1. Batched endpoint returns stats for all requested addresses
+curl -s -X POST https://candidate-a.cogni.sh/api/v1/poly/wallets/stats \
+  -H "Content-Type: application/json" \
+  -d '{"timePeriod":"WEEK","addresses":["0x<wallet1>","0x<wallet2>"]}' | jq '.stats | keys'
+
+# 2. numTrades in response matches the WEEK window (not all-time)
+# Compare: response.stats["0x<wallet>"].numTrades vs all-time count
+
+# 3. pnlKind appears in response ("authoritative" for wallets with open positions)
+curl ... | jq '.stats["0x<wallet>"].pnlKind'
+```
+
+Navigate to `/research` on candidate-a at `timePeriod=DAY` — verify `# Trades` column
+shows non-zero for active wallets (was always 0 before for DAY due to wrong endpoint).
+
+### observability
+
+`{service="app", env="candidate-a", pod=~"poly-node-app-.*"} | json | route="poly.wallets.stats"` —
+one request per page render (not per-wallet). Verify `durationMs < 5000` on cache-warm repeat requests.
+
+`{service="app", env="candidate-a"} | json | route="poly.top-wallets"` — confirm `numTrades` in
+enrichment logs now uses windowed counts (no more `listUserActivity` log lines).
