@@ -25,7 +25,6 @@ import type {
   PolyWalletOverviewOutput,
 } from "@cogni/node-contracts";
 import { useQuery } from "@tanstack/react-query";
-import { Radio } from "lucide-react";
 import Link from "next/link";
 import type { ReactElement } from "react";
 import { useState } from "react";
@@ -35,13 +34,10 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
-  ToggleGroup,
-  ToggleGroupItem,
 } from "@/components";
-import { BalanceBar } from "@/features/wallet-analysis";
+import { BalanceBar, WalletProfitLossCard } from "@/features/wallet-analysis";
 import { cn } from "@/shared/util/cn";
 import { fetchTradingWallet } from "../_api/fetchTradingWallet";
-import { TradingWalletPnlChart } from "./TradingWalletPnlChart";
 
 function formatDecimal(n: number | null, fractionDigits: number): string {
   if (n === null) return "—";
@@ -60,7 +56,7 @@ function formatUsd(n: number | null): string {
 }
 
 export function TradingWalletCard(): ReactElement {
-  const [interval, setInterval] = useState<PolyWalletOverviewInterval>("1W");
+  const [interval, setInterval] = useState<PolyWalletOverviewInterval>("ALL");
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard-trading-wallet", interval],
     queryFn: () => fetchTradingWallet(interval),
@@ -173,63 +169,16 @@ export function TradingWalletCard(): ReactElement {
                 <Metric label="Total" value={formatUsd(data.usdc_total)} />
               </div>
             )}
-
-            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="inline-flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-                  <Radio className="size-3" />
-                  Polymarket P/L
-                </div>
-                <ToggleGroup
-                  type="single"
-                  value={interval}
-                  onValueChange={(value) => {
-                    if (value) setInterval(value as PolyWalletOverviewInterval);
-                  }}
-                  className="justify-start rounded-lg border border-border/70 p-1 sm:justify-end"
-                >
-                  {(["1D", "1W", "1M", "1Y", "YTD", "ALL"] as const).map(
-                    (value) => (
-                      <ToggleGroupItem
-                        key={value}
-                        value={value}
-                        className="px-3 text-xs"
-                      >
-                        {value}
-                      </ToggleGroupItem>
-                    )
-                  )}
-                </ToggleGroup>
-              </div>
-
-              <TradingWalletPnlChart
-                history={data.pnlHistory}
-                isLoading={false}
-                rangeLabel={rangeLabel(interval)}
-              />
-            </div>
+            <WalletProfitLossCard
+              history={data.pnlHistory}
+              interval={interval}
+              onIntervalChange={setInterval}
+            />
           </div>
         )}
       </CardContent>
     </Card>
   );
-}
-
-function rangeLabel(interval: PolyWalletOverviewInterval): string {
-  switch (interval) {
-    case "1D":
-      return "Past day";
-    case "1W":
-      return "Past week";
-    case "1M":
-      return "Past month";
-    case "1Y":
-      return "Past year";
-    case "YTD":
-      return "Year to date";
-    case "ALL":
-      return "All time";
-  }
 }
 
 function hasOverviewBreakdown(

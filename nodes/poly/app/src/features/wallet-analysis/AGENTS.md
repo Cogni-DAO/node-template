@@ -31,7 +31,7 @@ Shared shape `WalletAnalysisData` mirrors the v1 wallet-analysis HTTP contract t
 
 ## Public Surface
 
-- **Exports:** `WalletAnalysisView`, `WalletIdentityHeader`, `StatGrid`, `BalanceBar`, `BalanceOverTimeChart`, `TradesPerDayChart`, `RecentTradesTable`, `PositionsTable`, `PositionTimelineChart`, `TopMarketsList`, `EdgeHypothesis`, type `WalletAnalysisData` and supporting types.
+- **Exports:** `WalletAnalysisView`, `WalletAnalysisSurface`, `WalletIdentityHeader`, `StatGrid`, `BalanceBar`, `BalanceOverTimeChart`, `WalletProfitLossCard`, `TradesPerDayChart`, `RecentTradesTable`, `PositionsTable`, `PositionTimelineChart`, `TopMarketsList`, `EdgeHypothesis`, type `WalletAnalysisData` and supporting types.
 - **Routes:** none directly; consumed by `/research`, `/research/w/[addr]` (Checkpoint B), and the dashboard drawer (Checkpoint C).
 - **Files considered API:** `index.ts`, `types/wallet-analysis.ts`.
 

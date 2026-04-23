@@ -23,6 +23,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import {
   getBalanceSlice,
+  getPnlSlice,
   getSnapshotSlice,
   getTradesSlice,
 } from "@/features/wallet-analysis/server/wallet-analysis-service";
@@ -53,6 +54,7 @@ export const GET = wrapRouteHandlerWithLogging<{
     const url = new URL(request.url);
     const queryParse = WalletAnalysisQuerySchema.safeParse({
       include: url.searchParams.getAll("include"),
+      interval: url.searchParams.get("interval") ?? undefined,
     });
     if (!queryParse.success) {
       return NextResponse.json(
@@ -61,15 +63,18 @@ export const GET = wrapRouteHandlerWithLogging<{
       );
     }
     const include = queryParse.data.include;
+    const interval = queryParse.data.interval;
 
     const wantSnapshot = include.includes("snapshot");
     const wantTrades = include.includes("trades");
     const wantBalance = include.includes("balance");
+    const wantPnl = include.includes("pnl");
 
-    const [snapshotR, tradesR, balanceR] = await Promise.all([
+    const [snapshotR, tradesR, balanceR, pnlR] = await Promise.all([
       wantSnapshot ? getSnapshotSlice(addr) : null,
       wantTrades ? getTradesSlice(addr) : null,
       wantBalance ? getBalanceSlice(addr) : null,
+      wantPnl ? getPnlSlice(addr, interval) : null,
     ]);
 
     const response: WalletAnalysisResponse = {
@@ -87,6 +92,10 @@ export const GET = wrapRouteHandlerWithLogging<{
     if (balanceR) {
       if (balanceR.kind === "ok") response.balance = balanceR.value;
       else response.warnings.push(balanceR.warning);
+    }
+    if (pnlR) {
+      if (pnlR.kind === "ok") response.pnl = pnlR.value;
+      else response.warnings.push(pnlR.warning);
     }
 
     return NextResponse.json(WalletAnalysisResponseSchema.parse(response));
