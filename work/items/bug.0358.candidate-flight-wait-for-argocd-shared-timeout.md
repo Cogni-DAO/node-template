@@ -2,7 +2,7 @@
 id: bug.0358
 type: bug
 title: "candidate-flight false-red: wait-for-argocd shares one timeout budget across all promoted apps"
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 1
@@ -18,7 +18,7 @@ credit:
 project: proj.cicd-services-gitops
 initiative:
 branch: fix/bug-0358-candidate-flight-shared-timeout
-pr:
+pr: 1002
 reviewer:
 revision: 0
 blocked_by: []
