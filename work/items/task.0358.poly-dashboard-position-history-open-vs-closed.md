@@ -2,7 +2,7 @@
 id: task.0358
 type: task
 title: "Poly dashboard — open vs closed positions, position history replaces order history"
-status: needs_merge
+status: done
 priority: 1
 rank: 3
 estimate: 3
