@@ -2,7 +2,8 @@
 id: bug.0361
 type: bug
 title: "promote-and-deploy: EXPECTED_BUILDSHA uses merge commit SHA; deploy-infra always runs"
-status: needs_merge
+status: needs_implement
+revision: 1
 priority: 1
 rank: 1
 estimate: 1
@@ -48,3 +49,46 @@ model (two orthogonal levers) proves the pattern; preview/production never adopt
   `verify-deploy` passes with `buildSha` matching the PR branch head SHA.
 - observability: `verify-buildsha.sh` logs `✅ operator: buildSha=<pr-head-sha> matches expected`; no
   `deploy-infra` job in the run graph.
+
+## Review Feedback (revision 1)
+
+Self-review of PR #1011 (2026-04-23) found blockers in the job-dependency graph. The
+build_sha + skip_infra input wiring is correct, but downstream jobs were not updated to
+tolerate a skipped `deploy-infra`, so the PR as-written would break every preview flight.
+
+**Blocking issues to fix before re-review:**
+
+1. **verify/verify-deploy/e2e/lock-preview skip cascade.** GHA treats an `if:` without
+   `always()`/`cancelled()`/`failure()` as implicitly prefixed with `success()`. When
+   `deploy-infra` is skipped (the `skip_infra=true` path that `flight-preview.sh` now
+   triggers on every merge), `success()` → false on all four dependent jobs:
+   - `verify-deploy` (needs: deploy-infra) → skipped
+   - `verify` (needs: deploy-infra) → skipped
+   - `e2e` (needs: verify, verify-deploy) → skipped
+   - `lock-preview-on-success` (needs: e2e, if e2e.result == 'success') → skipped
+   - `unlock-preview-on-failure` fires because `needs.e2e.result != 'success'`
+     Net: preview lease bounces unlocked → dispatching → unlocked forever, never reaches
+     reviewing. Fix: each of the four jobs needs
+   ```yaml
+   if: |
+     always() &&
+     needs.promote-k8s.result == 'success' &&
+     (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped') &&
+     <existing condition>
+   ```
+2. **AppSet reconcile regression (bug.0312).** The `Reconcile ArgoCD ApplicationSet
+from repo` step lives inside `deploy-infra`. With `skip_infra=true`, that reconcile
+   never runs on app-only flights. Template drift accumulates silently. Move the
+   reconcile out of `deploy-infra` — into `promote-k8s` or a new always-run job.
+3. **Production silent-green risk.** Under the same cascade, a prod dispatch with
+   `skip_infra=true` skips `verify-deploy` → pod ships without buildSha contract
+   verification. Re-opens the bug.0321 silent-green class.
+
+**Non-blocking:**
+
+- After the cascade fix, exercise the flow end-to-end on an already-merged PR before
+  re-requesting review. The current Validation block describes a state the PR cannot
+  reach.
+- Short runbook for prod dispatch (the exact `gh workflow run` invocation + how to find
+  `source_sha` and `build_sha`).
+- Consider `type: boolean` for `skip_infra` with `!inputs.skip_infra` comparisons.
