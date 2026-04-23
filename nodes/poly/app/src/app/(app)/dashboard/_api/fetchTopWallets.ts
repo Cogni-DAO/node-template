@@ -4,7 +4,7 @@
 /**
  * Module: `@app/(app)/dashboard/_api/fetchTopWallets`
  * Purpose: Client-side fetch for the Top Wallets dashboard card. Calls GET /api/v1/poly/top-wallets.
- * Scope: Data fetching only; gracefully returns an empty list on 404 / network error so the UI doesn't explode.
+ * Scope: Data fetching only; returns empty on 404 or TypeError (network offline/CORS); throws on timeout (AbortError) or non-404 HTTP errors so callers can surface an error state.
  * Invariants: Returns WalletTopTradersOutput matching the shared ai-tools schema.
  * Side-effects: IO (HTTP fetch)
  * Links: [route](../../../api/v1/poly/top-wallets/route.ts)

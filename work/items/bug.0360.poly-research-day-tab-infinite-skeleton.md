@@ -16,7 +16,7 @@ deploy_verified: false
 labels: [poly, research, ux, timeout, data-api]
 ---
 
-# bug.0359 — Poly research Day tab hangs indefinitely
+# bug.0360 — Poly research Day tab hangs indefinitely
 
 ## Symptoms
 
