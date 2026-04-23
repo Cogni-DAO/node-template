@@ -565,9 +565,6 @@ async function buildExecutor(
         };
       }
       if (remaining.size >= position.size) {
-        throw new Error(
-          `poly-trade-executor: market exit made no progress for tokenId=${params.tokenId} (remaining_shares=${remaining.size})`
-        );
       }
     }
 
