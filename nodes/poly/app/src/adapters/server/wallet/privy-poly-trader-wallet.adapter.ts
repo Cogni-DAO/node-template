@@ -12,7 +12,7 @@
  *   for USDC.e + POL display on the Money page), `authorizeIntent` (trading-
  *   readiness + scope + cap + active-grant checks; mints the branded
  *   `AuthorizedSigningContext`), `ensureTradingApprovals` (idempotent 5-step
- *   Polymarket onboarding: 3× USDC.e `approve` + 2× CTF `setApprovalForAll`
+ *   Polymarket onboarding: 3× USDC.e `approve` + 3× CTF `setApprovalForAll`
  *   signed by Privy HSM; stamps the `trading_approvals_ready_at` readiness
  *   column on success), `revoke` (cascades across `poly_wallet_grants` in
  *   the same tx + clears `trading_approvals_ready_at` so the next connection
@@ -788,7 +788,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     try {
       // APPROVALS_BEFORE_PLACE — check the connection row's readiness stamp
       // up front. Order matters: we want `no_connection` (never provisioned)
-      // and `trading_not_ready` (provisioned but hasn't run the 5 approvals)
+      // and `trading_not_ready` (provisioned but hasn't run the 6 approvals)
       // to short-circuit BEFORE we run cap math, otherwise those counters
       // would fill with ghost reservations for wallets that can't settle.
       const [connection] = await this.serviceDb

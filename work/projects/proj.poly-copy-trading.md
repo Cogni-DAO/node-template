@@ -10,7 +10,7 @@ summary: "Autonomous mirror of selected Polymarket wallets from a Cogni-controll
 outcome: "A Cogni node autonomously mirrors N Polymarket target wallets onto M per-user operator wallets with sub-30s latency, RLS-enforced tenancy, at-most-once idempotency, and real-money caps enforced in code. DAO treasury earns measurable realized PnL tracked against a counterfactual baseline."
 assignees: derekg1729
 created: 2026-04-19
-updated: 2026-04-22
+updated: 2026-04-23
 labels: [poly, polymarket, copy-trading, mirror, privy, rls, multi-tenant]
 ---
 
@@ -59,7 +59,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 | Trading wallet withdrawal — `withdrawUsdc` adapter + route + dialog (replaces stubbed button on Money)                            | Needs Triage    | 3   | [task.0351](../items/task.0351.poly-trading-wallet-withdrawal.md)                |
 | Trading wallet one-click fund flow — Polygon in wagmi + `trading_wallet_funding` repo-spec + dialog                               | Needs Design    | 3   | [task.0352](../items/task.0352.poly-trading-wallet-fund-flow.md)                 |
 | Money page v0 — hybrid AI-credits + trading-wallet panel; nav label Money, route `/credits`                                       | Done            | 2   | [task.0353](../items/task.0353.poly-money-page-v0.md)                            |
-| Enable Trading — 3×USDC.e approve + 2×CTF setApprovalForAll port + Money-page flow (blocks deploy_verified)                       | Needs Review    | 5   | [task.0355](../items/task.0355.poly-trading-wallet-enable-trading.md)            |
+| Enable Trading — 3×USDC.e approve + 3×CTF setApprovalForAll port + Money-page flow (blocks deploy_verified)                       | Needs Review    | 5   | [task.0355](../items/task.0355.poly-trading-wallet-enable-trading.md)            |
 | Position exit correctness — live approval revalidation + provider cache refresh + authoritative close/redeem semantics            | Needs Implement | 3   | [task.0357](../items/task.0357.poly-position-exit-authoritative-close-redeem.md) |
 | E2E test suite — wallet onboarding (`connect`, grants, enable-trading) + trading path to `placeOrder` (deferred from #992 review) | Needs Triage    | 5   | [task.0356](../items/task.0356.poly-wallet-onboarding-trading-e2e-test-suite.md) |
 | Trading hardening — executor cache, cap-source column, prototype residue, agent tool re-enable                                    | Needs Triage    | 3   | [task.0354](../items/task.0354.poly-trading-hardening-followups.md)              |
@@ -74,10 +74,11 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 ## Open Bugs
 
-| Bug                                                                                                       | Status       | Impact                                                                                                                                                                                   |
-| --------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [bug.0329](../items/bug.0329.poly-sell-neg-risk-empty-reject.md) — SELL on neg_risk empty reject          | needs_triage | Every position opened on a neg_risk market becomes roach-motel until resolution. Blocks close-position.                                                                                  |
-| [bug.0335](../items/bug.0335.poly-clob-buy-empty-reject-candidate-a.md) — BUY empty reject on candidate-a | needs_triage | Every autonomous mirror attempt rejected with empty CLOB response. Likely operator-wallet state (balance/allowance/keys), not code. Surfaced during task.0318 Phase A flight validation. |
+| Bug                                                                                                                                  | Status          | Impact                                                                                                                                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------ | --------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [bug.0329](../items/bug.0329.poly-sell-neg-risk-empty-reject.md) — SELL on neg_risk empty reject                                     | needs_triage    | Every position opened on a neg_risk market becomes roach-motel until resolution. Blocks close-position.                                                                                                          |
+| [bug.0335](../items/bug.0335.poly-clob-buy-empty-reject-candidate-a.md) — BUY empty reject on candidate-a                            | needs_triage    | Every autonomous mirror attempt rejected with empty CLOB response. Likely operator-wallet state (balance/allowance/keys), not code. Surfaced during task.0318 Phase A flight validation.                         |
+| [bug.0345](../items/bug.0345.poly-neg-risk-adapter-ctf-approval-missing-on-user-exit.md) — neg-risk close needs adapter CTF approval | needs_implement | Multi-tenant wallets can report trading-ready yet still fail every neg-risk close with `spender 0xd91E80... allowance: 0`. Live wallet-level validation proved Enable Trading must provision 6 approvals, not 5. |
 
 ## Constraints
 
@@ -97,7 +98,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 - [x] `poly_copy_trade_fills.synced_at` column — task.0328 migration 0028
 - [ ] Target wallet must be onboarded with USDC.e + CTF approvals — per `scripts/experiments/onboard-raw-pk-wallet.ts`
 - [ ] Operator wallet must maintain USDC.e balance + allowances — **currently broken on candidate-a, see bug.0335**
-- [ ] Per-tenant wallet must complete Polymarket approvals (3× USDC.e approve + 2× CTF setApprovalForAll) before first trade — productized in [task.0355](../items/task.0355.poly-trading-wallet-enable-trading.md); blocks task.0318 Phase B3 `deploy_verified: true`
+- [ ] Per-tenant wallet must complete Polymarket approvals (3× USDC.e approve + 3× CTF setApprovalForAll) before first trade — productized in [task.0355](../items/task.0355.poly-trading-wallet-enable-trading.md); blocks task.0318 Phase B3 `deploy_verified: true`
 
 ## As-Built Specs
 
@@ -110,7 +111,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 - **Operator / target / test wallet roles**: three disjoint jobs. Operator places all autonomous mirror trades via Privy HSM. Target is the wallet being monitored (its trades flow through the mirror). Test is a raw-PK wallet in `.env.test` used for scripted validation — it doubles as a target in some flows. See `.claude/skills/poly-dev-manager/SKILL.md` for the poly-node overview and routing to the specialty runbooks (copy-trading, market-data, auth/wallets).
 
-- **Two-approval onboarding**: a wallet that can BUY but not SELL is useless for copy-trading. USDC.e allowance on {Exchange, Neg-Risk Exchange, Neg-Risk Adapter} enables BUY. CTF `setApprovalForAll(operator, true)` on {Exchange, Neg-Risk Exchange} enables SELL. Skipping either is a latent bug that only surfaces on close-position.
+- **Six-approval onboarding**: a wallet that can BUY but not SELL is useless for copy-trading. USDC.e allowance on {Exchange, Neg-Risk Exchange, Neg-Risk Adapter} enables BUY. CTF `setApprovalForAll(operator, true)` on {Exchange, Neg-Risk Exchange, Neg-Risk Adapter} enables SELL, including neg-risk closes. Skipping the adapter approval is a latent bug that only surfaces on close-position.
 
 - **Provider cache is a real boundary**: candidate-a proved that Polymarket can reject a SELL with `allowance: 0` on the neg-risk adapter even when our live on-chain reads show the spender approved. The integration plan now treats Polymarket's `/balance-allowance` cache as a write-path dependency that must be refreshed on exits, not as an implementation detail we can ignore.
 

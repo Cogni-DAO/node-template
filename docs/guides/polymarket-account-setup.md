@@ -112,16 +112,17 @@ Three spenders receive `approve(spender, MaxUint256)` on the USDC.e contract (`0
 
 Without this, SELL orders are silently rejected by the CLOB (`success=undefined, errorMsg=""`).
 
-The CTF contract (`0x4D97DCd97eC945f40cF65F87097ACe5EA0476045`) must grant `setApprovalForAll(operator, true)` to two operators:
+The CTF contract (`0x4D97DCd97eC945f40cF65F87097ACe5EA0476045`) must grant `setApprovalForAll(operator, true)` to three operators:
 
 | Operator          | Address                                      |
 | ----------------- | -------------------------------------------- |
 | Exchange          | `0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E` |
 | Neg-Risk Exchange | `0xC5d563A36AE78145C45a50134d48A1215220f80a` |
+| Neg-Risk Adapter  | `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296` |
 
-(The Neg-Risk Adapter is intentionally excluded — it never takes ERC-1155 custody.)
+Live validation on 2026-04-23 proved this third operator is required for successful neg-risk SELL close. Without it, Polymarket will reject exit with `spender: 0xd91E80... allowance: 0` even when BUY-side approvals are otherwise healthy.
 
-Verify both are set: `isApprovedForAll(owner, operator)` returns `true` for each.
+Verify all three are set: `isApprovedForAll(owner, operator)` returns `true` for each.
 
 ### 5. Derive Polymarket L2 CLOB API credentials
 
@@ -149,7 +150,7 @@ OPERATOR_WALLET_ADDRESS=$POLY_PROTO_WALLET_ADDRESS \
   pnpm dotenv -e .env.local -- pnpm tsx scripts/experiments/probe-polymarket-account.ts
 ```
 
-Expect non-zero USDC.e balance, three `MaxUint256` USDC.e allowances, and two CTF `isApprovedForAll=true` results.
+Expect non-zero USDC.e balance, three `MaxUint256` USDC.e allowances, and three CTF `isApprovedForAll=true` results.
 
 ## Final `.env.local` block
 
