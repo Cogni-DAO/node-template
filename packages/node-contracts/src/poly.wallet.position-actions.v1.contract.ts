@@ -18,9 +18,11 @@ import { z } from "zod";
 
 export const polyWalletClosePositionOperation = {
   id: "poly.wallet.position_close.v1",
-  summary: "Market SELL to fully exit an open position via CLOB (live market)",
+  summary: "SELL-to-close an open position via CLOB (live market)",
   input: z.object({
     token_id: z.string().min(1),
+    /** Omit to close up to the full current position notional. */
+    max_size_usdc: z.number().positive().optional(),
   }),
   output: z.object({
     order_id: z.string(),

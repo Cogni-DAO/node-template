@@ -16,7 +16,6 @@
 
 import {
   type ApiKeyCreds,
-  AssetType,
   Chain,
   ClobClient,
   type ClobSigner,
@@ -66,15 +65,6 @@ export const POLY_CLOB_METRICS = {
 function truncErr(e: unknown, max = 512): string {
   const msg = e instanceof Error ? e.message : String(e);
   return msg.length > max ? `${msg.slice(0, max)}…` : msg;
-}
-
-function makeBelowMarketMinError(message: string): Error {
-  const err = new Error(message);
-  // Discriminator for cross-package catch blocks — `err.code` is
-  // bundler-stable where `instanceof` is not.
-  (err as unknown as { code: string }).code = BELOW_MARKET_MIN_CODE;
-  err.name = "BelowMarketMinError";
-  return err;
 }
 
 /**
@@ -140,22 +130,6 @@ export interface PolymarketClobAdapterConfig {
    * Dashboards reference the names in `POLY_CLOB_METRICS`.
    */
   metrics?: MetricsPort;
-}
-
-export interface PolymarketMarketSellParams {
-  /** ERC-1155 asset id being sold. */
-  tokenId: string;
-  /** Exact number of outcome shares to sell. */
-  shares: number;
-  /** Caller correlation key echoed in the receipt. */
-  client_order_id: string;
-  /** Market order execution policy. */
-  orderType?: OrderType.FOK | OrderType.FAK;
-}
-
-export interface PolymarketBalanceAllowanceParams {
-  assetType: "COLLATERAL" | "CONDITIONAL";
-  tokenId?: string;
 }
 
 /**
@@ -290,9 +264,14 @@ export class PolymarketClobAdapter implements MarketProviderPort {
         intent.attributes?.post_only !== true &&
         effectiveUsdc < POLY_MARKETABLE_BUY_MIN_USDC;
       if (belowShareMin || belowUsdcMin) {
-        throw makeBelowMarketMinError(
+        const err = new Error(
           `PolymarketClobAdapter.placeOrder: intent below market floor (gotShares=${shareSize}, minShares=${minShares}, gotUsdc=${effectiveUsdc}, minUsdc=${POLY_MARKETABLE_BUY_MIN_USDC}, tokenId=${tokenId}). Coordinator should have scaled or skipped. bug.0342.`
         );
+        // Discriminator for cross-package catch blocks — `err.code` is
+        // bundler-stable where `instanceof` is not.
+        (err as unknown as { code: string }).code = BELOW_MARKET_MIN_CODE;
+        err.name = "BelowMarketMinError";
+        throw err;
       }
 
       const postOnly = intent.attributes?.post_only === true;
@@ -369,154 +348,6 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       );
       throw err;
     }
-  }
-
-  async sellPositionAtMarket(
-    params: PolymarketMarketSellParams
-  ): Promise<OrderReceipt> {
-    const start = Date.now();
-    const baseFields = {
-      event: "poly.clob.place",
-      side: "SELL" as const,
-      token_id: params.tokenId,
-      client_order_id: params.client_order_id,
-      shares: params.shares,
-      order_mode: "market",
-    };
-    this.log.info(
-      { ...baseFields, phase: "start" },
-      "sellPositionAtMarket: start"
-    );
-
-    let tickSize: TickSize | undefined;
-    let negRisk: boolean | undefined;
-    let feeRateBps: number | undefined;
-
-    try {
-      const preflight = await Promise.all([
-        this.client.getTickSize(params.tokenId),
-        this.client.getNegRisk(params.tokenId),
-        this.client.getFeeRateBps(params.tokenId),
-        this.client.getOrderBook(params.tokenId),
-      ]);
-      [tickSize, negRisk, feeRateBps] = preflight;
-      negRisk = coerceNegRiskApiValue(negRisk);
-      const orderBook = preflight[3];
-      const minShares = Number(orderBook.min_order_size);
-      if (Number.isFinite(minShares) && params.shares < minShares) {
-        throw makeBelowMarketMinError(
-          `PolymarketClobAdapter.sellPositionAtMarket: share balance below market floor (gotShares=${params.shares}, minShares=${minShares}, tokenId=${params.tokenId}).`
-        );
-      }
-
-      // Polymarket's `/balance-allowance` view can lag behind on-chain
-      // approvals. Refresh both collateral and conditional caches before we
-      // post a market SELL so exits don't fail on stale provider state.
-      await Promise.all([
-        this.updateBalanceAllowance({ assetType: "COLLATERAL" }),
-        this.updateBalanceAllowance({
-          assetType: "CONDITIONAL",
-          tokenId: params.tokenId,
-        }),
-      ]);
-
-      const response: unknown = await this.client.createAndPostMarketOrder(
-        {
-          tokenID: params.tokenId,
-          amount: params.shares,
-          side: Side.SELL,
-          feeRateBps,
-        },
-        { tickSize, negRisk },
-        params.orderType ?? OrderType.FAK
-      );
-
-      const receipt = mapOrderResponseToReceipt(response, {
-        provider: "polymarket",
-        market_id: `prediction-market:polymarket:${params.tokenId}`,
-        outcome: "EXIT",
-        side: "SELL",
-        size_usdc: params.shares,
-        limit_price: 1,
-        client_order_id: params.client_order_id,
-        attributes: { token_id: params.tokenId, order_mode: "market" },
-      });
-      const duration_ms = Date.now() - start;
-      this.metrics.incr(POLY_CLOB_METRICS.placeTotal, { result: "ok" });
-      this.metrics.observeDurationMs(
-        POLY_CLOB_METRICS.placeDurationMs,
-        duration_ms,
-        { result: "ok" }
-      );
-      this.log.info(
-        {
-          ...baseFields,
-          phase: "ok",
-          duration_ms,
-          order_id: receipt.order_id,
-          status: receipt.status,
-          filled_size_usdc: receipt.filled_size_usdc,
-          tick_size: tickSize,
-          neg_risk: negRisk,
-          fee_rate_bps: feeRateBps,
-        },
-        "sellPositionAtMarket: ok"
-      );
-      return receipt;
-    } catch (err) {
-      const duration_ms = Date.now() - start;
-      const details =
-        err instanceof ClobRejectionError
-          ? err.details
-          : classifyClientError(err);
-      const result = err instanceof ClobRejectionError ? "rejected" : "error";
-      this.metrics.incr(POLY_CLOB_METRICS.placeTotal, {
-        result,
-        error_code: details.error_code,
-      });
-      this.metrics.observeDurationMs(
-        POLY_CLOB_METRICS.placeDurationMs,
-        duration_ms,
-        { result, error_code: details.error_code }
-      );
-      this.log.error(
-        {
-          ...baseFields,
-          phase: result,
-          duration_ms,
-          tick_size: tickSize,
-          neg_risk: negRisk,
-          fee_rate_bps: feeRateBps,
-          error_code: details.error_code,
-          http_status: details.http_status,
-          response_keys: details.response_keys,
-          reason: details.reason,
-        },
-        `sellPositionAtMarket: ${result}`
-      );
-      throw err;
-    }
-  }
-
-  async updateBalanceAllowance(
-    params: PolymarketBalanceAllowanceParams
-  ): Promise<void> {
-    const assetType =
-      params.assetType === "COLLATERAL"
-        ? AssetType.COLLATERAL
-        : AssetType.CONDITIONAL;
-    await this.client.updateBalanceAllowance({
-      asset_type: assetType,
-      ...(params.tokenId ? { token_id: params.tokenId } : {}),
-    });
-    this.log.info(
-      {
-        event: "poly.clob.balance_allowance.sync",
-        asset_type: params.assetType,
-        token_id: params.tokenId,
-      },
-      "updateBalanceAllowance: ok"
-    );
   }
 
   async cancelOrder(orderId: string): Promise<void> {
@@ -976,7 +807,7 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
     return {
       error_code: POLY_CLOB_ERROR_CODES.staleApiKey,
       response_keys: [],
-      ...(http_status !== undefined ? { http_status } : {}),
+      http_status,
       reason: message.slice(0, 128),
     };
   }
@@ -985,10 +816,7 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
   const data = anyErr?.response?.data;
   if (data && typeof data === "object" && Object.keys(data).length > 0) {
     const fromBody = classifyClobFailure(data);
-    return {
-      ...fromBody,
-      ...(http_status !== undefined ? { http_status } : {}),
-    };
+    return { ...fromBody, http_status };
   }
 
   const error_code = http_status
@@ -997,7 +825,7 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
   return {
     error_code,
     response_keys: [],
-    ...(http_status !== undefined ? { http_status } : {}),
+    http_status,
     reason: message.slice(0, 128),
   };
 }

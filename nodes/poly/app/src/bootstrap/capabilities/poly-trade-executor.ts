@@ -5,12 +5,9 @@
  * Module: `@bootstrap/capabilities/poly-trade-executor`
  * Purpose: Per-tenant Polymarket trade executor. Given a `billingAccountId`,
  *   returns a `PolyTradeExecutor` with `placeIntent` / `closePosition` /
- *   `exitPosition` / `redeemResolvedPosition` / `listPositions` methods.
- *   Entry and mirror-placement flows route through
+ *   `redeemResolvedPosition` / `listPositions` methods that route trades through
  *   `PolyTraderWalletPort.authorizeIntent` before signing — so scope + cap +
- *   grant-revoke checks run on the hot path. User-initiated exits/redeems are
- *   authorized by active tenant connection instead of grant caps so users can
- *   always unwind their own positions. Caches the per-tenant
+ *   grant-revoke checks run on the hot path. Caches the per-tenant
  *   `PolymarketClobAdapter` + viem `WalletClient` so the Privy resolve /
  *   clob-client construction costs are paid once per tenant per process.
  *   Also the lone legal importer of `@polymarket/clob-client` alongside
@@ -114,14 +111,6 @@ export interface ClosePositionParams {
   client_order_id: `0x${string}`;
 }
 
-/** User-initiated full exit of the current wallet position. */
-export interface ExitPositionParams {
-  /** ERC-1155 asset id (Polymarket token). */
-  tokenId: string;
-  /** Caller-supplied idempotency key. */
-  client_order_id: `0x${string}`;
-}
-
 export interface OpenOrderSummary {
   orderId: string;
   marketId: string | null;
@@ -178,12 +167,6 @@ export interface PolyTradeExecutor {
    * so `authorizeIntent` enforces scope + caps.
    */
   closePosition: (params: ClosePositionParams) => Promise<OrderReceipt>;
-  /**
-   * User-facing full exit path. Sells the wallet's entire share balance for
-   * the token via a market FOK order and bypasses grant caps so users can
-   * always unwind exposure.
-   */
-  exitPosition: (params: ExitPositionParams) => Promise<OrderReceipt>;
   /** Per-tenant position query for the operator address. */
   listPositions: () => Promise<PolymarketUserPosition[]>;
   /** Per-tenant getOrder for the reconciler path (optional, deferred). */
@@ -200,8 +183,8 @@ export interface PolyTradeExecutor {
   listOpenOrders: () => Promise<OpenOrderSummary[]>;
   /**
    * Redeem winning outcome tokens for USDC.e via Conditional Tokens `redeemPositions`
-   * after the market is resolved (Data API `redeemable: true`). Requires only
-   * an active tenant wallet connection; grant caps never block redemptions.
+   * after the market is resolved (Data API `redeemable: true`). Uses `authorizeIntent`
+   * with SELL + $0 so grant scope matches exit semantics.
    */
   redeemResolvedPosition: (
     params: RedeemResolvedParams
@@ -223,26 +206,6 @@ export interface PolyTradeExecutorFactoryDeps {
   host?: string | undefined;
   polygonRpcUrl?: string | undefined;
 }
-
-const EXIT_RECONCILE_DELAYS_MS = [150, 350, 750] as const;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function errorMentionsAllowance(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return message.toLowerCase().includes("allowance");
-}
-
-type MarketExitAdapter = {
-  sellPositionAtMarket: (params: {
-    tokenId: string;
-    shares: number;
-    client_order_id: `0x${string}`;
-    orderType?: "FOK" | "FAK";
-  }) => Promise<OrderReceipt>;
-};
 
 type CachedExecutor = {
   executor: PolyTradeExecutor;
@@ -434,13 +397,13 @@ async function buildExecutor(
         `poly-trade-executor: no open position for tokenId=${params.tokenId} on wallet=${funderAddress}`
       );
     }
-    const limit_price =
-      params.limit_price ?? Math.max(0.01, position.curPrice - 0.01);
-    const positionValueUsdcAtLimit = position.size * limit_price;
+    const positionValueUsdc = position.size * position.curPrice;
     const effective_size_usdc = Math.min(
       params.max_size_usdc,
-      positionValueUsdcAtLimit
+      positionValueUsdc
     );
+    const limit_price =
+      params.limit_price ?? Math.max(0.01, position.curPrice - 0.01);
     const intent: OrderIntent = {
       provider: "polymarket",
       market_id: `prediction-market:polymarket:${position.conditionId}`,
@@ -454,227 +417,40 @@ async function buildExecutor(
     return authorizedPlace(intent);
   }
 
-  async function authorizeWalletExit(params: {
-    action: "close" | "redeem";
-    requireTradingReady: boolean;
-  }): Promise<void> {
-    const connection =
-      await deps.walletPort.getConnectionSummary(billingAccountId);
-    if (!connection) {
-      deps.logger.warn(
-        {
-          event: "poly.trade.executor.exit_denied",
-          billing_account_id: billingAccountId,
-          action: params.action,
-          reason: "no_connection",
-        },
-        "poly-trade-executor: exit denied; no active tenant wallet connection"
-      );
-      throw new PolyTradeExecutorError(
-        "not_authorized",
-        `poly-trade-executor: ${params.action} denied (no_connection)`,
-        "no_connection"
-      );
-    }
-    if (params.requireTradingReady) {
-      try {
-        const ready =
-          await deps.walletPort.ensureTradingApprovals(billingAccountId);
-        if (ready.ready) return;
-      } catch (err) {
-        deps.logger.warn(
-          {
-            event: "poly.trade.executor.exit_denied",
-            billing_account_id: billingAccountId,
-            action: params.action,
-            reason: "trading_not_ready",
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "poly-trade-executor: exit denied; trading approvals bootstrap failed"
-        );
-        throw new PolyTradeExecutorError(
-          "not_authorized",
-          `poly-trade-executor: ${params.action} denied (trading_not_ready)`,
-          "trading_not_ready"
-        );
-      }
-      deps.logger.warn(
-        {
-          event: "poly.trade.executor.exit_denied",
-          billing_account_id: billingAccountId,
-          action: params.action,
-          reason: "trading_not_ready",
-        },
-        "poly-trade-executor: exit denied; trading approvals not ready"
-      );
-      throw new PolyTradeExecutorError(
-        "not_authorized",
-        `poly-trade-executor: ${params.action} denied (trading_not_ready)`,
-        "trading_not_ready"
-      );
-    }
-  }
-
-  async function reconcileRemainingPosition(
-    tokenId: string
-  ): Promise<PolymarketUserPosition | null> {
-    for (
-      let attempt = 0;
-      attempt < EXIT_RECONCILE_DELAYS_MS.length;
-      attempt += 1
-    ) {
-      const refreshedPositions =
-        await dataApiClient.listUserPositions(funderAddress);
-      const remaining = refreshedPositions.find((p) => p.asset === tokenId);
-      if (!remaining || remaining.size <= 0) {
-        return null;
-      }
-      const delayMs = EXIT_RECONCILE_DELAYS_MS[attempt];
-      if (!delayMs) {
-        return remaining;
-      }
-      await sleep(delayMs);
-    }
-
-    const refreshedPositions =
-      await dataApiClient.listUserPositions(funderAddress);
-    return refreshedPositions.find((p) => p.asset === tokenId) ?? null;
-  }
-
-  async function exitPosition(
-    params: ExitPositionParams
-  ): Promise<OrderReceipt> {
-    await authorizeWalletExit({
-      action: "close",
-      requireTradingReady: true,
-    });
-
-    const marketExitAdapter = adapter as typeof adapter & MarketExitAdapter;
-    let totalFilledUsdc = 0;
-    let lastReceipt: OrderReceipt | null = null;
-    let recoveredAllowances = false;
-
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const positions = await dataApiClient.listUserPositions(funderAddress);
-      const position = positions.find((p) => p.asset === params.tokenId);
-      if (!position || position.size <= 0) {
-        if (!lastReceipt) {
-          throw new PolyTradeExecutorError(
-            "no_position_to_close",
-            `poly-trade-executor: no open position for tokenId=${params.tokenId} on wallet=${funderAddress}`
-          );
-        }
-        return {
-          ...lastReceipt,
-          filled_size_usdc: totalFilledUsdc,
-        };
-      }
-
-      deps.logger.info(
-        {
-          event: "poly.exit.place.tenant",
-          billing_account_id: billingAccountId,
-          token_id: params.tokenId,
-          shares: position.size,
-          client_order_id: params.client_order_id,
-          attempt: attempt + 1,
-        },
-        "poly-trade-executor: market exit authorized → placeOrder"
-      );
-
-      let receipt: OrderReceipt;
-      try {
-        receipt = await marketExitAdapter.sellPositionAtMarket({
-          tokenId: params.tokenId,
-          shares: position.size,
-          client_order_id: params.client_order_id,
-          orderType: "FAK",
-        });
-      } catch (err) {
-        if (!recoveredAllowances && errorMentionsAllowance(err)) {
-          recoveredAllowances = true;
-          deps.logger.warn(
-            {
-              event: "poly.exit.recover_approvals",
-              billing_account_id: billingAccountId,
-              token_id: params.tokenId,
-              attempt: attempt + 1,
-            },
-            "poly-trade-executor: market exit hit allowance drift; refreshing approvals and retrying once"
-          );
-          const ready =
-            await deps.walletPort.ensureTradingApprovals(billingAccountId);
-          if (!ready.ready) {
-            throw err;
-          }
-          receipt = await marketExitAdapter.sellPositionAtMarket({
-            tokenId: params.tokenId,
-            shares: position.size,
-            client_order_id: params.client_order_id,
-            orderType: "FAK",
-          });
-        } else {
-          throw err;
-        }
-      }
-      totalFilledUsdc += receipt.filled_size_usdc;
-      lastReceipt = receipt;
-
-      const remaining = await reconcileRemainingPosition(params.tokenId);
-      if (!remaining || remaining.size <= 0) {
-        return {
-          ...receipt,
-          filled_size_usdc: totalFilledUsdc,
-        };
-      }
-
-      if (remaining.size < position.size) {
-        deps.logger.info(
-          {
-            event: "poly.exit.reconcile_progress",
-            billing_account_id: billingAccountId,
-            token_id: params.tokenId,
-            prior_shares: position.size,
-            remaining_shares: remaining.size,
-            attempt: attempt + 1,
-          },
-          "poly-trade-executor: market exit made progress; retrying remaining shares"
-        );
-        continue;
-      }
-
-      if (receipt.filled_size_usdc > 0 || receipt.status === "filled") {
-        deps.logger.warn(
-          {
-            event: "poly.exit.reconcile_pending",
-            billing_account_id: billingAccountId,
-            token_id: params.tokenId,
-            remaining_shares: remaining.size,
-            attempt: attempt + 1,
-            order_id: receipt.order_id,
-          },
-          "poly-trade-executor: market exit accepted but Data API still shows stale position state; returning provider receipt"
-        );
-        return {
-          ...receipt,
-          filled_size_usdc: totalFilledUsdc,
-        };
-      }
-    }
-
-    if (
-      lastReceipt &&
-      (lastReceipt.filled_size_usdc > 0 || lastReceipt.status === "filled")
-    ) {
-      return {
-        ...lastReceipt,
-        filled_size_usdc: totalFilledUsdc,
-      };
-    }
-
-    throw new Error(
-      `poly-trade-executor: market exit incomplete after retries for tokenId=${params.tokenId}`
+  async function authorizeRedeemExit(marketConditionId: string): Promise<void> {
+    const summary: OrderIntentSummary = {
+      side: "SELL",
+      usdcAmount: 0,
+      marketConditionId: marketConditionId.replace(
+        /^prediction-market:polymarket:/i,
+        ""
+      ),
+    };
+    const authz = await deps.walletPort.authorizeIntent(
+      billingAccountId,
+      summary
     );
+    if (!authz.ok) {
+      deps.metrics.incr("poly_authorize_denied_total", {
+        reason: authz.reason,
+      });
+      deps.logger.warn(
+        {
+          event: "poly.trade.executor.authorize_denied",
+          billing_account_id: billingAccountId,
+          intent_side: "SELL",
+          intent_usdc: 0,
+          reason: authz.reason,
+          redeem: true,
+        },
+        "poly-trade-executor: authorize denied; refusing redeem"
+      );
+      throw new PolyTradeExecutorError(
+        "not_authorized",
+        `poly-trade-executor: authorize denied for redeem (${authz.reason})`,
+        authz.reason
+      );
+    }
   }
 
   async function redeemResolvedPosition(
@@ -709,10 +485,7 @@ async function buildExecutor(
       );
     }
 
-    await authorizeWalletExit({
-      action: "redeem",
-      requireTradingReady: false,
-    });
+    await authorizeRedeemExit(match.conditionId);
 
     try {
       const hash = await walletClient.writeContract({
@@ -798,7 +571,6 @@ async function buildExecutor(
     billingAccountId,
     placeIntent: authorizedPlace,
     closePosition,
-    exitPosition,
     listPositions: () => dataApiClient.listUserPositions(funderAddress),
     getOrder: adapter.getOrder.bind(adapter),
     getMarketConstraints: adapter.getMarketConstraints.bind(adapter),
