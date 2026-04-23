@@ -15,6 +15,7 @@
 
 "use client";
 
+import { LoaderCircle } from "lucide-react";
 import type { ReactElement } from "react";
 
 import {
@@ -33,12 +34,21 @@ export type PositionsTableProps = {
   positions?: readonly WalletPosition[] | undefined;
   isLoading?: boolean | undefined;
   emptyMessage?: string | undefined;
+  /** When set, clicking Close / Redeem invokes this (open → Close, redeemable → Redeem). */
+  onPositionAction?: (
+    position: WalletPosition,
+    action: "close" | "redeem"
+  ) => void | Promise<void>;
+  /** Row `positionId` while an action request is in flight. */
+  pendingActionPositionId?: string | null;
 };
 
 export function PositionsTable({
   positions,
   isLoading,
   emptyMessage = "No positions yet.",
+  onPositionAction,
+  pendingActionPositionId = null,
 }: PositionsTableProps): ReactElement {
   if (isLoading) {
     return (
@@ -125,17 +135,11 @@ export function PositionsTable({
                 {formatSignedPct(position.pnlPct)}
               </TableCell>
               <TableCell className="text-right">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  title={`${actionLabel(position.status)} actions land next`}
-                  aria-label={`${actionLabel(position.status)} ${position.marketTitle}`}
-                  onClick={(event) => event.preventDefault()}
-                  className="w-20 border-border/70 text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
-                >
-                  {actionLabel(position.status)}
-                </Button>
+                <PositionActionButton
+                  position={position}
+                  onPositionAction={onPositionAction}
+                  pendingActionPositionId={pendingActionPositionId}
+                />
               </TableCell>
             </TableRow>
           );
@@ -172,6 +176,66 @@ function formatHeldDuration(heldMinutes: number): string {
 
 function actionLabel(status: WalletPosition["status"]): string {
   if (status === "redeemable") return "Redeem";
-  if (status === "closed") return "Exit";
+  if (status === "closed") return "Settled";
   return "Close";
+}
+
+function PositionActionButton({
+  position,
+  onPositionAction,
+  pendingActionPositionId,
+}: {
+  position: WalletPosition;
+  onPositionAction?: PositionsTableProps["onPositionAction"];
+  pendingActionPositionId: string | null;
+}): ReactElement {
+  const label = actionLabel(position.status);
+  const wired = typeof onPositionAction === "function";
+  const actionable =
+    wired && (position.status === "open" || position.status === "redeemable");
+  const busy = pendingActionPositionId === position.positionId;
+  const kind =
+    position.status === "redeemable"
+      ? ("redeem" as const)
+      : position.status === "open"
+        ? ("close" as const)
+        : null;
+
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      disabled={!actionable || busy}
+      title={
+        !wired
+          ? "Actions require a dashboard handler"
+          : position.status === "closed"
+            ? "Position already settled"
+            : busy
+              ? "Working…"
+              : `${label} via Polymarket`
+      }
+      aria-label={`${label} ${position.marketTitle}`}
+      onClick={(event) => {
+        event.preventDefault();
+        if (!actionable || busy || !kind) return;
+        void onPositionAction(position, kind);
+      }}
+      className={
+        actionable && !busy
+          ? "w-20 border-border/70 hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+          : "w-20 border-border/70 text-muted-foreground"
+      }
+    >
+      {busy ? (
+        <span className="inline-flex items-center justify-center">
+          <LoaderCircle aria-hidden="true" className="size-3 animate-spin" />
+          <span className="sr-only">{label} in progress</span>
+        </span>
+      ) : (
+        label
+      )}
+    </Button>
+  );
 }

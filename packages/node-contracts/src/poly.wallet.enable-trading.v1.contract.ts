@@ -3,14 +3,14 @@
 
 /**
  * Module: `@contracts/poly.wallet.enable-trading.v1.contract`
- * Purpose: Contract for the idempotent "Enable Trading" Polymarket on-chain approvals ceremony — 3× USDC.e `approve` + 2× CTF `setApprovalForAll` signed by the tenant's Privy-custodied wallet.
+ * Purpose: Contract for the idempotent "Enable Trading" Polymarket on-chain approvals ceremony — 3× USDC.e `approve` + 3× CTF `setApprovalForAll` signed by the tenant's Privy-custodied wallet.
  * Scope: `POST /api/v1/poly/wallet/enable-trading`. Schema-only. Does not submit transactions, touch the DB, talk to Privy, or accept a caller-supplied target address.
  * Invariants:
  *   - APPROVALS_BEFORE_PLACE — `ready: true` in this response is the only
  *     event that flips `poly_wallet_connections.trading_approvals_ready_at`
  *     from null → now(), which is what `authorizeIntent` reads before
  *     letting any order reach the CLOB.
- *   - APPROVAL_TARGETS_PINNED — the 3 USDC.e spenders + 2 CTF operators are
+ *   - APPROVAL_TARGETS_PINNED — the 3 USDC.e spenders + 3 CTF operators are
  *     Polymarket mainnet addresses hardcoded in the adapter. No contract
  *     field accepts a caller-supplied target address.
  *   - PARTIAL_FAILURE_NEVER_THROWS — if a step reverts mid-sequence, the
@@ -54,7 +54,7 @@ export const polyWalletEnableTradingOperation = {
     address: addressSchema,
     /** Decimal POL balance used for gas. `null` when Polygon RPC is not configured on this deployment. */
     pol_balance: z.number().nullable(),
-    steps: z.array(approvalStepSchema).min(5).max(5),
+    steps: z.array(approvalStepSchema).min(6).max(6),
     /** ISO timestamp when the readiness stamp was written; `null` when `ready: false`. */
     ready_at: z.string().datetime().nullable(),
   }),

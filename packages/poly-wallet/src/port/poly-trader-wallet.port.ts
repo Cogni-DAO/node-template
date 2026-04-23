@@ -141,7 +141,7 @@ export interface TradingApprovalStep {
  * Shape is JSON-friendly so the route can serialize it directly.
  */
 export interface TradingApprovalsState {
-  /** True iff all 5 targets ended the run at `satisfied` | `set`. */
+  /** True iff all 6 targets ended the run at `satisfied` | `set`. */
   readonly ready: boolean;
   readonly address: `0x${string}`;
   /** Decimal POL balance used for gas. `null` when RPC unconfigured. */
@@ -306,11 +306,11 @@ export interface PolyTraderWalletPort {
 
   /**
    * Idempotently drive the tenant's trading wallet to "ready to trade" by
-   * running the five Polymarket onboarding approvals:
+   * running the six Polymarket onboarding approvals:
    *   - USDC.e `approve(MaxUint256)` on Exchange, Neg-Risk Exchange,
    *     Neg-Risk Adapter (enables BUY)
-   *   - CTF `setApprovalForAll(true)` on Exchange + Neg-Risk Exchange
-   *     (enables SELL on neg_risk)
+   *   - CTF `setApprovalForAll(true)` on Exchange + Neg-Risk Exchange +
+   *     Neg-Risk Adapter (enables SELL on neg_risk, including close)
    *
    * On full success, stamps `poly_wallet_connections.trading_approvals_ready_at`
    * so subsequent calls no-op and `authorizeIntent`'s `APPROVALS_BEFORE_PLACE`

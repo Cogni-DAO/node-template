@@ -21,8 +21,8 @@
  *   - SEPARATE_PRIVY_APP: privy_wallet_id references the USER-WALLETS Privy
  *     app only. The app-layer adapter enforces this; the DB cannot.
  *   - APPROVALS_BEFORE_PLACE: trading_approvals_ready_at is the on-chain
- *     readiness stamp for the five Polymarket approvals (3× USDC.e approve +
- *     2× CTF setApprovalForAll). authorizeIntent fails-closed when NULL.
+ *     readiness stamp for the six Polymarket approvals (3× USDC.e approve +
+ *     3× CTF setApprovalForAll). authorizeIntent fails-closed when NULL.
  *     Cleared app-side alongside revoked_at so a fresh post-revoke row
  *     re-runs the approvals flow.
  * Side-effects: none (schema only)
@@ -95,7 +95,7 @@ export const polyWalletConnections = pgTable(
     lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
     /**
      * Stamped by `PrivyPolyTraderWalletAdapter.ensureTradingApprovals` once all
-     * five Polymarket on-chain approvals resolve to max / approved. `null`
+     * six Polymarket on-chain approvals resolve to max / approved. `null`
      * means the wallet is provisioned but cannot yet trade — the
      * `APPROVALS_BEFORE_PLACE` invariant on `authorizeIntent` fail-closes.
      */

@@ -125,6 +125,8 @@ export interface MirrorJobDeps {
    * When absent, SELL fills degrade to `skip/sell_without_position`.
    */
   getOperatorPositions?: () => Promise<OperatorPosition[]>;
+  /** Optional CTF redeem sweep — see `MirrorPipelineDeps.redeemSweep`. */
+  redeemSweep?: () => Promise<void>;
 }
 
 /** Stops the poll. Returned so the container can call on SIGTERM (future). */
@@ -178,6 +180,9 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
       : {}),
     ...(deps.getOperatorPositions !== undefined
       ? { getOperatorPositions: deps.getOperatorPositions }
+      : {}),
+    ...(deps.redeemSweep !== undefined
+      ? { redeemSweep: deps.redeemSweep }
       : {}),
   };
 

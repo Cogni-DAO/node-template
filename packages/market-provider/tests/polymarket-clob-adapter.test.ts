@@ -17,6 +17,8 @@ import {
   ClobRejectionError,
   classifyClientError,
   classifyClobFailure,
+  coerceNegRiskApiValue,
+  extractClobPlacedOrderId,
   mapOpenOrderToReceipt,
   mapOrderResponseToReceipt,
   normalizePolymarketStatus,
@@ -62,7 +64,39 @@ describe("normalizePolymarketStatus", () => {
   });
 });
 
+describe("coerceNegRiskApiValue (bug.0329)", () => {
+  it("maps API string/numeric toggles to boolean", () => {
+    expect(coerceNegRiskApiValue(true)).toBe(true);
+    expect(coerceNegRiskApiValue(false)).toBe(false);
+    expect(coerceNegRiskApiValue(1)).toBe(true);
+    expect(coerceNegRiskApiValue(0)).toBe(false);
+    expect(coerceNegRiskApiValue("1")).toBe(true);
+    expect(coerceNegRiskApiValue("0")).toBe(false);
+    expect(coerceNegRiskApiValue("true")).toBe(true);
+    expect(coerceNegRiskApiValue("false")).toBe(false);
+  });
+});
+
+describe("extractClobPlacedOrderId", () => {
+  it("reads orderID, orderId, then order_id", () => {
+    expect(extractClobPlacedOrderId({ orderID: "a" })).toBe("a");
+    expect(extractClobPlacedOrderId({ orderId: "b" })).toBe("b");
+    expect(extractClobPlacedOrderId({ order_id: "c" })).toBe("c");
+    expect(
+      extractClobPlacedOrderId({ orderId: "wins", orderID: "first" })
+    ).toBe("first");
+  });
+});
+
 describe("mapOrderResponseToReceipt", () => {
+  it("accepts camelCase orderId when orderID is absent", () => {
+    const receipt = mapOrderResponseToReceipt(
+      { orderId: "0xcamel", status: "live" },
+      BASE_INTENT
+    );
+    expect(receipt.order_id).toBe("0xcamel");
+  });
+
   it("echoes client_order_id from the intent verbatim", () => {
     const receipt = mapOrderResponseToReceipt(
       { orderID: "0xorder1", status: "live" },
@@ -271,6 +305,8 @@ describe("PolymarketClobAdapter", () => {
   function makeAdapter(
     stub: {
       createAndPostOrder?: ReturnType<typeof vi.fn>;
+      createAndPostMarketOrder?: ReturnType<typeof vi.fn>;
+      updateBalanceAllowance?: ReturnType<typeof vi.fn>;
       cancelOrder?: ReturnType<typeof vi.fn>;
       getOrder?: ReturnType<typeof vi.fn>;
       getTickSize?: ReturnType<typeof vi.fn>;
@@ -283,6 +319,9 @@ describe("PolymarketClobAdapter", () => {
     stub.getTickSize ??= vi.fn().mockResolvedValue("0.01");
     stub.getNegRisk ??= vi.fn().mockResolvedValue(false);
     stub.getFeeRateBps ??= vi.fn().mockResolvedValue(0);
+    stub.updateBalanceAllowance ??= vi
+      .fn()
+      .mockResolvedValue({ balance: "0", allowance: "0" });
     // Default orderBook: minShares=1 so legacy tests (BASE_INTENT size_usdc=1
     // at price 0.5 = 2 shares ≥ 1) pass through without triggering the
     // bug.0342 defense-in-depth guard. Tests that exercise the guard override
@@ -422,6 +461,84 @@ describe("PolymarketClobAdapter", () => {
     const adapter = makeAdapter({ cancelOrder });
     await adapter.cancelOrder("0xorder");
     expect(cancelOrder).toHaveBeenCalledWith({ orderID: "0xorder" });
+  });
+
+  it("sellPositionAtMarket posts a market SELL using the exact share balance", async () => {
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
+      orderID: "0xmarket",
+      status: "matched",
+      takingAmount: "1.25",
+    });
+    const updateBalanceAllowance = vi
+      .fn()
+      .mockResolvedValue({ balance: "5", allowance: "5" });
+    const getTickSize = vi.fn().mockResolvedValue("0.001");
+    const getNegRisk = vi.fn().mockResolvedValue(true);
+    const getFeeRateBps = vi.fn().mockResolvedValue(1000);
+    const adapter = makeAdapter({
+      createAndPostMarketOrder,
+      updateBalanceAllowance,
+      getTickSize,
+      getNegRisk,
+      getFeeRateBps,
+    });
+
+    const receipt = await adapter.sellPositionAtMarket({
+      tokenId: "0xtoken",
+      shares: 5,
+      client_order_id: "0xclientid",
+      orderType: "FAK",
+    });
+
+    expect(createAndPostMarketOrder).toHaveBeenCalledOnce();
+    const [userOrder, opts, orderType] = createAndPostMarketOrder.mock
+      .calls[0] as [
+      { tokenID: string; amount: number; side: string; feeRateBps: number },
+      { tickSize: string; negRisk: boolean },
+      string,
+    ];
+    expect(userOrder).toEqual({
+      tokenID: "0xtoken",
+      amount: 5,
+      side: "SELL",
+      feeRateBps: 1000,
+    });
+    expect(opts).toEqual({ tickSize: "0.001", negRisk: true });
+    expect(orderType).toBe("FAK");
+    expect(updateBalanceAllowance).toHaveBeenNthCalledWith(1, {
+      asset_type: "COLLATERAL",
+    });
+    expect(updateBalanceAllowance).toHaveBeenNthCalledWith(2, {
+      asset_type: "CONDITIONAL",
+      token_id: "0xtoken",
+    });
+    expect(receipt.order_id).toBe("0xmarket");
+    expect(receipt.client_order_id).toBe("0xclientid");
+    expect(receipt.filled_size_usdc).toBe(1.25);
+  });
+
+  it("sellPositionAtMarket rejects a share balance below the market minimum", async () => {
+    const createAndPostMarketOrder = vi.fn();
+    const getOrderBook = vi.fn().mockResolvedValue({
+      min_order_size: "5",
+      tick_size: "0.01",
+    });
+    const adapter = makeAdapter({ createAndPostMarketOrder, getOrderBook });
+
+    let caught: unknown;
+    try {
+      await adapter.sellPositionAtMarket({
+        tokenId: "0xtoken",
+        shares: 2,
+        client_order_id: "0xclientid",
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    expect((caught as { code?: string }).code).toBe("BELOW_MARKET_MIN");
+    expect(createAndPostMarketOrder).not.toHaveBeenCalled();
   });
 
   it("getOrder maps OpenOrder response to { found: receipt } (GETORDER_NEVER_NULL, task.0328 CP1)", async () => {
@@ -591,6 +708,7 @@ describe("PolymarketClobAdapter — observability", () => {
   function makeAdapter(
     stub: {
       createAndPostOrder?: ReturnType<typeof vi.fn>;
+      createAndPostMarketOrder?: ReturnType<typeof vi.fn>;
       cancelOrder?: ReturnType<typeof vi.fn>;
       getOrder?: ReturnType<typeof vi.fn>;
       getTickSize?: ReturnType<typeof vi.fn>;
