@@ -1,7 +1,7 @@
 {
   "slot": "candidate-a",
-  "state": "failed",
-  "released_at": "2026-04-23T06:16:04.185331Z",
+  "state": "free",
+  "released_at": "2026-04-23T07:08:52.000000Z",
   "last_owner": {
     "pr_number": 999,
     "head_sha": "dd4061580c007323d2c75653385e8059b97ee4fb",
