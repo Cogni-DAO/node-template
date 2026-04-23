@@ -37,7 +37,7 @@ import type {
   WalletExecutionWarning,
 } from "@cogni/node-contracts";
 import pLimit from "p-limit";
-import { coalesce } from "./coalesce";
+import { clearTtlCacheByPrefix, coalesce } from "./coalesce";
 import { getTradingWalletPnlHistory } from "./trading-wallet-overview-service";
 
 /** Cache TTL for every slice. Matches design doc 30 s. */
@@ -80,6 +80,20 @@ export function __setClientsForTests(opts: {
 export type SliceResult<T> =
   | { kind: "ok"; value: T }
   | { kind: "warn"; warning: WalletAnalysisWarning };
+
+/**
+ * Evict wallet-scoped slices after a close/redeem write so the next dashboard
+ * refetch does not reuse stale process cache entries.
+ */
+export function invalidateWalletAnalysisCaches(addr: string): void {
+  const addressVariants = new Set([addr, addr.toLowerCase()]);
+  for (const address of addressVariants) {
+    clearTtlCacheByPrefix(`positions:${address}`);
+    clearTtlCacheByPrefix(`trades:${address}`);
+    clearTtlCacheByPrefix(`execution-trades:${address}`);
+    clearTtlCacheByPrefix(`pnl:${address}:`);
+  }
+}
 
 /** Fetch + return the trades slice. Coalesced + p-limited. */
 export async function getTradesSlice(

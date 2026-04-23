@@ -115,6 +115,8 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 
 - **Provider cache is a real boundary**: candidate-a proved that Polymarket can reject a SELL with `allowance: 0` on the neg-risk adapter even when our live on-chain reads show the spender approved. The integration plan now treats Polymarket's `/balance-allowance` cache as a write-path dependency that must be refreshed on exits, not as an implementation detail we can ignore.
 
+- **Execution rows are a read model, not authority**: candidate-a also proved a close can succeed upstream while the dashboard still renders the old open row from the 30s wallet-analysis process cache. Immediate fix lives in task.0357: evict wallet-scoped execution/read-model cache keys after successful close/redeem. Proper follow-up is a readonly-first split between `live_positions`, `closed_positions`, and `pending_actions` so future MCP tooling can expose each authority cleanly.
+
 - **Target-source seam (`CopyTradeTargetSource`)**: Phase A lands the DB-backed impl (`dbTargetSource` over `poly_copy_trade_targets`) alongside the original `envTargetSource` (now local-dev only). The port has two methods: `listForActor(actorId)` RLS-clamped via appDb for per-user routes, and `listAllActive()` under serviceDb — the ONE sanctioned BYPASSRLS read — used exclusively by the mirror-poll enumerator in `container.ts`.
 
 - **Sync-truth cache (task.0328)**: the ledger's `status` column is insert-time only — actual CLOB state may be filled, canceled, or partial. The reconciler reads CLOB on a 60s cadence and writes `synced_at`. Routes that show live status must cross-check Data-API `/positions?user=<addr>` or check `synced_at` staleness.

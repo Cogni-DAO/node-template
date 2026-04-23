@@ -35,6 +35,7 @@ external_refs:
 - Exit readiness must be validated against the live pinned approval target set before a close attempt; the DB readiness stamp is a cache/UI hint, not authoritative truth.
 - After live approvals are good on-chain, the close path must refresh Polymarket's own `/balance-allowance` view before market SELL. Candidate-a proved the provider can still reject with `allowance: 0` while our direct chain reads say the spender is approved.
 - A successful or accepted Polymarket market-sell response must never be turned into a 502 solely because one immediate public Data API `/positions` reread still shows the old balance.
+- After a successful close or redeem, the dashboard's next refetch must not reuse a stale wallet-analysis execution snapshot from the process TTL cache.
 - Exit execution must use types that match the provider's execution units. Share-based market exits must not be forced through a USDC-notional `OrderReceipt` abstraction without explicit normalization.
 - Redeem must remain uncapped and move toward chain-authoritative eligibility; the system should not strand redeemable funds behind our own policy gates or a lagging advisory read model.
 
@@ -119,6 +120,9 @@ The clean boundary is:
    - a single stale `/positions` read must not fail the request
    - if the write succeeded but read reconciliation is lagging, return a non-error typed state (`submitted`), not `502`
 
+7. A successful close/redeem must evict wallet-scoped execution/read-model caches.
+   Reason: candidate-a proved the write can succeed while a warm 30 s process cache still renders the old "open" row.
+
 ### Redeem Semantics
 
 - Redeem remains separate from close.
@@ -132,6 +136,7 @@ The clean boundary is:
 - [ ] EXIT_READINESS_IS_LIVE: exit readiness is checked against the live pinned approval target set; `tradingApprovalsReadyAt` is never treated as sole truth for exits
 - [ ] PROVIDER_BALANCE_ALLOWANCE_CACHE_IS_REAL: on-chain approvals do not by themselves prove Polymarket's live SELL path is ready; exit must refresh `/balance-allowance` before treating allowance errors as final
 - [ ] PROVIDER_WRITE_ACK_BEATS_LAGGING_READ_MODEL: one stale `/positions` reread cannot negate an accepted or filled provider write
+- [ ] POST_EXIT_REFETCH_SEES_FRESH_STATE: successful close/redeem paths evict wallet-scoped execution/read-model caches so the next dashboard refetch does not reuse stale holdings
 - [ ] EXIT_TYPES_MATCH_EXECUTION_UNITS: share-based market exits use explicit share-grounded result types rather than overloading USDC-notional receipts
 - [ ] RETRY_ONLY_SAFE_PROVIDER_ERRORS: only network/provider-transient failures are retry-eligible; auth and validation failures are surfaced directly
 - [ ] REDEEM_AUTHORITY_IS_CHAIN: redeem correctness is grounded in chain state, not only in Data API advisory flags
@@ -154,6 +159,7 @@ The clean boundary is:
 ## Plan
 
 - [ ] Add the proposed exit spec and lock the invariants
+- [ ] Evict wallet-analysis cache entries after successful close/redeem so the dashboard reflects the new holding state immediately
 - [ ] Introduce a dedicated market-exit result type at the provider boundary
 - [ ] Rework executor close flow to run live approval readiness and bounded reconciliation
 - [ ] Update close/redeem HTTP contracts and route responses to typed states

@@ -10,7 +10,7 @@
  *   - CONCURRENT_DEDUP: simultaneous calls for the same key resolve to one fetcher invocation.
  *   - FAILED_FETCH_NOT_CACHED: rejected fetchers are evicted so the next caller retries.
  * Side-effects: holds a Map in module scope; no I/O of its own.
- * Notes: Use `clearTtlCache()` in tests to reset module state between specs.
+ * Notes: Use `clearTtlCache()` in tests to reset module state between specs. Routes that mutate wallet state can selectively evict stale slices with `clearTtlCacheByPrefix(...)`.
  * Links: docs/design/wallet-analysis-components.md
  * @public
  */
@@ -66,6 +66,17 @@ export async function coalesce<T>(
 /** Test-only: drop all cache state. */
 export function clearTtlCache(): void {
   cache.clear();
+}
+
+/** Drop every cache key that starts with `prefix`; used after wallet-mutating writes. */
+export function clearTtlCacheByPrefix(prefix: string): number {
+  let removed = 0;
+  for (const key of cache.keys()) {
+    if (!key.startsWith(prefix)) continue;
+    cache.delete(key);
+    removed += 1;
+  }
+  return removed;
 }
 
 /** Test-only: how many keys are currently cached (in-flight or warm). */

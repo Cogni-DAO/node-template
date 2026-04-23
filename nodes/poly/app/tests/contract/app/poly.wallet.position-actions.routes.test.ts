@@ -28,6 +28,8 @@ const mockGetPolyTradeExecutorFor = vi.fn();
 const mockGetPolyTraderWalletAdapter = vi.fn();
 const mockAccountsForUser = vi.fn();
 const mockGetOrCreateBillingAccountForUser = vi.fn();
+const mockGetAddress = vi.fn();
+const mockInvalidateWalletAnalysisCaches = vi.fn();
 
 class MockPolyTradeExecutorError extends Error {
   constructor(
@@ -88,6 +90,10 @@ vi.mock("@/shared/env/server-env", () => ({
   })),
 }));
 
+vi.mock("@/features/wallet-analysis/server/wallet-analysis-service", () => ({
+  invalidateWalletAnalysisCaches: mockInvalidateWalletAnalysisCaches,
+}));
+
 vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
 }));
@@ -108,7 +114,12 @@ describe("poly wallet position action routes", () => {
       getOrCreateBillingAccountForUser: mockGetOrCreateBillingAccountForUser,
     });
     mockGetOrCreateBillingAccountForUser.mockResolvedValue(ACCOUNT);
-    mockGetPolyTraderWalletAdapter.mockReturnValue({});
+    mockGetAddress.mockResolvedValue(
+      "0xAbCdEf0000000000000000000000000000000001"
+    );
+    mockGetPolyTraderWalletAdapter.mockReturnValue({
+      getAddress: mockGetAddress,
+    });
   });
 
   it("close route delegates to exitPosition and returns the contract-shaped receipt", async () => {
@@ -143,6 +154,10 @@ describe("poly wallet position action routes", () => {
       tokenId: "token-1",
       client_order_id: expect.stringMatching(/^0x[a-f0-9]{64}$/),
     });
+    expect(mockGetAddress).toHaveBeenCalledWith(ACCOUNT.id);
+    expect(mockInvalidateWalletAnalysisCaches).toHaveBeenCalledWith(
+      "0xAbCdEf0000000000000000000000000000000001"
+    );
   });
 
   it("close route maps executor authorization / no-position failures to 403 / 409", async () => {
@@ -237,6 +252,10 @@ describe("poly wallet position action routes", () => {
       tx_hash:
         "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
     });
+    expect(mockGetAddress).toHaveBeenCalledWith(ACCOUNT.id);
+    expect(mockInvalidateWalletAnalysisCaches).toHaveBeenCalledWith(
+      "0xAbCdEf0000000000000000000000000000000001"
+    );
 
     const notRedeemable = await POST(
       makeJsonRequest("http://localhost/api/v1/poly/wallet/positions/redeem", {
@@ -293,5 +312,35 @@ describe("poly wallet position action routes", () => {
     const body = await badRedeem.json();
     expect(body.error).toBe("Invalid input");
     expect(mockGetPolyTradeExecutorFor).not.toHaveBeenCalled();
+  });
+
+  it("still returns success when cache invalidation lookup fails", async () => {
+    mockGetAddress.mockRejectedValueOnce(new Error("address lookup failed"));
+    mockGetPolyTradeExecutorFor.mockResolvedValue({
+      exitPosition: vi.fn().mockResolvedValue({
+        order_id: "0xclose",
+        status: "filled",
+        client_order_id: "0xclient",
+        filled_size_usdc: 1.25,
+      }),
+    });
+
+    const { POST } = await import(
+      "@/app/api/v1/poly/wallet/positions/close/route"
+    );
+    const response = await POST(
+      makeJsonRequest("http://localhost/api/v1/poly/wallet/positions/close", {
+        token_id: "token-1",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      order_id: "0xclose",
+      status: "filled",
+      client_order_id: "0xclient",
+      filled_size_usdc: 1.25,
+    });
+    expect(mockInvalidateWalletAnalysisCaches).not.toHaveBeenCalled();
   });
 });

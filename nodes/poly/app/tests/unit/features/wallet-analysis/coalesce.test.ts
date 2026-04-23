@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   clearTtlCache,
+  clearTtlCacheByPrefix,
   coalesce,
   ttlCacheSize,
 } from "@/features/wallet-analysis/server/coalesce";
@@ -82,5 +83,20 @@ describe("coalesce", () => {
     expect(v1).toBe("a");
     expect(v2).toBe("b");
     expect(ttlCacheSize()).toBe(2);
+  });
+
+  it("can evict a targeted prefix without flushing unrelated keys", async () => {
+    await coalesce("positions:0xabc", async () => "open", 1_000);
+    await coalesce("execution-trades:0xabc", async () => "trades", 1_000);
+    await coalesce("positions:0xdef", async () => "other", 1_000);
+
+    expect(clearTtlCacheByPrefix("positions:0xabc")).toBe(1);
+    expect(ttlCacheSize()).toBe(2);
+
+    const fetcher = vi.fn(async () => "fresh");
+    await expect(coalesce("positions:0xabc", fetcher, 1_000)).resolves.toBe(
+      "fresh"
+    );
+    expect(fetcher).toHaveBeenCalledTimes(1);
   });
 });
