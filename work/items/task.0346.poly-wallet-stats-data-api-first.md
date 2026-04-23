@@ -2,7 +2,7 @@
 id: task.0346
 type: task
 title: "Poly wallet stats: Data-API-first windowed stats + batched endpoint"
-status: needs_review
+status: done
 priority: 2
 rank: 5
 estimate: 3
