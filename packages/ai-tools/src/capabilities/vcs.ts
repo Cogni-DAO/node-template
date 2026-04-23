@@ -153,8 +153,8 @@ export interface VcsCapability {
     headSha?: string;
   }): Promise<DispatchCandidateFlightResult>;
 
-  /** Open a pull request from an existing branch. Branch must already exist on remote. */
-  createPr(params: {
+  /** Open a pull request from an existing branch. Branch must already exist on remote. Operator-only. */
+  createPr?(params: {
     owner: string;
     repo: string;
     branch: string;

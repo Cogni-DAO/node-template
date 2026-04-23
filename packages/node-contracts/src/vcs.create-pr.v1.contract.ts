@@ -16,8 +16,6 @@ import { z } from "zod";
 export const createPrOperation = {
   id: "vcs.create-pr.v1",
   input: z.object({
-    owner: z.string().min(1),
-    repo: z.string().min(1),
     branch: z.string().min(1),
     title: z.string().min(1).max(256),
     body: z.string().max(65536).default(""),

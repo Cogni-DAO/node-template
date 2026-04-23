@@ -21,6 +21,7 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
+import { getGithubRepo } from "@/shared/config/repoSpec.server";
 import { logRequestWarn, type RequestContext } from "@/shared/observability";
 
 export const runtime = "nodejs";
@@ -56,10 +57,18 @@ export const POST = wrapRouteHandlerWithLogging(
     const input = parsed.data;
 
     try {
+      const { owner, repo } = getGithubRepo();
       const container = getContainer();
-      const result = await container.vcsCapability.createPr({
-        owner: input.owner,
-        repo: input.repo,
+      const { createPr } = container.vcsCapability;
+      if (!createPr) {
+        return NextResponse.json(
+          { error: "VCS capability not configured on this node" },
+          { status: 503 }
+        );
+      }
+      const result = await createPr.call(container.vcsCapability, {
+        owner,
+        repo,
         branch: input.branch,
         title: input.title,
         body: input.body,

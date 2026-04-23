@@ -31,11 +31,6 @@ export const stubVcsCapability: VcsCapability = {
   createBranch: async () => {
     throw new Error("VcsCapability not configured on this node.");
   },
-  createPr: async () => {
-    throw new Error(
-      "VcsCapability not configured. Set GH_REVIEW_APP_ID and GH_REVIEW_APP_PRIVATE_KEY_BASE64."
-    );
-  },
   dispatchCandidateFlight: async () => {
     throw new Error("VcsCapability not configured on this node.");
   },
