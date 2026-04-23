@@ -3,20 +3,20 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: cogni-production
+namespace: cogni-preview
 
 resources:
   - ../../../base/node-app
 
-namePrefix: poly-
+namePrefix: resy-
 
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    newTag: "prod-placeholder-poly"
+    digest: "sha256:3193282d3a864913d93ad174768416ea3273345e01fbab0544b2102648616f4b"
   - name: ghcr.io/cogni-dao/cogni-template-migrate
-    newName: ghcr.io/cogni-dao/cogni-template
-    newTag: "prod-placeholder-poly"
+    newName: ghcr.io/cogni-dao/cogni-template-migrate
+    digest: "sha256:a2f45715c1921bd82c0df9fb46405730fb628f4a94332332bb454eed5120c4dc"
 
 patches:
   # Node-specific ConfigMap values.
@@ -27,22 +27,22 @@ patches:
     patch: |
       - op: replace
         path: /data/NODE_NAME
-        value: "poly"
+        value: "resy"
       - op: replace
         path: /data/TEMPORAL_NAMESPACE
-        value: "cogni-production"
+        value: "cogni-preview"
       - op: replace
         path: /data/LITELLM_BASE_URL
-        value: "http://poly-litellm-external:4000"
+        value: "http://resy-litellm-external:4000"
       - op: replace
         path: /data/TEMPORAL_ADDRESS
-        value: "poly-temporal-external:7233"
+        value: "resy-temporal-external:7233"
       - op: replace
         path: /data/REDIS_URL
-        value: "redis://poly-redis-external:6379"
+        value: "redis://resy-redis-external:6379"
       - op: add
         path: /data/NEXTAUTH_URL
-        value: "https://poly.cognidao.org"
+        value: "https://resy-preview.cognidao.org"
   # NodePort + instance label on selector (prevents cross-node routing)
   - target:
       kind: Service
@@ -50,13 +50,13 @@ patches:
     patch: |
       - op: add
         path: /spec/ports/0/nodePort
-        value: 30100
+        value: 30300
       - op: replace
         path: /spec/ports/0/targetPort
-        value: 3100
+        value: 3300
       - op: add
         path: /spec/selector/app.kubernetes.io~1instance
-        value: "poly"
+        value: "resy"
   # Fix secret refs + container port + instance label
   - target:
       kind: Deployment
@@ -64,31 +64,27 @@ patches:
     patch: |
       - op: replace
         path: /spec/template/spec/containers/0/envFrom/1/secretRef/name
-        value: "poly-node-app-secrets"
+        value: "resy-node-app-secrets"
       - op: replace
         path: /spec/template/spec/containers/0/ports/0/containerPort
-        value: 3100
+        value: 3300
       - op: add
         path: /spec/selector/matchLabels/app.kubernetes.io~1instance
-        value: "poly"
+        value: "resy"
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
-        value: "poly"
-  # Migration: skip until node-template builds its own -migrate image (task.0260).
-  # The current migrate digest points to the app image, which starts Next.js
-  # instead of running migrations — blocking Argo PreSync indefinitely.
+        value: "resy"
+  # Migration: shared migrator image runs operator's schema (all nodes share one schema).
+  # Secret ref patched to resy's secret so DATABASE_URL points to cogni_resy.
   - target:
       kind: Job
       name: migrate-node-app
     patch: |
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
-        value: "poly-node-app-secrets"
-      - op: add
-        path: /spec/template/spec/containers/0/command
-        value: ["sh", "-c", "echo 'poly: no dedicated migrate image yet (task.0260)' && exit 0"]
+        value: "resy-node-app-secrets"
 
-  # bug.0295: VM discovery via DNS (production.vm.cognidao.org).
+  # bug.0295: VM discovery via DNS (preview.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
   - target: { kind: Service, name: postgres-external }
     patch: |
@@ -98,7 +94,7 @@ patches:
         name: postgres-external
       spec:
         type: ExternalName
-        externalName: production.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: temporal-external }
     patch: |
@@ -108,7 +104,7 @@ patches:
         name: temporal-external
       spec:
         type: ExternalName
-        externalName: production.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: litellm-external }
     patch: |
@@ -118,7 +114,7 @@ patches:
         name: litellm-external
       spec:
         type: ExternalName
-        externalName: production.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: redis-external }
     patch: |
@@ -128,7 +124,7 @@ patches:
         name: redis-external
       spec:
         type: ExternalName
-        externalName: production.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: Service, name: doltgres-external }
     patch: |
@@ -138,7 +134,7 @@ patches:
         name: doltgres-external
       spec:
         type: ExternalName
-        externalName: production.vm.cognidao.org
+        externalName: preview.vm.cognidao.org
         clusterIP: null
   - target: { kind: EndpointSlice, name: postgres-external-1 }
     patch: |

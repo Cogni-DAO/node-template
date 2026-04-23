@@ -13,10 +13,10 @@ namePrefix: resy-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:4cafe81c0376bbce83155106dd8f70396faff4d9078b6cfc7cbb798f7ec20537"
+    newTag: "prod-placeholder-resy"
   - name: ghcr.io/cogni-dao/cogni-template-migrate
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:cb021c7aa2e8c42aa352e566a423e738c9040f717c92932776b8be8fe5258f92"
+    newTag: "prod-placeholder-resy"
 
 patches:
   # Node-specific ConfigMap values.
@@ -25,9 +25,6 @@ patches:
       kind: ConfigMap
       name: node-app-config
     patch: |
-      - op: replace
-        path: /data/APP_ENV
-        value: "production"
       - op: replace
         path: /data/NODE_NAME
         value: "resy"
@@ -46,9 +43,6 @@ patches:
       - op: add
         path: /data/NEXTAUTH_URL
         value: "https://resy.cognidao.org"
-      - op: add
-        path: /data/AUTH_TRUST_HOST
-        value: "true"
   # NodePort + instance label on selector (prevents cross-node routing)
   - target:
       kind: Service
@@ -80,7 +74,7 @@ patches:
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
         value: "resy"
-  # Migration: shared migrator image runs operator's schema against resy's DB.
+  # Migration: skip until node-template builds its own -migrate image (task.0260).
   - target:
       kind: Job
       name: migrate-node-app
@@ -88,44 +82,94 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
         value: "resy-node-app-secrets"
-  # EndpointSlice IPs + service-name label fix (namePrefix doesn't update label values)
-  - target:
-      kind: EndpointSlice
-      name: postgres-external-1
+      - op: add
+        path: /spec/template/spec/containers/0/command
+        value: ["sh", "-c", "echo 'resy: no dedicated migrate image yet (task.0260)' && exit 0"]
+
+  # bug.0295: VM discovery via DNS (production.vm.cognidao.org).
+  # Convert base headless Services → ExternalName; delete EndpointSlices.
+  - target: { kind: Service, name: postgres-external }
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.202"]
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "resy-postgres-external"
-  - target:
-      kind: EndpointSlice
-      name: temporal-external-1
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: postgres-external
+      spec:
+        type: ExternalName
+        externalName: production.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: temporal-external }
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.202"]
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "resy-temporal-external"
-  - target:
-      kind: EndpointSlice
-      name: litellm-external-1
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: temporal-external
+      spec:
+        type: ExternalName
+        externalName: production.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: litellm-external }
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.202"]
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "resy-litellm-external"
-  - target:
-      kind: EndpointSlice
-      name: redis-external-1
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: litellm-external
+      spec:
+        type: ExternalName
+        externalName: production.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: redis-external }
     patch: |
-      - op: replace
-        path: /endpoints/0/addresses
-        value: ["84.32.110.202"]
-      - op: replace
-        path: /metadata/labels/kubernetes.io~1service-name
-        value: "resy-redis-external"
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: redis-external
+      spec:
+        type: ExternalName
+        externalName: production.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: doltgres-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: doltgres-external
+      spec:
+        type: ExternalName
+        externalName: production.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: EndpointSlice, name: postgres-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: postgres-external-1
+  - target: { kind: EndpointSlice, name: temporal-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: temporal-external-1
+  - target: { kind: EndpointSlice, name: litellm-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: litellm-external-1
+  - target: { kind: EndpointSlice, name: redis-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: redis-external-1
+  - target: { kind: EndpointSlice, name: doltgres-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: doltgres-external-1
