@@ -20,7 +20,7 @@
 
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Copy } from "lucide-react";
 import { type ReactElement, useMemo, useState } from "react";
 import {
@@ -44,6 +44,10 @@ import {
 import { cn } from "@/shared/util/cn";
 import { fetchExecution } from "../_api/fetchExecution";
 import { fetchOrders, type OrdersStatusFilter } from "../_api/fetchOrders";
+import {
+  postClosePosition,
+  postRedeemPosition,
+} from "../_api/fetchPositionActions";
 import { formatPrice, formatUsdc, timeAgo } from "./wallet-format";
 
 type ExecutionView = "positions" | "history";
@@ -163,8 +167,41 @@ function StalenessDot({
 }
 
 export function ExecutionActivityCard(): ReactElement {
+  const queryClient = useQueryClient();
   const [view, setView] = useState<ExecutionView>("positions");
   const [historyFilter, setHistoryFilter] = useState<OrdersStatusFilter>("all");
+  const [positionActionError, setPositionActionError] = useState<string | null>(
+    null
+  );
+
+  const positionAction = useMutation({
+    mutationFn: async (args: {
+      kind: "close" | "redeem";
+      position: WalletPosition;
+    }) => {
+      if (args.kind === "close") {
+        return postClosePosition(args.position.asset);
+      }
+      return postRedeemPosition(args.position.conditionId);
+    },
+    onSuccess: () => {
+      setPositionActionError(null);
+      void queryClient.invalidateQueries({
+        queryKey: ["dashboard-wallet-execution"],
+      });
+      void queryClient.invalidateQueries({
+        queryKey: ["dashboard-trading-wallet"],
+      });
+    },
+    onError: (err: unknown) => {
+      setPositionActionError(err instanceof Error ? err.message : String(err));
+    },
+  });
+
+  const pendingActionPositionId =
+    positionAction.isPending && positionAction.variables
+      ? positionAction.variables.position.positionId
+      : null;
 
   const {
     data: executionData,
@@ -273,6 +310,11 @@ export function ExecutionActivityCard(): ReactElement {
             warnings={executionData?.warnings ?? []}
             isLoading={isExecutionLoading}
             isError={isExecutionError}
+            onPositionAction={(position, action) => {
+              positionAction.mutate({ kind: action, position });
+            }}
+            pendingActionPositionId={pendingActionPositionId}
+            positionActionError={positionActionError}
           />
         ) : (
           <HistoryPanel
@@ -292,11 +334,20 @@ function PositionsPanel({
   warnings,
   isLoading,
   isError,
+  onPositionAction,
+  pendingActionPositionId,
+  positionActionError,
 }: {
   positions: readonly WalletPosition[];
   warnings: readonly { code: string; message: string }[];
   isLoading: boolean;
   isError: boolean;
+  onPositionAction: (
+    position: WalletPosition,
+    action: "close" | "redeem"
+  ) => void;
+  pendingActionPositionId: string | null;
+  positionActionError: string | null;
 }): ReactElement {
   if (isError) {
     return (
@@ -318,10 +369,17 @@ function PositionsPanel({
             render with a shorter trace.
           </p>
         ) : null}
+        {positionActionError ? (
+          <p className="rounded border border-destructive/40 bg-destructive/10 px-3 py-2 text-destructive text-xs">
+            {positionActionError}
+          </p>
+        ) : null}
         <PositionsTable
           positions={positions}
           isLoading={isLoading}
           emptyMessage="No positions yet."
+          onPositionAction={onPositionAction}
+          pendingActionPositionId={pendingActionPositionId}
         />
       </div>
     </div>

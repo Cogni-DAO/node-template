@@ -17,6 +17,8 @@ import {
   ClobRejectionError,
   classifyClientError,
   classifyClobFailure,
+  coerceNegRiskApiValue,
+  extractClobPlacedOrderId,
   mapOpenOrderToReceipt,
   mapOrderResponseToReceipt,
   normalizePolymarketStatus,
@@ -62,7 +64,39 @@ describe("normalizePolymarketStatus", () => {
   });
 });
 
+describe("coerceNegRiskApiValue (bug.0329)", () => {
+  it("maps API string/numeric toggles to boolean", () => {
+    expect(coerceNegRiskApiValue(true)).toBe(true);
+    expect(coerceNegRiskApiValue(false)).toBe(false);
+    expect(coerceNegRiskApiValue(1)).toBe(true);
+    expect(coerceNegRiskApiValue(0)).toBe(false);
+    expect(coerceNegRiskApiValue("1")).toBe(true);
+    expect(coerceNegRiskApiValue("0")).toBe(false);
+    expect(coerceNegRiskApiValue("true")).toBe(true);
+    expect(coerceNegRiskApiValue("false")).toBe(false);
+  });
+});
+
+describe("extractClobPlacedOrderId", () => {
+  it("reads orderID, orderId, then order_id", () => {
+    expect(extractClobPlacedOrderId({ orderID: "a" })).toBe("a");
+    expect(extractClobPlacedOrderId({ orderId: "b" })).toBe("b");
+    expect(extractClobPlacedOrderId({ order_id: "c" })).toBe("c");
+    expect(
+      extractClobPlacedOrderId({ orderId: "wins", orderID: "first" })
+    ).toBe("first");
+  });
+});
+
 describe("mapOrderResponseToReceipt", () => {
+  it("accepts camelCase orderId when orderID is absent", () => {
+    const receipt = mapOrderResponseToReceipt(
+      { orderId: "0xcamel", status: "live" },
+      BASE_INTENT
+    );
+    expect(receipt.order_id).toBe("0xcamel");
+  });
+
   it("echoes client_order_id from the intent verbatim", () => {
     const receipt = mapOrderResponseToReceipt(
       { orderID: "0xorder1", status: "live" },

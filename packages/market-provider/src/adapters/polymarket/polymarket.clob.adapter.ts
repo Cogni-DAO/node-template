@@ -67,6 +67,35 @@ function truncErr(e: unknown, max = 512): string {
   return msg.length > max ? `${msg.slice(0, max)}…` : msg;
 }
 
+/**
+ * `/neg-risk` and tick-size helpers sometimes return `"0"`/`"1"` or numbers —
+ * `createAndPostOrder` needs a real boolean or EIP-712 targets the wrong exchange (bug.0329).
+ */
+export function coerceNegRiskApiValue(value: unknown): boolean {
+  if (typeof value === "boolean") return value;
+  if (value === 1 || value === "1" || value === true) return true;
+  if (value === 0 || value === "0" || value === false) return false;
+  if (typeof value === "string") {
+    const lower = value.toLowerCase();
+    if (lower === "true") return true;
+    if (lower === "false") return false;
+  }
+  return Boolean(value);
+}
+
+/** Placement responses may use `orderID`, `orderId`, or `order_id`. */
+export function extractClobPlacedOrderId(
+  response: unknown
+): string | undefined {
+  if (!response || typeof response !== "object") return undefined;
+  const r = response as Record<string, unknown>;
+  const candidates = [r.orderID, r.orderId, r.order_id];
+  for (const c of candidates) {
+    if (typeof c === "string" && c.length > 0) return c;
+  }
+  return undefined;
+}
+
 /** Default Polymarket CLOB host. */
 const DEFAULT_CLOB_HOST = "https://clob.polymarket.com";
 
@@ -220,6 +249,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
         this.client.getOrderBook(tokenId),
       ]);
       [tickSize, negRisk, feeRateBps] = preflight;
+      negRisk = coerceNegRiskApiValue(negRisk);
       const orderBook = preflight[3];
 
       const minShares = Number(orderBook.min_order_size);
@@ -619,6 +649,8 @@ export function normalizePolymarketStatus(raw: string): OrderReceipt["status"] {
 
 interface ClobOrderResponseLike {
   orderID?: string;
+  orderId?: string;
+  order_id?: string;
   status?: string;
   success?: boolean;
   errorMsg?: string;
@@ -803,10 +835,11 @@ export function mapOrderResponseToReceipt(
   intent: OrderIntent
 ): OrderReceipt {
   const r = response as ClobOrderResponseLike;
+  const placedOrderId = extractClobPlacedOrderId(response);
   // B2 — Polymarket returns `{success: false, errorMsg, orderID: "..."}` for
   // rejections (orderID can be populated even when the order was not accepted).
   // Treat an explicit `success === false` as a hard failure regardless of orderID.
-  if (r.success === false || !r.orderID) {
+  if (r.success === false || !placedOrderId) {
     const details = classifyClobFailure(response);
     throw new ClobRejectionError(
       `PolymarketClobAdapter.placeOrder: CLOB rejected order (error_code=${details.error_code}, response_keys=[${details.response_keys.join(",")}], reason="${details.reason ?? ""}")`,
@@ -826,7 +859,7 @@ export function mapOrderResponseToReceipt(
   const filled_size_usdc = filledUsdcRaw ? Number(filledUsdcRaw) : 0;
 
   return {
-    order_id: r.orderID,
+    order_id: placedOrderId,
     client_order_id: intent.client_order_id,
     status,
     filled_size_usdc,

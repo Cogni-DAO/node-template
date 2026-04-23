@@ -828,6 +828,10 @@ function createContainer(): Container {
                   size: p.size,
                 }));
               },
+              redeemSweep: async () => {
+                const executor = await getExecutor();
+                await executor.redeemAllRedeemableResolvedPositions();
+              },
               logger: mirrorLogger,
               metrics: noopMetrics,
             });

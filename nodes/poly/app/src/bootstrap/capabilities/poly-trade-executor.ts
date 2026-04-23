@@ -5,7 +5,7 @@
  * Module: `@bootstrap/capabilities/poly-trade-executor`
  * Purpose: Per-tenant Polymarket trade executor. Given a `billingAccountId`,
  *   returns a `PolyTradeExecutor` with `placeIntent` / `closePosition` /
- *   `listPositions` methods that route every order through
+ *   `redeemResolvedPosition` / `listPositions` methods that route trades through
  *   `PolyTraderWalletPort.authorizeIntent` before signing — so scope + cap +
  *   grant-revoke checks run on the hot path. Caches the per-tenant
  *   `PolymarketClobAdapter` + viem `WalletClient` so the Privy resolve /
@@ -125,16 +125,26 @@ export interface OpenOrderSummary {
   status: string;
 }
 
-/** Thrown when `closePosition` finds no open position for the given tokenId. */
+/** Thrown when close/redeem preconditions fail or chain tx fails. */
 export class PolyTradeExecutorError extends Error {
   constructor(
-    public readonly code: "no_position_to_close" | "not_authorized",
+    public readonly code:
+      | "no_position_to_close"
+      | "not_authorized"
+      | "not_redeemable"
+      | "redeem_failed",
     message: string,
     public readonly reason?: string
   ) {
     super(message);
     this.name = "PolyTradeExecutorError";
   }
+}
+
+/** Single-market CTF redeem after Polymarket resolution (not CLOB). */
+export interface RedeemResolvedParams {
+  /** Polymarket condition id (`0x` + 64 hex). */
+  condition_id: string;
 }
 
 /**
@@ -171,6 +181,20 @@ export interface PolyTradeExecutor {
   ) => Promise<{ minShares: number; minUsdcNotional?: number }>;
   /** Per-tenant live open orders from the CLOB. */
   listOpenOrders: () => Promise<OpenOrderSummary[]>;
+  /**
+   * Redeem winning outcome tokens for USDC.e via Conditional Tokens `redeemPositions`
+   * after the market is resolved (Data API `redeemable: true`). Uses `authorizeIntent`
+   * with SELL + $0 so grant scope matches exit semantics.
+   */
+  redeemResolvedPosition: (
+    params: RedeemResolvedParams
+  ) => Promise<{ tx_hash: `0x${string}` }>;
+  /**
+   * Sweep all Data-API positions with `redeemable: true` for this wallet (dedupes by condition id).
+   */
+  redeemAllRedeemableResolvedPositions: () => Promise<
+    Array<{ condition_id: string; tx_hash: `0x${string}` }>
+  >;
   /** The tenant's current EOA address (used for profile URLs + position queries). */
   readonly funderAddress: `0x${string}`;
 }
@@ -247,16 +271,27 @@ async function buildExecutor(
     );
   }
 
-  const { PolymarketClobAdapter, PolymarketDataApiClient } = await import(
-    "@cogni/market-provider/adapters/polymarket"
-  );
-  const { createWalletClient, http } = await import("viem");
+  const {
+    BINARY_REDEEM_INDEX_SETS,
+    normalizePolygonConditionId,
+    PARENT_COLLECTION_ID_ZERO,
+    POLYGON_CONDITIONAL_TOKENS,
+    POLYGON_USDC_E,
+    PolymarketClobAdapter,
+    PolymarketDataApiClient,
+    polymarketCtfRedeemAbi,
+  } = await import("@cogni/market-provider/adapters/polymarket");
+  const { createPublicClient, createWalletClient, http } = await import("viem");
   const { polygon } = await import("viem/chains");
 
   // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
   const accountAny: any = resolved.account;
   const walletClient = createWalletClient({
     account: accountAny,
+    chain: polygon,
+    transport: http(deps.polygonRpcUrl),
+  });
+  const publicClient = createPublicClient({
     chain: polygon,
     transport: http(deps.polygonRpcUrl),
   });
@@ -382,6 +417,156 @@ async function buildExecutor(
     return authorizedPlace(intent);
   }
 
+  async function authorizeRedeemExit(marketConditionId: string): Promise<void> {
+    const summary: OrderIntentSummary = {
+      side: "SELL",
+      usdcAmount: 0,
+      marketConditionId: marketConditionId.replace(
+        /^prediction-market:polymarket:/i,
+        ""
+      ),
+    };
+    const authz = await deps.walletPort.authorizeIntent(
+      billingAccountId,
+      summary
+    );
+    if (!authz.ok) {
+      deps.metrics.incr("poly_authorize_denied_total", {
+        reason: authz.reason,
+      });
+      deps.logger.warn(
+        {
+          event: "poly.trade.executor.authorize_denied",
+          billing_account_id: billingAccountId,
+          intent_side: "SELL",
+          intent_usdc: 0,
+          reason: authz.reason,
+          redeem: true,
+        },
+        "poly-trade-executor: authorize denied; refusing redeem"
+      );
+      throw new PolyTradeExecutorError(
+        "not_authorized",
+        `poly-trade-executor: authorize denied for redeem (${authz.reason})`,
+        authz.reason
+      );
+    }
+  }
+
+  async function redeemResolvedPosition(
+    params: RedeemResolvedParams
+  ): Promise<{ tx_hash: `0x${string}` }> {
+    let normalized: `0x${string}`;
+    try {
+      normalized = normalizePolygonConditionId(params.condition_id);
+    } catch {
+      throw new PolyTradeExecutorError(
+        "not_redeemable",
+        `poly-trade-executor: invalid condition_id=${params.condition_id}`
+      );
+    }
+
+    const positions = await dataApiClient.listUserPositions(funderAddress);
+    const match = positions.find((p) => {
+      try {
+        return (
+          normalizePolygonConditionId(p.conditionId) === normalized &&
+          p.redeemable
+        );
+      } catch {
+        return false;
+      }
+    });
+
+    if (!match) {
+      throw new PolyTradeExecutorError(
+        "not_redeemable",
+        `poly-trade-executor: no redeemable position for conditionId=${params.condition_id}`
+      );
+    }
+
+    await authorizeRedeemExit(match.conditionId);
+
+    try {
+      const hash = await walletClient.writeContract({
+        address: POLYGON_CONDITIONAL_TOKENS,
+        abi: polymarketCtfRedeemAbi,
+        functionName: "redeemPositions",
+        args: [
+          POLYGON_USDC_E,
+          PARENT_COLLECTION_ID_ZERO,
+          normalized,
+          [...BINARY_REDEEM_INDEX_SETS],
+        ],
+        chain: polygon,
+        account: accountAny,
+      });
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+      });
+      if (receipt.status !== "success") {
+        throw new PolyTradeExecutorError(
+          "redeem_failed",
+          `poly-trade-executor: redeem tx not successful conditionId=${params.condition_id}`
+        );
+      }
+      deps.logger.info(
+        {
+          event: "poly.ctf.redeem.ok",
+          billing_account_id: billingAccountId,
+          condition_id: params.condition_id,
+          tx_hash: hash,
+        },
+        "poly-trade-executor: redeemPositions confirmed"
+      );
+      deps.metrics.incr("poly_ctf_redeem_total", { result: "ok" });
+      return { tx_hash: hash };
+    } catch (err) {
+      if (err instanceof PolyTradeExecutorError) throw err;
+      deps.metrics.incr("poly_ctf_redeem_total", { result: "error" });
+      throw new PolyTradeExecutorError(
+        "redeem_failed",
+        `poly-trade-executor: redeemPositions failed — ${err instanceof Error ? err.message : String(err)}`
+      );
+    }
+  }
+
+  async function redeemAllRedeemableResolvedPositions(): Promise<
+    Array<{ condition_id: string; tx_hash: `0x${string}` }>
+  > {
+    const positions = await dataApiClient.listUserPositions(funderAddress);
+    const seen = new Set<string>();
+    const out: Array<{ condition_id: string; tx_hash: `0x${string}` }> = [];
+    for (const p of positions) {
+      if (!p.redeemable || !p.conditionId) continue;
+      let norm: string;
+      try {
+        norm = normalizePolygonConditionId(p.conditionId);
+      } catch {
+        continue;
+      }
+      if (seen.has(norm)) continue;
+      seen.add(norm);
+      try {
+        const r = await redeemResolvedPosition({
+          condition_id: p.conditionId,
+        });
+        out.push({ condition_id: p.conditionId, tx_hash: r.tx_hash });
+      } catch (err) {
+        deps.logger.warn(
+          {
+            event: "poly.ctf.redeem.sweep_skip",
+            billing_account_id: billingAccountId,
+            condition_id: p.conditionId,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "poly-trade-executor: redeem sweep skipped one condition"
+        );
+      }
+    }
+    return out;
+  }
+
   const executor: PolyTradeExecutor = {
     billingAccountId,
     placeIntent: authorizedPlace,
@@ -391,6 +576,8 @@ async function buildExecutor(
     getMarketConstraints: adapter.getMarketConstraints.bind(adapter),
     listOpenOrders: async () =>
       (await adapter.listOpenOrders()).map(mapOpenOrderSummary),
+    redeemResolvedPosition,
+    redeemAllRedeemableResolvedPositions,
     funderAddress,
   };
 
