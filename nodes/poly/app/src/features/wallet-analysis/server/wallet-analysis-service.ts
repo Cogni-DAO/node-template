@@ -3,15 +3,16 @@
 
 /**
  * Module: `@features/wallet-analysis/server/wallet-analysis-service`
- * Purpose: Service layer feeding the `/api/v1/poly/wallets/[addr]` route — fetches the wallet-analysis slices (snapshot, trades, balance, pnl) via the existing `PolymarketDataApiClient`, the public CLOB client, and Polymarket's public user-pnl service. All upstream calls are bounded by a process-wide `p-limit(4)` and per-(slice, addr) coalesced under a 30 s TTL.
- * Scope: Compute + I/O only. Does not authenticate, does not parse HTTP. Returns Zod-validated slice values per the wallet-analysis v1 contract.
+ * Purpose: Service layer feeding `/api/v1/poly/wallets/[addr]` (snapshot, trades, balance, pnl slices) and `/api/v1/poly/wallet/execution` (live/closed position split). Fetches via `PolymarketDataApiClient`, the public CLOB client, and Polymarket's public user-pnl service. All upstream calls are bounded by a process-wide `p-limit(4)` and per-(slice, addr) coalesced under a 30 s TTL.
+ * Scope: Compute + I/O only. Does not authenticate, does not parse HTTP. Returns Zod-validated slice values per the wallet-analysis v1 and execution v1 contracts.
  * Invariants:
  *   - REUSE_PACKAGE_CLIENTS: all upstream HTTP goes through `@cogni/market-provider` clients — no fetch in this file.
  *   - DETERMINISTIC_METRICS: snapshot math is identical to `computeWalletMetrics` (spike.0323 v3).
  *   - PARTIAL_FAILURE_NEVER_THROWS: each slice returns a `{ value | warning }` result; the route surfaces warnings without 5xx-ing.
+ *   - CLOB_HISTORY_OPEN_ONLY: `getPriceHistory` is fetched only for open/redeemable positions; closed positions use trade-derived timelines only.
  * Side-effects: IO (Polymarket Data API + Polymarket CLOB public + Polymarket user-pnl).
  * Notes: Cache is process-scoped — see `instrumentation.ts` single-replica boot assert.
- * Links: docs/design/wallet-analysis-components.md, packages/market-provider/src/analysis/wallet-metrics.ts, packages/node-contracts/src/poly.wallet-analysis.v1.contract.ts
+ * Links: docs/design/wallet-analysis-components.md, packages/market-provider/src/analysis/wallet-metrics.ts, packages/node-contracts/src/poly.wallet-analysis.v1.contract.ts, packages/node-contracts/src/poly.wallet.execution.v1.contract.ts
  * @public
  */
 

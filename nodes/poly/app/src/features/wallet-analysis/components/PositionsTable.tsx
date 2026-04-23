@@ -8,7 +8,7 @@
  * Invariants:
  *   - The chart is supplemental; P/L truth comes from the numeric columns.
  *   - Market links open the actual Polymarket event/market URL when upstream slugs are present.
- *   - Open, redeemable, and closed positions share one table shape so the caller can filter without swapping components.
+ *   - In "default" variant, Current value + Action columns are shown; in "history" variant, a Closed timestamp column replaces them and no action buttons render.
  * Side-effects: none
  * @public
  */

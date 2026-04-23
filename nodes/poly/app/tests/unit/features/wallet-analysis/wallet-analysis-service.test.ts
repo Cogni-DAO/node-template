@@ -1,6 +1,20 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
+/**
+ * Module: `@features/wallet-analysis/server/wallet-analysis-service` (unit)
+ * Purpose: Verifies `getExecutionSlice` splits positions into `live_positions` and `closed_positions`, applies separate caps, and skips CLOB price history for closed assets.
+ * Scope: Covers live/closed split logic, EXECUTION_OPEN_LIMIT (18), EXECUTION_HISTORY_LIMIT (30), and CLOB-skip-for-closed invariant. Does NOT cover snapshot/trades/balance slices.
+ * Invariants:
+ *   - live_positions contains only open/redeemable rows; closed_positions contains only closed rows.
+ *   - live_positions is capped at 18; closed_positions is capped at 30.
+ *   - CLOB `prices-history` is not fetched for assets whose position is closed.
+ * Side-effects: none (all upstream clients mocked via __setClientsForTests)
+ * Notes: TTL cache cleared in afterEach to prevent inter-test coalescing.
+ * Links: nodes/poly/app/src/features/wallet-analysis/server/wallet-analysis-service.ts
+ * @public
+ */
+
 import {
   PolymarketClobPublicClient,
   PolymarketDataApiClient,
