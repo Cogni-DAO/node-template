@@ -58,15 +58,14 @@ export const POST = wrapRouteHandlerWithLogging(
 
     try {
       const { owner, repo } = getGithubRepo();
-      const container = getContainer();
-      const { createPr } = container.vcsCapability;
-      if (!createPr) {
+      const { vcsCapability } = getContainer();
+      if (!vcsCapability.createPr) {
         return NextResponse.json(
           { error: "VCS capability not configured on this node" },
           { status: 503 }
         );
       }
-      const result = await createPr.call(container.vcsCapability, {
+      const result = await vcsCapability.createPr({
         owner,
         repo,
         branch: input.branch,

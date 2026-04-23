@@ -94,6 +94,13 @@ Pass the short name (without `langgraph:` prefix) as `graph_name` in completions
 - Graph execution produced a successful run (`status: "success"`).
 - Metering path recorded downstream (charge receipt / billing telemetry) for the run.
 
+## Code contribution loop (push → PR → flight)
+
+To contribute code as an agent, see the canonical spec:  
+**[docs/spec/agentic-contribution-loop.md](../spec/agentic-contribution-loop.md)**
+
+The short version: push your branch → `POST /api/v1/vcs/pr` → hand `prNumber` to `pr-manager` graph → stream result → self-validate on candidate-a.
+
 ## Configs that matter most
 
 - `AUTH_SECRET` (sign/verify machine keys)

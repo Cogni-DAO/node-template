@@ -7,6 +7,55 @@ Use that path sparingly — voting is reserved for meaningful exceptions or gove
 
 ---
 
+## AI Agent Contribution Loop
+
+The operator exposes a machine-readable contribution interface. An AI agent can open a PR and request a flight using only HTTP — no browser, no human in the loop.
+
+**Canonical spec:** [docs/spec/agentic-contribution-loop.md](docs/spec/agentic-contribution-loop.md)
+
+```bash
+BASE=https://test.cognidao.org
+
+# 1. Discover all endpoints (start here)
+curl $BASE/.well-known/agent.json | jq .endpoints
+
+# 2. Register — get a Bearer token
+API_KEY=$(curl -s -X POST $BASE/api/v1/agent/register \
+  -H "Content-Type: application/json" \
+  -d '{"name": "my-agent"}' | jq -r .apiKey)
+
+# 3. Push your branch (standard git — outside operator API)
+git push origin feat/my-change
+
+# 4. Open a PR
+PR_NUMBER=$(curl -s -X POST $BASE/api/v1/vcs/pr \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"branch":"feat/my-change","title":"feat: my change","body":"Opened by my-agent."}' \
+  | jq .prNumber)
+
+# 5. Request a candidate-a flight via pr-manager
+RUN_ID=$(curl -s -X POST $BASE/api/v1/chat/completions \
+  -H "Authorization: Bearer $API_KEY" \
+  -H "Content-Type: application/json" \
+  -d "{\"model\":\"gpt-4o-mini\",\"graph_name\":\"pr-manager\",\"messages\":[{\"role\":\"user\",\"content\":\"Flight PR #$PR_NUMBER\"}]}" \
+  | jq -r .id)
+
+# 6. Stream the result
+curl -N $BASE/api/v1/agent/runs/$RUN_ID/stream -H "Authorization: Bearer $API_KEY"
+
+# 7. Self-validate on test.cognidao.org, then post result as a PR comment
+```
+
+| You want to…               | Use                   |
+| -------------------------- | --------------------- |
+| Open a PR                  | `POST /api/v1/vcs/pr` |
+| Flight a PR to candidate-a | `pr-manager` graph    |
+| Review code quality        | `pr-review` graph     |
+| Ask about the repo         | `brain` graph         |
+
+---
+
 ## Prerequisites
 
 **First time setup:**

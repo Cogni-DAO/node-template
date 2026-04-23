@@ -64,8 +64,8 @@ exercise: |
   Register a machine agent, push a test branch to the repo, POST /api/v1/vcs/pr with branch+title+body,
   confirm PR appears on GitHub with correct title/body, confirm prNumber returned.
 observability: |
-  Loki query: {namespace="cogni-candidate-a"} |= "vcs_create_pr" | json
-  Expect: contractId=vcs.create_pr.v1, prNumber in log line, no error field
+  Loki query: {namespace="cogni-candidate-a"} |= "vcs.create-pr" | json
+  Expect: routeId="vcs.create-pr", prNumber in log line, no error field
 ```
 
 ## Design
