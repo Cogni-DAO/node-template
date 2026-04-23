@@ -48,7 +48,7 @@
 #                       Empty → fall back to full catalog. Apps not promoted
 #                       in this run may legitimately be pinned at prior digest
 #                       (e.g. sandbox-openclaw placeholder) and would false-fail.
-#   ARGOCD_TIMEOUT      (optional, default 300) overall timeout in seconds
+#   ARGOCD_TIMEOUT      (optional, default 300) per-app timeout in seconds
 #   ACTIVE_SYNC_AFTER   (optional, default 30) seconds before the first Argo kick
 #   SYNC_KICK_INTERVAL  (optional, default 45) seconds between subsequent kicks
 #                       while revision still mismatches (hard refresh + sync op)
@@ -125,8 +125,8 @@ resolve_deployment() {
 
 # Block until the Deployment's new ReplicaSet is fully available AND the old
 # ReplicaSet's pods are gone. Called AFTER sync.revision + Healthy to close
-# bug.0326 (Argo-level Healthy ≠ pods-serving-new-image). Uses the remaining
-# overall deadline so we don't double-budget the wait.
+# bug.0326 (Argo-level Healthy ≠ pods-serving-new-image). Uses the per-app
+# deadline so later apps are not starved by earlier reconciles.
 rollout_check() {
   local app_name="$1"
   local deadline="$2"
@@ -221,10 +221,11 @@ patch_sync_operation() {
 }
 
 # Poll a single app until it reports EXPECTED_SHA on sync.revision AND is Healthy,
-# OR until the overall deadline is hit. Re-kicks Argo periodically while mismatched.
+# OR until its per-app deadline is hit. Re-kicks Argo periodically while mismatched.
 wait_for_app() {
   local app_name="$1"
-  local deadline="$2"
+  local timeout_seconds="$2"
+  local deadline=$((SECONDS + timeout_seconds))
   local next_kick=$((SECONDS + ACTIVE_SYNC_AFTER))
   local kick_count=0
 
@@ -282,11 +283,10 @@ wait_for_app() {
 }
 
 FAILED=0
-DEADLINE=$((SECONDS + ARGOCD_TIMEOUT))
 for app in "${APPS[@]}"; do
   APP_NAME="${DEPLOY_ENVIRONMENT}-${app}"
   echo "  Waiting for ${APP_NAME}..."
-  if ! wait_for_app "$APP_NAME" "$DEADLINE"; then
+  if ! wait_for_app "$APP_NAME" "$ARGOCD_TIMEOUT"; then
     FAILED=1
   fi
 done
