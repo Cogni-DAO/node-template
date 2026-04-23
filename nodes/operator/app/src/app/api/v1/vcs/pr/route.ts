@@ -11,7 +11,7 @@
  *   - CAPABILITY_BOUNDARY: Calls VcsCapability only — no direct GitHub API or Octokit in this file.
  *   - CONTRACTS_ARE_TRUTH: Input/output parsed through createPrOperation contract.
  * Side-effects: IO (GitHub REST API via VcsCapability)
- * Links: task.0358, packages/node-contracts/src/vcs.create-pr.v1.contract.ts,
+ * Links: task.0360, packages/node-contracts/src/vcs.create-pr.v1.contract.ts,
  *   docs/guides/agent-api-validation.md
  * @public
  */

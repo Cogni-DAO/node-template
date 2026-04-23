@@ -7,7 +7,7 @@
  * Scope: Input/output wire shape only. Does not contain business logic or adapters.
  * Invariants: CONTRACTS_ARE_TRUTH — single source for create-PR wire shape.
  * Side-effects: none
- * Links: task.0358, docs/guides/agent-api-validation.md
+ * Links: task.0360, docs/guides/agent-api-validation.md
  * @public
  */
 

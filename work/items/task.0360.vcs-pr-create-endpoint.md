@@ -1,5 +1,5 @@
 ---
-id: task.0358
+id: task.0360
 type: task
 title: "POST /api/v1/vcs/pr — VCS create-PR endpoint for external agents"
 status: needs_implement
@@ -20,7 +20,7 @@ tags: [operator, vcs, agent-api]
 project: proj.agentic-interop
 ---
 
-# task.0358 — POST /api/v1/vcs/pr — VCS create-PR endpoint for external agents
+# task.0360 — POST /api/v1/vcs/pr — VCS create-PR endpoint for external agents
 
 ## Context
 
