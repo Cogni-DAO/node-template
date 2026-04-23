@@ -20,20 +20,28 @@
 
 "use client";
 
-import type { PolyWalletOverviewOutput } from "@cogni/node-contracts";
+import type {
+  PolyWalletOverviewInterval,
+  PolyWalletOverviewOutput,
+} from "@cogni/node-contracts";
 import { useQuery } from "@tanstack/react-query";
+import { Radio } from "lucide-react";
 import Link from "next/link";
 import type { ReactElement } from "react";
+import { useState } from "react";
 import {
   AddressChip,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  ToggleGroup,
+  ToggleGroupItem,
 } from "@/components";
 import { BalanceBar } from "@/features/wallet-analysis";
 import { cn } from "@/shared/util/cn";
 import { fetchTradingWallet } from "../_api/fetchTradingWallet";
+import { TradingWalletPnlChart } from "./TradingWalletPnlChart";
 
 function formatDecimal(n: number | null, fractionDigits: number): string {
   if (n === null) return "—";
@@ -52,9 +60,10 @@ function formatUsd(n: number | null): string {
 }
 
 export function TradingWalletCard(): ReactElement {
+  const [interval, setInterval] = useState<PolyWalletOverviewInterval>("1W");
   const { data, isLoading, isError } = useQuery({
-    queryKey: ["dashboard-trading-wallet"],
-    queryFn: fetchTradingWallet,
+    queryKey: ["dashboard-trading-wallet", interval],
+    queryFn: () => fetchTradingWallet(interval),
     refetchInterval: 15_000,
     staleTime: 10_000,
     gcTime: 60_000,
@@ -113,9 +122,9 @@ export function TradingWalletCard(): ReactElement {
       </CardHeader>
       <CardContent className="px-5 pt-1 pb-4">
         {isLoading ? (
-          <div className="flex animate-pulse flex-col gap-3">
-            <div className="h-4 w-2/3 rounded bg-muted" />
-            <div className="h-2 w-full rounded-full bg-muted" />
+          <div className="space-y-4">
+            <div className="h-12 animate-pulse rounded bg-muted" />
+            <div className="h-48 animate-pulse rounded bg-muted" />
           </div>
         ) : isError || !data ? (
           <p className="py-2 text-muted-foreground text-sm">
@@ -137,31 +146,90 @@ export function TradingWalletCard(): ReactElement {
               Connect →
             </Link>
           </div>
-        ) : fullBreakdown ? (
-          <div className="space-y-3">
-            <BalanceBar balance={fullBreakdown ?? undefined} />
-            <div className="flex flex-wrap items-center justify-between gap-3 text-muted-foreground text-xs">
-              <span>
-                {data.open_orders ?? 0} open order
-                {(data.open_orders ?? 0) === 1 ? "" : "s"}
-              </span>
-              <span>POL gas {formatDecimal(data.pol_gas, 4)}</span>
-            </div>
-          </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-4">
-            <Metric label="Available" value={formatUsd(data.usdc_available)} />
-            <Metric label="Locked" value={formatUsd(data.usdc_locked)} />
-            <Metric
-              label="Positions"
-              value={formatUsd(data.usdc_positions_mtm)}
-            />
-            <Metric label="Total" value={formatUsd(data.usdc_total)} />
+          <div className="space-y-5 py-1">
+            {fullBreakdown ? (
+              <div className="space-y-3">
+                <BalanceBar balance={fullBreakdown ?? undefined} />
+                <div className="flex flex-wrap items-center justify-between gap-3 text-muted-foreground text-xs">
+                  <span>
+                    {data.open_orders ?? 0} open order
+                    {(data.open_orders ?? 0) === 1 ? "" : "s"}
+                  </span>
+                  <span>POL gas {formatDecimal(data.pol_gas, 4)}</span>
+                </div>
+              </div>
+            ) : (
+              <div className="grid gap-3 md:grid-cols-4">
+                <Metric
+                  label="Available"
+                  value={formatUsd(data.usdc_available)}
+                />
+                <Metric label="Locked" value={formatUsd(data.usdc_locked)} />
+                <Metric
+                  label="Positions"
+                  value={formatUsd(data.usdc_positions_mtm)}
+                />
+                <Metric label="Total" value={formatUsd(data.usdc_total)} />
+              </div>
+            )}
+
+            <div className="space-y-4 rounded-xl border border-border/60 bg-muted/10 p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="inline-flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
+                  <Radio className="size-3" />
+                  Polymarket P/L
+                </div>
+                <ToggleGroup
+                  type="single"
+                  value={interval}
+                  onValueChange={(value) => {
+                    if (value) setInterval(value as PolyWalletOverviewInterval);
+                  }}
+                  className="justify-start rounded-lg border border-border/70 p-1 sm:justify-end"
+                >
+                  {(["1D", "1W", "1M", "1Y", "YTD", "ALL"] as const).map(
+                    (value) => (
+                      <ToggleGroupItem
+                        key={value}
+                        value={value}
+                        className="px-3 text-xs"
+                      >
+                        {value}
+                      </ToggleGroupItem>
+                    )
+                  )}
+                </ToggleGroup>
+              </div>
+
+              <TradingWalletPnlChart
+                history={data.pnlHistory}
+                isLoading={false}
+                rangeLabel={rangeLabel(interval)}
+              />
+            </div>
           </div>
         )}
       </CardContent>
     </Card>
   );
+}
+
+function rangeLabel(interval: PolyWalletOverviewInterval): string {
+  switch (interval) {
+    case "1D":
+      return "Past day";
+    case "1W":
+      return "Past week";
+    case "1M":
+      return "Past month";
+    case "1Y":
+      return "Past year";
+    case "YTD":
+      return "Year to date";
+    case "ALL":
+      return "All time";
+  }
 }
 
 function hasOverviewBreakdown(
