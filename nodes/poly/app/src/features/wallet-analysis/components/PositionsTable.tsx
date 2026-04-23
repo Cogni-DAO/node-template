@@ -34,6 +34,11 @@ export type PositionsTableProps = {
   positions?: readonly WalletPosition[] | undefined;
   isLoading?: boolean | undefined;
   emptyMessage?: string | undefined;
+  /**
+   * "default" — shows Current value + Action columns (Close/Redeem buttons).
+   * "history" — shows Closed At timestamp instead; no Action column. Used for closed-position history.
+   */
+  variant?: "default" | "history";
   /** When set, clicking Close / Redeem invokes this (open → Close, redeemable → Redeem). */
   onPositionAction?: (
     position: WalletPosition,
@@ -47,6 +52,7 @@ export function PositionsTable({
   positions,
   isLoading,
   emptyMessage = "No positions yet.",
+  variant = "default",
   onPositionAction,
   pendingActionPositionId = null,
 }: PositionsTableProps): ReactElement {
@@ -68,6 +74,8 @@ export function PositionsTable({
     );
   }
 
+  const isHistory = variant === "history";
+
   return (
     <Table>
       <TableHeader>
@@ -75,10 +83,16 @@ export function PositionsTable({
           <TableHead>Market</TableHead>
           <TableHead className="w-72">Trace</TableHead>
           <TableHead className="text-right">Held</TableHead>
-          <TableHead className="text-right">Current</TableHead>
+          {isHistory ? (
+            <TableHead className="text-right">Closed</TableHead>
+          ) : (
+            <TableHead className="text-right">Current</TableHead>
+          )}
           <TableHead className="text-right">P/L</TableHead>
           <TableHead className="text-right">P/L %</TableHead>
-          <TableHead className="w-28 text-right">Action</TableHead>
+          {!isHistory && (
+            <TableHead className="w-28 text-right">Action</TableHead>
+          )}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -121,9 +135,15 @@ export function PositionsTable({
               <TableCell className="text-right text-muted-foreground text-sm tabular-nums">
                 {formatHeldDuration(position.heldMinutes)}
               </TableCell>
-              <TableCell className="text-right text-sm tabular-nums">
-                {formatUsd(position.currentValue)}
-              </TableCell>
+              {isHistory ? (
+                <TableCell className="text-right text-muted-foreground text-sm tabular-nums">
+                  {position.closedAt ? formatClosedAt(position.closedAt) : "—"}
+                </TableCell>
+              ) : (
+                <TableCell className="text-right text-sm tabular-nums">
+                  {formatUsd(position.currentValue)}
+                </TableCell>
+              )}
               <TableCell
                 className={`text-right text-sm tabular-nums ${pnlClass}`}
               >
@@ -134,19 +154,29 @@ export function PositionsTable({
               >
                 {formatSignedPct(position.pnlPct)}
               </TableCell>
-              <TableCell className="text-right">
-                <PositionActionButton
-                  position={position}
-                  onPositionAction={onPositionAction}
-                  pendingActionPositionId={pendingActionPositionId}
-                />
-              </TableCell>
+              {!isHistory && (
+                <TableCell className="text-right">
+                  <PositionActionButton
+                    position={position}
+                    onPositionAction={onPositionAction}
+                    pendingActionPositionId={pendingActionPositionId}
+                  />
+                </TableCell>
+              )}
             </TableRow>
           );
         })}
       </TableBody>
     </Table>
   );
+}
+
+function formatClosedAt(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function formatUsd(value: number): string {
