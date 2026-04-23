@@ -144,5 +144,6 @@ export interface VcsCapability {
     repo: string;
     prNumber: number;
     headSha?: string;
+    workflowRef?: string;
   }): Promise<DispatchCandidateFlightResult>;
 }
