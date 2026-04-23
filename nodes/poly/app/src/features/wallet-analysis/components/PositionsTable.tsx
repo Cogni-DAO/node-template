@@ -15,6 +15,7 @@
 
 "use client";
 
+import { LoaderCircle } from "lucide-react";
 import type { ReactElement } from "react";
 
 import {
@@ -227,7 +228,14 @@ function PositionActionButton({
           : "w-20 border-border/70 text-muted-foreground"
       }
     >
-      {busy ? "…" : label}
+      {busy ? (
+        <span className="inline-flex items-center justify-center">
+          <LoaderCircle aria-hidden="true" className="size-3 animate-spin" />
+          <span className="sr-only">{label} in progress</span>
+        </span>
+      ) : (
+        label
+      )}
     </Button>
   );
 }

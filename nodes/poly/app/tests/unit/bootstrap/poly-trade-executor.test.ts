@@ -120,7 +120,13 @@ function makeWalletPort(): PolyTraderWalletPort {
     }),
     withdrawUsdc: vi.fn(),
     rotateClobCreds: vi.fn(),
-    ensureTradingApprovals: vi.fn(),
+    ensureTradingApprovals: vi.fn().mockResolvedValue({
+      ready: true,
+      address: FUNDER,
+      polBalance: 1,
+      steps: [],
+      readyAt: new Date("2026-04-23T00:00:00.000Z"),
+    }),
   } as unknown as PolyTraderWalletPort;
 }
 
@@ -184,10 +190,13 @@ describe("createPolyTradeExecutorFactory", () => {
       client_order_id: "0xclient",
       orderType: "FAK",
     });
+    expect(walletPort.ensureTradingApprovals).toHaveBeenCalledWith(
+      BILLING_ACCOUNT_ID
+    );
     expect(walletPort.authorizeIntent).not.toHaveBeenCalled();
   });
 
-  it("exitPosition self-heals trading approvals when the readiness stamp is missing", async () => {
+  it("exitPosition revalidates trading approvals even when the readiness stamp is already present", async () => {
     listUserPositions
       .mockResolvedValueOnce([
         {
@@ -208,18 +217,6 @@ describe("createPolyTradeExecutorFactory", () => {
       submitted_at: "2026-04-23T00:00:00.000Z",
     });
     const walletPort = makeWalletPort();
-    vi.mocked(walletPort.getConnectionSummary).mockResolvedValue({
-      connectionId: "connection-1",
-      funderAddress: FUNDER,
-      tradingApprovalsReadyAt: null,
-    });
-    vi.mocked(walletPort.ensureTradingApprovals).mockResolvedValue({
-      ready: true,
-      address: FUNDER,
-      polBalance: 1,
-      steps: [],
-      readyAt: new Date("2026-04-23T00:00:00.000Z"),
-    });
 
     const factory = createPolyTradeExecutorFactory({
       walletPort,
@@ -244,6 +241,132 @@ describe("createPolyTradeExecutorFactory", () => {
       client_order_id: "0xclient",
       orderType: "FAK",
     });
+  });
+
+  it("exitPosition refreshes approvals once and retries when the market close hits allowance drift", async () => {
+    listUserPositions
+      .mockResolvedValueOnce([
+        {
+          asset: "token-1",
+          size: 5,
+          curPrice: 0.25,
+          conditionId: CONDITION_ID,
+          outcome: "YES",
+          redeemable: false,
+        },
+      ])
+      .mockResolvedValueOnce([]);
+    sellPositionAtMarket
+      .mockRejectedValueOnce(new Error("allowance is not enough"))
+      .mockResolvedValueOnce({
+        order_id: "0xexit",
+        client_order_id: "0xclient",
+        status: "filled",
+        filled_size_usdc: 1.25,
+        submitted_at: "2026-04-23T00:00:00.000Z",
+      });
+    const walletPort = makeWalletPort();
+
+    const factory = createPolyTradeExecutorFactory({
+      walletPort,
+      logger: makeLogger() as never,
+      metrics: makeMetrics() as never,
+      host: "https://clob.polymarket.com",
+      polygonRpcUrl: "https://polygon.example",
+    });
+    const executor = await factory.getPolyTradeExecutorFor(BILLING_ACCOUNT_ID);
+
+    const result = await executor.exitPosition({
+      tokenId: "token-1",
+      client_order_id: "0xclient",
+    });
+
+    expect(result.order_id).toBe("0xexit");
+    expect(walletPort.ensureTradingApprovals).toHaveBeenCalledTimes(2);
+    expect(sellPositionAtMarket).toHaveBeenCalledTimes(2);
+  });
+
+  it("exitPosition trusts a provider fill when the follow-up positions read is stale", async () => {
+    listUserPositions
+      .mockResolvedValueOnce([
+        {
+          asset: "token-1",
+          size: 14.6535,
+          curPrice: 0.22,
+          conditionId: CONDITION_ID,
+          outcome: "YES",
+          redeemable: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          asset: "token-1",
+          size: 14.6535,
+          curPrice: 0.22,
+          conditionId: CONDITION_ID,
+          outcome: "YES",
+          redeemable: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          asset: "token-1",
+          size: 14.6535,
+          curPrice: 0.22,
+          conditionId: CONDITION_ID,
+          outcome: "YES",
+          redeemable: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          asset: "token-1",
+          size: 14.6535,
+          curPrice: 0.22,
+          conditionId: CONDITION_ID,
+          outcome: "YES",
+          redeemable: false,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          asset: "token-1",
+          size: 14.6535,
+          curPrice: 0.22,
+          conditionId: CONDITION_ID,
+          outcome: "YES",
+          redeemable: false,
+        },
+      ]);
+    sellPositionAtMarket.mockResolvedValue({
+      order_id: "0xfilled",
+      client_order_id: "0xclient",
+      status: "filled",
+      filled_size_usdc: 3.223,
+      submitted_at: "2026-04-23T00:00:00.000Z",
+    });
+    const walletPort = makeWalletPort();
+
+    const factory = createPolyTradeExecutorFactory({
+      walletPort,
+      logger: makeLogger() as never,
+      metrics: makeMetrics() as never,
+      host: "https://clob.polymarket.com",
+      polygonRpcUrl: "https://polygon.example",
+    });
+    const executor = await factory.getPolyTradeExecutorFor(BILLING_ACCOUNT_ID);
+
+    const result = await executor.exitPosition({
+      tokenId: "token-1",
+      client_order_id: "0xclient",
+    });
+
+    expect(result).toMatchObject({
+      order_id: "0xfilled",
+      status: "filled",
+      filled_size_usdc: 3.223,
+    });
+    expect(sellPositionAtMarket).toHaveBeenCalledTimes(1);
   });
 
   it("closePosition caps SELL notional at the requested limit price so it never oversells shares", async () => {
