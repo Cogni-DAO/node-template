@@ -64,6 +64,7 @@ Derek re-homed the same request ("flight 1012, sonarcloud nonblocking") onto Kim
 So the Operator now has **two confirmed pilot models**: gpt-4o-mini and Kimi-K2. The distinguishing axis remains the executor (normal graph executor has the VCS tools; Codex graph executor still doesn't), not the model itself.
 
 Pilot roster:
+
 - 4o-mini (OpenAI) — PR #1034, 2026-04-24 ✅
 - Kimi-K2 (paid) — PR #1012, 2026-04-24 ✅
 - Codex — still grounded 🛑
