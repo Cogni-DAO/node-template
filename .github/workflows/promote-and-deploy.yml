@@ -117,12 +117,21 @@ jobs:
           PREVIEW_FORWARD=false
           if [ "$ENV" = "production" ] && [ -z "$RAW_SOURCE_SHA" ]; then
             PREVIEW_FORWARD=true
-            RAW_SOURCE_SHA=$(curl -fsSL "https://raw.githubusercontent.com/${{ github.repository }}/deploy/preview/.promote-state/current-sha")
-            if [ -z "$RAW_SOURCE_SHA" ]; then
+            # In preview-forward mode head_sha must carry the workflow ref
+            # (typically main tip), NOT preview current-sha: bootstrap scripts
+            # for the workflow (resolve-digests-from-preview.sh, AppSet YAML,
+            # verify-deployment.sh, e2e specs) may post-date preview's
+            # current-sha. Using main tip matches the invariant that the
+            # workflow always runs with its own paired scripts.
+            # Informational: preview_current_sha is emitted for the summary.
+            PREVIEW_CURRENT_SHA=$(curl -fsSL --max-time 30 "https://raw.githubusercontent.com/${{ github.repository }}/deploy/preview/.promote-state/current-sha" || true)
+            if [ -z "$PREVIEW_CURRENT_SHA" ]; then
               echo "❌ preview-forward mode: failed to read deploy/preview .promote-state/current-sha"
               exit 1
             fi
-            echo "🔁 preview-forward mode: using preview current-sha ${RAW_SOURCE_SHA:0:8} as head_sha"
+            RAW_SOURCE_SHA="${{ github.sha }}"
+            echo "🔁 preview-forward mode: head_sha=${RAW_SOURCE_SHA:0:8} (workflow ref) / preview_current_sha=${PREVIEW_CURRENT_SHA:0:8}"
+            echo "preview_current_sha=$PREVIEW_CURRENT_SHA" >> $GITHUB_OUTPUT
           fi
           SHA="${RAW_SOURCE_SHA:-${{ github.sha }}}"
           # build_sha is the SHA baked into images at pr-build time (PR branch head).
@@ -330,18 +339,24 @@ jobs:
                 --app "$app" \
                 --digest "$digest"
             fi
-            PROMOTED+=("$app")
-
+            # Resolve source_sha BEFORE marking the app as promoted. A
+            # missing preview-map entry is a hard fail: the overlay digest
+            # is about to be written, and verify-buildsha (SOURCE_SHA_MAP
+            # mode) would silently fall back to EXPECTED_BUILDSHA (= the
+            # workflow ref SHA), which does NOT match the image build SHA.
+            # Better to refuse the promote than silent-green a mismatched
+            # contract probe downstream.
             local app_source_sha="$BUILD_SHA"
             if [ -n "$PREVIEW_MAP" ]; then
               app_source_sha=$(jq -r --arg k "$app" '.[$k] // ""' "$PREVIEW_MAP")
               if [ -z "$app_source_sha" ]; then
-                echo "⚠️  preview-forward: no source_sha for $app in preview map — skipping map write"
-                return 0
+                echo "❌ preview-forward: no source_sha for $app in preview map ($PREVIEW_MAP) — refusing to promote without verifiable build provenance"
+                exit 1
               fi
             fi
             APP="$app" SOURCE_SHA="$app_source_sha" \
               bash ../app-src/scripts/ci/update-source-sha-map.sh
+            PROMOTED+=("$app")
           }
 
           # Per-node migrator pairing (task.0324): each node is promoted with
