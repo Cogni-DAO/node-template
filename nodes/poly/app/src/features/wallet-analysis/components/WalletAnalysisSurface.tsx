@@ -5,12 +5,14 @@
  * Module: `@features/wallet-analysis/components/WalletAnalysisSurface`
  * Purpose: Client data container for the reusable wallet-analysis UI on both
  *          the page route and the side drawer.
- * Scope: Owns interval state + the shared `useWalletAnalysis` hook; renders
- *   `WalletAnalysisView`.
+ * Scope: Owns interval state + the shared `useWalletAnalysis` hook + the
+ *   `useWalletWindowStats` hook; renders `WalletAnalysisView`.
  * Invariants:
  *   - SINGLE_FETCH_SOURCE: this is the owner for wallet-analysis HTTP reads.
  *   - PAUSED_WHEN_DISABLED: no background fetches when `enabled=false`.
- * Side-effects: IO (via `useWalletAnalysis`).
+ *   - UNIFIED_INTERVAL: one `interval` state drives both the PnL chart and
+ *     the windowed stats strip.
+ * Side-effects: IO (via `useWalletAnalysis` and `useWalletWindowStats`).
  * Links: docs/design/wallet-analysis-components.md
  * @public
  */
@@ -21,6 +23,7 @@ import type { PolyWalletOverviewInterval } from "@cogni/node-contracts";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import { useWalletAnalysis } from "../client/use-wallet-analysis";
+import { useWalletWindowStats } from "../client/use-wallet-window-stats";
 import type {
   WalletAnalysisSize,
   WalletAnalysisVariant,
@@ -42,6 +45,8 @@ export function WalletAnalysisSurface({
 }: WalletAnalysisSurfaceProps): ReactElement {
   const [interval, setInterval] = useState<PolyWalletOverviewInterval>("ALL");
   const { data, isLoading } = useWalletAnalysis(addr, enabled, interval);
+  const { stats: windowStats, isLoading: windowStatsLoading } =
+    useWalletWindowStats(addr, interval, enabled);
 
   return (
     <WalletAnalysisView
@@ -52,6 +57,8 @@ export function WalletAnalysisSurface({
       capturedAt={new Date().toISOString().slice(0, 16).replace("T", " ")}
       pnlInterval={interval}
       onPnlIntervalChange={setInterval}
+      windowStats={windowStats}
+      windowStatsLoading={windowStatsLoading}
     />
   );
 }

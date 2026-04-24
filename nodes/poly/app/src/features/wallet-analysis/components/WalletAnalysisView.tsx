@@ -15,7 +15,10 @@
 
 "use client";
 
-import type { PolyWalletOverviewInterval } from "@cogni/node-contracts";
+import type {
+  PolyWalletOverviewInterval,
+  WalletWindowStats,
+} from "@cogni/node-contracts";
 import type { ReactElement } from "react";
 
 import { Card, CardContent, CardHeader } from "@/components";
@@ -32,6 +35,7 @@ import { TopMarketsList } from "./TopMarketsList";
 import { TradesPerDayChart } from "./TradesPerDayChart";
 import { WalletIdentityHeader } from "./WalletIdentityHeader";
 import { WalletProfitLossCard } from "./WalletProfitLossCard";
+import { WindowedStatsStrip } from "./WindowedStatsStrip";
 
 export type WalletAnalysisLoadingState = {
   snapshot?: boolean | undefined;
@@ -51,6 +55,8 @@ export type WalletAnalysisViewProps = {
   onPnlIntervalChange?:
     | ((interval: PolyWalletOverviewInterval) => void)
     | undefined;
+  windowStats?: WalletWindowStats | undefined;
+  windowStatsLoading?: boolean | undefined;
 };
 
 export function WalletAnalysisView({
@@ -62,6 +68,8 @@ export function WalletAnalysisView({
   rankBadge,
   pnlInterval,
   onPnlIntervalChange,
+  windowStats,
+  windowStatsLoading,
 }: WalletAnalysisViewProps): ReactElement {
   // variant fallback while drawer/compact land in later checkpoints
   if (variant !== "page") {
@@ -73,6 +81,8 @@ export function WalletAnalysisView({
         capturedAt={capturedAt}
         pnlInterval={pnlInterval}
         onPnlIntervalChange={onPnlIntervalChange}
+        windowStats={windowStats}
+        windowStatsLoading={windowStatsLoading}
       />
     );
   }
@@ -85,6 +95,8 @@ export function WalletAnalysisView({
       rankBadge={rankBadge}
       pnlInterval={pnlInterval}
       onPnlIntervalChange={onPnlIntervalChange}
+      windowStats={windowStats}
+      windowStatsLoading={windowStatsLoading}
     />
   );
 }
@@ -97,6 +109,8 @@ function PageVariant({
   rankBadge,
   pnlInterval,
   onPnlIntervalChange,
+  windowStats,
+  windowStatsLoading,
 }: {
   data: WalletAnalysisData;
   size: WalletAnalysisSize;
@@ -107,6 +121,8 @@ function PageVariant({
   onPnlIntervalChange?:
     | ((interval: PolyWalletOverviewInterval) => void)
     | undefined;
+  windowStats?: WalletWindowStats | undefined;
+  windowStatsLoading?: boolean | undefined;
 }): ReactElement {
   const isHero = size === "hero";
   return (
@@ -136,6 +152,11 @@ function PageVariant({
       </CardHeader>
 
       <CardContent className="flex flex-col gap-6 pt-0">
+        <WindowedStatsStrip
+          stats={windowStats}
+          isLoading={windowStatsLoading}
+        />
+
         <StatGrid snapshot={data.snapshot} isLoading={isLoading?.snapshot} />
 
         {(data.balance || isLoading?.balance) && (
