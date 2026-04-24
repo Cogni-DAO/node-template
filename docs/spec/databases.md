@@ -150,23 +150,27 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 
 ## 2. Migration Strategy
 
-**Core Principle:** Each node owns its migrations. task.0324 split the previously-shared drizzle config into per-node configs (`nodes/<node>/drizzle.config.ts`). Each node ships its own migrator image built from its own Dockerfile, carrying only that node's schema + migrations + config + the shared `@cogni/db-schema` core.
+**Core Principle:** Each node owns its migrations. Migrations run as an **initContainer on the node-app Deployment using the same image digest as the main container** (task.0370 — replaces the earlier per-node migrator-image + Argo PreSync-hook pattern from task.0322 after bug.0368 showed the separate image caused ~4min of per-flight image-pull).
 
 **Architecture:**
 
-- **Per-node migrator images:** `IMAGE_NAME:IMAGE_TAG-{operator,poly,resy}-migrate` — one image per node, built from `nodes/<node>/app/Dockerfile` stage `migrator`.
-- **Per-node drizzle configs:** `nodes/<node>/drizzle.config.ts` (operator, poly, resy, node-template). Schema glob is core-only for operator/resy/node-template, core + local for poly. Each config requires `DATABASE_URL` from env and throws if unset — no fallback.
+- **One image per node:** `ghcr.io/cogni-dao/cogni-template[-{poly,resy}]:{sha}` — single runtime image. The initContainer reuses this digest; k3s reads it from the local cache (already pulled for the main container), so migrations start in seconds, not minutes.
+- **Per-node migrate.mjs runner:** `nodes/{node}/app/src/adapters/server/db/migrate.mjs` — ~20-line ESM script invoked as the Deployment's initContainer command. Uses `drizzle-orm/postgres-js/migrator` against the sibling `./migrations` dir. Both `drizzle-orm` and `postgres` are production dependencies (already declared in `serverExternalPackages` in each node's `next.config.ts`) — no devDep footprint, no drizzle-kit at runtime.
+- **Per-node drizzle-kit configs (dev + CI only):** `nodes/<node>/drizzle.config.ts` — used by `pnpm db:migrate:*` for local dev and by testcontainers. **Not** invoked at production runtime.
 - **Core schema package:** `packages/db-schema` (`@cogni/db-schema`) — cross-node platform tables.
-- **Per-node schema packages:** `nodes/<node>/packages/db-schema` (`@cogni/<node>-db-schema`) — node-local tables. Created per-node when that node ships its first node-local table. Today only `@cogni/poly-db-schema` exists (copy-trade prototype tables). Node-local packages mirror `@cogni/db-schema`'s exports shape (root barrel + per-slice subpath exports) so any workspace consumer (app, worker, graph) can import tables without reaching into app internals.
-- **Migration history per DB:** one `drizzle.__drizzle_migrations` table per database (standard drizzle default). `0027_silent_nextwave.sql` is byte-duplicated across `nodes/{operator,poly,resy}/app/src/adapters/server/db/migrations/` because it was applied to every deployed DB before the split — READMEs in each migrations dir warn against deletion.
-- **Runner image:** Lean production image (~80MB) with no migration tooling.
+- **Per-node schema packages:** `nodes/<node>/packages/db-schema` (`@cogni/<node>-db-schema`) — node-local tables. Today only `@cogni/poly-db-schema` exists.
+- **Migration history per DB:** one `drizzle.__drizzle_migrations` table per database (standard drizzle default). `migrate.mjs` reads this journal, applies only new rows — idempotent on every pod start (no-op in ~1s when nothing to apply). `0027_silent_nextwave.sql` is byte-duplicated across `nodes/{operator,poly,resy}/app/src/adapters/server/db/migrations/` (pre-task.0324 legacy) — READMEs warn against deletion.
+- **Poly-doltgres** runs on a separate migration path (task.0370 PR C). `drizzle-orm/postgres-js/migrator` must be verified against Doltgres's non-compliant extended-protocol implementation before the same initContainer pattern is applied; until then, poly-doltgres retains its Argo PreSync hook Job.
 
 **Invariants:**
 
-- **NO_CROSS_NODE_TABLE_LEAK** — node-local tables are defined in that node's own workspace package (e.g. poly's tables live in `@cogni/poly-db-schema` at `nodes/poly/packages/db-schema/`). Adding a node-local table to `@cogni/db-schema` is a review-blocking error.
+- **FORWARD_COMPAT_MIGRATIONS** — every migration must be forward-compatible with the prior code version. With `strategy: RollingUpdate`, the old pod continues serving traffic against the newly-migrated schema between the new pod's initContainer commit and the old pod's termination. A `DROP COLUMN` / non-default `NOT NULL` during that window = partial outage. (Holds equally under the prior PreSync-hook pattern — made explicit here; CI lint for destructive SQL without `needs_two_deploys` pragma is follow-up task.0371.)
+- **IDEMPOTENT_MIGRATIONS** — drizzle's journal-based migrator is safe to run twice; pod restarts and rolling updates never re-apply a completed migration.
+- **NO_CROSS_NODE_TABLE_LEAK** — node-local tables are defined in that node's own workspace package. Adding a node-local table to `@cogni/db-schema` is a review-blocking error.
 - **CORE_TABLES_IN_SHARED_PACKAGE** — `@cogni/db-schema` contains only tables every node needs (intersection, not union).
 - **EACH_NODE_OWNS_ITS_MIGRATIONS** — `nodes/<node>/app/src/adapters/server/db/migrations/` is that node's authoritative history. Core-table changes are copied to each node's dir manually.
-- **EXPLICIT_DATABASE_URL_NO_FALLBACK** — drizzle configs read `DATABASE_URL` from env and throw if unset. No component-piece fallback (matches runtime app invariant from §Database URL Configuration).
+- **EXPLICIT_DATABASE_URL_NO_FALLBACK** — drizzle configs and `migrate.mjs` read `DATABASE_URL` from env and throw if unset. No component-piece fallback (matches runtime app invariant from §Database URL Configuration).
+- **ONE_IMAGE_PER_NODE** — each deployed node ships exactly one container image. No `-migrate` suffix image.
 
 **Migration Commands:**
 
@@ -178,7 +182,6 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 - `pnpm db:migrate:test:poly` / `:resy` — same pattern with `.env.test`
 - `pnpm db:migrate:test:nodes` — runs all 3 test DB migrations
 - `pnpm db:migrate:direct` — drizzle-kit using operator config + `DATABASE_URL` from current environment (used by testcontainers)
-- `pnpm db:migrate:{operator,poly,resy}:container` — container-only: invoked by each node's Dockerfile default CMD
 - `pnpm db:generate:{operator,poly,resy}` — generate new migrations for a node's schema (runs drizzle-kit diff)
 
 **Execution Contexts:**
@@ -186,7 +189,7 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 - **Local Dev** (`db:migrate:dev` / `:poly` / `:resy`): runs `drizzle-kit migrate` with `.env.local` + per-node config. For daily development.
 - **Local Test** (`db:migrate:test*`): runs with `.env.test`. For test database setup.
 - **Direct** (`db:migrate:direct`): runs with operator config using `DATABASE_URL` from environment. For testcontainers (`testcontainers-postgres.global.ts` sets `process.env.DATABASE_URL` before `execSync`).
-- **Container** (`db:migrate:{operator,poly,resy}:container`): default CMD of each per-node migrator image. K8s `AtlasMigration`/`migrate-node-app` Jobs invoke these via overlays.
+- **Production runtime** (k8s initContainer): the node-app Deployment's initContainer runs `node /app/nodes/{node}/app/src/adapters/server/db/migrate.mjs` with `DATABASE_URL` from the node's Secret. Main container starts only after initContainer exits 0. Failure → `Init:Error` → old ReplicaSet keeps serving → `kubectl rollout status` non-zero. See [ci-cd.md](./ci-cd.md) for the full deploy flow.
 
 **Future: Atlas + GitOps migrations** — declarative schema, CRD-based Argo integration, destructive-change linting. Deferred to task.0325 with full spike intel preserved.
 
@@ -360,41 +363,31 @@ env:
 
 ### 4.1 Docker Image Architecture
 
-**Per-node image strategy (task.0324):** each deployed node ships two images from its own `nodes/<node>/app/Dockerfile`:
+**One image per node (task.0370 — supersedes the two-image split in task.0322):** each deployed node ships exactly one image from its own `nodes/<node>/app/Dockerfile`:
 
-- **Runner image** (`IMAGE_NAME:IMAGE_TAG` for operator; `IMAGE_NAME:IMAGE_TAG-{poly,resy}` for node variants): Lean production image (~80MB) for app runtime only.
-- **Migrator image** (`IMAGE_NAME:IMAGE_TAG-{operator,poly,resy}-migrate`): Contains drizzle-kit + that node's migrations + core schema (`packages/db-schema/src`). Node-template ships a scaffold migrator image for forks.
+- **Runtime image** (`ghcr.io/cogni-dao/cogni-template:{sha}` for operator; `cogni-template-{poly,resy}:{sha}` for node variants): the app's Next.js standalone bundle + the node's migration SQL files + a ~20-line `migrate.mjs` runner. Runs as both the main Deployment container and the initContainer; reuses the already-pulled digest so migrations start in seconds, not minutes.
 
-**Runner Stage (no migration tools):** unchanged — same pattern as before.
-
-**Per-node Migrator Stage:** each node's Dockerfile has a `FROM base AS migrator` stage. Stage copies only that node's slice:
+**Runner stage:** gains three `COPY` lines to bundle the migration SQL + migrate.mjs into the standalone layout:
 
 ```dockerfile
-FROM base AS migrator
-WORKDIR /app
-
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/nodes/<node>/drizzle.config.ts ./nodes/<node>/drizzle.config.ts
-COPY --from=builder /app/packages/db-schema/src ./packages/db-schema/src
-COPY --from=builder /app/nodes/<node>/app/src/shared/db ./nodes/<node>/app/src/shared/db
-COPY --from=builder /app/nodes/<node>/app/src/adapters/server/db/migrations ./nodes/<node>/app/src/adapters/server/db/migrations
-
-CMD ["pnpm", "db:migrate:<node>:container"]
+# nodes/<node>/app/Dockerfile (runner stage, partial)
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/<node>/app/src/adapters/server/db/migrations \
+     ./nodes/<node>/app/src/adapters/server/db/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/<node>/app/src/adapters/server/db/migrate.mjs \
+     ./nodes/<node>/app/src/adapters/server/db/migrate.mjs
 ```
 
-**Partial isolation, not full sovereignty:** each migrator image still carries `packages/db-schema/src`, so core schema changes rebuild all three migrators. The win is per-node cache invalidation + pattern consistency with existing per-node app images + forks inheriting trivially.
+`drizzle-orm` + `postgres` are already in each node's `next.config.ts` `serverExternalPackages`, so the standalone output ships them; `migrate.mjs` resolves both via standard Node.js module resolution at runtime. If a future bundle prune drops the `drizzle-orm/postgres-js/migrator` subpath, force it via `outputFileTracingIncludes` (pattern explicitly listed in task.0370).
 
-**CI wiring (see `scripts/ci/`):**
+**CI wiring (see `scripts/ci/`):** simpler after task.0370 PR B — one target per node instead of two:
 
-Adding a new build-target name requires updating this full chain — missing any one step causes silent failure modes (target gets built but never promoted, or promoted but never resolved on re-flight).
+- `detect-affected.sh` — emits the per-node target when its paths change.
+- `build-and-push-images.sh` — builds one image per node.
+- `merge-build-fragments.sh` — `canonical_order` array has one entry per node (no migrator companions).
+- `resolve-pr-build-images.sh` — resolves one digest per node.
+- `promote-build-payload.sh` — writes one digest per app overlay. The kustomize `images:` block has one `name:` matching `ghcr.io/cogni-dao/cogni-template[-{poly,resy}]`, which patches both the main container and the initContainer references in one shot.
 
-- `detect-affected.sh` — emits the target name when its paths change.
-- `build-and-push-images.sh` — builds the image tag from a Dockerfile stage with a distinct GHA cache scope.
-- `merge-build-fragments.sh` — `canonical_order` array must include the target for stable JSON ordering across matrix leg merges.
-- `compute_migrator_fingerprint.sh` — (migrators only) takes a node arg and hashes only that node's inputs for content-addressed image caching.
-- `resolve-pr-build-images.sh` — `ALL_TARGETS` + `resolve_tag()` must know about the tag shape, or the flight's PR-image resolver silently drops the target from the promoted payload (bug.0321 documents the vacuous-green failure mode this produces).
-- `promote-build-payload.sh` — pairs each app with its companion migrator digest (`operator-migrator` digest → operator overlay, etc.).
+**Legacy (pre-task.0370):** `scripts/ci/compute_migrator_fingerprint.sh`, the `-migrate` tag convention, and the migrator legs in `lib/image-tags.sh` are removed in PR B. Forks migrating from the two-image world drop those plus the `FROM base AS migrator` stage from their Dockerfiles.
 
 ### 4.2 Drizzle Configuration
 
@@ -435,36 +428,37 @@ Poly's config uses an array schema that unions core + poly's per-node package so
 
 ### 5.1 Benefits
 
-**Separation of Concerns:**
+**k8s-native migration lifecycle (task.0370):**
 
-- Runner image cannot mutate database schema (no pnpm, no drizzle-kit)
-- Migrator image has only DB env vars (least-secret exposure)
-- Clear security boundary between app runtime and migrations
+- Migrations run as a Deployment initContainer — the correct k8s primitive for "must complete before the app container starts."
+- No separate Argo PreSync hook Job, no ambient hook phase-machine state, no `BeforeHookCreation` Job churn on every sync.
+- Failures surface uniformly via `kubectl rollout status` non-zero; `/readyz` from old pods keeps traffic on the previous schema during failed rollouts.
 
-**Lean Production Image:**
+**Fast, cache-friendly deploys:**
 
-- Runner image ~80MB (Next.js standalone only)
-- No dev dependencies in production runtime
-- Faster container pulls and startup
+- initContainer reuses the main container's image digest → k3s hits the local layer cache → migrations start in seconds, not minutes (bug.0368: prior two-image pattern paid ~3m45s of per-flight image pull per node).
+- Single image per node to build, push, promote, and verify — PR-build matrix is one leg per node instead of two.
 
-**Consistent Migration Tooling:**
+**Same idempotent tooling, minimal runtime surface:**
 
-- Pinned drizzle-kit version in migrator image
-- Idempotent migrations (safe to re-run)
-- Same db-migrate service in dev and production
+- `drizzle-orm/postgres-js/migrator` reads `__drizzle_migrations` journal and applies only new rows — safe on every pod restart.
+- No drizzle-kit, no tsx, no pnpm in the runtime image. Migration capability is a 20-line `migrate.mjs` plus two already-present prod deps (`drizzle-orm`, `postgres`).
 
 ### 5.2 Trade-offs
 
-**Two Images to Build:**
+**Migration capability in the runtime image:**
 
-- CI builds both runner and migrator targets
-- Tag coupling: `IMAGE_NAME:IMAGE_TAG` and `IMAGE_NAME:IMAGE_TAG-migrate`
-- Both must be pushed and pulled during deployment
+- The runtime image ships `drizzle-orm/postgres-js/migrator` + migration SQL (both already required by the app; migrator subpath adds no new files beyond what `drizzle-orm` already bundles).
+- An attacker with RCE in the main container already has `DATABASE_URL` (app_user) and can issue raw SQL via the always-resident `postgres` driver — adding the migrator subpath does not broaden the blast radius.
+- Narrower posture (separate `app_migrator` role with DDL rights, `app_user` with DDL revoked) is deferred to proj.database-ops P1 — see §6.4.
 
-**Larger Migrator Image:**
+**Forward-compatibility obligation:**
 
-- Migrator includes full node_modules (~480MB)
-- Acceptable since it only runs during deployments, not at runtime
+- `FORWARD_COMPAT_MIGRATIONS` is explicit: a `DROP COLUMN` without a two-deploy dance will partial-outage the rolling update. This obligation existed under the prior PreSync-hook pattern equally; we are making it explicit. CI lint is follow-up task.0371.
+
+**Per-pod-start migration invocation:**
+
+- Every pod start (including restarts, not just rollouts) runs the idempotent migrator — adds ~1s to cold start when the journal is caught up. Acceptable; pod restarts are rare in steady state.
 
 ## 6. Future Improvements (If/When Needed)
 
@@ -480,15 +474,15 @@ Non-localhost `DATABASE_URL` values do not currently require `sslmode=require`. 
 
 `provision.sh` creates the `app_user` role but does not restrict it from DDL operations. Production deployments should revoke `CREATE`, `DROP`, `TRUNCATE`, `ALTER` from the app role. Covered in [Database RLS Spec](database-rls.md).
 
-### 6.4 Migrator Image Optimization
+### 6.4 Migration Credential Scoping
 
-The migrator image (~480MB) includes full node_modules. Potential optimizations:
+The initContainer currently binds the same `DATABASE_URL` the main container binds (`{node}-node-app-secrets.DATABASE_URL`, app_user role). Top-0.1% posture: migrations bind a narrower role (`app_migrator`) with DDL rights, the main container binds `app_user` with DDL revoked — neither role can do the other's job if compromised. The app_user role hardening is tracked in proj.database-ops P1 (credential convergence); the initContainer can adopt the narrower secret once that role exists.
 
-- Use pnpm's `--filter` to install only drizzle-kit and dependencies
-- Multi-stage build to copy only required binaries
-- Consider distroless base image for smaller footprint
+### 6.5 Destructive-SQL CI Lint
 
-### 6.2 Enhanced Environment Separation
+`FORWARD_COMPAT_MIGRATIONS` (§2 invariants) is enforced by convention + code review today. Follow-up task.0371: CI job that fails on `DROP COLUMN` / `DROP TABLE` / non-default `ALTER COLUMN ... NOT NULL` unless the migration declares `-- needs_two_deploys: true` pragma.
+
+### 6.6 Enhanced Environment Separation
 
 **Stricter Test Isolation:**
 
@@ -503,12 +497,10 @@ The migrator image (~480MB) includes full node_modules. Potential optimizations:
 
 ## 7. Summary
 
-**Environment Separation:** Host dev DB, host stack test DB, container stack DB are cleanly separated
+**Environment Separation:** host dev DB, host stack test DB, container stack DB cleanly separated.
 
-**Two-Image Architecture:** Lean runner image (~80MB) + dedicated migrator image (~480MB) with clear security boundaries
+**One Image per Node (task.0370):** single runtime image per node. Migrations run as an initContainer reusing the main container's digest — no per-flight image pull, no Argo PreSync hook, no drizzle-kit at runtime.
 
-**Production-Ready Pattern:** Dedicated db-migrate service, same `DATABASE_URL`, migrations as first-class deployment step
+**Forward-Compatible Migrations:** the rolling-update data path means every migration must be compatible with the prior code version. `FORWARD_COMPAT_MIGRATIONS` is a hard invariant; CI lint is follow-up.
 
-**Least-Secret Exposure:** db-migrate service receives only DB env vars, not app secrets
-
-**Tag Coupling:** `APP_IMAGE=IMAGE_NAME:IMAGE_TAG`, `MIGRATOR_IMAGE=IMAGE_NAME:IMAGE_TAG-migrate`
+**Idempotent Tooling:** `drizzle-orm/postgres-js/migrator` reads `__drizzle_migrations` and applies only new rows — safe on every pod start.
