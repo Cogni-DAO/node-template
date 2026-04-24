@@ -16,7 +16,6 @@
 
 import {
   type ApiKeyCreds,
-  AssetType,
   Chain,
   ClobClient,
   type ClobSigner,
@@ -151,11 +150,6 @@ export interface PolymarketMarketSellParams {
   client_order_id: string;
   /** Market order execution policy. */
   orderType?: OrderType.FOK | OrderType.FAK;
-}
-
-export interface PolymarketBalanceAllowanceParams {
-  assetType: "COLLATERAL" | "CONDITIONAL";
-  tokenId?: string;
 }
 
 /**
@@ -409,17 +403,6 @@ export class PolymarketClobAdapter implements MarketProviderPort {
         );
       }
 
-      // Polymarket's `/balance-allowance` view can lag behind on-chain
-      // approvals. Refresh both collateral and conditional caches before we
-      // post a market SELL so exits don't fail on stale provider state.
-      await Promise.all([
-        this.updateBalanceAllowance({ assetType: "COLLATERAL" }),
-        this.updateBalanceAllowance({
-          assetType: "CONDITIONAL",
-          tokenId: params.tokenId,
-        }),
-      ]);
-
       const response: unknown = await this.client.createAndPostMarketOrder(
         {
           tokenID: params.tokenId,
@@ -496,27 +479,6 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       );
       throw err;
     }
-  }
-
-  async updateBalanceAllowance(
-    params: PolymarketBalanceAllowanceParams
-  ): Promise<void> {
-    const assetType =
-      params.assetType === "COLLATERAL"
-        ? AssetType.COLLATERAL
-        : AssetType.CONDITIONAL;
-    await this.client.updateBalanceAllowance({
-      asset_type: assetType,
-      ...(params.tokenId ? { token_id: params.tokenId } : {}),
-    });
-    this.log.info(
-      {
-        event: "poly.clob.balance_allowance.sync",
-        asset_type: params.assetType,
-        token_id: params.tokenId,
-      },
-      "updateBalanceAllowance: ok"
-    );
   }
 
   async cancelOrder(orderId: string): Promise<void> {

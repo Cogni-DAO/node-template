@@ -6,17 +6,28 @@ name: Promote and Deploy
 # deploy-branch SHA as Healthy, deploys Compose infra via SSH, verifies health,
 # runs E2E, and drives the preview review-state lease.
 #
-# Job graph (bug.0321):
+# Job graph (bug.0321 + bug.0361):
 #
-#   promote-k8s ─► deploy-infra ─┬─► verify-deploy ─┐
-#                                └─► verify         ┴─► e2e ─┬─► lock-on-success
-#                                                            └─► unlock-on-failure
+#   promote-k8s ─► deploy-infra* ─┬─► verify-deploy ─┐
+#                                 └─► verify         ┴─► e2e ─┬─► lock-on-success
+#                                                             └─► unlock-on-failure
 #
-# verify-deploy is job-level gated on promote-k8s.outputs.promoted_apps != ''
-# (Axiom 11). Empty-promotion runs visibly skip it → e2e skipped →
+#   * deploy-infra is gated on `skip_infra != 'true'` (bug.0361). When
+#     skipped (the normal app-only flight-preview path), downstream jobs
+#     (verify, verify-deploy, e2e, lock-preview) use an explicit
+#     `deploy-infra.result in {success, skipped}` guard instead of GHA's
+#     implicit success() — otherwise the whole chain cascade-skips and
+#     the preview lease would never transition to `reviewing`.
+#
+# verify-deploy is also job-level gated on promote-k8s.outputs.promoted_apps
+# != '' (Axiom 11). Empty-promotion runs visibly skip it → e2e skipped →
 # lock-preview-on-success skipped → unlock-preview-on-failure fires. Preview
 # lease stays unlocked instead of silently advancing against an unchanged
 # overlay.
+#
+# AppSet-reconcile-from-repo (bug.0312) runs inside verify-deploy, NOT
+# inside deploy-infra, so template-drift on the VM is caught on every
+# non-empty promotion regardless of skip_infra.
 #
 # Job outputs that downstream jobs care about:
 #   promote-k8s.deploy_branch_sha  — tip SHA of deploy/{env} after promote
@@ -55,8 +66,17 @@ on:
         type: choice
         options: [preview, production]
       source_sha:
-        description: "SHA of source images (PR head SHA — images must exist as preview-{sha} in GHCR)"
+        description: "SHA of source images (PR head SHA — images must exist as preview-{sha} in GHCR). Leave empty for production to copy current deploy/preview state forward (bug.0364)."
         required: false
+      build_sha:
+        description: "SHA baked into images at build time (PR branch head). Defaults to source_sha. Needed on squash-merge where source_sha is the merge commit but containers report the branch SHA. Ignored in preview-forward mode (per-app SHAs come from deploy/preview map)."
+        required: false
+      skip_infra:
+        description: "Skip deploy-infra (Compose) step — use for app-only changes; infra has its own lever (candidate-flight-infra.yml)"
+        required: false
+        default: "false"
+        type: choice
+        options: ["true", "false"]
 
 permissions:
   contents: write
@@ -78,7 +98,9 @@ jobs:
       environment: ${{ steps.env.outputs.environment }}
       overlay: ${{ steps.env.outputs.overlay }}
       head_sha: ${{ steps.env.outputs.head_sha }}
+      build_sha: ${{ steps.env.outputs.build_sha }}
       deploy_branch: ${{ steps.env.outputs.deploy_branch }}
+      preview_forward: ${{ steps.env.outputs.preview_forward }}
       deploy_branch_sha: ${{ steps.deploy-push.outputs.deploy_branch_sha }}
       promoted_apps: ${{ steps.deploy-push.outputs.promoted_apps }}
     steps:
@@ -86,7 +108,41 @@ jobs:
         id: env
         run: |
           ENV="${{ inputs.environment }}"
-          SHA="${{ inputs.source_sha || github.sha }}"
+          RAW_SOURCE_SHA="${{ inputs.source_sha }}"
+          # bug.0364 preview-forward mode: production + empty source_sha means
+          # "copy whatever deploy/preview is currently proving forward". We
+          # derive head_sha from deploy/preview's .promote-state/current-sha
+          # so downstream checkouts (app-src, appset yaml, e2e) reference the
+          # same main commit the preview artifact was built from.
+          PREVIEW_FORWARD=false
+          if [ "$ENV" = "production" ] && [ -z "$RAW_SOURCE_SHA" ]; then
+            PREVIEW_FORWARD=true
+            # In preview-forward mode head_sha must carry the workflow ref
+            # (typically main tip), NOT preview current-sha: bootstrap scripts
+            # for the workflow (resolve-digests-from-preview.sh, AppSet YAML,
+            # verify-deployment.sh, e2e specs) may post-date preview's
+            # current-sha. Using main tip matches the invariant that the
+            # workflow always runs with its own paired scripts.
+            # Informational: preview_current_sha is emitted for the summary.
+            PREVIEW_CURRENT_SHA=$(curl -fsSL --max-time 30 "https://raw.githubusercontent.com/${{ github.repository }}/deploy/preview/.promote-state/current-sha" || true)
+            if [ -z "$PREVIEW_CURRENT_SHA" ]; then
+              echo "❌ preview-forward mode: failed to read deploy/preview .promote-state/current-sha"
+              exit 1
+            fi
+            RAW_SOURCE_SHA="${{ github.sha }}"
+            echo "🔁 preview-forward mode: head_sha=${RAW_SOURCE_SHA:0:8} (workflow ref) / preview_current_sha=${PREVIEW_CURRENT_SHA:0:8}"
+            echo "preview_current_sha=$PREVIEW_CURRENT_SHA" >> $GITHUB_OUTPUT
+          fi
+          SHA="${RAW_SOURCE_SHA:-${{ github.sha }}}"
+          # build_sha is the SHA baked into images at pr-build time (PR branch head).
+          # On squash-merge, source_sha is the new main commit SHA but containers
+          # report the PR branch SHA. Callers (flight-preview.sh) pass this
+          # explicitly. Falls back to source_sha when not supplied (direct-push or
+          # production promotion where the same image is re-used). In
+          # preview-forward mode per-app build SHAs come from the preview
+          # source-sha map — this value is a commit-message label only.
+          BUILD_SHA="${{ inputs.build_sha }}"
+          BUILD_SHA="${BUILD_SHA:-$SHA}"
 
           case "$ENV" in
             preview)    OVERLAY=preview;    DEPLOY_BRANCH=deploy/preview ;;
@@ -97,8 +153,10 @@ jobs:
           echo "environment=$ENV" >> $GITHUB_OUTPUT
           echo "overlay=$OVERLAY" >> $GITHUB_OUTPUT
           echo "head_sha=$SHA" >> $GITHUB_OUTPUT
+          echo "build_sha=$BUILD_SHA" >> $GITHUB_OUTPUT
           echo "deploy_branch=$DEPLOY_BRANCH" >> $GITHUB_OUTPUT
-          echo "Promoting to $ENV (overlay: $OVERLAY, deploy branch: $DEPLOY_BRANCH, sha: ${SHA:0:8})"
+          echo "preview_forward=$PREVIEW_FORWARD" >> $GITHUB_OUTPUT
+          echo "Promoting to $ENV (overlay: $OVERLAY, deploy branch: $DEPLOY_BRANCH, source: ${SHA:0:8}, build: ${BUILD_SHA:0:8}, preview_forward: $PREVIEW_FORWARD)"
 
       # Checkout app source for scripts and overlay templates
       - name: Checkout app source
@@ -119,7 +177,27 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # bug.0364: preview-forward mode checks out deploy/preview to read
+      # resolved per-app digests + source-sha map, bypassing the single-SHA
+      # GHCR tag assumption.
+      - name: Checkout deploy/preview (preview-forward mode)
+        if: steps.env.outputs.preview_forward == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: deploy/preview
+          fetch-depth: 1
+          token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
+          path: preview-src
+
+      - name: Resolve digests from deploy/preview overlays (preview-forward mode)
+        if: steps.env.outputs.preview_forward == 'true'
+        id: digests-preview
+        env:
+          PREVIEW_OVERLAY_ROOT: ${{ github.workspace }}/preview-src/infra/k8s/overlays/preview
+        run: bash app-src/scripts/ci/resolve-digests-from-preview.sh
+
       - name: Resolve all image digests
+        if: steps.env.outputs.preview_forward != 'true'
         id: digests
         env:
           HEAD_SHA: ${{ steps.env.outputs.head_sha }}
@@ -209,9 +287,13 @@ jobs:
       - name: Update overlay digests on deploy branch
         env:
           OVERLAY_ENV: ${{ steps.env.outputs.overlay }}
+          PREVIEW_FORWARD: ${{ steps.env.outputs.preview_forward }}
+          # Exactly one of these has a value (guarded by the `if:` on each
+          # digests step). The fallback via `||` picks the populated one.
+          DIGESTS_JSON: ${{ steps.digests.outputs.digests_json || steps.digests-preview.outputs.digests_json }}
         working-directory: deploy-branch
         run: |
-          echo "Promoting digests to overlay: $OVERLAY_ENV (on deploy branch)"
+          echo "Promoting digests to overlay: $OVERLAY_ENV (on deploy branch, preview_forward=$PREVIEW_FORWARD)"
 
           # promote-k8s-image.sh runs on the deploy branch checkout.
           # It only touches image digest fields — never EndpointSlice IPs.
@@ -224,7 +306,23 @@ jobs:
           # also records its source_sha into .promote-state/source-sha-by-app.json
           # for cross-env contract verification (bug.0321 Fix 4).
           PROMOTED=()
-          SOURCE_SHA="${{ steps.env.outputs.head_sha }}"
+
+          # Source-SHA resolution:
+          #   - Normal mode: every promoted app gets the same build_sha (PR
+          #     branch head for this dispatch).
+          #   - Preview-forward mode (bug.0364): each app keeps its own
+          #     source_sha from deploy/preview's map — preview built those
+          #     specific digests from those specific commits, and production
+          #     must verify the same pairing. Map is copied wholesale below.
+          BUILD_SHA="${{ steps.env.outputs.build_sha }}"
+          PREVIEW_MAP=""
+          if [ "$PREVIEW_FORWARD" = "true" ]; then
+            PREVIEW_MAP="${{ github.workspace }}/preview-src/.promote-state/source-sha-by-app.json"
+            if [ ! -f "$PREVIEW_MAP" ]; then
+              echo "❌ preview-forward mode: source-sha map missing at $PREVIEW_MAP"
+              exit 1
+            fi
+          fi
 
           promote_app() {
             local app="$1" digest="$2" migrator="${3:-}"
@@ -241,9 +339,24 @@ jobs:
                 --app "$app" \
                 --digest "$digest"
             fi
-            PROMOTED+=("$app")
-            APP="$app" SOURCE_SHA="$SOURCE_SHA" \
+            # Resolve source_sha BEFORE marking the app as promoted. A
+            # missing preview-map entry is a hard fail: the overlay digest
+            # is about to be written, and verify-buildsha (SOURCE_SHA_MAP
+            # mode) would silently fall back to EXPECTED_BUILDSHA (= the
+            # workflow ref SHA), which does NOT match the image build SHA.
+            # Better to refuse the promote than silent-green a mismatched
+            # contract probe downstream.
+            local app_source_sha="$BUILD_SHA"
+            if [ -n "$PREVIEW_MAP" ]; then
+              app_source_sha=$(jq -r --arg k "$app" '.[$k] // ""' "$PREVIEW_MAP")
+              if [ -z "$app_source_sha" ]; then
+                echo "❌ preview-forward: no source_sha for $app in preview map ($PREVIEW_MAP) — refusing to promote without verifiable build provenance"
+                exit 1
+              fi
+            fi
+            APP="$app" SOURCE_SHA="$app_source_sha" \
               bash ../app-src/scripts/ci/update-source-sha-map.sh
+            PROMOTED+=("$app")
           }
 
           # Per-node migrator pairing (task.0324): each node is promoted with
@@ -253,7 +366,7 @@ jobs:
           # to this step.
           # shellcheck source=../../scripts/ci/lib/image-tags.sh
           . ../app-src/scripts/ci/lib/image-tags.sh
-          DIGESTS='${{ steps.digests.outputs.digests_json }}'
+          DIGESTS="$DIGESTS_JSON"
 
           for node in "${NODE_TARGETS[@]}"; do
             app_digest=$(printf '%s' "$DIGESTS" | jq -r --arg k "$node" '.[$k] // ""')
@@ -334,7 +447,11 @@ jobs:
           echo "✅ Direct push to ${DEPLOY_BRANCH} for ${OVERLAY_ENV} ${SHORT_SHA} (deploy-branch SHA: ${DEPLOY_SHA:0:8}, promoted: ${PROMOTED_CSV})"
 
   # ── Deploy Compose infrastructure ────────────────────────────────
+  # Skipped when skip_infra=true (app-only changes). Infra has its own
+  # lever: candidate-flight-infra.yml for candidate-a, or dispatch this
+  # workflow with skip_infra=false when compose config changes.
   deploy-infra:
+    if: inputs.skip_infra != 'true'
     runs-on: ubuntu-latest
     needs: promote-k8s
     environment: ${{ needs.promote-k8s.outputs.environment }}
@@ -453,29 +570,8 @@ jobs:
           fi
           echo "✅ SSH connection successful"
 
-      # Reconcile the ApplicationSet on the VM BEFORE waiting for sync. This
-      # is the fix for the bug.0312 preview-stuck-on-deploy/staging incident:
-      # the live AppSet template can drift behind the repo (e.g. when the
-      # deploy branch name was retired in a repo-only change), and no CD step
-      # was re-applying it. Running this every deploy makes the CD path self-
-      # healing against future template drift.
-      - name: Reconcile ArgoCD ApplicationSet from repo
-        if: env.VM_HOST != ''
-        env:
-          SSH_OPTS: "-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6"
-          DEPLOY_ENVIRONMENT: ${{ needs.promote-k8s.outputs.environment }}
-        run: |
-          APPSET_FILE="infra/k8s/argocd/${DEPLOY_ENVIRONMENT}-applicationset.yaml"
-          if [ ! -f "$APPSET_FILE" ]; then
-            echo "⚠️  No ApplicationSet file for ${DEPLOY_ENVIRONMENT} (${APPSET_FILE}) — skipping"
-            exit 0
-          fi
-          echo "📤 SCPing ${APPSET_FILE} to VM and applying..."
-          # shellcheck disable=SC2086
-          scp $SSH_OPTS "$APPSET_FILE" root@"$VM_HOST":/tmp/appset.yaml
-          # shellcheck disable=SC2086
-          ssh $SSH_OPTS root@"$VM_HOST" "kubectl apply -f /tmp/appset.yaml -n argocd && rm -f /tmp/appset.yaml"
-          echo "✅ ApplicationSet reconciled"
+      # AppSet reconcile (bug.0312) moved to verify-deploy so it runs on
+      # every non-empty promotion regardless of skip_infra (bug.0361).
 
       - name: Deploy infrastructure
         if: env.VM_HOST != ''
@@ -517,13 +613,32 @@ jobs:
   verify-deploy:
     runs-on: ubuntu-latest
     needs: [promote-k8s, deploy-infra]
-    if: needs.promote-k8s.outputs.promoted_apps != ''
+    # Explicit result guard, not GHA's implicit success(). Without the
+    # `|| deploy-infra.result == 'skipped'` leg, this job cascade-skips
+    # every time flight-preview dispatches with skip_infra=true (bug.0361).
+    if: |
+      always() &&
+      needs.promote-k8s.result == 'success' &&
+      (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped') &&
+      needs.promote-k8s.outputs.promoted_apps != ''
     environment: ${{ needs.promote-k8s.outputs.environment }}
     env:
       VM_HOST: ${{ secrets.VM_HOST }}
       DOMAIN: ${{ vars.DOMAIN }}
       DEPLOY_ENVIRONMENT: ${{ needs.promote-k8s.outputs.environment }}
     steps:
+      # Bare checkout at workspace root so local composite actions
+      # (./.github/actions/loki-ci-telemetry, which itself nests
+      # uses: ./.github/actions/loki-push and invokes scripts/ci/*.sh
+      # with cwd=$GITHUB_WORKSPACE) can resolve. Nested `uses: ./...`
+      # inside a composite resolves against $GITHUB_WORKSPACE, not the
+      # parent action's dir — a one-line path prefix on the outer call
+      # is insufficient.
+      - name: Checkout (workspace root — for local composite actions)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.promote-k8s.outputs.head_sha }}
+
       - name: Checkout app source (for verification scripts)
         uses: actions/checkout@v4
         with:
@@ -546,6 +661,31 @@ jobs:
           echo "$SSH_DEPLOY_KEY" | tr -d '\r' > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      # Reconcile the ApplicationSet on the VM BEFORE waiting for sync. This
+      # is the fix for the bug.0312 preview-stuck-on-deploy/staging incident:
+      # the live AppSet template can drift behind the repo (e.g. when the
+      # deploy branch name was retired in a repo-only change), and no CD step
+      # was re-applying it. Runs in verify-deploy (not deploy-infra) so the
+      # reconcile still happens on every non-empty promotion when skip_infra
+      # is true (bug.0361).
+      - name: Reconcile ArgoCD ApplicationSet from repo
+        if: env.VM_HOST != ''
+        env:
+          SSH_OPTS: "-i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new -o ConnectTimeout=30 -o ServerAliveInterval=10 -o ServerAliveCountMax=6"
+          DEPLOY_ENVIRONMENT: ${{ needs.promote-k8s.outputs.environment }}
+        run: |
+          APPSET_FILE="app-src/infra/k8s/argocd/${DEPLOY_ENVIRONMENT}-applicationset.yaml"
+          if [ ! -f "$APPSET_FILE" ]; then
+            echo "⚠️  No ApplicationSet file for ${DEPLOY_ENVIRONMENT} (${APPSET_FILE}) — skipping"
+            exit 0
+          fi
+          echo "📤 SCPing ${APPSET_FILE} to VM and applying..."
+          # shellcheck disable=SC2086
+          scp $SSH_OPTS "$APPSET_FILE" root@"$VM_HOST":/tmp/appset.yaml
+          # shellcheck disable=SC2086
+          ssh $SSH_OPTS root@"$VM_HOST" "kubectl apply -f /tmp/appset.yaml -n argocd && rm -f /tmp/appset.yaml"
+          echo "✅ ApplicationSet reconciled"
 
       - name: Wait for ArgoCD sync
         if: env.VM_HOST != ''
@@ -577,7 +717,9 @@ jobs:
         if: env.VM_HOST != ''
         env:
           SOURCE_SHA_MAP: deploy-branch/.promote-state/source-sha-by-app.json
-          EXPECTED_BUILDSHA: ${{ needs.promote-k8s.outputs.head_sha }}
+          # build_sha is the PR branch head SHA baked into images — not the
+          # squash-merge commit on main (head_sha). See promote-k8s inputs.
+          EXPECTED_BUILDSHA: ${{ needs.promote-k8s.outputs.build_sha }}
           NODES: ${{ needs.promote-k8s.outputs.promoted_apps }}
         run: bash app-src/scripts/ci/verify-buildsha.sh
 
@@ -594,6 +736,11 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     needs: [promote-k8s, deploy-infra]
+    # Explicit result guard — see verify-deploy note. bug.0361.
+    if: |
+      always() &&
+      needs.promote-k8s.result == 'success' &&
+      (needs.deploy-infra.result == 'success' || needs.deploy-infra.result == 'skipped')
     environment: ${{ needs.promote-k8s.outputs.environment }}
     env:
       VM_HOST: ${{ secrets.VM_HOST }}
@@ -648,6 +795,13 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     needs: [promote-k8s, verify, verify-deploy]
+    # e2e requires real verification — verify and verify-deploy must have
+    # actually succeeded (not skipped). Empty-promotion path (promoted_apps
+    # empty) correctly cascades to skipped because verify-deploy is skipped.
+    if: |
+      needs.promote-k8s.result == 'success' &&
+      needs.verify.result == 'success' &&
+      needs.verify-deploy.result == 'success'
     timeout-minutes: 10
     environment: ${{ needs.promote-k8s.outputs.environment }}
     env:
@@ -769,7 +923,7 @@ jobs:
       always() &&
       needs.promote-k8s.outputs.environment == 'preview' &&
       (needs.promote-k8s.result != 'success' ||
-       needs.deploy-infra.result != 'success' ||
+       (needs.deploy-infra.result != 'success' && needs.deploy-infra.result != 'skipped') ||
        needs.verify.result != 'success' ||
        needs.verify-deploy.result != 'success' ||
        needs.e2e.result != 'success')

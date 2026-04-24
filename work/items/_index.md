@@ -29,6 +29,7 @@
 | 0 | 1 | 1 | needs_implement | bug.0307 | Operator OOM on candidate-a — memory limit too low, manual canary bump never landed in overlay | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 4 | needs_design | task.0309 | QA agent — reads work item, exercises feature, confirms observability post-flight | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 3 | needs_merge | bug.0334 | Overlay EndpointSlice IPs via env-state.yaml + workflow rsync — establish INFRA_K8S_MAIN_DERIVED | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | 1 | 1 | needs_review | bug.0363 | wait-for-argocd `delete_stale_hook_jobs` kills live migration jobs → infinite stuck-Running loop | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -78,6 +79,8 @@
 | 1 | 1 | 3 | needs_implement | task.0349 | CI-owned preview digest promotion; demote Image Updater to freshness-only |  |  |
 | 1 | 1 | 1 | needs_merge | bug.0358 | candidate-flight false-red: wait-for-argocd shares one timeout budget across all promoted apps | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 2 | needs_implement | task.0360 | POST /api/v1/vcs/pr — VCS create-PR endpoint for external agents | Agentic Interoperability | proj.agentic-interop |
+| 1 | 1 | 1 | needs_merge | bug.0361 | promote-and-deploy: EXPECTED_BUILDSHA uses merge commit SHA; deploy-infra always runs | CI/CD Pipeline | proj.cicd-services-gitops |
+| 1 | 1 | 1 | needs_review | bug.0364 | promote-and-deploy: production can't promote heterogeneous preview (single source_sha assumption) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -178,6 +181,7 @@
 | 1 | 99 | 2 | needs_review | bug.0343 | Candidate-a poly flights inherit ancient poly-migrator digest — doltgres PreSync hook fails intermittently |  |  |
 | 2 | 0 | 2 | needs_triage | task.0109 | Expand GitHub adapter — PR comments, review comments, issue creation | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 2 | 3 | needs_design | task.0238 | Agent avatars — Rive/Lottie animated characters on run cards and chat | Premium Frontend UX | proj.premium-frontend-ux |
+| 2 | 2 | 1 | needs_review | bug.0367 | verify-buildsha.sh hostname convention breaks production verify | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 3 | 1 | needs_triage | bug.0012 | pre-commit check:docs validates all files, not just staged — blocks unrelated commits |  |  |
 | 2 | 3 | 3 | needs_design | story.0128 | Governance ops: manual workflow triggers, run history, and admin role gating | System Tenant & Governance Execution Infrastructure | proj.system-tenant-governance |
 | 2 | 3 | 5 | needs_design | story.0263 | Doltgres Node Lifecycle — clone/pull from remotes, repo-spec linking, permission model | Cogni Poly | proj.poly-prediction-bot |
@@ -191,6 +195,7 @@
 | 2 | 5 | 4 | needs_review | task.0329 | Wallet analysis — reusable component + live data plane (any wallet) + Monitored drawer | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 5 | 5 | needs_design | task.0333 | Wallet analyst agent — AI qualitative judgments, Dolt-stored, DAO-funded | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 5 | 1 | needs_implement | task.0335 | Wallet analysis — clickable Monitored Wallets rows + paste-any-wallet search | Cogni Poly | proj.poly-prediction-bot |
+| 2 | 5 | 1 | needs_review | task.0369 | Drop --force from packages:build; reclaim 70s per local rebuild | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 6 | 5 | needs_design | task.0334 | Poly niche-research engine — skill-creator + research graph + Dolt store + EDO evidence | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 8 | 1 | needs_design | task.0064 | OpenClaw preflight cost estimate 10x audit — real token consumption | Reliability & Uptime | proj.reliability |
 | 2 | 9 | 2 | needs_design | task.0039 | Billing reconciler — LiteLLM spend/logs polling in scheduler worker | Unified Graph Launch | proj.unified-graph-launch |
@@ -228,6 +233,7 @@
 | 2 | 99 | 5 | needs_triage | bug.0319 | Split @cogni/ai-tools into per-node packages; kill the shared TOOL_CATALOG stub dance | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 99 | 5 | needs_design | task.0322 | Poly copy-trade Phase 4 design prep — dual-path ingestion, hot signer, target ranker, counterfactual baseline | Cogni Poly | proj.poly-copy-trading |
 | 2 | 99 | 3 | needs_review | task.0323 | Poly copy-trade v1 hardening — close the v0 gaps uncovered during candidate-a validation | Cogni Poly | proj.poly-copy-trading |
+| 3 | 3 | 2 | needs_design | task.0362 | Node-owned hostname declaration for verify + ingress | CI/CD Pipeline | proj.cicd-services-gitops |
 | 3 | 5 | 5 | needs_design | story.0248 | Dolt Branching CI/CD — experiment branches, A/B evaluation, confidence-gated promotion to main | Cogni Poly | proj.poly-prediction-bot |
 | 3 | 6 | 2 | needs_design | task.0326 | Ledger/attribution worker: rename DATABASE_URL and enforce no-DB-creds invariant on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |
 | 3 | 7 | 2 | needs_triage | bug.0034 | Secrets redaction uses regex on serialized JSON — adopt fast-redact for structured fields |  |  |
@@ -379,6 +385,7 @@
 | 1 | task.0328 | Poly sync-truth — DB as CLOB cache (first slice: typed not_found, grace window, synced_at, sync-health) | Cogni Poly | proj.poly-copy-trading |
 | 1 | bug.0335 | Polymarket CLOB rejects every operator BUY on candidate-a with empty error — mirror pipeline boots clean but places zero orders | Cogni Poly | proj.poly-copy-trading |
 | 1 | bug.0338 | Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only | Cogni Poly | proj.poly-copy-trading |
+| 1 | task.0358 | Poly dashboard — open vs closed positions, position history replaces order history | Cogni Poly | proj.poly-copy-trading |
 | 1 | bug.0360 | Poly research Day tab hangs indefinitely — no timeout, no error state | Cogni Poly | proj.poly-prediction-bot |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |

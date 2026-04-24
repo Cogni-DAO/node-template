@@ -224,17 +224,6 @@ export interface PolyTradeExecutorFactoryDeps {
   polygonRpcUrl?: string | undefined;
 }
 
-const EXIT_RECONCILE_DELAYS_MS = [150, 350, 750] as const;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function errorMentionsAllowance(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err);
-  return message.toLowerCase().includes("allowance");
-}
-
 type MarketExitAdapter = {
   sellPositionAtMarket: (params: {
     tokenId: string;
@@ -476,7 +465,7 @@ async function buildExecutor(
         "no_connection"
       );
     }
-    if (params.requireTradingReady) {
+    if (params.requireTradingReady && !connection.tradingApprovalsReadyAt) {
       try {
         const ready =
           await deps.walletPort.ensureTradingApprovals(billingAccountId);
@@ -515,32 +504,6 @@ async function buildExecutor(
     }
   }
 
-  async function reconcileRemainingPosition(
-    tokenId: string
-  ): Promise<PolymarketUserPosition | null> {
-    for (
-      let attempt = 0;
-      attempt < EXIT_RECONCILE_DELAYS_MS.length;
-      attempt += 1
-    ) {
-      const refreshedPositions =
-        await dataApiClient.listUserPositions(funderAddress);
-      const remaining = refreshedPositions.find((p) => p.asset === tokenId);
-      if (!remaining || remaining.size <= 0) {
-        return null;
-      }
-      const delayMs = EXIT_RECONCILE_DELAYS_MS[attempt];
-      if (!delayMs) {
-        return remaining;
-      }
-      await sleep(delayMs);
-    }
-
-    const refreshedPositions =
-      await dataApiClient.listUserPositions(funderAddress);
-    return refreshedPositions.find((p) => p.asset === tokenId) ?? null;
-  }
-
   async function exitPosition(
     params: ExitPositionParams
   ): Promise<OrderReceipt> {
@@ -552,7 +515,6 @@ async function buildExecutor(
     const marketExitAdapter = adapter as typeof adapter & MarketExitAdapter;
     let totalFilledUsdc = 0;
     let lastReceipt: OrderReceipt | null = null;
-    let recoveredAllowances = false;
 
     for (let attempt = 0; attempt < 4; attempt += 1) {
       const positions = await dataApiClient.listUserPositions(funderAddress);
@@ -582,94 +544,28 @@ async function buildExecutor(
         "poly-trade-executor: market exit authorized → placeOrder"
       );
 
-      let receipt: OrderReceipt;
-      try {
-        receipt = await marketExitAdapter.sellPositionAtMarket({
-          tokenId: params.tokenId,
-          shares: position.size,
-          client_order_id: params.client_order_id,
-          orderType: "FAK",
-        });
-      } catch (err) {
-        if (!recoveredAllowances && errorMentionsAllowance(err)) {
-          recoveredAllowances = true;
-          deps.logger.warn(
-            {
-              event: "poly.exit.recover_approvals",
-              billing_account_id: billingAccountId,
-              token_id: params.tokenId,
-              attempt: attempt + 1,
-            },
-            "poly-trade-executor: market exit hit allowance drift; refreshing approvals and retrying once"
-          );
-          const ready =
-            await deps.walletPort.ensureTradingApprovals(billingAccountId);
-          if (!ready.ready) {
-            throw err;
-          }
-          receipt = await marketExitAdapter.sellPositionAtMarket({
-            tokenId: params.tokenId,
-            shares: position.size,
-            client_order_id: params.client_order_id,
-            orderType: "FAK",
-          });
-        } else {
-          throw err;
-        }
-      }
+      const receipt = await marketExitAdapter.sellPositionAtMarket({
+        tokenId: params.tokenId,
+        shares: position.size,
+        client_order_id: params.client_order_id,
+        orderType: "FAK",
+      });
       totalFilledUsdc += receipt.filled_size_usdc;
       lastReceipt = receipt;
 
-      const remaining = await reconcileRemainingPosition(params.tokenId);
+      const refreshedPositions =
+        await dataApiClient.listUserPositions(funderAddress);
+      const remaining = refreshedPositions.find(
+        (p) => p.asset === params.tokenId
+      );
       if (!remaining || remaining.size <= 0) {
         return {
           ...receipt,
           filled_size_usdc: totalFilledUsdc,
         };
       }
-
-      if (remaining.size < position.size) {
-        deps.logger.info(
-          {
-            event: "poly.exit.reconcile_progress",
-            billing_account_id: billingAccountId,
-            token_id: params.tokenId,
-            prior_shares: position.size,
-            remaining_shares: remaining.size,
-            attempt: attempt + 1,
-          },
-          "poly-trade-executor: market exit made progress; retrying remaining shares"
-        );
-        continue;
+      if (remaining.size >= position.size) {
       }
-
-      if (receipt.filled_size_usdc > 0 || receipt.status === "filled") {
-        deps.logger.warn(
-          {
-            event: "poly.exit.reconcile_pending",
-            billing_account_id: billingAccountId,
-            token_id: params.tokenId,
-            remaining_shares: remaining.size,
-            attempt: attempt + 1,
-            order_id: receipt.order_id,
-          },
-          "poly-trade-executor: market exit accepted but Data API still shows stale position state; returning provider receipt"
-        );
-        return {
-          ...receipt,
-          filled_size_usdc: totalFilledUsdc,
-        };
-      }
-    }
-
-    if (
-      lastReceipt &&
-      (lastReceipt.filled_size_usdc > 0 || lastReceipt.status === "filled")
-    ) {
-      return {
-        ...lastReceipt,
-        filled_size_usdc: totalFilledUsdc,
-      };
     }
 
     throw new Error(
