@@ -53,7 +53,9 @@ resolve_digest_ref() {
   if [ -z "$digest" ] || [ "$digest" = "null" ]; then
     return 1
   fi
-  printf '%s@%s' "${tag%%:*}" "$digest"
+  local repo="${tag%@*}"
+  repo="${repo%%:*}"
+  printf '%s@%s' "$repo" "$digest"
 }
 
 # Print one line: image@sha256:... or image:tag from preview overlay kustomization.
