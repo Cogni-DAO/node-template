@@ -98,6 +98,7 @@
 | 1 | 2 | 3 | needs_design | bug.0312 | Purge canary and staging legacy naming from docs, workflows, and scorecards; document the e2e CI/CD flow | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 2 | 3 | needs_merge | task.0357 | Poly position exits — authoritative close/redeem semantics + live approval readiness | Cogni Poly | proj.poly-copy-trading |
 | 1 | 2 | 1 | needs_review | bug.0359 | candidate-flight false-green: wait-for-argocd accepts revision-advanced apps whose Deployment stays OutOfSync | CI/CD Pipeline | proj.cicd-services-gitops |
+| 1 | 2 | 3 | needs_design | task.0365 | Poly onboarding UX polish (v0.1) — Money page layout, funding tip, approval-state design | Cogni Poly | proj.poly-copy-trading |
 | 1 | 3 | 1 | needs_design | bug.0011 | Gateway streaming truncates output mid-sentence in UI | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 3 | 3 | needs_design | task.0099 | Node + scope identity infra: repo-spec, DB persistence, scope_id columns, boot-time drift protection |  |  |
 | 1 | 3 | 3 | needs_research | spike.0119 | Quarterly people-centric attribution review — evaluation payload, governance input, and signal collection | Transparent Credit Payouts | proj.transparent-credit-payouts |
@@ -311,6 +312,7 @@
 | 0 | task.0293 | Flight merged-PR digests to preview with lock-gate | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | task.0314 | Decouple infra flighting from app flighting — two independent levers | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | bug.0344 | Hand-curated overlay digests drift on every unrelated flight — adopt a digest-update controller | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | task.0361 | Poly — first-user onboarding flow v0 (sign-on → provision → fund → select targets) | Cogni Poly | proj.poly-copy-trading |
 | 1 | task.0006 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0007 | Billing enforcement decorator at GraphExecutorPort level | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0010 | OpenClaw gateway model selection — session-level override or agent-per-specialty | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
