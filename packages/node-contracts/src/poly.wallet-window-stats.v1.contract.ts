@@ -4,9 +4,8 @@
 /**
  * Module: `@contracts/poly.wallet-window-stats.v1.contract`
  * Purpose: Contract for the batched per-wallet windowed stats endpoint — POST /api/v1/poly/wallets/stats.
- * Scope: Read-only; does not place orders or mutate state. Covers volumeUsdc, pnlUsdc, numTrades
- *        per (wallet, timePeriod). pnlKind is "authoritative" (positions API) or "estimated"
- *        (trade-cashflow fallback).
+ * Scope: Read-only; does not place orders or mutate state. Covers volumeUsdc, pnlUsdc (all-time), numTrades
+ *        per (wallet, timePeriod). pnlKind is always "authoritative" (positions API, no time filter).
  * Invariants:
  *   - CONTRACT_IS_SOT: Route handler and capability both derive types from these schemas.
  *   - PURE_LIBRARY: No I/O, no env vars.
@@ -33,8 +32,8 @@ export const WalletWindowStatsSchema = z.object({
   timePeriod: WalletWindowTimePeriodSchema,
   volumeUsdc: z.number(),
   pnlUsdc: z.number(),
-  /** "authoritative" = Polymarket positions API (cashPnl + realizedPnl). "estimated" = trade-cashflow fallback. */
-  pnlKind: z.enum(["authoritative", "estimated"]),
+  /** "authoritative" = Polymarket positions API (cashPnl + realizedPnl). Always all-time; positions API has no time filter. */
+  pnlKind: z.literal("authoritative"),
   roiPct: z.number().nullable(),
   numTrades: z.number().int().nonnegative(),
   /** True when the /trades response hit the API cap (1k per call); actual count may be higher. */

@@ -57,7 +57,7 @@ export interface ListUserActivityParams {
 }
 
 export interface ListUserTradesParams {
-  /** Rows per page (Polymarket supports up to 10k for `/trades`). Default: 1000. */
+  /** Rows per page. Empirically capped at ~1k per response regardless of requested limit. Default: 1000. */
   limit?: number;
   /** Only return trades at or after this unix-seconds timestamp. */
   sinceTs?: number;

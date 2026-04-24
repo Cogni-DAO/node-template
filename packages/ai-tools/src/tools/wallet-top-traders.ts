@@ -34,7 +34,7 @@ export interface WalletWindowStats {
   timePeriod: "DAY" | "WEEK" | "MONTH" | "ALL";
   volumeUsdc: number;
   pnlUsdc: number;
-  pnlKind: "authoritative" | "estimated";
+  pnlKind: "authoritative";
   roiPct: number | null;
   numTrades: number;
   numTradesCapped: boolean;

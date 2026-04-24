@@ -64,7 +64,7 @@ export const POST = wrapRouteHandlerWithLogging(
             address,
             timePeriod,
           });
-          return [address, stats] as const;
+          return [address.toLowerCase(), stats] as const;
         })
       )
     );
