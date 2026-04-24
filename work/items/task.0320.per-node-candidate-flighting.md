@@ -164,6 +164,36 @@ Two PRs, each independently validatable on candidate-a.
 3. Template AppSet `revision` / `targetRevision` from catalog.
 4. Observe Argo creates four Applications, each tracking its own branch at the same digest set (no flight yet; state is identical).
 
-**PR 2 — Workflow cutover (matrix fan-out + lane isolation):** 5. Add `detect-affected` job running Turbo. 6. Matrix fan-out in `candidate-flight.yml`; each cell targets its per-node branch. 7. Delete whole-slot promote loop + lease acquire/release. 8. Update `candidate-flight-infra.yml` pre-check. 9. Update `pr-coordinator-v0` skill. 10. Retire `deploy/candidate-a` branch + `candidate-lease.json` + acquire/release scripts if unreferenced. 11. Update `docs/spec/ci-cd.md`.
+**PR 2 — Workflow cutover (matrix fan-out + lane isolation):**
 
-Validation on PR 2 via the four test cases above. First two PRs to use the new lane model are flights of PR 2 itself (dogfood). Estimate bumps to 2 units; PR 1 is ~0.5, PR 2 is ~1.5.
+5. Add `detect-affected` job running Turbo.
+6. Matrix fan-out in `candidate-flight.yml` with `fail-fast: false` AND `concurrency: group: flight-${{ matrix.node }}` (see Design Review item 3).
+7. Delete whole-slot promote loop + lease acquire/release.
+8. Update `candidate-flight-infra.yml` pre-check.
+9. Update `pr-coordinator-v0` skill.
+10. Retire `deploy/candidate-a` branch + `candidate-lease.json` + acquire/release scripts if unreferenced.
+11. Update `docs/spec/ci-cd.md`.
+
+Validation on PR 2 via the four test cases above. PR 2 itself ships under the **whole-slot model** (dogfood ordering — see Design Review item 2); the new lane model first flights begin on the PR _after_ PR 2 merges.
+
+## Design Review (2026-04-24)
+
+**Verdict: APPROVED.** Deletes more than it adds; branch-head-as-lease is the right primitive; matrix + `fail-fast: false` is the right isolation; Turbo-affected is the right source; no new services. Behaviorally reversible — repoint AppSet at `deploy/candidate-a` to roll back.
+
+Net impact: ~100 LOC, mostly deletions (lease JSON, acquire/release scripts, whole-slot promote loop). PR 1 is a behavioral no-op (four branches at identical SHAs → Argo reconciles to same state), so the substrate is validatable in prod before any workflow change.
+
+### Implementer Guardrails
+
+Address these in PR 1 and PR 2 respectively. Each is a code-review checkbox:
+
+- [ ] **GR-1 (PR 1): AppSet generator shape — expect 4 git generators, not 1 templated.** Argo's git generator applies one `revision` to all matched `files:`. Templating `{{candidate_a_branch}}` into `revision` from a catalog field will not work. Instead: split the single git generator into **four `generators.git` entries under the same ApplicationSet**, each with `revision: deploy/candidate-a-<node>` and `files: [infra/catalog/<node>.yaml]`. Still one AppSet resource — four generators inside it. The original design's "~10 lines" estimate is low; budget ~40 lines for the AppSet.
+- [ ] **GR-2 (PR 2): Dogfood ordering — PR 2 ships on the whole-slot model.** PR 2 can't flight itself on the new lane model because the new model doesn't exist until PR 2 merges. Order: `PR 1` merges (whole-slot, no-op) → flight `PR 2` via the **existing whole-slot workflow** → merge `PR 2` → the first PR _after_ PR 2 is the first flight of the new lane model. Do not introduce a chicken-and-egg bootstrap workflow.
+- [ ] **GR-3 (PR 2): GHA `concurrency` group keyed by matrix node.** Add `concurrency: { group: flight-${{ matrix.node }}, cancel-in-progress: false }` to the matrix job. Prevents parallel same-node runs from racing on `git push deploy/candidate-a-<node>` without the coordinator having to serialize. Belt for the suspenders of non-fast-forward-push rebase-retry.
+- [ ] **GR-4 (landing order, external): Land PR #1041 first.** PR #1041 (migrations as initContainer, deletes the migrate Job hook) eliminates one failure class during cutover. Merge order: `#1041` → `task.0320 PR 1` → `task.0320 PR 2`. Different files — no merge conflict risk — but cleaner validation.
+- [ ] **GR-5 (follow-up): Harden the infra-lever pre-check before the fifth node.** `gh run list --status=in_progress` is best-effort for v0. File a follow-up task to convert to a proper lease (e.g. one global infra-lease file, or a GHA environment-based concurrency gate) before adding the 5th node. Don't let "v0 best-effort" drift into "our concurrency story forever."
+
+### Rejected During Review (Recorded for Posterity)
+
+- Templating `generator.git.revision` from a single catalog field (GR-1 — Argo doesn't support it; four generators is the real shape).
+- Flighting PR 2 on its own new model (GR-2 — chicken-and-egg; whole-slot flights PR 2).
+- Relying solely on rebase-retry for same-node concurrency (GR-3 — free GHA primitive exists, use it).
