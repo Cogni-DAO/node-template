@@ -24,35 +24,34 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components";
-import { groupChecks, overallStatus, type UiCheckStatus } from "./group-checks";
+import { computeEntryStatus, type UiCheckStatus } from "./group-checks";
 import { PrPanelRow } from "./PrPanelRow";
 import type { PrPanelEntry } from "./pr-panel.types";
 import { StatusDot } from "./StatusDot";
 
-function rowOverall(entry: PrPanelEntry): UiCheckStatus {
-  const groups = groupChecks(entry.ci.checks);
-  return overallStatus({
-    ci: groups.find((g) => g.id === "ci")?.status ?? "pending",
-    flight: groups.find((g) => g.id === "flight")?.status,
-    deployVerified: entry.flight?.deployVerified ?? false,
-  });
-}
-
-function countByStatus(entries: PrPanelEntry[]): Record<UiCheckStatus, number> {
+function countByStatus(
+  entries: readonly PrPanelEntry[]
+): Record<UiCheckStatus, number> {
   const counts: Record<UiCheckStatus, number> = {
     passing: 0,
     running: 0,
     failed: 0,
     pending: 0,
   };
-  for (const e of entries) counts[rowOverall(e)] += 1;
+  for (const e of entries) {
+    const { overall } = computeEntryStatus(
+      e.ci.checks,
+      e.flight?.deployVerified ?? false
+    );
+    counts[overall] += 1;
+  }
   return counts;
 }
 
 export function ActivePullRequestsPanel({
   entries,
 }: {
-  entries: PrPanelEntry[];
+  entries: readonly PrPanelEntry[];
 }): ReactElement {
   const counts = countByStatus(entries);
 

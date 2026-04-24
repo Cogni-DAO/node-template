@@ -33,12 +33,13 @@ export interface CheckGroup {
   checks: UiCheck[];
 }
 
-/** Check-name prefixes we classify as flight/deploy stages. */
+/** Check-name prefixes we classify as flight/deploy stages. All must be delimited to avoid false positives on unrelated names (e.g. `argonaut-*`). */
 const FLIGHT_PREFIXES = [
   "candidate-flight",
   "flight-",
   "verify-buildsha",
-  "argo",
+  "argo-",
+  "argo/",
   "deploy-",
 ] as const;
 
@@ -105,6 +106,8 @@ export function groupChecks(checks: readonly CheckInfo[]): CheckGroup[] {
 
 /**
  * Overall PR indicator status. Folds CI + flight + deploy_verified into one dot.
+ * Note: `flight` and `deployVerified` are required to be passed as
+ * `undefined`/`false` explicitly (exactOptionalPropertyTypes is on).
  */
 export function overallStatus(args: {
   ci: UiCheckStatus;
@@ -120,4 +123,24 @@ export function overallStatus(args: {
     return "running";
   }
   return "pending";
+}
+
+/**
+ * Single-pass classifier used by both the panel header counts and the row.
+ * Importing from one place prevents the two sites drifting.
+ */
+export function computeEntryStatus(
+  checks: readonly CheckInfo[],
+  deployVerified: boolean | undefined
+): {
+  groups: CheckGroup[];
+  overall: UiCheckStatus;
+} {
+  const groups = groupChecks(checks);
+  const overall = overallStatus({
+    ci: groups.find((g) => g.id === "ci")?.status ?? "pending",
+    flight: groups.find((g) => g.id === "flight")?.status,
+    deployVerified,
+  });
+  return { groups, overall };
 }

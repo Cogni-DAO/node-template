@@ -2,7 +2,7 @@
 id: task.0363
 type: task
 title: "Operator dashboard: Active Pull Requests + CI/flight/deploy_verified loop"
-status: needs_implement
+status: needs_closeout
 revision: 1
 priority: 1
 rank: 1
@@ -73,6 +73,22 @@ nodes/operator/app/src/app/(app)/dashboard/
 
 - exercise: visit `/dashboard` on candidate-a; the Active Pull Requests panel renders above the Runs/Work grid. Expand a row; CI Pipeline and (when present) Flight (candidate-a) group cards render with correct semantic dot colors. A row with `deploy_verified: true` shows the success checkmark + "Deploy Verified" badge.
 - observability: Loki query `{app="operator"} |= "dashboard-active-prs"` at the deployed SHA (React Query cache key appears in request telemetry).
+
+## Revision 1 — Resolved
+
+All four blocking items + non-blocking suggestions addressed:
+
+- **Nested interactive fixed** — `PrPanelRow` now uses a native `<button>` with the external `<Link>` as a sibling (not descendant). No `validateDOMNesting` warning.
+- **Duplicate React keys fixed** — `CheckPill` keys include index (`${name}-${idx}`) for check-run reruns.
+- **`mergeable` defaults to `null`** in both `pr()` and `ci()` mock helpers, preserving the contract's `boolean | null` semantics.
+- **Unit tests added** — `tests/unit/pr-panel-group-checks.test.ts` covers `normalize`, `groupChecks` classification, `rollup`, `overallStatus` (all branches including awaiting-credit), and `computeEntryStatus`. 24 tests, all passing.
+- `rowOverall` deduplicated into `computeEntryStatus` in `group-checks.ts`.
+- `"argo"` prefix tightened to `"argo-"` + `"argo/"`.
+- Mock timestamps built per-call via `buildMockEntries()` so refetch feels alive.
+- PR #1241 fixture corrected (CI still pending because flight in progress).
+- `ActivePullRequestsPanel` prop is `readonly PrPanelEntry[]`.
+- Loading skeleton added in `view.tsx` to match sibling sections.
+- `statusLabel` pending fallback renamed `"Queued"` → `"Waiting"`.
 
 ## Review Feedback (revision 1)
 

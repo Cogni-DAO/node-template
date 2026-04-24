@@ -44,8 +44,10 @@ export function CheckGroupCard({ group }: { group: CheckGroup }): ReactElement {
       </div>
       {group.checks.length > 0 ? (
         <div className="flex flex-wrap gap-2">
-          {group.checks.map((check) => (
-            <CheckPill key={check.name} check={check} />
+          {group.checks.map((check, idx) => (
+            // Key includes index because GitHub returns multiple check-runs with
+            // the same `name` when a check is rerun.
+            <CheckPill key={`${check.name}-${idx}`} check={check} />
           ))}
         </div>
       ) : (

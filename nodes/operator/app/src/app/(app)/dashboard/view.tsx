@@ -190,7 +190,7 @@ export function DashboardView(): ReactElement {
     gcTime: 60_000,
   });
 
-  const { data: prsData } = useQuery({
+  const { data: prsData, isLoading: prsLoading } = useQuery({
     queryKey: ["dashboard-active-prs"],
     queryFn: fetchActivePrs,
     refetchInterval: 30_000,
@@ -300,9 +300,14 @@ export function DashboardView(): ReactElement {
       <NodeHealthCard />
 
       {/* Active Pull Requests — operator's core PR → CI → flight → deploy_verified loop */}
-      {prsData && prsData.entries.length > 0 && (
+      {prsLoading ? (
+        <div className="animate-pulse space-y-2">
+          <div className="h-20 rounded-lg bg-muted" />
+          <div className="h-20 rounded-lg bg-muted" />
+        </div>
+      ) : prsData && prsData.entries.length > 0 ? (
         <ActivePullRequestsPanel entries={prsData.entries} />
-      )}
+      ) : null}
 
       {/* Two-column top section: Agents + Work */}
       <div className="grid gap-6 lg:grid-cols-2">

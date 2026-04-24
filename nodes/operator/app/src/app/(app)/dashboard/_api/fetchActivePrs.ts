@@ -31,142 +31,149 @@ function isoMinutesAgo(minutes: number): string {
   return new Date(Date.now() - minutes * 60 * 1000).toISOString();
 }
 
-const MOCK_ENTRIES: PrPanelEntry[] = [
-  {
-    pr: pr({
-      number: 1247,
-      title: "feat: candidate-flight telemetry for operator dispatches",
-      author: "alex-contributor",
-      headBranch: "feat/flight-telemetry",
-      labels: ["enhancement", "needs-review"],
-      updatedAt: isoMinutesAgo(120),
-    }),
-    ci: ci({
-      prNumber: 1247,
-      headSha: "abc1234",
-      allGreen: false,
-      pending: true,
-      checks: [
-        { name: "Lint", status: "completed", conclusion: "success" },
-        { name: "Typecheck", status: "completed", conclusion: "success" },
-        { name: "Unit", status: "in_progress", conclusion: null },
-        { name: "Component", status: "queued", conclusion: null },
-        { name: "Build", status: "queued", conclusion: null },
-      ],
-    }),
-    htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1247",
-  },
-  {
-    pr: pr({
-      number: 1245,
-      title: "fix: loki-ci-telemetry path in verify-deploy (sub-checkout)",
-      author: "sarah-dev",
-      headBranch: "fix/loki-ci-telemetry",
-      labels: ["bug", "priority-high"],
-      updatedAt: isoMinutesAgo(300),
-    }),
-    ci: ci({
-      prNumber: 1245,
-      headSha: "def5678",
-      allGreen: true,
-      pending: false,
-      checks: [
-        { name: "Lint", status: "completed", conclusion: "success" },
-        { name: "Typecheck", status: "completed", conclusion: "success" },
-        { name: "Unit", status: "completed", conclusion: "success" },
-        { name: "Component", status: "completed", conclusion: "success" },
-        { name: "Build", status: "completed", conclusion: "success" },
-        {
-          name: "candidate-flight / build-image",
-          status: "completed",
-          conclusion: "success",
-        },
-        {
-          name: "candidate-flight / argo-sync",
-          status: "completed",
-          conclusion: "success",
-        },
-        {
-          name: "verify-buildsha",
-          status: "completed",
-          conclusion: "success",
-        },
-      ],
-    }),
-    flight: {
-      workflowUrl:
-        "https://github.com/Cogni-DAO/node-template/actions/runs/mock-1245",
-      headSha: "def5678",
-      deployVerified: true,
+/**
+ * Build fixtures at call time so timestamps stay fresh on each refetch
+ * (otherwise `isoMinutesAgo` freezes at module load and the "Live" chip lies).
+ */
+function buildMockEntries(): PrPanelEntry[] {
+  return [
+    {
+      pr: pr({
+        number: 1247,
+        title: "feat: candidate-flight telemetry for operator dispatches",
+        author: "alex-contributor",
+        headBranch: "feat/flight-telemetry",
+        labels: ["enhancement", "needs-review"],
+        updatedAt: isoMinutesAgo(120),
+      }),
+      ci: ci({
+        prNumber: 1247,
+        headSha: "abc1234",
+        allGreen: false,
+        pending: true,
+        checks: [
+          { name: "Lint", status: "completed", conclusion: "success" },
+          { name: "Typecheck", status: "completed", conclusion: "success" },
+          { name: "Unit", status: "in_progress", conclusion: null },
+          { name: "Component", status: "queued", conclusion: null },
+          { name: "Build", status: "queued", conclusion: null },
+        ],
+      }),
+      htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1247",
     },
-    htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1245",
-  },
-  {
-    pr: pr({
-      number: 1243,
-      title: "chore: upgrade dependencies and fix security vulnerabilities",
-      author: "bot-renovate",
-      headBranch: "renovate/weekly",
-      labels: ["dependencies", "automated"],
-      updatedAt: isoMinutesAgo(60 * 24),
-    }),
-    ci: ci({
-      prNumber: 1243,
-      headSha: "ghi9012",
-      allGreen: false,
-      pending: false,
-      checks: [
-        { name: "Lint", status: "completed", conclusion: "success" },
-        { name: "Typecheck", status: "completed", conclusion: "success" },
-        { name: "Unit", status: "completed", conclusion: "failure" },
-        { name: "Component", status: "queued", conclusion: null },
-        { name: "Build", status: "queued", conclusion: null },
-      ],
-    }),
-    htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1243",
-  },
-  {
-    pr: pr({
-      number: 1241,
-      title: "feat: implement OAuth2 login flow with GitHub",
-      author: "mike-auth",
-      headBranch: "feat/github-oauth",
-      labels: ["feature", "wip"],
-      updatedAt: isoMinutesAgo(60 * 48),
-      draft: true,
-    }),
-    ci: ci({
-      prNumber: 1241,
-      headSha: "jkl3456",
-      allGreen: true,
-      pending: false,
-      checks: [
-        { name: "Lint", status: "completed", conclusion: "success" },
-        { name: "Typecheck", status: "completed", conclusion: "success" },
-        { name: "Unit", status: "completed", conclusion: "success" },
-        { name: "Component", status: "completed", conclusion: "success" },
-        { name: "Build", status: "completed", conclusion: "success" },
-        {
-          name: "candidate-flight / build-image",
-          status: "in_progress",
-          conclusion: null,
-        },
-        {
-          name: "candidate-flight / argo-sync",
-          status: "queued",
-          conclusion: null,
-        },
-      ],
-    }),
-    flight: {
-      workflowUrl:
-        "https://github.com/Cogni-DAO/node-template/actions/runs/mock-1241",
-      headSha: "jkl3456",
-      deployVerified: false,
+    {
+      pr: pr({
+        number: 1245,
+        title: "fix: loki-ci-telemetry path in verify-deploy (sub-checkout)",
+        author: "sarah-dev",
+        headBranch: "fix/loki-ci-telemetry",
+        labels: ["bug", "priority-high"],
+        updatedAt: isoMinutesAgo(300),
+      }),
+      ci: ci({
+        prNumber: 1245,
+        headSha: "def5678",
+        allGreen: true,
+        pending: false,
+        checks: [
+          { name: "Lint", status: "completed", conclusion: "success" },
+          { name: "Typecheck", status: "completed", conclusion: "success" },
+          { name: "Unit", status: "completed", conclusion: "success" },
+          { name: "Component", status: "completed", conclusion: "success" },
+          { name: "Build", status: "completed", conclusion: "success" },
+          {
+            name: "candidate-flight / build-image",
+            status: "completed",
+            conclusion: "success",
+          },
+          {
+            name: "candidate-flight / argo-sync",
+            status: "completed",
+            conclusion: "success",
+          },
+          {
+            name: "verify-buildsha",
+            status: "completed",
+            conclusion: "success",
+          },
+        ],
+      }),
+      flight: {
+        workflowUrl:
+          "https://github.com/Cogni-DAO/node-template/actions/runs/mock-1245",
+        headSha: "def5678",
+        deployVerified: true,
+      },
+      htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1245",
     },
-    htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1241",
-  },
-];
+    {
+      pr: pr({
+        number: 1243,
+        title: "chore: upgrade dependencies and fix security vulnerabilities",
+        author: "bot-renovate",
+        headBranch: "renovate/weekly",
+        labels: ["dependencies", "automated"],
+        updatedAt: isoMinutesAgo(60 * 24),
+      }),
+      ci: ci({
+        prNumber: 1243,
+        headSha: "ghi9012",
+        allGreen: false,
+        pending: false,
+        checks: [
+          { name: "Lint", status: "completed", conclusion: "success" },
+          { name: "Typecheck", status: "completed", conclusion: "success" },
+          { name: "Unit", status: "completed", conclusion: "failure" },
+          { name: "Component", status: "queued", conclusion: null },
+          { name: "Build", status: "queued", conclusion: null },
+        ],
+      }),
+      htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1243",
+    },
+    {
+      pr: pr({
+        number: 1241,
+        title: "feat: implement OAuth2 login flow with GitHub",
+        author: "mike-auth",
+        headBranch: "feat/github-oauth",
+        labels: ["feature", "wip"],
+        updatedAt: isoMinutesAgo(60 * 48),
+        draft: true,
+      }),
+      ci: ci({
+        prNumber: 1241,
+        headSha: "jkl3456",
+        // PR checks are green; flight is in flight — overall is "running" (awaiting credit).
+        allGreen: false,
+        pending: true,
+        checks: [
+          { name: "Lint", status: "completed", conclusion: "success" },
+          { name: "Typecheck", status: "completed", conclusion: "success" },
+          { name: "Unit", status: "completed", conclusion: "success" },
+          { name: "Component", status: "completed", conclusion: "success" },
+          { name: "Build", status: "completed", conclusion: "success" },
+          {
+            name: "candidate-flight / build-image",
+            status: "in_progress",
+            conclusion: null,
+          },
+          {
+            name: "candidate-flight / argo-sync",
+            status: "queued",
+            conclusion: null,
+          },
+        ],
+      }),
+      flight: {
+        workflowUrl:
+          "https://github.com/Cogni-DAO/node-template/actions/runs/mock-1241",
+        headSha: "jkl3456",
+        deployVerified: false,
+      },
+      htmlUrl: "https://github.com/Cogni-DAO/node-template/pull/1241",
+    },
+  ];
+}
 
 /**
  * Phase 1: return mock data.
@@ -174,7 +181,7 @@ const MOCK_ENTRIES: PrPanelEntry[] = [
  */
 export async function fetchActivePrs(): Promise<PrPanelListResponse> {
   return {
-    entries: MOCK_ENTRIES,
+    entries: buildMockEntries(),
     syncedAt: new Date().toISOString(),
   };
 }
@@ -192,7 +199,9 @@ function pr(overrides: Partial<PrSummary> & { number: number }): PrSummary {
     headBranch: overrides.headBranch ?? "feat/branch",
     labels: overrides.labels ?? [],
     draft: overrides.draft ?? false,
-    mergeable: overrides.mergeable ?? true,
+    // mergeable is `boolean | null`; `null` = GitHub hasn't computed yet.
+    // Preserve explicit null; default undefined → null.
+    mergeable: overrides.mergeable === undefined ? null : overrides.mergeable,
     updatedAt: overrides.updatedAt ?? new Date().toISOString(),
   };
 }
@@ -206,7 +215,7 @@ function ci(
     author: overrides.author ?? "unknown",
     baseBranch: overrides.baseBranch ?? "main",
     headSha: overrides.headSha,
-    mergeable: overrides.mergeable ?? true,
+    mergeable: overrides.mergeable === undefined ? null : overrides.mergeable,
     reviewDecision: overrides.reviewDecision ?? null,
     labels: overrides.labels ?? [],
     draft: overrides.draft ?? false,
