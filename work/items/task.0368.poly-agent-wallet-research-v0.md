@@ -13,7 +13,7 @@ assignees: [derekg1729]
 credit:
 project: proj.poly-prediction-bot
 branch: feat/task-0368-poly-agent-wallet-research
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1033
 reviewer:
 revision: 0
 blocked_by: []
