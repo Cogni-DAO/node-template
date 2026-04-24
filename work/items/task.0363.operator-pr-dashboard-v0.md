@@ -2,7 +2,8 @@
 id: task.0363
 type: task
 title: "Operator dashboard: Active Pull Requests + CI/flight/deploy_verified loop"
-status: needs_closeout
+status: needs_implement
+revision: 1
 priority: 1
 rank: 1
 estimate: 2
@@ -72,3 +73,22 @@ nodes/operator/app/src/app/(app)/dashboard/
 
 - exercise: visit `/dashboard` on candidate-a; the Active Pull Requests panel renders above the Runs/Work grid. Expand a row; CI Pipeline and (when present) Flight (candidate-a) group cards render with correct semantic dot colors. A row with `deploy_verified: true` shows the success checkmark + "Deploy Verified" badge.
 - observability: Loki query `{app="operator"} |= "dashboard-active-prs"` at the deployed SHA (React Query cache key appears in request telemetry).
+
+## Review Feedback (revision 1)
+
+From `/review-implementation` on 2026-04-24. Four blocking items:
+
+1. **Nested interactive elements in `PrPanelRow.tsx:83–141`** — outer `<button>` wraps an inner `<Link>` (`<a>`). HTML-invalid; triggers React `validateDOMNesting` warning. Refactor to non-nested structure (e.g., `<div role="button" tabIndex={0}>` + `onKeyDown`, or lift the external link out of the clickable region).
+2. **Duplicate React keys in `CheckGroupCard.tsx:47–48`** — `key={check.name}` collides when GitHub reruns a check-run (real data has multiple rows per name). Use `${check.name}-${idx}` or thread the GitHub check-run id through `CheckInfo` via the adapter.
+3. **`mergeable ?? true` masks `null` state** in `fetchActivePrs.ts:195, 209` — the contract's `boolean | null` has semantic meaning (`null` = not-yet-computed by GitHub); `??` collapses it to `true`. Default to `null`.
+4. **No unit tests on `group-checks.ts`** — pure logic (`normalize` status×conclusion matrix, `isFlight` prefix classification, `rollup` empties, `overallStatus` fold) needs coverage before Phase 2 swaps server-side data onto it. Add vitest for all three.
+
+Non-blocking but worth folding in while the PR is open:
+
+- Deduplicate `rowOverall` (in `ActivePullRequestsPanel.tsx`) and the in-row computation — extract `computeEntryStatus(entry)` into `group-checks.ts`.
+- Tighten the `"argo"` flight prefix to `"argo-"` to match the delimited convention of other prefixes (`candidate-flight`, `flight-`, `deploy-`).
+- Move mock timestamp generation into `fetchActivePrs()` so the "Live" chip isn't lying at refetch time.
+- PR #1241 mock has `ci.allGreen: true` but candidate-flight checks are `in_progress`/`queued` — internally inconsistent fixture.
+- Add a loading skeleton for the panel in `view.tsx` so the layout doesn't jump when data arrives (sibling sections already do this).
+- `ActivePullRequestsPanel` prop → `readonly PrPanelEntry[]`.
+- `statusLabel` in `PrPanelRow.tsx:58–65` returns `"Queued"` as a catch-all for overall="pending" — misleading for empty-checks PRs; consider "Waiting".
