@@ -5,6 +5,14 @@ description: Close the deploy_verified loop for a PR flighted to candidate-a. Re
 
 # /validate-candidate — Manual E2E Validation Skill
 
+## Hard rules (read first, do not violate)
+
+1. **Zero artifacts.** This skill writes *nothing* to disk during a validation run. No per-PR scripts. No scorecard files. No screenshots. No temp JSON. If you catch yourself reaching for `Write`, you are doing it wrong — inline the work. Playwright runs via `node --input-type=module -e '<inline JS>'` or a one-shot `node -e`. The scorecard is assembled as a shell variable or piped directly into `gh pr comment --body-file -`. Nothing in `.cogni/` gets modified either — `.cogni/auth/` holds only the permanent Chrome profile, storageState files, and credentials; never validation outputs.
+
+2. **Discovery is not execution.** For a row whose surface is a graph, tool, or any behavioral capability, *running a listing endpoint to confirm it's registered does not count as the agent-axis pass*. The agent axis is 🟢 only when you actually invoked the capability and got a successful response. "The catalog contains it" is 🟡 at best and must be labeled as such.
+
+3. **Observability must tie to the feature exercise, not ambient traffic.** Generic `request received` / `request complete` logs for a listing endpoint are not proof that your feature exercise worked. For a graph change, query for the graph's execution logs (graph-run started, tool calls, graph-run completed). For an API route change, query for the route's specific handler log line. "I found traffic at the SHA" without the feature-specific marker is 🟡, not 🟢.
+
 ## What this skill is for
 
 A PR gets merged and `candidate-flight` turns green. That proves it builds and deploys. It does **not** prove the feature works for a real user hitting the real URL. The only gate that proves that is someone actually driving the feature on the deployed build and reading their own request back out of Loki — the project's `deploy_verified` bar (see `CLAUDE.md` "Definition of Done").
@@ -107,17 +115,18 @@ For each row, try **both** the agent axis and the human axis. Skip an axis only 
 #### Agent axis strategies
 
 - **`api-route`** — prefer the agent-api-validation flow from `docs/guides/agent-api-validation.md` (API key / service token). If the endpoint requires a user session, fall through to using the captured storageState cookies with `fetch` / `curl` (extract the session cookie from `.cogni/auth/<slug>.storageState.json` and pass as `Cookie:` header).
-- **`graph`** — POST to the node's chat endpoint (e.g. `POST https://poly-test.cognidao.org/api/v1/ai/chat`) with a prompt that selects the graph, specifying `graph: "<graph-name>"` in the request body if the schema supports it. Capture the response: did the graph execute, did it return the expected shape, did any tool calls fire?
-- **tool registration** — hit the graphs/tools discovery endpoint (`GET /api/v1/ai/graphs` or equivalent) and assert the new graph/tool name is present.
+- **`graph` — EXECUTE, don't just list.** Find the real invocation route (typically `POST /api/v1/agent/runs` or `POST /api/v1/ai/chat` — inspect the node's routes if unsure) and POST a run request that selects the graph by its registered agentId (e.g. `langgraph:poly-research`). Include a minimal realistic input. Await the response and, if streaming, read at least the first few stream chunks to confirm the graph started. Row is 🟢 only when the run reached a terminal state or at least produced structured output indicating the graph executed. A `GET /api/v1/ai/agents` listing is *discovery*, not *execution* — it's allowed as a secondary check but cannot be the only agent-axis evidence.
+- **tool registration** — discovery only; mark 🟡 with note unless you can also invoke the tool end-to-end via a graph that uses it (preferred).
 
 #### Human axis strategies
 
-- **`ui-page`** — use Playwright with captured storageState. Pattern lives in `scripts/dev/smoke-authed-state.mjs` — copy it, adapt the target URL + click sequence. Inline Playwright is fine; no committed test file needed for a one-off.
+- **`ui-page`** — use Playwright with captured storageState. `scripts/dev/smoke-authed-state.mjs` is the *committed reference pattern*; for a validation run, **do not create a new script file** — inline the Playwright invocation via `node --input-type=module -e '<js>'`.
 - **`graph` or `tool` behind the UI** — this is the subtle part. Even if the PR only touched backend code, a graph is typically invoked by a user picking it in the chat UI. Launch Playwright, open the chat page, and look for a graph selector / dropdown / command that exposes the new graph. If it's not there, the human-axis row is 🔴 fail with note "graph `<name>` exists backend-side but is not exposed in the chat UI" — that's exactly the drift the matrix exists to surface.
 
-Playwright skeleton:
+**Inline Playwright skeleton** (shell-piped — no `.mjs` file on disk):
 
-```js
+```bash
+node --input-type=module << 'JS'
 import { chromium } from "@playwright/test";
 import { join } from "node:path";
 const storageState = join(process.cwd(), ".cogni/auth/candidate-a-<node>.storageState.json");
@@ -125,13 +134,16 @@ const browser = await chromium.launch({ headless: true });
 const ctx = await browser.newContext({ storageState });
 const page = await ctx.newPage();
 const apiCalls = [];
-page.on("response", async r => {
-  if (r.url().includes("/api/v1/")) apiCalls.push({ method: r.request().method(), url: r.url(), status: r.status() });
-});
+page.on("response", r => { if (r.url().includes("/api/v1/")) apiCalls.push({ method: r.request().method(), url: r.url(), status: r.status() }); });
 await page.goto("<candidate-a-url>/<route>");
 // exercise: click the element that would invoke the changed feature
-// assert on visible outcome AND on apiCalls[] containing the expected downstream call
+// emit one JSON line — skill parses this; do NOT write files or screenshots
+console.log(JSON.stringify({ ts: new Date().toISOString(), apiCalls, body: (await page.locator("body").innerText()).slice(0, 1200) }));
+await browser.close();
+JS
 ```
+
+Parse the stdout JSON; use it to fill the row. If a visible outcome needs a screenshot for the PR comment, capture it as a base64 data URL in the JSON payload and embed in the markdown — **never** write an image file.
 
 #### When to skip an axis
 
@@ -143,33 +155,34 @@ await page.goto("<candidate-a-url>/<route>");
 
 **For any axis you truly can't figure out how to exercise** — mark `skipped` with the reason rather than halting, and ding the final verdict toward 🟡.
 
-### Step 6 — Observability: read your own request back
+### Step 6 — Observability: find the **feature-specific** log of your own call
 
-For each `pass`/`fail` exercise row, query Loki at the deployed SHA for evidence of your own call. Time window: `start = exercise_start - 10s`, `end = now + 10s`.
+For each exercised row, query Loki for evidence your exercise *did the thing*, not just that traffic reached the pod.
 
-Query patterns (use `mcp__grafana__query_loki_logs` or the equivalent):
+Time window: `start = exercise_start - 10s`, `end = now + 10s`.
 
+Grounding labels (confirmed present on `grafanacloud-logs`): `namespace="cogni-candidate-a"`, `pod=~"<node>-node-app-.*"`, plus the JSON-parsed fields `reqId`, `traceId`, `userId`, `route`, `msg`.
+
+**Tier the query. Stop at the first tier that returns ≥1 line:**
+
+1. **Feature-specific marker** (strongest). For a graph change: the log line emitted when the graph runs (`msg=~"graph.run"` or `msg="<graph-name>_started"` or equivalent — inspect the node's `src` for the actual log emitters). For an API route change: the route's handler emit (e.g. `route="poly.wallet.connect"`, `msg="poly.wallet.connect_success"`). **Row is 🟢 only at this tier.**
+2. **reqId/traceId correlation.** If your inline Playwright / fetch captured a response `x-request-id` or a cookie-session trace header, query `|~ "<reqId>"`. Proves *your specific call* reached the pod.
+3. **userId + route.** `| json | userId="<you>" | route="<feature-route>"` narrowed to the exercise window. Row is 🟡 at this tier — proves traffic from you but not necessarily the feature behavior.
+4. **Ambient pod traffic only.** `| json | route="<feature-route>"` without user/trace correlation. This is essentially "the endpoint exists and took traffic" — 🟡 with a note explaining you couldn't prove the specific call was yours.
+
+If only tier 4 matches, the observability cell is 🟡, not 🟢 — regardless of how many lines came back. Do not grant 🟢 to generic traffic. The skill exists to catch drift, and drift hides behind ambient success.
+
+If Grafana MCP isn't available, mark all observability cells `no_mcp` and note it.
+
+### Step 7 — Post the scorecard (zero artifacts)
+
+Build the markdown **in memory only**. Post it via stdin:
+
+```bash
+echo "$SCORECARD_MD" | gh pr comment <N> --body-file -
 ```
-{namespace="cogni-candidate-a"} | json | buildSha="<pr-head-sha-prefix>"
-```
 
-Then narrow with feature-specific filters:
-
-- API route touched: `| path="<route>"` or `| msg=~".*<route-slug>.*"`
-- UI interaction: find the downstream API log the click triggered
-- Graph run: `| graph="<graph-name>"` or `| msg=~".*graph.*"`
-
-Record for each row:
-
-- 🟢 `saw_own_request=true` — found ≥1 log line in window at deployed SHA matching the feature filter
-- 🟡 `saw_own_request=partial` — found SHA-tagged traffic in window but couldn't prove it's specifically yours
-- 🔴 `saw_own_request=false` — no matching log lines
-
-If Grafana MCP isn't available, mark all observability cells `no_mcp` and note the gap in the final report.
-
-### Step 7 — Post the scorecard
-
-Build the markdown below and post it as a PR comment via `gh pr comment <N> --body-file <tempfile>`.
+Do not write the scorecard to a temp file under any circumstances, including `/tmp`. If the harness blocks shell heredocs with unquoted variables, hold the markdown in a bash variable (`SCORECARD_MD=$(cat <<'MARKDOWN' ... MARKDOWN)`) and pipe it. Dry-run mode skips this step entirely — print the markdown to stdout and stop.
 
 ```markdown
 ## /validate-candidate — PR #<N>
