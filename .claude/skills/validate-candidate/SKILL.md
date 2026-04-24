@@ -38,7 +38,7 @@ If no PR number, resolve it with `gh pr view --json number,headRefName -q .numbe
 
 2. **`gh` CLI authed.** `gh auth status` should be green. Stop if not.
 
-3. **Grafana MCP available.** This skill needs Loki query access to close the observability loop. If `mcp__grafana__*` tools aren't present, note it as a known gap in the final report rather than halting — you can still do the exercise step.
+3. **Loki access available** — either the `mcp__grafana__*` tools or the `scripts/loki-query.sh` shell helper with `GRAFANA_URL` + `GRAFANA_SERVICE_ACCOUNT_TOKEN` in env (or a sourceable `.env.canary` / `.env.local`). If neither works, don't halt — mark observability cells `no-grafana-data-available` and proceed with the exercise step; the gap itself is a finding worth reporting.
 
 ## The flow
 
@@ -120,30 +120,25 @@ For each row, try **both** the agent axis and the human axis. Skip an axis only 
 
 #### Human axis strategies
 
-- **`ui-page`** — use Playwright with captured storageState. `scripts/dev/smoke-authed-state.mjs` is the *committed reference pattern*; for a validation run, **do not create a new script file** — inline the Playwright invocation via `node --input-type=module -e '<js>'`.
-- **`graph` or `tool` behind the UI** — this is the subtle part. Even if the PR only touched backend code, a graph is typically invoked by a user picking it in the chat UI. Launch Playwright, open the chat page, and look for a graph selector / dropdown / command that exposes the new graph. If it's not there, the human-axis row is 🔴 fail with note "graph `<name>` exists backend-side but is not exposed in the chat UI" — that's exactly the drift the matrix exists to surface.
+Drive the UI with **`playwright-cli`** (available as a skill-allowed tool). Its `state-load` reads the same JSON schema `capture-authed-state.mjs` writes, so captured storageState works as-is. Prefer it over inline Node / `@playwright/test` heredocs — one bash call per action, snapshots give accessibility refs, built-in `network` / `console` taps remove event-listener boilerplate.
 
-**Inline Playwright skeleton** (shell-piped — no `.mjs` file on disk):
+- **`ui-page`** — load state, open, snapshot to get element refs, click/type, snapshot again to verify, read `network` to confirm the downstream API call fired.
+- **`graph` or `tool` behind the UI** — open the chat page, snapshot, find the agent/graph picker, open it, re-snapshot. If the new graph's displayName is absent from the opened-menu snapshot → row is 🔴 **drift**: "graph `<name>` registered backend-side but not exposed in chat UI". That's the drift the matrix exists to catch.
+
+**Canonical sequence** (one ephemeral session, zero durable artifacts):
 
 ```bash
-node --input-type=module << 'JS'
-import { chromium } from "@playwright/test";
-import { join } from "node:path";
-const storageState = join(process.cwd(), ".cogni/auth/candidate-a-<node>.storageState.json");
-const browser = await chromium.launch({ headless: true });
-const ctx = await browser.newContext({ storageState });
-const page = await ctx.newPage();
-const apiCalls = [];
-page.on("response", r => { if (r.url().includes("/api/v1/")) apiCalls.push({ method: r.request().method(), url: r.url(), status: r.status() }); });
-await page.goto("<candidate-a-url>/<route>");
-// exercise: click the element that would invoke the changed feature
-// emit one JSON line — skill parses this; do NOT write files or screenshots
-console.log(JSON.stringify({ ts: new Date().toISOString(), apiCalls, body: (await page.locator("body").innerText()).slice(0, 1200) }));
-await browser.close();
-JS
+playwright-cli -s=validate state-load .cogni/auth/candidate-a-<node>.storageState.json
+playwright-cli -s=validate open https://<node>.cognidao.org/<route>
+playwright-cli -s=validate snapshot                 # element refs
+playwright-cli -s=validate click e<N>               # exercise the change
+playwright-cli -s=validate snapshot                 # verify outcome
+playwright-cli -s=validate network                  # downstream API calls
+playwright-cli -s=validate console                  # client-side errors
+playwright-cli -s=validate close                    # tear down
 ```
 
-Parse the stdout JSON; use it to fill the row. If a visible outcome needs a screenshot for the PR comment, capture it as a base64 data URL in the JSON payload and embed in the markdown — **never** write an image file.
+Record per row: the refs clicked, the post-click snapshot excerpt proving the outcome, the `network` line (method + path + status), any `console` errors. Snapshot yaml files playwright-cli writes under `.playwright-cli/` are its own working state — not validation artifacts we author; never reference them in the scorecard, and ensure `.playwright-cli/` is gitignored.
 
 #### When to skip an axis
 
@@ -172,7 +167,18 @@ Grounding labels (confirmed present on `grafanacloud-logs`): `namespace="cogni-c
 
 If only tier 4 matches, the observability cell is 🟡, not 🟢 — regardless of how many lines came back. Do not grant 🟢 to generic traffic. The skill exists to catch drift, and drift hides behind ambient success.
 
-If Grafana MCP isn't available, mark all observability cells `no_mcp` and note it.
+**Loki access — two paths, prefer whichever is available:**
+
+- `mcp__grafana__query_loki_logs` (MCP) — use when connected. Datasource uid: `grafanacloud-logs`.
+- `scripts/loki-query.sh '<logql>' [mins_back] [limit]` (shell fallback) — no MCP dependency. Reads `GRAFANA_URL` + `GRAFANA_SERVICE_ACCOUNT_TOKEN` from env (or `.env.canary` / `.env.local` auto-sourced). Outputs raw Loki JSON on stdout — pipe through `jq` to filter.
+
+Example shell-fallback queries:
+
+```bash
+scripts/loki-query.sh '{namespace="cogni-candidate-a", pod=~"poly-node-app-.*"} | json | route="<feature-route>"' 5 50 | jq '.data.result[].values[][1] | fromjson | {ts:.time, reqId, msg, route, status}'
+```
+
+**If neither path is available** (MCP disconnected and the token isn't in env) — mark every observability cell `no-grafana-data-available` and note it in the scorecard. **Do not halt.** Missing observability is a gap worth surfacing, not a reason to abandon the run. The human-axis + agent-axis evidence still stands on its own.
 
 ### Step 7 — Post the scorecard (zero artifacts)
 
