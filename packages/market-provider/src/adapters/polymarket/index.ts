@@ -55,6 +55,7 @@ export {
   type ListUserActivityParams,
   type ListUserPositionsParams,
   type ListUserTradesParams,
+  PolyDataApiValidationError,
   PolymarketDataApiClient,
   type PolymarketDataApiClientConfig,
   type ResolveUsernameParams,

@@ -11,6 +11,7 @@
  * @public
  */
 
+import type { ZodIssue, ZodTypeAny, z } from "zod";
 import {
   type ActivityEvent,
   ActivityEventsResponseSchema,
@@ -33,6 +34,37 @@ import {
   TradedEventsResponseSchema,
   UserValueResponseSchema,
 } from "./polymarket.data-api.types.js";
+
+/**
+ * Thrown when a Data API response fails Zod validation at the client boundary.
+ * Stable envelope so downstream agents can catch schema drift distinctly from HTTP failures.
+ */
+export class PolyDataApiValidationError extends Error {
+  readonly code = "VALIDATION_FAILED" as const;
+  constructor(
+    readonly endpoint: string,
+    readonly issues: ZodIssue[]
+  ) {
+    super(
+      `Polymarket Data API response validation failed (${endpoint}): ${issues
+        .map((i) => `${i.path.join(".") || "<root>"}: ${i.message}`)
+        .join("; ")}`
+    );
+    this.name = "PolyDataApiValidationError";
+  }
+}
+
+function parseResponse<S extends ZodTypeAny>(
+  schema: S,
+  json: unknown,
+  endpoint: string
+): z.output<S> {
+  const result = schema.safeParse(json);
+  if (!result.success) {
+    throw new PolyDataApiValidationError(endpoint, result.error.issues);
+  }
+  return result.data;
+}
 
 const DEFAULT_DATA_API_BASE_URL = "https://data-api.polymarket.com";
 const DEFAULT_GAMMA_BASE_URL = "https://gamma-api.polymarket.com";
@@ -248,7 +280,7 @@ export class PolymarketDataApiClient {
     }
 
     const json = await this.fetchJson(url);
-    return ActivityEventsResponseSchema.parse(json);
+    return parseResponse(ActivityEventsResponseSchema, json, "/activity");
   }
 
   /**
@@ -265,7 +297,7 @@ export class PolymarketDataApiClient {
     if (params?.market) url.searchParams.set("market", params.market);
 
     const json = await this.fetchJson(url);
-    const entries = UserValueResponseSchema.parse(json);
+    const entries = parseResponse(UserValueResponseSchema, json, "/value");
     const first = entries[0];
     if (!first) {
       return { user: wallet, value: 0 };
@@ -291,7 +323,7 @@ export class PolymarketDataApiClient {
     }
 
     const json = await this.fetchJson(url);
-    return MarketHoldersResponseSchema.parse(json);
+    return parseResponse(MarketHoldersResponseSchema, json, "/holders");
   }
 
   /**
@@ -316,7 +348,7 @@ export class PolymarketDataApiClient {
     }
 
     const json = await this.fetchJson(url);
-    return MarketTradesResponseSchema.parse(json);
+    return parseResponse(MarketTradesResponseSchema, json, "/trades?market=");
   }
 
   /**
@@ -337,7 +369,7 @@ export class PolymarketDataApiClient {
     }
 
     const json = await this.fetchJson(url);
-    return TradedEventsResponseSchema.parse(json);
+    return parseResponse(TradedEventsResponseSchema, json, "/traded-events");
   }
 
   /**
@@ -359,7 +391,11 @@ export class PolymarketDataApiClient {
     }
 
     const json = await this.fetchJson(url);
-    const parsed = GammaPublicSearchResponseSchema.parse(json);
+    const parsed = parseResponse(
+      GammaPublicSearchResponseSchema,
+      json,
+      "gamma:/public-search"
+    );
     return parsed.profiles;
   }
 

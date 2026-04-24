@@ -16,6 +16,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 import {
+  PolyDataApiValidationError,
   PolymarketDataApiClient,
   PolymarketLeaderboardEntrySchema,
 } from "../src/adapters/polymarket/index.js";
@@ -424,5 +425,44 @@ describe("PolymarketDataApiClient.resolveUsername", () => {
   it("rejects queries shorter than 2 chars", async () => {
     const client = new PolymarketDataApiClient({ fetch: vi.fn() });
     await expect(client.resolveUsername("a")).rejects.toThrow(/≥2/);
+  });
+});
+
+describe("PolymarketDataApiClient Zod envelope", () => {
+  const wallet = "0x1234567890abcdef1234567890abcdef12345678";
+
+  it("throws PolyDataApiValidationError with endpoint + issues when /activity response is malformed", async () => {
+    // Missing required `proxyWallet` on the event — should fail the envelope parse.
+    const malformed = [{ type: "TRADE", timestamp: 1700000000 }];
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(malformed));
+    const client = new PolymarketDataApiClient({
+      fetch: fetchImpl,
+      baseUrl: "http://fake.test",
+    });
+    await expect(client.listActivity(wallet)).rejects.toBeInstanceOf(
+      PolyDataApiValidationError
+    );
+    try {
+      await client.listActivity(wallet);
+    } catch (err) {
+      expect(err).toBeInstanceOf(PolyDataApiValidationError);
+      const typed = err as PolyDataApiValidationError;
+      expect(typed.code).toBe("VALIDATION_FAILED");
+      expect(typed.endpoint).toBe("/activity");
+      expect(typed.issues.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("throws PolyDataApiValidationError when /holders returns a non-array", async () => {
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValue(jsonResponse({ error: "not an array" }));
+    const client = new PolymarketDataApiClient({
+      fetch: fetchImpl,
+      baseUrl: "http://fake.test",
+    });
+    await expect(
+      client.getHolders("0xabc", { limit: 10 })
+    ).rejects.toBeInstanceOf(PolyDataApiValidationError);
   });
 });
