@@ -1,3 +1,17 @@
+---
+id: guide.candidate-auth-bootstrap
+type: guide
+title: Candidate Auth Bootstrap — Authed Playwright via CDP Attach
+status: draft
+trust: draft
+summary: Capture a reusable signed-in browser session for candidate-a envs via a dedicated Chrome profile + MetaMask + CDP-attach export, so AI agents can drive authed Playwright flows without re-prompting signin.
+read_when: Setting up the candidate-auth Chrome profile, capturing a new env's storageState, or troubleshooting why a captured session no longer authenticates
+owner: derekg1729
+created: 2026-04-24
+verified: null
+tags: [auth, playwright, candidate-a, validate, metamask]
+---
+
 # Candidate Auth Bootstrap — Authed Playwright via CDP Attach
 
 > Goal: capture a reusable signed-in browser session for `{env}.cognidao.org` so AI agents (Claude, qa-agent) can drive authed Playwright flows without re-prompting MetaMask on every run.
@@ -8,7 +22,7 @@
 
 Playwright launches a fresh Chromium profile with no extensions — MetaMask and other wallet extensions therefore do not work in the normal `browser.newContext()` flow. Work around it by launching **a dedicated Chrome profile** (with MetaMask installed), signing in once, then exporting the resulting session cookies via CDP attach. Future Playwright runs load the exported `storageState.json` and are authenticated without needing a wallet at all.
 
-The session cookie is the auth artifact. MetaMask only participates in the *first* signin to mint the cookie.
+The session cookie is the auth artifact. MetaMask only participates in the _first_ signin to mint the cookie.
 
 ## Why a dedicated profile (not your default Chrome)
 
@@ -84,7 +98,7 @@ import path from "node:path";
 
 const storageState = path.join(
   process.cwd(),
-  ".cogni/auth/candidate-a-poly.storageState.json",
+  ".cogni/auth/candidate-a-poly.storageState.json"
 );
 
 const browser = await chromium.launch();
@@ -106,7 +120,7 @@ await page.goto("https://poly-test.cognidao.org");
 - **Still refused with dedicated profile:** another Chrome instance is holding the profile lock. Run `pgrep -lf "Google Chrome"`, kill stragglers, retry.
 - **MetaMask popup doesn't appear on signin:** unlock the extension (click the fox icon, enter password). Extensions stay locked across Chrome restarts.
 - **Captured state has no cookies for the expected domain:** you signed in before the capture script could see the tab. Make sure the tab is still open at the target URL when you run the script.
-- **Playwright runs but site redirects to signin:** cookie expired — recapture. *Or:* the site stores auth in `localStorage` rather than cookies, and CDP-attach export reports `origins: 0`. In that case the captured `storageState.json` is insufficient; a dedicated Playwright authfile step (using `browser.newContext({ storageState })` against a Playwright-launched browser + manual signin inside Playwright) may be needed. Tracked as a known gap — update this guide when resolved.
+- **Playwright runs but site redirects to signin:** cookie expired — recapture. _Or:_ the site stores auth in `localStorage` rather than cookies, and CDP-attach export reports `origins: 0`. In that case the captured `storageState.json` is insufficient; a dedicated Playwright authfile step (using `browser.newContext({ storageState })` against a Playwright-launched browser + manual signin inside Playwright) may be needed. Tracked as a known gap — update this guide when resolved.
 
 ## Done for the session — getting back to your normal browser
 

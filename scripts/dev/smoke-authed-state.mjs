@@ -1,7 +1,20 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@scripts/dev/smoke-authed-state`
+ * Purpose: Verify a captured Playwright storageState still authenticates against the target URL by launching a headless browser and printing signed-in markers.
+ * Scope: Developer sanity-check after running `capture-authed-state.mjs`. Not a validation
+ *   skill; does not post comments or touch the PR.
+ * Invariants: Read-only relative to the repo — never writes files, never mutates the
+ *   captured storageState.
+ * Side-effects: IO (launches headless Chromium, makes one HTTPS request to the target).
+ * Links: docs/guides/candidate-auth-bootstrap.md, scripts/dev/capture-authed-state.mjs
+ * @internal
+ */
+
 import { join } from "node:path";
-// Smoke test: load captured storageState, hit target URL, report what we see.
-// Usage: node scripts/dev/smoke-authed-state.mjs <env-slug> <url>
 import { chromium } from "@playwright/test";
 
 const [, , slug, targetUrl] = process.argv;

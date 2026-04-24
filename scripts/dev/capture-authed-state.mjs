@@ -1,9 +1,20 @@
 #!/usr/bin/env node
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@scripts/dev/capture-authed-state`
+ * Purpose: Capture authed Playwright storageState from a running CDP-debuggable Chrome.
+ * Scope: One-off developer helper — connects over CDP, exports storageState to `.cogni/auth/<slug>.storageState.json`. Does not drive signin, does not launch Chrome, does not run in CI.
+ * Invariants: Reads only; never mutates the source Chrome profile. Write target is
+ *   always under `.cogni/auth/` which is gitignored.
+ * Side-effects: IO (connects to Chrome over CDP, writes one JSON file under .cogni/auth/).
+ * Links: docs/guides/candidate-auth-bootstrap.md
+ * @internal
+ */
+
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-// Capture authed Playwright storageState from a running CDP-debuggable Chrome.
-// Usage: node scripts/dev/capture-authed-state.mjs <env-slug> <url>
-// Prereq: Chrome launched with --remote-debugging-port=9222 (see docs/guides/candidate-auth-bootstrap.md)
 import { chromium } from "@playwright/test";
 
 const [, , slug, targetUrl] = process.argv;

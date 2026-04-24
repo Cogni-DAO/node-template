@@ -1,5 +1,5 @@
 ---
-id: bug.0368
+id: bug.0369
 type: bug
 title: "Reown/WalletConnect origin allowlist missing for poly-test (and no sync workflow across node × env matrix)"
 status: needs_triage
@@ -26,7 +26,7 @@ external_refs:
   - "https://cloud.reown.com"
 ---
 
-# bug.0368 — Reown/WalletConnect Origin Allowlist Missing per Env
+# bug.0369 — Reown/WalletConnect Origin Allowlist Missing per Env
 
 ## Evidence
 
@@ -48,11 +48,11 @@ Repeats on every page load that initializes wagmi/Reown (`nodes/poly/app/src/sha
 
 This is the same class of problem `dns-ops` solves for Cloudflare: there's a node × env matrix of hostnames, and every external system that needs to know about those hostnames drifts out of sync with the matrix unless the sync is codified.
 
-| Node     | candidate-a                | preview                     | production               |
-|----------|----------------------------|-----------------------------|--------------------------|
-| operator | test.cognidao.org          | preview.cognidao.org        | cognidao.org             |
-| poly     | poly-test.cognidao.org     | poly-preview.cognidao.org   | poly.cognidao.org        |
-| resy     | resy-test.cognidao.org     | resy-preview.cognidao.org   | resy.cognidao.org        |
+| Node     | candidate-a            | preview                   | production        |
+| -------- | ---------------------- | ------------------------- | ----------------- |
+| operator | test.cognidao.org      | preview.cognidao.org      | cognidao.org      |
+| poly     | poly-test.cognidao.org | poly-preview.cognidao.org | poly.cognidao.org |
+| resy     | resy-test.cognidao.org | resy-preview.cognidao.org | resy.cognidao.org |
 
 Each one of those needs to be on the Reown project allowlist. Today the allowlist is hand-curated via the Reown dashboard with no checked-in source of truth, so:
 
@@ -63,10 +63,12 @@ Each one of those needs to be on the Reown project allowlist. Today the allowlis
 ## Fix scope
 
 **Phase 1 — immediate unblock (this bug):**
+
 - Add `https://poly-test.cognidao.org` (and any other known-missing origins) to the Reown project allowlist manually.
 - Document the current Reown `projectId` and allowlist source-of-truth in `docs/guides/reown-ops.md`.
 
 **Phase 2 — primitive (follow-up, out of scope for this bug):**
+
 - `reown-ops` skill / script, parallel to `dns-ops`, that:
   - Reads the expected origin matrix from the same place that drives `dns-ops` (node × env → hostname map).
   - Calls the Reown Cloud API to reconcile the project allowlist.
