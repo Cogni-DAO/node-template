@@ -23,10 +23,6 @@ import type {
   WalletWindowStats,
 } from "@cogni/ai-tools";
 import { PolymarketDataApiClient } from "@cogni/market-provider/adapters/polymarket";
-import pLimit from "p-limit";
-import { makeLogger } from "@/shared/observability";
-
-const log = makeLogger({ component: "wallet-capability" });
 
 /** Fetch cap for windowed trade counts. Polymarket /trades returns at most 1k rows per call. */
 const TRADES_LIMIT = 1_000;
@@ -36,9 +32,6 @@ const DEFAULT_TOP_N = 10;
 
 /** Cache TTL in ms — 60s matches the spec. */
 const CACHE_TTL_MS = 60_000;
-
-/** Bounded concurrency for per-wallet enrichment fan-out. */
-const ENRICH_CONCURRENCY = 4;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Module-level cache: (wallet:timePeriod) → WalletWindowStats
@@ -168,55 +161,27 @@ export function createWalletCapability(config?: {
         limit,
       });
 
-      // Enrich each leaderboard entry with windowed numTrades from /trades.
-      // Uses the module-level cache — repeated calls within 60s are free.
-      // Concurrency bounded to ENRICH_CONCURRENCY to avoid fan-out spikes.
-      const limiter = pLimit(ENRICH_CONCURRENCY);
-
-      const withTrades = await Promise.all(
-        entries.map(
-          (e): Promise<WalletTopTraderItem> =>
-            limiter(async () => {
-              let numTrades = 0;
-              let numTradesCapped = false;
-              try {
-                const stats = await getWalletWindowStats({
-                  address: e.proxyWallet,
-                  timePeriod,
-                });
-                numTrades = stats.numTrades;
-                numTradesCapped = stats.numTradesCapped;
-              } catch (err) {
-                log.warn(
-                  {
-                    wallet: e.proxyWallet,
-                    err: err instanceof Error ? err.message : String(err),
-                  },
-                  "wallet-top-traders enrichment: getWalletWindowStats failed; numTrades reported as 0"
-                );
-              }
-              const roiPct = e.vol > 0 ? (e.pnl / e.vol) * 100 : null;
-
-              return {
-                rank: Number.parseInt(e.rank, 10) || 0,
-                proxyWallet: e.proxyWallet,
-                userName: e.userName || e.proxyWallet,
-                volumeUsdc: e.vol,
-                pnlUsdc: e.pnl,
-                roiPct,
-                numTrades,
-                numTradesCapped,
-                verified: e.verifiedBadge,
-              };
-            })
-        )
-      );
+      // numTrades enrichment removed: per-wallet /trades + /positions fan-out added
+      // ~1.5s to the route with no accuracy benefit (1k API cap, client-side filter).
+      // The leaderboard already provides accurate windowed vol + pnl; numTrades is
+      // available on-demand via POST /wallets/stats when the drawer opens.
+      const traders: WalletTopTraderItem[] = entries.map((e) => ({
+        rank: Number.parseInt(e.rank, 10) || 0,
+        proxyWallet: e.proxyWallet,
+        userName: e.userName || e.proxyWallet,
+        volumeUsdc: e.vol,
+        pnlUsdc: e.pnl,
+        roiPct: e.vol > 0 ? (e.pnl / e.vol) * 100 : null,
+        numTrades: 0,
+        numTradesCapped: false,
+        verified: e.verifiedBadge,
+      }));
 
       return {
-        traders: withTrades,
+        traders,
         timePeriod,
         orderBy: params.orderBy ?? "PNL",
-        totalCount: withTrades.length,
+        totalCount: traders.length,
       };
     },
   };
