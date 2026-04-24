@@ -33,6 +33,18 @@ export type {
   MetricWindow,
   TemplateQueryParams,
 } from "./metrics";
+// Poly Data-API research capability (task.0368)
+export type {
+  PolyDataActivityOutput,
+  PolyDataActivityType,
+  PolyDataCapability,
+  PolyDataHoldersOutput,
+  PolyDataMarketTradesOutput,
+  PolyDataPositionsOutput,
+  PolyDataResolveUsernameOutput,
+  PolyDataTradedEventsOutput,
+  PolyDataValueOutput,
+} from "./poly-data";
 // Repository capability (per COGNI_BRAIN_SPEC)
 export type {
   RepoCapability,

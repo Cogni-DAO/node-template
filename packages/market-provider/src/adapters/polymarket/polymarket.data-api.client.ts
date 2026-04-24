@@ -13,6 +13,15 @@
  */
 
 import {
+  type ActivityEvent,
+  ActivityEventsResponseSchema,
+  type ActivityEventType,
+  type GammaProfile,
+  GammaPublicSearchResponseSchema,
+  type MarketHolder,
+  MarketHoldersResponseSchema,
+  type MarketTrade,
+  MarketTradesResponseSchema,
   type PolymarketLeaderboardEntry,
   type PolymarketLeaderboardOrderBy,
   PolymarketLeaderboardResponseSchema,
@@ -21,13 +30,22 @@ import {
   PolymarketUserPositionsResponseSchema,
   type PolymarketUserTrade,
   PolymarketUserTradesResponseSchema,
+  type TradedEvent,
+  TradedEventsResponseSchema,
+  UserValueResponseSchema,
 } from "./polymarket.data-api.types.js";
 
 const DEFAULT_DATA_API_BASE_URL = "https://data-api.polymarket.com";
+const DEFAULT_GAMMA_BASE_URL = "https://gamma-api.polymarket.com";
 
 export interface PolymarketDataApiClientConfig {
   /** Data API base URL (default: https://data-api.polymarket.com) */
   baseUrl?: string;
+  /**
+   * Gamma API base URL (default: https://gamma-api.polymarket.com).
+   * Only used by `resolveUsername` — Gamma has a different host than the Data API.
+   */
+  gammaBaseUrl?: string;
   /** Optional fetch implementation for tests (default: global fetch). */
   fetch?: typeof fetch;
   /**
@@ -66,7 +84,57 @@ export interface ListUserTradesParams {
 export interface ListUserPositionsParams {
   /** Optional conditionId filter. */
   market?: string;
+  /** Optional minimum position size (USDC). */
+  sizeThreshold?: number;
   /** Optional position cap. */
+  limit?: number;
+  /** Optional offset for pagination. */
+  offset?: number;
+}
+
+export interface ListActivityParams {
+  /** Filter by event type (TRADE/SPLIT/MERGE/REDEEM/REWARD/CONVERSION). */
+  type?: ActivityEventType;
+  /** Filter by side when type=TRADE. */
+  side?: "BUY" | "SELL";
+  /** Unix-seconds lower bound (inclusive). */
+  start?: number;
+  /** Unix-seconds upper bound (inclusive). */
+  end?: number;
+  /** Rows per page (1-500). */
+  limit?: number;
+  /** Pagination offset. */
+  offset?: number;
+}
+
+export interface GetValueParams {
+  /** Optional conditionId filter to restrict valuation to a single market. */
+  market?: string;
+}
+
+export interface GetHoldersParams {
+  /** Max holders to return (1-100). */
+  limit?: number;
+}
+
+export interface ListMarketTradesParams {
+  /** When true, only include trades where the `proxyWallet` was the taker. */
+  takerOnly?: boolean;
+  /** Rows per page (1-500). */
+  limit?: number;
+  /** Pagination offset. */
+  offset?: number;
+}
+
+export interface ListTradedEventsParams {
+  /** Rows per page (1-100). */
+  limit?: number;
+  /** Pagination offset. */
+  offset?: number;
+}
+
+export interface ResolveUsernameParams {
+  /** Max profile matches to return (1-20). */
   limit?: number;
 }
 
@@ -83,11 +151,13 @@ export interface ListUserPositionsParams {
  */
 export class PolymarketDataApiClient {
   private readonly baseUrl: string;
+  private readonly gammaBaseUrl: string;
   private readonly fetchImpl: typeof fetch;
   private readonly timeoutMs: number;
 
   constructor(config?: PolymarketDataApiClientConfig) {
     this.baseUrl = config?.baseUrl ?? DEFAULT_DATA_API_BASE_URL;
+    this.gammaBaseUrl = config?.gammaBaseUrl ?? DEFAULT_GAMMA_BASE_URL;
     this.fetchImpl = config?.fetch ?? fetch;
     this.timeoutMs = config?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   }
@@ -138,12 +208,160 @@ export class PolymarketDataApiClient {
     const url = new URL("/positions", this.baseUrl);
     url.searchParams.set("user", wallet);
     if (params?.market) url.searchParams.set("market", params.market);
+    if (params?.sizeThreshold !== undefined) {
+      url.searchParams.set("sizeThreshold", String(params.sizeThreshold));
+    }
+    if (params?.limit !== undefined) {
+      url.searchParams.set("limit", String(params.limit));
+    }
+    if (params?.offset !== undefined) {
+      url.searchParams.set("offset", String(params.offset));
+    }
+
+    const json = await this.fetchJson(url);
+    return PolymarketUserPositionsResponseSchema.parse(json);
+  }
+
+  /**
+   * `GET /activity?user=<wallet>` — lifecycle events (TRADE/SPLIT/MERGE/REDEEM/...).
+   * Distinct from `/trades`; do not delegate.
+   */
+  async listActivity(
+    wallet: string,
+    params?: ListActivityParams
+  ): Promise<ActivityEvent[]> {
+    assertWallet(wallet);
+    const url = new URL("/activity", this.baseUrl);
+    url.searchParams.set("user", wallet);
+    if (params?.type) url.searchParams.set("type", params.type);
+    if (params?.side) url.searchParams.set("side", params.side);
+    if (params?.start !== undefined) {
+      url.searchParams.set("start", String(params.start));
+    }
+    if (params?.end !== undefined) {
+      url.searchParams.set("end", String(params.end));
+    }
+    if (params?.limit !== undefined) {
+      url.searchParams.set("limit", String(params.limit));
+    }
+    if (params?.offset !== undefined) {
+      url.searchParams.set("offset", String(params.offset));
+    }
+
+    const json = await this.fetchJson(url);
+    return ActivityEventsResponseSchema.parse(json);
+  }
+
+  /**
+   * `GET /value?user=<wallet>` — cheap wallet-value probe.
+   * Returns the first entry; endpoint is `[{ user, value }]`.
+   */
+  async getValue(
+    wallet: string,
+    params?: GetValueParams
+  ): Promise<{ user: string; value: number }> {
+    assertWallet(wallet);
+    const url = new URL("/value", this.baseUrl);
+    url.searchParams.set("user", wallet);
+    if (params?.market) url.searchParams.set("market", params.market);
+
+    const json = await this.fetchJson(url);
+    const entries = UserValueResponseSchema.parse(json);
+    const first = entries[0];
+    if (!first) {
+      return { user: wallet, value: 0 };
+    }
+    return { user: first.user, value: first.value };
+  }
+
+  /**
+   * `GET /holders?market=<conditionId>` — current shareholders on a market.
+   * Hidden-gem discovery input for wallet research.
+   */
+  async getHolders(
+    market: string,
+    params?: GetHoldersParams
+  ): Promise<MarketHolder[]> {
+    if (!market || typeof market !== "string") {
+      throw new Error("getHolders: market (conditionId) is required");
+    }
+    const url = new URL("/holders", this.baseUrl);
+    url.searchParams.set("market", market);
     if (params?.limit !== undefined) {
       url.searchParams.set("limit", String(params.limit));
     }
 
     const json = await this.fetchJson(url);
-    return PolymarketUserPositionsResponseSchema.parse(json);
+    return MarketHoldersResponseSchema.parse(json);
+  }
+
+  /**
+   * `GET /trades?market=<conditionId>` — market-level trade stream.
+   * Used for counterparty harvesting (NOT per-user history — see `listUserTrades`).
+   */
+  async listMarketTrades(
+    market: string,
+    params?: ListMarketTradesParams
+  ): Promise<MarketTrade[]> {
+    if (!market || typeof market !== "string") {
+      throw new Error("listMarketTrades: market (conditionId) is required");
+    }
+    const url = new URL("/trades", this.baseUrl);
+    url.searchParams.set("market", market);
+    if (params?.takerOnly) url.searchParams.set("takerOnly", "true");
+    if (params?.limit !== undefined) {
+      url.searchParams.set("limit", String(params.limit));
+    }
+    if (params?.offset !== undefined) {
+      url.searchParams.set("offset", String(params.offset));
+    }
+
+    const json = await this.fetchJson(url);
+    return MarketTradesResponseSchema.parse(json);
+  }
+
+  /**
+   * `GET /traded-events?user=<wallet>` — per-event aggregates for category analysis.
+   */
+  async listTradedEvents(
+    wallet: string,
+    params?: ListTradedEventsParams
+  ): Promise<TradedEvent[]> {
+    assertWallet(wallet);
+    const url = new URL("/traded-events", this.baseUrl);
+    url.searchParams.set("user", wallet);
+    if (params?.limit !== undefined) {
+      url.searchParams.set("limit", String(params.limit));
+    }
+    if (params?.offset !== undefined) {
+      url.searchParams.set("offset", String(params.offset));
+    }
+
+    const json = await this.fetchJson(url);
+    return TradedEventsResponseSchema.parse(json);
+  }
+
+  /**
+   * Gamma `GET /public-search?q=<query>&profile=true` — handle → proxyWallet resolution.
+   * Note: Gamma is a different host (`gamma-api.polymarket.com`) from the Data API.
+   */
+  async resolveUsername(
+    query: string,
+    params?: ResolveUsernameParams
+  ): Promise<GammaProfile[]> {
+    if (typeof query !== "string" || query.length < 2) {
+      throw new Error("resolveUsername: query must be a string of ≥2 chars");
+    }
+    const url = new URL("/public-search", this.gammaBaseUrl);
+    url.searchParams.set("q", query);
+    url.searchParams.set("profile", "true");
+    if (params?.limit !== undefined) {
+      url.searchParams.set("limit", String(params.limit));
+    }
+
+    const json = await this.fetchJson(url);
+    const parsed = GammaPublicSearchResponseSchema.parse(json);
+    return parsed.profiles;
   }
 
   private async fetchJson(url: URL): Promise<unknown> {

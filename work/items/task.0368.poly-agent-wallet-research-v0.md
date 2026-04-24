@@ -2,7 +2,7 @@
 id: task.0368
 type: task
 title: "Poly agent wallet research v0 — Data-API tools + poly-research graph"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 4
 estimate: 3
@@ -19,7 +19,7 @@ revision: 0
 blocked_by: []
 deploy_verified: false
 created: 2026-04-24
-updated: 2026-04-25
+updated: 2026-04-24
 labels:
   [poly, ai, langgraph, ai-tools, data-api, wallet-research, copy-trade-targets]
 external_refs:

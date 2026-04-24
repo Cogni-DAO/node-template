@@ -21,6 +21,14 @@ import { knowledgeWriteBoundTool } from "./tools/knowledge-write";
 import { marketListBoundTool } from "./tools/market-list";
 import { metricsQueryBoundTool } from "./tools/metrics-query";
 import { polyCancelOrderBoundTool } from "./tools/poly-cancel-order";
+import { polyDataActivityBoundTool } from "./tools/poly-data-activity";
+import { polyDataHelpBoundTool } from "./tools/poly-data-help";
+import { polyDataHoldersBoundTool } from "./tools/poly-data-holders";
+import { polyDataPositionsBoundTool } from "./tools/poly-data-positions";
+import { polyDataResolveUsernameBoundTool } from "./tools/poly-data-resolve-username";
+import { polyDataTradedEventsBoundTool } from "./tools/poly-data-traded-events";
+import { polyDataTradesMarketBoundTool } from "./tools/poly-data-trades-market";
+import { polyDataValueBoundTool } from "./tools/poly-data-value";
 import { polyListOrdersBoundTool } from "./tools/poly-list-orders";
 import { polyPlaceTradeBoundTool } from "./tools/poly-place-trade";
 import { repoListBoundTool } from "./tools/repo-list";
@@ -116,6 +124,14 @@ export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
   marketListBoundTool as CatalogBoundTool,
   metricsQueryBoundTool as CatalogBoundTool,
   polyCancelOrderBoundTool as CatalogBoundTool,
+  polyDataActivityBoundTool as CatalogBoundTool,
+  polyDataHelpBoundTool as CatalogBoundTool,
+  polyDataHoldersBoundTool as CatalogBoundTool,
+  polyDataPositionsBoundTool as CatalogBoundTool,
+  polyDataResolveUsernameBoundTool as CatalogBoundTool,
+  polyDataTradedEventsBoundTool as CatalogBoundTool,
+  polyDataTradesMarketBoundTool as CatalogBoundTool,
+  polyDataValueBoundTool as CatalogBoundTool,
   polyListOrdersBoundTool as CatalogBoundTool,
   polyPlaceTradeBoundTool as CatalogBoundTool,
   repoListBoundTool as CatalogBoundTool,
