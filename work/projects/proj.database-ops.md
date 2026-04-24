@@ -139,26 +139,11 @@ Already tracked in DATABASE_RLS_SPEC.md P1:
 
 | Deliverable                                                        | Status       | Est | Work Item                                                                  |
 | ------------------------------------------------------------------ | ------------ | --- | -------------------------------------------------------------------------- |
-| Per-node drizzle configs + per-node migrator images + legacy purge | done         | 2   | task.0324 ([PR #916](https://github.com/Cogni-DAO/node-template/pull/916)) |
+| Per-node drizzle configs + per-node migrator images + legacy purge | in-review    | 2   | task.0324 ([PR #916](https://github.com/Cogni-DAO/node-template/pull/916)) |
 | Un-no-op prod poly/resy migration Jobs (gated on DB inspection)    | needs_design | 1   | task.0324 Phase 3 (follow-up)                                              |
 | **Future:** Atlas + GitOps migrations (declarative schema, CRD)    | needs_design | 5   | task.0325                                                                  |
 
-task.0324 delivered per-node sovereignty of schema + migration ownership. task.0325 preserves the Atlas adoption plan for when destructive-change linting warrants the investment.
-
-### Migration Runtime: initContainer on the Runtime Image
-
-**Goal:** migrations run as a Deployment initContainer reusing the main container's image digest. One image per node. No Argo PreSync hook Jobs on node-app. Cuts `candidate-flight` verify-candidate wait from 4–9 min to ~60s (bug.0368: the separate migrator image caused per-flight cold image pulls that dominated the wait).
-
-| Deliverable                                                                                                                | Status       | Est | Work Item |
-| -------------------------------------------------------------------------------------------------------------------------- | ------------ | --- | --------- |
-| bug.0368 diagnosis: migrator image pull dominates verify wait (migration itself ~8s; total Job ~3m52s)                     | done         | 1   | bug.0368  |
-| PR A — additive: per-node `migrate.mjs` + Dockerfile COPY + initContainer block in `base/node-app/deployment.yaml`          | needs_design | 2   | task.0370 |
-| PR B — cleanup: delete migration-job.yaml + migrator Dockerfile stage + migrator image build/promote surface + overlay refs | needs_design | 2   | task.0370 |
-| PR C — validate + apply same pattern to `poly-doltgres` (separate DB, non-compliant extended protocol)                      | needs_design | 1   | task.0370 |
-| Follow-up: CI lint for destructive SQL without `needs_two_deploys` pragma                                                  | needs_design | 1   | task.0371 |
-| Follow-up: migrator credential scoping (`app_migrator` role) — coupled to P1 credential convergence below                   | needs_design | 1   | (P1)      |
-
-**Hard invariant under this design:** `FORWARD_COMPAT_MIGRATIONS` — every migration must be compatible with the prior code version, because `strategy: RollingUpdate` means old pods serve traffic against the newly-migrated schema during the rollover window. (Same obligation existed under the PreSync-hook pattern; task.0370 makes it explicit.) See [databases.md](../../docs/spec/databases.md) §2 invariants.
+task.0324 is the current-priority minimal fix (no new tooling). task.0325 preserves the Atlas adoption plan for when contributor scale or destructive-change linting warrants the investment.
 
 ### P3 — DSN-Only Provisioning
 
@@ -209,7 +194,7 @@ Already tracked in DATABASE_URL_ALIGNMENT_SPEC.md P1-P2:
 
 ## As-Built Specs
 
-- [databases.md](../../docs/spec/databases.md) — §2 Migration Strategy + §4 Technical Implementation describe the **one-image-per-node + initContainer** runtime (task.0370, post-PR-B). §5 Trade-offs + §6.4/§6.5 carry the forward-compat invariant and follow-up CI-lint plan. §5 originally documented the two-image (runner + migrator) split from task.0324; that text is obsoleted in-place by task.0370.
+- [databases.md](../../docs/spec/databases.md) — §2 Migration Strategy + §4 Technical Implementation updated for per-node drizzle configs + per-node migrator images (task.0324).
 
 ### Roadmap — Supabase Evaluation Decisions Track
 

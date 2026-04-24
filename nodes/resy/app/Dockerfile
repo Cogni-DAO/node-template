@@ -57,21 +57,6 @@ ENV AUTH_SECRET=${AUTH_SECRET_BUILD}
 RUN --mount=type=cache,id=next-cache-resy,target=/app/nodes/resy/app/.next/cache,sharing=locked \
     pnpm --filter @cogni/resy-app build
 
-# Migrator — resy-only migration image (task.0322).
-# Carries only resy's schema + migrations + nodes/resy/drizzle.config.ts, plus shared
-# packages/db-schema/src for core tables.
-FROM base AS migrator
-WORKDIR /app
-
-COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/nodes/resy/drizzle.config.ts ./nodes/resy/drizzle.config.ts
-COPY --from=builder /app/packages/db-schema/src ./packages/db-schema/src
-COPY --from=builder /app/nodes/resy/app/src/shared/db ./nodes/resy/app/src/shared/db
-COPY --from=builder /app/nodes/resy/app/src/adapters/server/db/migrations ./nodes/resy/app/src/adapters/server/db/migrations
-
-CMD ["pnpm", "db:migrate:resy:container"]
-
 # Runner – lean production image
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -128,3 +113,17 @@ HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://localhost:3300/livez || exit 1
 
 CMD ["node", "nodes/resy/app/server.js"]
+
+# Migrator — rebased on runner so k3s reuses the runtime image's cached layers
+# and the per-flight migrator image pull becomes a 1MB delta, not a 400MB blob.
+# See bug.0368 / task.0370. Uses the programmatic `drizzle-orm/postgres-js/migrator`
+# (shipped in runner via serverExternalPackages) so no drizzle-kit/pnpm/tsx in the
+# migrator image. Argo PreSync hook + one-Job-per-sync + DATABASE_URL secret binding
+# are unchanged — only what's inside the migrator image changes.
+FROM runner AS migrator
+USER root
+WORKDIR /app
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/resy/app/src/adapters/server/db/migrations /app/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/resy/app/src/adapters/server/db/migrate.mjs /app/migrate.mjs
+USER nextjs
+CMD ["node", "/app/migrate.mjs", "/app/migrations"]

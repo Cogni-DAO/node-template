@@ -43,6 +43,16 @@ const nextConfig: NextConfig = {
       "**/pino/benchmarks/**",
     ],
   },
+  // task.0370: migrator image is `FROM runner`, so its migrate.mjs runs against
+  // the standalone node_modules. The app itself only imports
+  // drizzle-orm/postgres-js (driver); nft would otherwise prune the
+  // postgres-js/migrator subpath. Force-include so the migrator image can run
+  // `import { migrate } from "drizzle-orm/postgres-js/migrator"`.
+  outputFileTracingIncludes: {
+    "/**": [
+      "../../../node_modules/drizzle-orm/postgres-js/migrator.js",
+    ],
+  },
   // Temporary containment (bug.0157): WalletConnect pulls pino@7 → thread-stream
   // which ships test files requiring 'tape'/'tap'. Stub thread-stream for Turbopack
   // so it doesn't follow the test-file dependency chain during Client Component SSR.
