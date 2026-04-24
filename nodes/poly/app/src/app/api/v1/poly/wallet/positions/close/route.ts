@@ -31,7 +31,6 @@ import {
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
 } from "@/bootstrap/poly-trader-wallet";
-import { invalidateWalletAnalysisCaches } from "@/features/wallet-analysis/server/wallet-analysis-service";
 import { serverEnv } from "@/shared/env/server-env";
 
 export const dynamic = "force-dynamic";
@@ -105,19 +104,6 @@ export const POST = wrapRouteHandlerWithLogging(
         client_order_id: receipt.client_order_id,
         filled_size_usdc: receipt.filled_size_usdc,
       });
-
-      try {
-        const address = await adapter.getAddress(account.id);
-        if (address) invalidateWalletAnalysisCaches(address);
-      } catch (err) {
-        ctx.log.warn(
-          {
-            billing_account_id: account.id,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "poly.wallet.positions.close.cache_invalidate_failed"
-        );
-      }
 
       ctx.log.info(
         {
