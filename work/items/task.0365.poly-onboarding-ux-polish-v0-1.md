@@ -2,7 +2,7 @@
 id: task.0365
 type: task
 title: "Poly onboarding UX polish (v0.1) — Money page layout, funding tip, approval-state design"
-status: needs_design
+status: done
 priority: 1
 rank: 2
 estimate: 3
@@ -14,9 +14,9 @@ spec_refs: []
 assignees: []
 credit:
 project: proj.poly-copy-trading
-branch:
+branch: feat/task-0365-poly-onboarding-ux-polish
 pr:
-reviewer:
+reviewer: claude
 revision: 0
 blocked_by: [task.0361]
 labels: [poly, onboarding, ui, polish, frontend-design]

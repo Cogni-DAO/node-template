@@ -9,13 +9,14 @@
 
 ## Purpose
 
-Protected Money page (served from the `/credits` route — URL is stable; the page is relabelled, not renamed). Composes two panels:
+Protected Money page (served from the `/credits` route — URL is stable; the page is relabelled, not renamed). Composes:
 
+- `OnboardingProgress` — state-driven 4-step rail (Create wallet → Fund → Enable trading → Pick a target) mounted at the top of the page. Pure projection of `poly-wallet-status` / `poly-wallet-balances` React Query caches; no new fetches (task.0365).
+- `TradingWalletPanel` — per-tenant Polymarket trading-wallet lifecycle. When disconnected, renders `TradingWalletConnectFlow` inline (first-time wallet provisioning via `/api/v1/poly/wallet/connect`). When connected & `trading_ready=false`, renders the deposit hero (big mono address + copy + Polygon-only guardrail), condensed balance line, and the Enable Trading CTA (`TradingReadinessSection`, task.0355). When `trading_ready=true`, renders the balance line, the "6/6 approvals signed" checkpoint, and the next-step CTA onto `/research`. Disabled Fund/Withdraw stubs were dropped in task.0365 — they'll return when [task.0352](../../../../../../work/items/task.0352.poly-trading-wallet-fund-flow.md) and [task.0351](../../../../../../work/items/task.0351.poly-trading-wallet-withdrawal.md) ship real flows.
 - `AiCreditsPanel` — AI credits balance + USDC top-up flow (unchanged behaviour from the single-column credits page).
-- `TradingWalletPanel` — per-tenant Polymarket trading-wallet lifecycle. When disconnected, renders `TradingWalletConnectFlow` inline (first-time wallet provisioning via `/api/v1/poly/wallet/connect`); when connected, shows USDC.e + POL balances from `/api/v1/poly/wallet/status` + `/api/v1/poly/wallet/balances`, the Enable Trading CTA (`TradingReadinessSection`, task.0355), and stubbed fund/withdraw buttons linked to [task.0352](../../../../../../work/items/task.0352.poly-trading-wallet-fund-flow.md) and [task.0351](../../../../../../work/items/task.0351.poly-trading-wallet-withdrawal.md).
 - `TradingWalletConnectFlow` — the per-tenant create-wallet UI (caps sliders + custodial-consent CTA). Moved here from `/profile` in task.0361 so wallet creation, funding, and approvals all live on one page.
 
-Desktop renders both panels as a two-column grid; mobile uses a **Credits** / **Wallet** pill toggle above a single-column stack.
+Viewports ≥`lg` (1024px) render wallet + credits as a two-column grid with the trading wallet first; narrower viewports use a **Trading wallet** / **AI credits** pill toggle above a single-column stack, defaulting to the wallet (first-user hot path).
 
 ## Pointers
 
@@ -46,7 +47,7 @@ Desktop renders both panels as a two-column grid; mobile uses a **Credits** / **
 
 - **Exports:** none
 - **Route:** `/credits` (server page + client composition; label in nav is "Money", Lucide `Coins` icon)
-- **Files considered API:** `page.tsx`, `CreditsPage.client.tsx`, `AiCreditsPanel.tsx`, `TradingWalletPanel.tsx`, `TradingWalletConnectFlow.tsx`, `TradingReadinessSection.tsx`
+- **Files considered API:** `page.tsx`, `CreditsPage.client.tsx`, `OnboardingProgress.tsx`, `AiCreditsPanel.tsx`, `TradingWalletPanel.tsx`, `TradingWalletConnectFlow.tsx`, `TradingReadinessSection.tsx`
 
 ## Responsibilities
 
@@ -64,7 +65,7 @@ Desktop renders both panels as a two-column grid; mobile uses a **Credits** / **
 
 ## Dependencies
 
-- **Internal:** `@/shared/config`, `@/components/vendor/depay`, `@tanstack/react-query`, `@/components/kit/wallet` (AddressChip).
+- **Internal:** `@/shared/config`, `@/components/vendor/depay`, `@tanstack/react-query`, `@/components/kit/wallet` (CopyAddressButton for the deposit hero), `@/components` (Card, HintText, PageContainer).
 - **External:** none
 
 ## Change Protocol
