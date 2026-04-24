@@ -130,24 +130,12 @@ export function createWalletCapability(config?: {
     const numTradesCapped = numTrades >= TRADES_LIMIT;
     const volumeUsdc = trades.reduce((sum, t) => sum + t.size * t.price, 0);
 
-    // Authoritative PnL: Polymarket positions API (cashPnl + realizedPnl per open position)
-    // Fallback: trade cashflow (BUY outflows negative, SELL inflows positive)
-    let pnlUsdc: number;
-    let pnlKind: "authoritative" | "estimated";
-    try {
-      const positions = await client.listUserPositions(address);
-      pnlUsdc = positions.reduce(
-        (sum, p) => sum + p.cashPnl + p.realizedPnl,
-        0
-      );
-      pnlKind = "authoritative";
-    } catch {
-      pnlUsdc = trades.reduce((sum, t) => {
-        const cashflow = t.size * t.price;
-        return t.side === "BUY" ? sum - cashflow : sum + cashflow;
-      }, 0);
-      pnlKind = "estimated";
-    }
+    const positions = await client.listUserPositions(address);
+    const pnlUsdc = positions.reduce(
+      (sum, p) => sum + p.cashPnl + p.realizedPnl,
+      0
+    );
+    const pnlKind = "authoritative" as const;
 
     const roiPct = volumeUsdc > 0 ? (pnlUsdc / volumeUsdc) * 100 : null;
 

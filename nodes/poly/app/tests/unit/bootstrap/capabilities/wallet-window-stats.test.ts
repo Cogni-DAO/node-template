@@ -3,9 +3,9 @@
 
 /**
  * Module: `@tests/unit/bootstrap/capabilities/wallet-window-stats`
- * Purpose: Unit tests for createWalletCapability().getWalletWindowStats — windowed stats with authoritative/estimated PnL.
+ * Purpose: Unit tests for createWalletCapability().getWalletWindowStats — windowed stats with authoritative PnL.
  * Scope: Mocks PolymarketDataApiClient via custom fetch; tests DAY/WEEK/MONTH/ALL filtering, 10k-cap flag,
- *        authoritative vs estimated pnlKind branches. Does not hit real Polymarket endpoints.
+ *        authoritative pnlKind from positions API. Does not hit real Polymarket endpoints.
  * Invariants: No I/O. Each test uses a unique wallet address to avoid module-level cache cross-contamination.
  * Side-effects: none
  * Links: work/items/task.0346, nodes/poly/app/src/bootstrap/capabilities/wallet.ts
@@ -87,15 +87,6 @@ function jsonResponse(body: unknown): Response {
     status: 200,
     statusText: "OK",
     json: async () => body,
-  } as unknown as Response;
-}
-
-function errorResponse(status = 500): Response {
-  return {
-    ok: false,
-    status,
-    statusText: "Server Error",
-    json: async () => ({}),
   } as unknown as Response;
 }
 
@@ -263,32 +254,6 @@ describe("getWalletWindowStats", () => {
 
     expect(result.pnlKind).toBe("authoritative");
     expect(result.pnlUsdc).toBeCloseTo(10); // 7 + 3
-  });
-
-  it("pnlKind=estimated when positions API returns HTTP error", async () => {
-    const wallet = freshWallet();
-    const mockFetch = vi.fn().mockImplementation((url: string) => {
-      if (url.includes("/positions"))
-        return Promise.resolve(errorResponse(500));
-      // 1 BUY trade at size=10, price=0.5 → cashflow = -5
-      if (url.includes("/trades"))
-        return Promise.resolve(
-          jsonResponse([makeTrade({ side: "BUY", size: 10, price: 0.5 })])
-        );
-      return Promise.resolve(jsonResponse([]));
-    });
-
-    const cap = createWalletCapability({
-      baseUrl: "https://test.example",
-      fetch: mockFetch as unknown as typeof fetch,
-    });
-    const result = await cap.getWalletWindowStats({
-      address: wallet,
-      timePeriod: "WEEK",
-    });
-
-    expect(result.pnlKind).toBe("estimated");
-    expect(result.pnlUsdc).toBeCloseTo(-5); // BUY = negative cashflow
   });
 
   it("roiPct=null when volumeUsdc is zero (no trades)", async () => {

@@ -8,8 +8,7 @@
  * Scope: Presentational only. Renders skeleton cells when stats is undefined.
  * Invariants:
  *   - Always renders 3 cells; loading state shows animated skeletons.
- *   - numTradesCapped: true renders a "~" prefix to signal the 10k cap.
- *   - pnlKind "estimated" renders a "~" prefix on PnL and a hint.
+ *   - numTradesCapped: true renders a "~" prefix on the trade count.
  * Side-effects: none
  * Links: work/items/task.0361.drawer-windowed-stats-strip.md
  * @public
@@ -49,7 +48,6 @@ export function WindowedStatsStrip({
   }
 
   const tradePrefix = stats.numTradesCapped ? "~" : "";
-  const pnlPrefix = stats.pnlKind === "estimated" ? "~" : "";
   const pnlTone: "success" | "warn" | "default" =
     stats.pnlUsdc > 0 ? "success" : stats.pnlUsdc < 0 ? "warn" : "default";
 
@@ -58,15 +56,9 @@ export function WindowedStatsStrip({
       <Cell
         label="Trades"
         value={`${tradePrefix}${stats.numTrades.toLocaleString()}`}
-        hint={stats.numTradesCapped ? "capped at 10k" : undefined}
       />
       <Cell label="Volume" value={formatUsd(stats.volumeUsdc)} />
-      <Cell
-        label="PnL"
-        value={`${pnlPrefix}${formatUsdSigned(stats.pnlUsdc)}`}
-        tone={pnlTone}
-        hint={stats.pnlKind === "estimated" ? "est. cashflow" : "authoritative"}
-      />
+      <Cell label="PnL" value={formatUsdSigned(stats.pnlUsdc)} tone={pnlTone} />
     </div>
   );
 }
