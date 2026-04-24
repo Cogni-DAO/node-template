@@ -15,7 +15,7 @@ assignees: []
 credit:
 project: proj.poly-copy-trading
 branch: feat/task-0365-poly-onboarding-ux-polish
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1040
 reviewer: claude
 revision: 0
 blocked_by: [task.0361]
