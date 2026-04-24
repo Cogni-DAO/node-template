@@ -37,7 +37,7 @@ export const WalletWindowStatsSchema = z.object({
   pnlKind: z.enum(["authoritative", "estimated"]),
   roiPct: z.number().nullable(),
   numTrades: z.number().int().nonnegative(),
-  /** True when the /trades response hit the fetch cap (10k); actual count may be higher. */
+  /** True when the /trades response hit the API cap (1k per call); actual count may be higher. */
   numTradesCapped: z.boolean(),
   computedAt: z.string(),
 });

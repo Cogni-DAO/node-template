@@ -206,9 +206,9 @@ describe("getWalletWindowStats", () => {
     expect(result.timePeriod).toBe("ALL");
   });
 
-  it("numTradesCapped=true when trade count equals the 10k fetch limit", async () => {
+  it("numTradesCapped=true when trade count equals the 1k API cap", async () => {
     const wallet = freshWallet();
-    const trades = Array.from({ length: 10_000 }, (_, i) =>
+    const trades = Array.from({ length: 1_000 }, (_, i) =>
       makeTrade({ timestamp: Math.floor(Date.now() / 1000) - i })
     );
 
@@ -228,7 +228,7 @@ describe("getWalletWindowStats", () => {
     });
 
     expect(result.numTradesCapped).toBe(true);
-    expect(result.numTrades).toBe(10_000);
+    expect(result.numTrades).toBe(1_000);
   });
 
   it("pnlKind=authoritative when positions API succeeds", async () => {

@@ -28,8 +28,8 @@ import { makeLogger } from "@/shared/observability";
 
 const log = makeLogger({ component: "wallet-capability" });
 
-/** Fetch cap for windowed trade counts. /trades supports up to 10k rows. */
-const TRADES_LIMIT = 10_000;
+/** Fetch cap for windowed trade counts. Polymarket /trades returns at most 1k rows per call. */
+const TRADES_LIMIT = 1_000;
 
 /** Default leaderboard size. */
 const DEFAULT_TOP_N = 10;
