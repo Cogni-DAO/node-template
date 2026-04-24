@@ -627,6 +627,18 @@ jobs:
       DOMAIN: ${{ vars.DOMAIN }}
       DEPLOY_ENVIRONMENT: ${{ needs.promote-k8s.outputs.environment }}
     steps:
+      # Bare checkout at workspace root so local composite actions
+      # (./.github/actions/loki-ci-telemetry, which itself nests
+      # uses: ./.github/actions/loki-push and invokes scripts/ci/*.sh
+      # with cwd=$GITHUB_WORKSPACE) can resolve. Nested `uses: ./...`
+      # inside a composite resolves against $GITHUB_WORKSPACE, not the
+      # parent action's dir — a one-line path prefix on the outer call
+      # is insufficient.
+      - name: Checkout (workspace root — for local composite actions)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.promote-k8s.outputs.head_sha }}
+
       - name: Checkout app source (for verification scripts)
         uses: actions/checkout@v4
         with:
@@ -713,7 +725,7 @@ jobs:
 
       - name: CI Telemetry
         if: always()
-        uses: ./app-src/.github/actions/loki-ci-telemetry
+        uses: ./.github/actions/loki-ci-telemetry
         with:
           loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
           loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
