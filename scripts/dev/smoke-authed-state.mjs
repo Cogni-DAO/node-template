@@ -27,7 +27,7 @@ if (!slug || !targetUrl) {
 
 const storageState = join(
   process.cwd(),
-  ".cogni/auth",
+  ".local-auth",
   `${slug}.storageState.json`
 );
 const browser = await chromium.launch({ headless: true });

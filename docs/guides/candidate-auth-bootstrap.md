@@ -31,7 +31,7 @@ Chrome 136+ **disables** `--remote-debugging-port` when launched against the def
 ## Storage layout (in repo, gitignored)
 
 ```
-.cogni/auth/
+.local-auth/
   chrome-profile/                           # dedicated Chrome user data dir (MetaMask lives here)
   credentials.md                            # MetaMask password + recovery phrase (test wallet only)
   candidate-a-poly.storageState.json        # poly-test.cognidao.org
@@ -39,7 +39,15 @@ Chrome 136+ **disables** `--remote-debugging-port` when launched against the def
   ...
 ```
 
-`.cogni/.gitignore` excludes the entire `auth/` subtree. Never commit — these files hold live session cookies, and the profile dir holds the MetaMask vault.
+Root `.gitignore` excludes the entire `/.local-auth/` directory. Never commit — these files hold live session cookies, and the profile dir holds the MetaMask vault.
+
+> **Future state:** this whole stack is a crawl-step MVP wedge. Long-term it should be:
+>
+> - test wallet seed in a secrets manager (1Password CLI / Doppler), not a gitignored markdown file
+> - Chrome profile under `~/.cogni-auth/chrome-profile/` (or OS-equivalent), not in-repo (profile is hundreds of MB and shared across worktrees)
+> - first-class commands `pnpm auth:capture <node> <env>` + `pnpm auth:verify <node> <env>` driven by the node × env matrix
+>
+> Tracked under `proj.agent-dev-testing.md` Run (P2+) — "Playwright + Chromium in devtools image" milestone.
 
 ## One-time setup (per laptop)
 
@@ -49,7 +57,7 @@ Chrome 136+ **disables** `--remote-debugging-port` when launched against the def
    ```bash
    /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
      --remote-debugging-port=9222 \
-     --user-data-dir="$PWD/.cogni/auth/chrome-profile"
+     --user-data-dir="$PWD/.local-auth/chrome-profile"
    ```
 
    Keep that terminal tab open — closing it kills Chrome.
@@ -59,9 +67,9 @@ Chrome 136+ **disables** `--remote-debugging-port` when launched against the def
    - Go to `https://chrome.google.com/webstore/detail/metamask/nkbihfbeogaeaoehlefnkodbefgpgknn`
    - Click "Add to Chrome"
    - MetaMask setup: choose **Create a new wallet** (preferred) or **Import existing** if you already have a dedicated test seed.
-   - **Suggested password:** `cogni-is-the-goat` (low-stakes — this profile is test-only and gitignored). If you pick something else, write it down in `.cogni/auth/credentials.md` so the next agent/session can unlock.
-   - Finish setup. MetaMask shows you a 12-word recovery phrase — **save it into `.cogni/auth/credentials.md` immediately**. That file is gitignored. Without it, a wiped profile means a lost wallet.
-   - **Seed confirmation step:** MetaMask then asks the user to fill in 3 specific word positions (e.g. "2, 5, 8") from a shuffled word pool. The AI agent should read `.cogni/auth/credentials.md`, map the requested positions to the saved phrase, and tell the user exactly which word goes in each slot. Don't make the user count words manually.
+   - **Suggested password:** `cogni-is-the-goat` (low-stakes — this profile is test-only and gitignored). If you pick something else, write it down in `.local-auth/credentials.md` so the next agent/session can unlock.
+   - Finish setup. MetaMask shows you a 12-word recovery phrase — **save it into `.local-auth/credentials.md` immediately**. That file is gitignored. Without it, a wiped profile means a lost wallet.
+   - **Seed confirmation step:** MetaMask then asks the user to fill in 3 specific word positions (e.g. "2, 5, 8") from a shuffled word pool. The AI agent should read `.local-auth/credentials.md`, map the requested positions to the saved phrase, and tell the user exactly which word goes in each slot. Don't make the user count words manually.
    - Unlock MetaMask.
 
 4. Verify CDP is listening:
@@ -71,7 +79,7 @@ Chrome 136+ **disables** `--remote-debugging-port` when launched against the def
    # -> "Chrome/<version>"
    ```
 
-The profile now persists under `.cogni/auth/chrome-profile/`. Future launches reuse it — MetaMask stays installed, stays funded with whatever account you imported.
+The profile now persists under `.local-auth/chrome-profile/`. Future launches reuse it — MetaMask stays installed, stays funded with whatever account you imported.
 
 ## Per-environment: sign in and capture
 
@@ -88,7 +96,7 @@ The profile now persists under `.cogni/auth/chrome-profile/`. Future launches re
    node scripts/dev/capture-authed-state.mjs candidate-a-poly https://poly-test.cognidao.org
    ```
 
-   Writes `.cogni/auth/candidate-a-poly.storageState.json` and prints cookie/domain counts as sanity check.
+   Writes `.local-auth/candidate-a-poly.storageState.json` and prints cookie/domain counts as sanity check.
 
 ## Using captured state from Playwright
 
@@ -98,7 +106,7 @@ import path from "node:path";
 
 const storageState = path.join(
   process.cwd(),
-  ".cogni/auth/candidate-a-poly.storageState.json"
+  ".local-auth/candidate-a-poly.storageState.json"
 );
 
 const browser = await chromium.launch();
@@ -112,11 +120,11 @@ await page.goto("https://poly-test.cognidao.org");
 
 - Sessions generally persist for days to weeks depending on the env's cookie TTL.
 - When an agent run hits "unauthenticated", re-run the sign-in + capture flow. MetaMask is only needed to re-mint the cookie.
-- Clearing `.cogni/auth/chrome-profile/` wipes MetaMask — you'd have to re-import the seed phrase.
+- Clearing `.local-auth/chrome-profile/` wipes MetaMask — you'd have to re-import the seed phrase.
 
 ## Troubleshooting
 
-- **`curl localhost:9222` refused but Chrome is running:** you pointed `--user-data-dir` at the default profile. Chrome 136+ blocks CDP there. Use `.cogni/auth/chrome-profile/` as shown.
+- **`curl localhost:9222` refused but Chrome is running:** you pointed `--user-data-dir` at the default profile. Chrome 136+ blocks CDP there. Use `.local-auth/chrome-profile/` as shown.
 - **Still refused with dedicated profile:** another Chrome instance is holding the profile lock. Run `pgrep -lf "Google Chrome"`, kill stragglers, retry.
 - **MetaMask popup doesn't appear on signin:** unlock the extension (click the fox icon, enter password). Extensions stay locked across Chrome restarts.
 - **Captured state has no cookies for the expected domain:** you signed in before the capture script could see the tab. Make sure the tab is still open at the target URL when you run the script.
@@ -132,7 +140,7 @@ When you're finished capturing state:
 Notes:
 
 - The macOS "default browser" setting is **app-level**, not profile-level. If macOS prompted "Make Chrome your default browser" when the debug profile launched, nothing meaningful changed — Chrome-the-app is still the default either way.
-- You **can run both at once**: the debug profile and your normal profile coexist as separate Chrome processes because they point at different `--user-data-dir`s. Launch one with the debug flag + `.cogni/auth/chrome-profile/`, open the other from the Dock. The only conflict is two processes sharing one profile dir (Chrome refuses that with a lock-file error). When both are running, macOS may open new-window link clicks in whichever Chrome launched most recently — keep that in mind while automating.
+- You **can run both at once**: the debug profile and your normal profile coexist as separate Chrome processes because they point at different `--user-data-dir`s. Launch one with the debug flag + `.local-auth/chrome-profile/`, open the other from the Dock. The only conflict is two processes sharing one profile dir (Chrome refuses that with a lock-file error). When both are running, macOS may open new-window link clicks in whichever Chrome launched most recently — keep that in mind while automating.
 
 ## Scope / non-goals
 

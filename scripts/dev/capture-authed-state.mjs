@@ -5,10 +5,10 @@
 /**
  * Module: `@scripts/dev/capture-authed-state`
  * Purpose: Capture authed Playwright storageState from a running CDP-debuggable Chrome.
- * Scope: One-off developer helper — connects over CDP, exports storageState to `.cogni/auth/<slug>.storageState.json`. Does not drive signin, does not launch Chrome, does not run in CI.
+ * Scope: One-off developer helper — connects over CDP, exports storageState to `.local-auth/<slug>.storageState.json`. Does not drive signin, does not launch Chrome, does not run in CI.
  * Invariants: Reads only; never mutates the source Chrome profile. Write target is
- *   always under `.cogni/auth/` which is gitignored.
- * Side-effects: IO (connects to Chrome over CDP, writes one JSON file under .cogni/auth/).
+ *   always under `.local-auth/` which is gitignored.
+ * Side-effects: IO (connects to Chrome over CDP, writes one JSON file under .local-auth/).
  * Links: docs/guides/candidate-auth-bootstrap.md
  * @internal
  */
@@ -26,7 +26,7 @@ if (!slug || !targetUrl) {
 }
 
 const CDP_URL = process.env.CDP_URL ?? "http://localhost:9222";
-const outDir = join(process.cwd(), ".cogni/auth");
+const outDir = join(process.cwd(), ".local-auth");
 const outFile = join(outDir, `${slug}.storageState.json`);
 
 const browser = await chromium.connectOverCDP(CDP_URL);

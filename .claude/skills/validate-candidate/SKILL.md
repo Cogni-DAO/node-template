@@ -7,7 +7,7 @@ description: Close the deploy_verified loop for a PR flighted to candidate-a. Re
 
 ## Hard rules (read first, do not violate)
 
-1. **Zero artifacts.** This skill writes _nothing_ to disk during a validation run. No per-PR scripts. No scorecard files. No screenshots. No temp JSON. If you catch yourself reaching for `Write`, you are doing it wrong — inline the work. Playwright runs via `node --input-type=module -e '<inline JS>'` or a one-shot `node -e`. The scorecard is assembled as a shell variable or piped directly into `gh pr comment --body-file -`. Nothing in `.cogni/` gets modified either — `.cogni/auth/` holds only the permanent Chrome profile, storageState files, and credentials; never validation outputs.
+1. **Zero artifacts.** This skill writes _nothing_ to disk during a validation run. No per-PR scripts. No scorecard files. No screenshots. No temp JSON. If you catch yourself reaching for `Write`, you are doing it wrong — inline the work. Playwright runs via `node --input-type=module -e '<inline JS>'` or a one-shot `node -e`. The scorecard is assembled as a shell variable or piped directly into `gh pr comment --body-file -`. Nothing in `.cogni/` gets modified either — `.local-auth/` holds only the permanent Chrome profile, storageState files, and credentials; never validation outputs.
 
 2. **Discovery is not execution.** For a row whose surface is a graph, tool, or any behavioral capability, _running a listing endpoint to confirm it's registered does not count as the agent-axis pass_. The agent axis is 🟢 only when you actually invoked the capability and got a successful response. "The catalog contains it" is 🟡 at best and must be labeled as such.
 
@@ -34,7 +34,7 @@ If no PR number, resolve it with `gh pr view --json number,headRefName -q .numbe
 
 ## Prerequisites — check these up front, halt on failure
 
-1. **Captured auth state exists for the impacted env.** Check `.cogni/auth/<slug>.storageState.json`. The filename slug convention is `candidate-a-<node>` (e.g., `candidate-a-poly`, `candidate-a-operator`). If the file for the impacted node is missing, halt and tell the user to run the candidate-auth bootstrap (`docs/guides/candidate-auth-bootstrap.md`) for that node first. Never try to re-auth — interactive signin is out of scope for this skill.
+1. **Captured auth state exists for the impacted env.** Check `.local-auth/<slug>.storageState.json`. The filename slug convention is `candidate-a-<node>` (e.g., `candidate-a-poly`, `candidate-a-operator`). If the file for the impacted node is missing, halt and tell the user to run the candidate-auth bootstrap (`docs/guides/candidate-auth-bootstrap.md`) for that node first. Never try to re-auth — interactive signin is out of scope for this skill.
 
 2. **`gh` CLI authed.** `gh auth status` should be green. Stop if not.
 
@@ -114,7 +114,7 @@ For each row, try **both** the agent axis and the human axis. Skip an axis only 
 
 #### Agent axis strategies
 
-- **`api-route`** — prefer the agent-api-validation flow from `docs/guides/agent-api-validation.md` (API key / service token). If the endpoint requires a user session, fall through to using the captured storageState cookies with `fetch` / `curl` (extract the session cookie from `.cogni/auth/<slug>.storageState.json` and pass as `Cookie:` header).
+- **`api-route`** — prefer the agent-api-validation flow from `docs/guides/agent-api-validation.md` (API key / service token). If the endpoint requires a user session, fall through to using the captured storageState cookies with `fetch` / `curl` (extract the session cookie from `.local-auth/<slug>.storageState.json` and pass as `Cookie:` header).
 - **`graph` — EXECUTE, don't just list.** Find the real invocation route (typically `POST /api/v1/agent/runs` or `POST /api/v1/ai/chat` — inspect the node's routes if unsure) and POST a run request that selects the graph by its registered agentId (e.g. `langgraph:poly-research`). Include a minimal realistic input. Await the response and, if streaming, read at least the first few stream chunks to confirm the graph started. Row is 🟢 only when the run reached a terminal state or at least produced structured output indicating the graph executed. A `GET /api/v1/ai/agents` listing is _discovery_, not _execution_ — it's allowed as a secondary check but cannot be the only agent-axis evidence.
 - **tool registration** — discovery only; mark 🟡 with note unless you can also invoke the tool end-to-end via a graph that uses it (preferred).
 
@@ -128,7 +128,7 @@ Drive the UI with **`playwright-cli`** (available as a skill-allowed tool). Its 
 **Canonical sequence** (one ephemeral session, zero durable artifacts):
 
 ```bash
-playwright-cli -s=validate state-load .cogni/auth/candidate-a-<node>.storageState.json
+playwright-cli -s=validate state-load .local-auth/candidate-a-<node>.storageState.json
 playwright-cli -s=validate open https://<node>.cognidao.org/<route>
 playwright-cli -s=validate snapshot                 # element refs
 playwright-cli -s=validate click e<N>               # exercise the change
@@ -273,6 +273,6 @@ UI page exercise runs are cheap (headless Chromium, single pageview). API route 
 - `docs/guides/candidate-auth-bootstrap.md` — how the storageState files get created (prereq)
 - `docs/guides/agent-api-validation.md` — API-flow reference
 - `scripts/dev/smoke-authed-state.mjs` — template for authed Playwright runs
-- `.cogni/auth/*.storageState.json` — the captured sessions (gitignored)
+- `.local-auth/*.storageState.json` — the captured sessions (gitignored)
 - `work/items/task.0309.qa-agent-e2e-validation.md` — the graph-agent successor
 - `work/projects/proj.cicd-services-gitops.md` (E2E Success Milestone section) — the bar this skill works toward
