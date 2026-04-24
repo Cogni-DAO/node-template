@@ -713,7 +713,7 @@ jobs:
 
       - name: CI Telemetry
         if: always()
-        uses: ./.github/actions/loki-ci-telemetry
+        uses: ./app-src/.github/actions/loki-ci-telemetry
         with:
           loki_url: ${{ secrets.GRAFANA_CLOUD_LOKI_URL }}
           loki_user: ${{ secrets.GRAFANA_CLOUD_LOKI_USER }}
