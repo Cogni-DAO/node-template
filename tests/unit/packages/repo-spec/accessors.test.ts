@@ -396,47 +396,56 @@ describe("extractOwningNode", () => {
     });
   });
 
-  it("scenario 2: all infra (non-`nodes/`) — packages/, infra/, docs/", () => {
+  it("scenario 2: operator-only PR — non-`nodes/` paths classify as operator domain", () => {
     const result = extractOwningNode(standardSpec(), [
       "packages/repo-spec/src/x.ts",
       "infra/k8s/foo.yaml",
       "docs/spec/bar.md",
       ".github/workflows/ci.yaml",
     ]);
-    expect(result).toEqual({ kind: "operator-infra" });
+    expect(result).toEqual({
+      kind: "single",
+      nodeId: TEST_NODE_IDS.operator,
+      path: "nodes/operator",
+    });
   });
 
-  it("scenario 3: all infra (operator) — nodes/operator/** is structurally infra", () => {
+  it("scenario 3: operator-only PR — nodes/operator/** classifies as operator domain", () => {
     const result = extractOwningNode(standardSpec(), [
       "nodes/operator/app/foo.ts",
       "nodes/operator/graphs/bar.ts",
     ]);
-    expect(result).toEqual({ kind: "operator-infra" });
-  });
-
-  it("scenario 4: mixed sovereign node + non-`nodes/` infra → single sovereign", () => {
-    const result = extractOwningNode(standardSpec(), [
-      "nodes/poly/app/foo.ts",
-      "packages/repo-spec/bar.ts",
-      "docs/guides/x.md",
-    ]);
     expect(result).toEqual({
       kind: "single",
-      nodeId: TEST_NODE_IDS.poly,
-      path: "nodes/poly",
+      nodeId: TEST_NODE_IDS.operator,
+      path: "nodes/operator",
     });
   });
 
-  it("scenario 5: mixed sovereign node + operator → operator rides along (matches task.0381)", () => {
+  it("scenario 4: mixed sovereign node + non-`nodes/` path → conflict (operator-infra is operator domain)", () => {
+    const result = extractOwningNode(standardSpec(), [
+      "nodes/poly/app/foo.ts",
+      "packages/repo-spec/bar.ts",
+    ]);
+    expect(result.kind).toBe("conflict");
+    if (result.kind !== "conflict") return;
+    expect(result.nodes).toEqual([
+      { nodeId: TEST_NODE_IDS.operator, path: "nodes/operator" },
+      { nodeId: TEST_NODE_IDS.poly, path: "nodes/poly" },
+    ]);
+  });
+
+  it("scenario 5: mixed sovereign node + nodes/operator/** → conflict (operator is a domain, not exemption)", () => {
     const result = extractOwningNode(standardSpec(), [
       "nodes/poly/app/foo.ts",
       "nodes/operator/app/bar.ts",
     ]);
-    expect(result).toEqual({
-      kind: "single",
-      nodeId: TEST_NODE_IDS.poly,
-      path: "nodes/poly",
-    });
+    expect(result.kind).toBe("conflict");
+    if (result.kind !== "conflict") return;
+    expect(result.nodes).toEqual([
+      { nodeId: TEST_NODE_IDS.operator, path: "nodes/operator" },
+      { nodeId: TEST_NODE_IDS.poly, path: "nodes/poly" },
+    ]);
   });
 
   it("scenario 6: conflict — two sovereign nodes, sorted by nodeId", () => {
@@ -446,7 +455,6 @@ describe("extractOwningNode", () => {
     ]);
     expect(result.kind).toBe("conflict");
     if (result.kind !== "conflict") return;
-    // poly nodeId < resy nodeId (lexicographic on UUID), so poly comes first.
     expect(result.nodes).toEqual([
       { nodeId: TEST_NODE_IDS.poly, path: "nodes/poly" },
       { nodeId: TEST_NODE_IDS.resy, path: "nodes/resy" },
@@ -481,28 +489,25 @@ describe("extractOwningNode", () => {
     ]);
   });
 
-  it("scenario 8: miss — path under nodes/<x>/ where <x> is not operator and not in registry", () => {
+  it("scenario 8: unregistered nodes/<x>/ falls through to operator domain", () => {
+    // Per spec invariant: registry mirrors filesystem (meta-test enforces).
+    // If a path under nodes/<unknown>/ leaks through, it classifies as operator —
+    // matching the bash gate's filesystem-driven default. The meta-test catches the drift.
     const result = extractOwningNode(standardSpec(), [
       "nodes/unregistered-node/foo.ts",
     ]);
-    expect(result).toEqual({ kind: "miss" });
+    expect(result).toEqual({
+      kind: "single",
+      nodeId: TEST_NODE_IDS.operator,
+      path: "nodes/operator",
+    });
   });
 
-  it("scenario 8b: miss trumps a registered sovereign — partial-routing is a miss", () => {
-    // If a PR touches nodes/poly/foo + nodes/unknown/bar, we cannot safely route to
-    // poly's rules — we don't know who owns nodes/unknown. Conservative: miss.
-    const result = extractOwningNode(standardSpec(), [
-      "nodes/poly/foo.ts",
-      "nodes/unknown/bar.ts",
-    ]);
-    expect(result).toEqual({ kind: "miss" });
-  });
-
-  it("scenario 9: empty input → miss (was operator-infra in earlier draft; safer to surface no-op)", () => {
+  it("scenario 9: empty input → miss (CI passes; reviewer surfaces no-op)", () => {
     expect(extractOwningNode(standardSpec(), [])).toEqual({ kind: "miss" });
   });
 
-  it("scenario 10: node-template is sovereign when registered (not infra)", () => {
+  it("scenario 10: node-template is sovereign when registered", () => {
     const nodeTemplate = {
       node_id: "00000000-0000-4000-8000-0000000000aa",
       node_name: "Node Template",
@@ -519,20 +524,51 @@ describe("extractOwningNode", () => {
     });
   });
 
-  it("OPERATOR_IS_INFRA: operator classification is structural, ignores registry presence", () => {
-    // Even with NO registry entry for operator, paths under nodes/operator/ are infra.
-    const spec = buildTestRepoSpec({
-      nodes: [TEST_NODE_ENTRIES.poly],
-    });
-    expect(extractOwningNode(spec, ["nodes/operator/app/foo.ts"])).toEqual({
-      kind: "operator-infra",
+  it("LOCKFILE_INHERITS: poly + pnpm-lock.yaml → single { poly, lockfileInheritsApplied: true }", () => {
+    const result = extractOwningNode(standardSpec(), [
+      "nodes/poly/app/package.json",
+      "pnpm-lock.yaml",
+    ]);
+    expect(result).toEqual({
+      kind: "single",
+      nodeId: TEST_NODE_IDS.poly,
+      path: "nodes/poly",
+      lockfileInheritsApplied: true,
     });
   });
 
-  it("PURE_RESOLVER: empty registry + non-nodes paths → operator-infra", () => {
-    const spec = buildTestRepoSpec();
-    expect(extractOwningNode(spec, ["packages/x.ts", "docs/y.md"])).toEqual({
-      kind: "operator-infra",
+  it("LOCKFILE_INHERITS bounded: poly + lockfile + .github/foo defeats the exception → conflict", () => {
+    const result = extractOwningNode(standardSpec(), [
+      "nodes/poly/app/package.json",
+      "pnpm-lock.yaml",
+      ".github/workflows/foo.yml",
+    ]);
+    expect(result.kind).toBe("conflict");
+    if (result.kind !== "conflict") return;
+    expect(result.nodes).toEqual([
+      { nodeId: TEST_NODE_IDS.operator, path: "nodes/operator" },
+      { nodeId: TEST_NODE_IDS.poly, path: "nodes/poly" },
+    ]);
+  });
+
+  it("operator-only with mixed operator paths (nodes/operator/** + packages/ + docs/)", () => {
+    const result = extractOwningNode(standardSpec(), [
+      "nodes/operator/app/src/foo.ts",
+      "packages/repo-spec/src/x.ts",
+      ".github/workflows/ci.yaml",
+      "docs/spec/architecture.md",
+    ]);
+    expect(result).toEqual({
+      kind: "single",
+      nodeId: TEST_NODE_IDS.operator,
+      path: "nodes/operator",
     });
+  });
+
+  it("throws when operator entry is missing from registry on an operator-only PR (meta-test invariant)", () => {
+    const spec = buildTestRepoSpec({ nodes: [TEST_NODE_ENTRIES.poly] });
+    expect(() =>
+      extractOwningNode(spec, ["packages/x.ts", "docs/y.md"])
+    ).toThrow(/operator entry missing/);
   });
 });

@@ -305,71 +305,70 @@ export function extractNodePath(spec: RepoSpec, nodeId: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// Owning-node resolution (paths → owning node)
+// Owning-node resolution (paths → owning domain)
 // ---------------------------------------------------------------------------
 
 /**
- * Discriminated outcome of `extractOwningNode`. The reviewer (and any other
- * consumer) dispatches on `kind`:
+ * Discriminated outcome of `extractOwningNode`. The reviewer dispatches on `kind`:
  *
- * - `single`         — exactly one sovereign node owns every path; review against `nodes/<...>/.cogni/rules/`.
- * - `operator-infra` — every path is infra (outside `nodes/` or under `nodes/operator/`); review against root `.cogni/rules/`.
- * - `conflict`       — two or more sovereign nodes touched; refuse to review (post diagnostic, ask for split).
- * - `miss`           — paths empty, OR at least one path is under `nodes/<x>/` where `<x>` is neither `operator` nor a registered node.
+ * - `single`   — exactly one domain owns every path. When `nodeId` is the operator,
+ *                this is an "operator-only" PR — `nodes/operator/**` ∪ `packages/**` ∪
+ *                `.github/**` ∪ `docs/**` ∪ root configs are all the operator's territory.
+ *                `lockfileInheritsApplied: true` flags the bounded `pnpm-lock.yaml` carve-out.
+ * - `conflict` — two or more domains touched. Refuse to review (post diagnostic).
+ * - `miss`     — empty input. The reviewer surfaces a no-op neutral check.
+ *
+ * Mirrors `tests/ci-invariants/classify.ts` (the CI gate's reference classifier);
+ * locked by `tests/ci-invariants/single-node-scope-parity.spec.ts`.
  */
 export type OwningNode =
-  | { kind: "single"; nodeId: string; path: string }
-  | { kind: "operator-infra" }
+  | {
+      kind: "single";
+      nodeId: string;
+      path: string;
+      lockfileInheritsApplied?: true;
+    }
   | {
       kind: "conflict";
       nodes: ReadonlyArray<{ nodeId: string; path: string }>;
     }
   | { kind: "miss" };
 
-type PathClass =
-  | { kind: "infra" }
-  | { kind: "sovereign"; nodeId: string; path: string }
-  | { kind: "unregistered" };
+const OPERATOR_TOP = "operator";
+const NODES_PREFIX = "nodes/";
+const LOCKFILE_PATH = "pnpm-lock.yaml";
 
-/**
- * Classify a single changed path. The rule (matches task.0381's CI gate exactly):
- *
- * - Top-level dir is not `nodes/` → infra.
- * - Top-level segment under `nodes/` is `operator` → infra (operator IS the control plane).
- * - Top-level segment under `nodes/` matches a registry entry's top-level segment → sovereign(nodeId, registryPath).
- * - Top-level segment under `nodes/` matches no registry entry → unregistered.
- */
-function classifyPath(
-  path: string,
-  registry: readonly NodeRegistryEntry[]
-): PathClass {
-  const segments = path.split("/");
-  if (segments[0] !== "nodes" || segments.length < 2 || segments[1] === "") {
-    return { kind: "infra" };
-  }
-  const top = segments[1];
-  if (top === "operator") return { kind: "infra" };
-
-  const entry = registry.find((e) => e.path.split("/")[1] === top);
-  if (!entry) return { kind: "unregistered" };
-  return { kind: "sovereign", nodeId: entry.node_id, path: entry.path };
+/** Top-level segment under `nodes/`, or null if the path is not under `nodes/<x>/`. */
+function topUnderNodes(p: string): string | null {
+  if (!p.startsWith(NODES_PREFIX)) return null;
+  const rest = p.slice(NODES_PREFIX.length);
+  const slash = rest.indexOf("/");
+  if (slash <= 0) return null;
+  return rest.slice(0, slash);
 }
 
 /**
- * Resolve which node owns a set of changed paths. Pure function — no I/O, no env,
- * no logging. Same policy as task.0381's CI gate (`OPERATOR_IS_INFRA`,
- * directory-listing-as-source-of-truth), expressed in code that runs inside the
- * operator runtime where shelling out to `turbo` is not available.
+ * Resolve which domain owns a set of changed paths. Pure — no I/O, no env, no logging.
+ * Implements `SINGLE_DOMAIN_HARD_FAIL` from
+ * `docs/spec/node-ci-cd-contract.md § Single-Domain Scope`:
  *
- * Algorithm: classify each path against the registry by top-level-under-`nodes/`
- * segment. Aggregate:
- * - empty input or any unregistered `nodes/<x>/` path → `miss`
- * - all paths classified as infra → `operator-infra`
- * - exactly one distinct sovereign node → `single`
- * - two or more distinct sovereign nodes → `conflict` (sorted by nodeId)
+ * - `domain(path) = X`         if path starts with `nodes/<X>/` for X in non-operator registry entries
+ * - `domain(path) = operator`  otherwise (includes `nodes/operator/**`, `packages/`, `.github/`, etc.)
  *
- * Path safety: paths are consumed verbatim. No `..` rejection, no absolute-path
- * detection. Same boundary as `extractNodePath` — the caller validates.
+ * Aggregation:
+ * - empty input → `miss` (CI passes; the reviewer has nothing to dispatch on)
+ * - exactly one distinct domain → `single`
+ * - two or more → `conflict` (sorted by `nodeId.localeCompare`)
+ *
+ * `LOCKFILE_INHERITS` exception: when domains is exactly `{operator, X}` and the only
+ * operator-domain path is `pnpm-lock.yaml`, drop operator → `single { X, lockfileInheritsApplied: true }`.
+ *
+ * Path safety: paths are consumed verbatim — no `..` rejection. Same boundary as `extractNodePath`.
+ *
+ * Registry mirror invariant: per the spec, `spec.nodes` mirrors the `nodes/*` filesystem
+ * listing (meta-test enforces both directions). Paths under an unregistered `nodes/<x>/`
+ * fall through to the operator-domain default — matching the bash gate. The meta-test
+ * catches the underlying registry/filesystem drift; this function does not defend against it.
  */
 export function extractOwningNode(
   spec: RepoSpec,
@@ -378,35 +377,78 @@ export function extractOwningNode(
   if (paths.length === 0) return { kind: "miss" };
 
   const registry = spec.nodes ?? [];
+  const operatorEntry = registry.find(
+    (e) => topUnderNodes(`${e.path}/`) === OPERATOR_TOP
+  );
+
+  // Index non-operator registry entries by their top-level segment under nodes/.
+  const nonOperatorByTop = new Map<string, NodeRegistryEntry>();
+  for (const e of registry) {
+    if (e === operatorEntry) continue;
+    const top = topUnderNodes(`${e.path}/`);
+    if (top != null) nonOperatorByTop.set(top, e);
+  }
+
   const sovereigns = new Map<string, { nodeId: string; path: string }>();
-  let hasUnregistered = false;
-  let hasInfra = false;
+  const operatorPaths: string[] = [];
 
   for (const p of paths) {
-    const cls = classifyPath(p, registry);
-    if (cls.kind === "unregistered") {
-      hasUnregistered = true;
-    } else if (cls.kind === "infra") {
-      hasInfra = true;
+    const top = topUnderNodes(p);
+    const sov = top != null ? nonOperatorByTop.get(top) : undefined;
+    if (sov) {
+      sovereigns.set(sov.node_id, { nodeId: sov.node_id, path: sov.path });
     } else {
-      sovereigns.set(cls.nodeId, { nodeId: cls.nodeId, path: cls.path });
+      operatorPaths.push(p);
     }
   }
 
-  if (hasUnregistered) return { kind: "miss" };
-  if (sovereigns.size === 0) {
-    // All paths classified as infra (we know paths.length > 0 here, hasInfra is true).
-    return hasInfra ? { kind: "operator-infra" } : { kind: "miss" };
+  // Lockfile-inherits exception: drop operator from a 2-domain {operator, X} diff
+  // when the only operator-domain path is exactly pnpm-lock.yaml.
+  let lockfileInheritsApplied = false;
+  let operatorTouched = operatorPaths.length > 0;
+  if (
+    sovereigns.size === 1 &&
+    operatorPaths.length === 1 &&
+    operatorPaths[0] === LOCKFILE_PATH
+  ) {
+    operatorTouched = false;
+    lockfileInheritsApplied = true;
   }
-  if (sovereigns.size === 1) {
-    const only = sovereigns.values().next().value as {
-      nodeId: string;
-      path: string;
+
+  const totalDomains = sovereigns.size + (operatorTouched ? 1 : 0);
+
+  if (totalDomains === 1) {
+    if (sovereigns.size === 1) {
+      const [only] = sovereigns.values();
+      const owner = only as { nodeId: string; path: string };
+      return lockfileInheritsApplied
+        ? {
+            kind: "single",
+            nodeId: owner.nodeId,
+            path: owner.path,
+            lockfileInheritsApplied: true,
+          }
+        : { kind: "single", nodeId: owner.nodeId, path: owner.path };
+    }
+    // Operator-only PR. Requires the operator to be in the registry.
+    if (!operatorEntry) {
+      throw new Error(
+        "[repo-spec] extractOwningNode: operator entry missing from nodes registry; meta-test invariant violated"
+      );
+    }
+    return {
+      kind: "single",
+      nodeId: operatorEntry.node_id,
+      path: operatorEntry.path,
     };
-    return { kind: "single", nodeId: only.nodeId, path: only.path };
   }
-  const sorted = [...sovereigns.values()].sort((a, b) =>
-    a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0
-  );
-  return { kind: "conflict", nodes: sorted };
+
+  // totalDomains >= 2 → conflict
+  const all: Array<{ nodeId: string; path: string }> = [];
+  if (operatorTouched && operatorEntry) {
+    all.push({ nodeId: operatorEntry.node_id, path: operatorEntry.path });
+  }
+  for (const s of sovereigns.values()) all.push(s);
+  all.sort((a, b) => a.nodeId.localeCompare(b.nodeId));
+  return { kind: "conflict", nodes: all };
 }
