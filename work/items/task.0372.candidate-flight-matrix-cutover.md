@@ -457,6 +457,32 @@ Best-effort warning, not a hard gate — explicitly per GR-5 deferred to follow-
 - **`detect-affected.sh` BASE selection for preview/prod**. candidate-flight uses `origin/main` as base. flight-preview's base should be the previous preview SHA (read from `deploy/preview/.promote-state/current-sha`). promote-and-deploy's base for preview-forward is the previous preview SHA; for production it's the previous production SHA. The decide job sets `TURBO_SCM_BASE` per workflow; existing `detect-affected.sh` honors it without modification.
 - **Old whole-slot `deploy/candidate-a` etc. continue to receive writes from any in-flight runs that started pre-merge.** Acceptable: those runs complete on the old paths; the next dispatch picks up the new matrix workflow.
 
+## Review Feedback (2026-04-25, foundation review)
+
+5 blocking issues + 4 suggestions on the 6-commit foundation (revision 4 design + bootstrap script + detect-affected + 3 AppSets + GR-5 pre-check). `pnpm check` PASS. Design stands; these are mechanical implementation fixes, not design issues — revision NOT bumped.
+
+### Blocking (fix before resuming workflow refactors)
+
+1. **`scripts/ops/bootstrap-per-node-deploy-branches.sh:27`** — make the deploy/_ fetch explicit: `git fetch origin '+refs/heads/deploy/_:refs/remotes/origin/deploy/\*' --prune --quiet`. Default refspec is unreliable on single-branch / custom-refspec worktrees.
+2. **`scripts/ops/bootstrap-per-node-deploy-branches.sh:50-56`** — divergence detection: distinguish "ahead" (whole-slot-is-ancestor-of-per-node) vs "diverged" (no ancestry); fail-loud on divergence pre-cutover. Currently masks state corruption.
+3. **`scripts/ops/bootstrap-per-node-deploy-branches.sh:78`** — add `--atomic` to `git push origin "${push_args[@]}"`. Branch-protection rejection on one ref shouldn't leave bootstrap in a half state.
+4. **AppSet generator-drift lint** — add to Layer-4 cleanup: extend `scripts/ci/check-catalog-ssot.sh` (or new `check-appset-generators.sh`) to assert each AppSet's `generators[].git.revision` set covers every node in `ALL_TARGETS`. Without this, adding a 5th node + forgetting one of three AppSets ships broken Argo state.
+5. **`.github/workflows/candidate-flight-infra.yml:114`** — comment claims "CI will catch drift via grep test in pr-build" but no such test was added. Either add a one-line `grep -q '^name: Candidate Flight$' .github/workflows/candidate-flight.yml` check to `ci.yaml`, or delete the claim.
+
+### Suggestions (non-blocking)
+
+- Bootstrap: trim whitespace on `IFS=',' read` of `ENVS`; echo the remote URL before pushing so the operator sees what they authorize.
+- `candidate-flight-infra.yml:121`: surface `gh run list` failures as `::warning::` instead of silently treating as 0 in-progress runs.
+- AppSet comment harmonization — `# APPSET_PRESERVE_ON_TRANSITION (R4 belt-and-suspenders)` on candidate-a only; preview/production drop the parenthetical. Pick one.
+- File for follow-up: extract `repoURL: https://github.com/cogni-dao/cogni-template.git` from AppSet generators (12 repetitions per env post-cutover). Needs Helm wrapper or kustomize replacement; not in scope of task.0372.
+
+### Positive findings (preserve across iteration)
+
+- AppSet 1→4 refactor is faithful to GR-1 + ONE_APPSET_PER_ENV + APPLICATION_NAMES_UNCHANGED + APPSET_PRESERVE_ON_TRANSITION. Names byte-identical.
+- Bootstrap SHA-equality short-circuit before ancestry check — right ordering.
+- `infra/catalog/*` in bash `case` correctly catches future subdirs (case glob `*` matches `/`).
+- Verification spike #1 + #3 confirmed via reads of `create-release.sh:22` and `verify-buildsha.sh:109-134`.
+
 ## PR / Links
 
 - Handoff: [handoff](../handoffs/task.0372.handoff.md)
