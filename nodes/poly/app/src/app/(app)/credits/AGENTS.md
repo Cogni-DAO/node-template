@@ -15,7 +15,9 @@ Protected Money page (served from the `/credits` route — URL is stable; the pa
 - `TradingWalletPanel` — per-tenant Polymarket trading-wallet lifecycle. When disconnected, renders `TradingWalletConnectFlow` inline (first-time wallet provisioning via `/api/v1/poly/wallet/connect`); when connected, shows USDC.e + POL balances from `/api/v1/poly/wallet/status` + `/api/v1/poly/wallet/balances`, the Enable Trading CTA (`TradingReadinessSection`, task.0355), and stubbed fund/withdraw buttons linked to [task.0352](../../../../../../work/items/task.0352.poly-trading-wallet-fund-flow.md) and [task.0351](../../../../../../work/items/task.0351.poly-trading-wallet-withdrawal.md).
 - `TradingWalletConnectFlow` — the per-tenant create-wallet UI (caps sliders + custodial-consent CTA). Moved here from `/profile` in task.0361 so wallet creation, funding, and approvals all live on one page.
 
-Desktop renders both panels as a two-column grid; mobile uses a **Credits** / **Wallet** pill toggle above a single-column stack.
+Desktop renders both panels as a two-column grid; mobile uses an **AI Credits** / **Trading wallet** pill toggle above a single-column stack.
+
+When approvals are signed but USDC.e=0, `TradingReadinessSection` recolors the compact "Trading enabled" pill from green to warning/yellow (FUNDED_RECOLOR, task.0365) — same shape, one-line tone-shift, no extra hero copy.
 
 ## Pointers
 

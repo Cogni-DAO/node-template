@@ -4,7 +4,7 @@
 /**
  * Module: `@tests/unit/auth/proxy-routing`
  * Purpose: Unit tests for proxy.ts auth routing — the single authority for redirect logic.
- * Scope: Tests page-level routing (authed on / → /chat, unauthed on app routes → /) and API protection. Does not test NextAuth internals.
+ * Scope: Tests page-level routing (authed on / → /dashboard, unauthed on app routes → /) and API protection. Does not test NextAuth internals.
  * Invariants: Single authority for auth routing; no client-side redirect logic.
  * Side-effects: none (mocked getToken)
  * Links: src/proxy.ts, docs/spec/security-auth.md

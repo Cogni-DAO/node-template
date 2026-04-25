@@ -27,6 +27,7 @@
  *        packages/node-contracts/src/poly.wallet.enable-trading.v1.contract.ts,
  *        work/items/task.0355.poly-trading-wallet-enable-trading.md,
  *        work/items/task.0361.poly-first-user-onboarding-flow-v0.md,
+ *        work/items/task.0365.poly-onboarding-ux-polish-v0-1.md,
  *        work/items/task.0351.poly-trading-wallet-withdrawal.md,
  *        work/items/task.0352.poly-trading-wallet-fund-flow.md
  * @public
@@ -163,6 +164,7 @@ export function TradingWalletPanel(): ReactElement {
           </div>
           <TradingReadinessSection
             tradingReady={status.trading_ready}
+            isFunded={(balances?.usdc_e ?? 0) > 0}
             polBalance={balances?.pol ?? null}
             usdcBalance={balances?.usdc_e ?? null}
           />
