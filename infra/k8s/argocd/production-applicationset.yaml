@@ -8,6 +8,7 @@ metadata:
   name: cogni-production
   namespace: argocd
 spec:
+  goTemplate: true
   generators:
     - git:
         repoURL: https://github.com/cogni-dao/cogni-template.git
@@ -31,7 +32,7 @@ spec:
           - path: "infra/catalog/scheduler-worker.yaml"
   template:
     metadata:
-      name: "production-{{name}}"
+      name: "production-{{.name}}"
       namespace: argocd
       finalizers:
         - resources-finalizer.argocd.argoproj.io
@@ -39,8 +40,8 @@ spec:
       project: default
       source:
         repoURL: https://github.com/cogni-dao/cogni-template.git
-        targetRevision: "{{production_branch}}"
-        path: "infra/k8s/overlays/production/{{name}}"
+        targetRevision: "deploy/production-{{.name}}"
+        path: "infra/k8s/overlays/production/{{.name}}"
       destination:
         server: https://kubernetes.default.svc
         namespace: cogni-production

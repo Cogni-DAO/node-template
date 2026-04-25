@@ -8,6 +8,7 @@ metadata:
   name: cogni-preview
   namespace: argocd
 spec:
+  goTemplate: true
   generators:
     - git:
         repoURL: https://github.com/cogni-dao/cogni-template.git
@@ -31,7 +32,7 @@ spec:
           - path: "infra/catalog/scheduler-worker.yaml"
   template:
     metadata:
-      name: "preview-{{name}}"
+      name: "preview-{{.name}}"
       namespace: argocd
       finalizers:
         - resources-finalizer.argocd.argoproj.io
@@ -39,8 +40,8 @@ spec:
       project: default
       source:
         repoURL: https://github.com/cogni-dao/cogni-template.git
-        targetRevision: "{{preview_branch}}"
-        path: "infra/k8s/overlays/preview/{{name}}"
+        targetRevision: "deploy/preview-{{.name}}"
+        path: "infra/k8s/overlays/preview/{{.name}}"
       destination:
         server: https://kubernetes.default.svc
         namespace: cogni-preview
