@@ -49,12 +49,12 @@ describe("proxy — page-level routing", () => {
     mockGetToken.mockReset();
   });
 
-  it("redirects authenticated user on / to /chat", async () => {
+  it("redirects authenticated user on / to /dashboard", async () => {
     mockGetToken.mockResolvedValue({ id: "user-1" });
 
     const res = await proxy(makeRequest("/"));
 
-    expectRedirectTo(res, "/chat");
+    expectRedirectTo(res, "/dashboard");
   });
 
   it("passes through unauthenticated user on /", async () => {
