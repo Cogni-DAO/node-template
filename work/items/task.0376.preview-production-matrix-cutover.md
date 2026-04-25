@@ -2,7 +2,7 @@
 id: task.0376
 type: task
 title: Preview + production matrix cutover — flight-preview.yml + promote-and-deploy.yml + cleanup
-status: needs_implement
+status: needs_merge
 priority: 0
 rank: 99
 estimate: 3
