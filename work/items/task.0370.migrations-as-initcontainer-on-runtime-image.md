@@ -28,12 +28,14 @@ Current migrator Dockerfile stage: `FROM base AS migrator` + `COPY --from=builde
 New: `FROM runner AS migrator` + `COPY migrate.mjs + migrations/` → 1–5MB unique delta on top of the runtime image k3s already has cached. First-ever flight still pays the runtime pull; every subsequent flight reuses it.
 
 Preserves:
+
 - Argo PreSync hook model (one Job per sync, no replica race)
 - Credential separation (migrator image runs in its own pod with its own secret binding)
 - Forward-compatible-migrations obligation (unchanged)
 - `drizzle-orm` as the already-trusted migration library (programmatic migrator — same underlying code drizzle-kit uses)
 
 Drops:
+
 - drizzle-kit + tsx + pnpm from the migrator image (not needed at runtime; `drizzle-orm/postgres-js/migrator` is the production programmatic API)
 - ~480MB of dev node_modules in the migrator image
 - `scripts/ci/compute_migrator_fingerprint.sh` becomes lower-value (content-addressing still fine; cache hit rate just improved dramatically). Keep it.
@@ -41,6 +43,7 @@ Drops:
 ## Why this is smaller than the earlier initContainer proposal (revision 1/2)
 
 Reviewer called out three concerns with the initContainer path:
+
 1. **Replica races** — initContainer runs per pod; 3 replicas = 3 concurrent migrators. This task's Job approach: 1 migrator per sync, unchanged.
 2. **Runtime image gains migration tooling + DB privilege** — minor, but non-zero attack-surface expansion. This task: runtime image is untouched; only migrator stage is rebased.
 3. **Drift from "migrations out of deploy path entirely"** — the top-0.1% endgame is CI-gated migrations + declarative schema via Atlas. This task doesn't move us toward or away from that endgame; it's a local optimization that buys the team ~3–8 min per flight, now, and leaves the architecture untouched for when Atlas is the right move.
@@ -54,6 +57,7 @@ Reviewer called out three concerns with the initContainer path:
 ### 2. Per-node Dockerfile — migrator stage (3 files touched)
 
 **Before (operator; poly and resy symmetric):**
+
 ```dockerfile
 FROM base AS migrator
 WORKDIR /app
@@ -69,6 +73,7 @@ FROM node:22-alpine AS runner
 ```
 
 **After — move migrator AFTER runner, rebase on runner:**
+
 ```dockerfile
 FROM node:22-alpine AS runner
 ... (unchanged)
@@ -120,6 +125,7 @@ Added alongside the existing `outputFileTracingExcludes`.
 exercise: push this branch → pr-build.yml rebuilds operator/poly/resy runtime + migrator images → dispatch `gh workflow run candidate-flight.yml --ref fix/candidate-flight-migrator-image-pull -f pr=<this-PR-number>`.
 
 observability:
+
 - First flight after this merges: migrator image pull wait = ~30–60s (pays the one-time runtime pull delta for the new code paths). Acceptable baseline.
 - Second flight (and every subsequent flight): `verify-candidate > Wait for ArgoCD sync` ≤ ~60s because migrator image layers are entirely cached. Previous baseline: 4–9 min.
 - `kubectl -n cogni-candidate-a get pods -l app.kubernetes.io/component=migration` — hook Jobs still present (unchanged).
@@ -141,12 +147,13 @@ Poly's constraint: its migrator image is shared between `migrate-node-app` Job (
 
 - **One poly migrator image**, `FROM runner AS migrator`, carrying both `migrate.mjs` (Postgres, default CMD) and `migrate-doltgres.mjs` (Doltgres, reached via Job `command:` override in `infra/k8s/base/poly-doltgres/doltgres-migration-job.yaml`).
 - Both scripts use `drizzle-orm/postgres-js/migrator` — identical code path. `migrate-doltgres.mjs` adds a single trailing `SELECT dolt_commit('-Am', 'migration: drizzle-orm batch')` to stamp DDL into `dolt_log` (same behavior as today's `pnpm db:migrate:poly:doltgres:container` trailing-commit step).
-- Doltgres compatibility: the programmatic migrator is the *same* function drizzle-kit calls internally. Existing production Doltgres migrations (via drizzle-kit CLI) already exercise this path. The only new thing in this PR is invoking it directly instead of via the CLI wrapper.
+- Doltgres compatibility: the programmatic migrator is the _same_ function drizzle-kit calls internally. Existing production Doltgres migrations (via drizzle-kit CLI) already exercise this path. The only new thing in this PR is invoking it directly instead of via the CLI wrapper.
 - Zero new CI targets, zero `lib/image-tags.sh` edits, zero overlay edits.
 
 ## Runtime image bloat — bug.0369 (separate)
 
 `docker history mig-operator` reveals the runtime image is ~920 MB with ~285 MB (31%) being `@openai/codex` SDK + platform-binary workaround (bug.0224). The codex weight is pre-existing, not introduced by task.0370. Layer-share still works: migrator adds ~2 MB on top of runner, k3s pulls the shared layers once. But the runner's own first-pull cost remains ~920 MB per node per promote, which is still a lot. File `bug.0369.runtime-image-codex-bloat` as follow-up — out of scope here.
+
 - Atlas / declarative schema / CI-gated migrations — the endgame per /review feedback. Tracked in task.0325. Not blocked by or touched by this task.
 - Credential narrowing to `app_migrator` role — proj.database-ops P1 credential convergence. Unaffected.
 - Destructive-SQL CI lint for FORWARD_COMPAT_MIGRATIONS — follow-up task.0371. Good hygiene; not load-bearing on this task's correctness.

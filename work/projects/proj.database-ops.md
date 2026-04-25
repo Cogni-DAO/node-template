@@ -149,13 +149,13 @@ task.0324 delivered per-node schema sovereignty. task.0325 preserves the Atlas a
 
 **Goal:** kill the per-flight migrator image-pull tax. Pre-task.0370 migrator was `FROM base` with full dev `node_modules` (~480 MB unique blob). k3s pulled it cold every flight (~3m45s per affected node), turning candidate-flight verify-candidate into a 4–9 min wait while the migration itself ran in ~8 s.
 
-| Deliverable                                                                                                                                | Status   | Est | Work Item                                              |
-| ------------------------------------------------------------------------------------------------------------------------------------------ | -------- | --- | ------------------------------------------------------ |
-| bug.0368 — diagnose & evidence                                                                                                             | done     | 1   | bug.0368                                               |
-| Rebase each migrator stage `FROM runner`; replace `pnpm db:migrate` with programmatic `migrate.mjs` using `drizzle-orm/postgres-js/migrator` | **done** | 2   | task.0370 (PR #1041, validated on candidate-a 2026-04-24) |
-| Validate operator + resy + poly Postgres + poly Doltgres all run programmatic migrator successfully                                        | done     | 1   | task.0370 (4/4 image digests match, 4/4 logs ✅)        |
-| Follow-up: runner image bloat (~285 MB codex SDK)                                                                                          | needs_triage | 1   | bug.0369 (file)                                       |
-| Follow-up: `wait-for-argocd.sh` `clear_stale_missing_hook_operation` only fires once → wedged apps after first kick are unrecoverable     | needs_triage | 1   | bug.0370-followup (file)                              |
+| Deliverable                                                                                                                                  | Status       | Est | Work Item                                                 |
+| -------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --- | --------------------------------------------------------- |
+| bug.0368 — diagnose & evidence                                                                                                               | done         | 1   | bug.0368                                                  |
+| Rebase each migrator stage `FROM runner`; replace `pnpm db:migrate` with programmatic `migrate.mjs` using `drizzle-orm/postgres-js/migrator` | **done**     | 2   | task.0370 (PR #1041, validated on candidate-a 2026-04-24) |
+| Validate operator + resy + poly Postgres + poly Doltgres all run programmatic migrator successfully                                          | done         | 1   | task.0370 (4/4 image digests match, 4/4 logs ✅)          |
+| Follow-up: runner image bloat (~285 MB codex SDK)                                                                                            | needs_triage | 1   | bug.0369 (file)                                           |
+| Follow-up: `wait-for-argocd.sh` `clear_stale_missing_hook_operation` only fires once → wedged apps after first kick are unrecoverable        | needs_triage | 1   | bug.0370-followup (file)                                  |
 
 **Hard invariant inherited:** `FORWARD_COMPAT_MIGRATIONS` — migrations must be backward-compatible with the prior app version. Rolling-update overlap means old pods serve traffic against the new schema briefly. Same obligation as before task.0370; made explicit in [databases.md](../../docs/spec/databases.md) §5.2.
 

@@ -4,10 +4,13 @@
 // Doltgres migrator: drizzle-orm/postgres-js/migrator against the Doltgres
 // knowledge plane, plus a trailing `SELECT dolt_commit('-Am', ...)` so DDL
 // lands in dolt_log (Dolt DDL doesn't auto-commit — dolt#4843).
+//
+// biome-ignore-all lint/suspicious/noConsole: standalone Node script invoked as Job CMD; stdout is the only log surface
+// biome-ignore-all lint/style/noProcessEnv: container entry point reads DATABASE_URL directly; no env wrapper to hide behind
 
-import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import postgres from "postgres";
 
 const NODE = "poly-doltgres";
 
@@ -29,7 +32,9 @@ try {
   const t0 = Date.now();
   await migrate(drizzle(sql), { migrationsFolder });
   await sql`SELECT dolt_commit('-Am', 'migration: drizzle-orm batch')`;
-  console.log(`✅ ${NODE} migrations applied + dolt_commit stamped in ${Date.now() - t0}ms`);
+  console.log(
+    `✅ ${NODE} migrations applied + dolt_commit stamped in ${Date.now() - t0}ms`
+  );
 } catch (err) {
   console.error(`FATAL(${NODE}): migrate failed:`, err);
   process.exitCode = 1;
