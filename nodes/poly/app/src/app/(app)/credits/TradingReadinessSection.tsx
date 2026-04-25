@@ -22,6 +22,11 @@
  *   - STACKED_CTA (task.0365): the primary action button lives below its
  *     label + copy, never side-by-side — prevents the cramp in the narrow
  *     right column of the Money page.
+ *   - FUNDED_GATES_LIVE (task.0365): the green "Trading enabled · Polymarket
+ *     ready" checkpoint only renders when `tradingReady && isFunded`. With
+ *     `tradingReady && !isFunded` it downgrades to a warning-toned
+ *     "Approvals signed · Add USDC.e to trade" — approvals alone are not
+ *     "ready to trade" since the user can't place an order with $0.
  * Side-effects: IO (POST enable-trading; React Query cache invalidation).
  * Links: packages/node-contracts/src/poly.wallet.enable-trading.v1.contract.ts,
  *        work/items/task.0355.poly-trading-wallet-enable-trading.md,
@@ -46,6 +51,14 @@ import { type ReactElement, useState } from "react";
 export interface TradingReadinessSectionProps {
   /** From `poly.wallet.status.v1` — drives the initial view. */
   readonly tradingReady: boolean;
+  /**
+   * Whether the wallet has any USDC.e (`> 0`). Gates the green "Polymarket
+   * ready" checkpoint — approvals alone are not enough to actually trade
+   * (FUNDED_GATES_LIVE, task.0365). When `tradingReady && !isFunded` the
+   * checkpoint downgrades to a warning-toned "Approvals signed · Add USDC.e"
+   * row instead of full success.
+   */
+  readonly isFunded: boolean;
   /** Decimal POL on Polygon. `null` on unknown / RPC error. */
   readonly polBalance: number | null;
   /** Decimal USDC.e. `null` on unknown. Informational (not gated on). */
@@ -95,7 +108,12 @@ export function TradingReadinessSection(
   // trading" click would keep rendering the authorize-box with step rows
   // until the user hard-refreshed the page.
   if (derivedReady && !inFlight && (!result || result.ready)) {
-    return <TradingReadyCheckpoint steps={result?.steps ?? null} />;
+    return (
+      <TradingReadyCheckpoint
+        steps={result?.steps ?? null}
+        isFunded={props.isFunded}
+      />
+    );
   }
 
   return (
@@ -154,8 +172,10 @@ export function TradingReadinessSection(
 
 function TradingReadyCheckpoint({
   steps,
+  isFunded,
 }: {
   steps: PolyWalletEnableTradingOutput["steps"] | null;
+  isFunded: boolean;
 }): ReactElement {
   const [open, setOpen] = useState(false);
   const totalSteps = steps?.length ?? 6;
@@ -163,21 +183,50 @@ function TradingReadyCheckpoint({
     ? steps.filter((s) => s.state === "satisfied" || s.state === "set").length
     : totalSteps;
 
+  // FUNDED_GATES_LIVE: when approvals are signed but USDC.e=0, render a
+  // warning-toned variant so the user isn't told "Polymarket ready" when
+  // they actually can't place a single order yet.
+  const tone = isFunded
+    ? {
+        section: "border-success/30 bg-success/5",
+        iconBg: "bg-success/20 text-success",
+        title: "text-success",
+        sub: "text-success/80",
+        button:
+          "border-success/30 bg-background/40 text-success hover:border-success/60",
+        divider: "border-success/20",
+      }
+    : {
+        section: "border-warning/40 bg-warning/5",
+        iconBg: "bg-warning/20 text-warning",
+        title: "text-warning",
+        sub: "text-warning/80",
+        button:
+          "border-warning/40 bg-background/40 text-warning hover:border-warning/70",
+        divider: "border-warning/20",
+      };
+  const titleText = isFunded ? "Trading enabled" : "Approvals signed";
+  const subText = isFunded
+    ? `${signedCount}/${totalSteps} approvals signed · Polymarket ready`
+    : `${signedCount}/${totalSteps} approvals signed · Add USDC.e to trade`;
+
   return (
     <section
-      aria-label="Trading enabled"
-      className="overflow-hidden rounded-lg border border-success/30 bg-success/5"
+      aria-label={isFunded ? "Trading enabled" : "Approvals signed"}
+      className={`overflow-hidden rounded-lg border ${tone.section}`}
     >
       <div className="flex flex-wrap items-center gap-3 px-4 py-3">
-        <span className="inline-flex size-7 items-center justify-center rounded-full bg-success/20 text-success">
+        <span
+          className={`inline-flex size-7 items-center justify-center rounded-full ${tone.iconBg}`}
+        >
           <CheckCircle2 size={16} strokeWidth={2.25} />
         </span>
         <div className="flex flex-1 flex-col gap-0.5">
-          <span className="font-semibold text-sm text-success">
-            Trading enabled
+          <span className={`font-semibold text-sm ${tone.title}`}>
+            {titleText}
           </span>
-          <span className="font-mono text-success/80 text-xs tabular-nums">
-            {signedCount}/{totalSteps} approvals signed · Polymarket ready
+          <span className={`font-mono text-xs tabular-nums ${tone.sub}`}>
+            {subText}
           </span>
         </div>
         {steps && steps.length > 0 ? (
@@ -185,7 +234,7 @@ function TradingReadyCheckpoint({
             type="button"
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
-            className="inline-flex items-center gap-1 rounded-md border border-success/30 bg-background/40 px-2 py-1 font-mono text-success text-xs uppercase tracking-wider transition-colors hover:border-success/60"
+            className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 font-mono text-xs uppercase tracking-wider transition-colors ${tone.button}`}
           >
             {open ? "Hide" : "Approvals"}
             <ChevronDown
@@ -200,7 +249,7 @@ function TradingReadyCheckpoint({
         ) : null}
       </div>
       {open && steps ? (
-        <div className="border-success/20 border-t bg-background/40 px-4 py-3">
+        <div className={`border-t bg-background/40 px-4 py-3 ${tone.divider}`}>
           <StepRows steps={steps} tone="success" />
         </div>
       ) : null}

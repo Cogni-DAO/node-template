@@ -5,9 +5,9 @@
  * Module: `@app/(app)/credits/TradingWalletPanel`
  * Purpose: Money page panel hosting the whole trading-wallet lifecycle —
  *   create (inline `TradingWalletConnectFlow` when `configured && !connected`),
- *   fund (deposit hero + condensed balance line + Polygon bridge), enable
- *   trading (`TradingReadinessSection`, task.0355), and — once ready — the
- *   "Trading enabled" checkpoint + next-step nudge onto /research.
+ *   fund (persistent deposit address card + condensed balance line + Polygon
+ *   bridge), enable trading (`TradingReadinessSection`, task.0355), and —
+ *   once ready AND funded — the next-step nudge onto /research.
  * Scope: Client component. React Query fetches `/wallet/status` + `/wallet/balances`;
  *   reads the session via `next-auth/react` only to surface `userId` to the
  *   inline connect flow. On `onConnected`, invalidates `poly-wallet-status`
@@ -17,9 +17,17 @@
  *     readiness section is the primary CTA below the deposit hero. Without
  *     it the user cannot reach the CLOB — APPROVALS_BEFORE_PLACE blocks
  *     `authorizeIntent`. Losing this CTA bricks every trade.
- *   - DEPOSIT_IS_HERO (task.0365): when connected AND `trading_ready=false`,
- *     the funder address is the single most prominent element — new users'
+ *   - ADDRESS_ALWAYS_VISIBLE (task.0365): the funder address + copy button
+ *     render for every connected user, every state. Hiding the address on
+ *     `trading_ready=true` strands a user who has approvals but no USDC.e
+ *     with no idea where to send money.
+ *   - DEPOSIT_IS_HERO (task.0365): when connected AND (`!trading_ready` OR
+ *     `usdc_e <= 0`) the funder address card is the page anchor — new users'
  *     blocker is "where do I send money?", not "which button is primary?".
+ *   - FUNDED_GATES_LIVE (task.0365): "Live" status, "Trading enabled · ready"
+ *     checkpoint, and the `/research` next-step CTA only render when the
+ *     wallet has approvals AND a non-zero USDC.e balance. Approvals alone
+ *     are not "ready to trade" — the user can't place an order with $0.
  *   - PROFILE_IS_IDENTITY_ONLY (task.0361): this panel owns the "create a
  *     trading wallet" action; `/profile` no longer has a wallet row.
  *   - PARTIAL_FAILURE_VISIBLE: render USDC.e/POL as "—" when the RPC errored.
@@ -114,13 +122,19 @@ export function TradingWalletPanel(): ReactElement {
   const status = statusQuery.data;
   const balances = balancesQuery.data;
 
+  const usdc = balances?.usdc_e ?? null;
+  // FUNDED_GATES_LIVE: wallet is only "live for trading" when approvals are
+  // signed AND there's USDC.e to actually place orders with. usdc=null
+  // (RPC error) is treated as unfunded — better to under-promise.
+  const isFunded = usdc !== null && usdc > 0;
+
   return (
     <Card className="flex flex-col gap-5 p-5 md:p-6">
       <header className="flex flex-wrap items-center justify-between gap-2 border-border/60 border-b pb-3">
         <span className="font-mono text-muted-foreground text-xs uppercase tracking-widest">
           Trading wallet
         </span>
-        <StatusBadge status={status} />
+        <StatusBadge status={status} isFunded={isFunded} />
       </header>
 
       {statusQuery.isLoading ? (
@@ -148,6 +162,7 @@ export function TradingWalletPanel(): ReactElement {
         <ConnectedBody
           funderAddress={status.funder_address}
           tradingReady={status.trading_ready}
+          isFunded={isFunded}
           balances={balances}
         />
       )}
@@ -157,8 +172,10 @@ export function TradingWalletPanel(): ReactElement {
 
 function StatusBadge({
   status,
+  isFunded,
 }: {
   status: PolyWalletStatusOutput | undefined;
+  isFunded: boolean;
 }): ReactElement | null {
   if (!status?.configured) return null;
   if (!status.connected) {
@@ -175,6 +192,14 @@ function StatusBadge({
       </span>
     );
   }
+  if (!isFunded) {
+    // FUNDED_GATES_LIVE: approvals signed but $0 — show warning, not green.
+    return (
+      <span className="rounded-full border border-warning/40 bg-warning/10 px-2.5 py-0.5 font-mono text-warning text-xs uppercase tracking-wider">
+        Needs funding
+      </span>
+    );
+  }
   return (
     <span className="rounded-full border border-success/40 bg-success/10 px-2.5 py-0.5 font-mono text-success text-xs uppercase tracking-wider">
       Live
@@ -185,29 +210,42 @@ function StatusBadge({
 interface ConnectedBodyProps {
   readonly funderAddress: string | null;
   readonly tradingReady: boolean;
+  readonly isFunded: boolean;
   readonly balances: PolyWalletBalancesOutput | undefined;
 }
 
 function ConnectedBody({
   funderAddress,
   tradingReady,
+  isFunded,
   balances,
 }: ConnectedBodyProps): ReactElement {
+  // ADDRESS_ALWAYS_VISIBLE: render the deposit address card for every
+  // connected user. The eyebrow + headline shift with state, but the
+  // address + copy button is always present so a user with $0 USDC.e
+  // is never stranded without somewhere to send funds.
+  const depositVariant: DepositVariant = !tradingReady
+    ? "deposit"
+    : !isFunded
+      ? "fund"
+      : "address";
+
   return (
     <div className="flex flex-col gap-5">
-      {!tradingReady && funderAddress ? (
-        <DepositHero address={funderAddress} />
+      {funderAddress ? (
+        <WalletAddressCard address={funderAddress} variant={depositVariant} />
       ) : null}
 
       <BalanceLine balances={balances} />
 
       <TradingReadinessSection
         tradingReady={tradingReady}
+        isFunded={isFunded}
         polBalance={balances?.pol ?? null}
         usdcBalance={balances?.usdc_e ?? null}
       />
 
-      {tradingReady ? (
+      {tradingReady && isFunded ? (
         <Link
           href="/research"
           className="group inline-flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-4 py-3 font-medium text-primary text-sm transition-colors hover:bg-primary/15"
@@ -219,7 +257,7 @@ function ConnectedBody({
           />
         </Link>
       ) : (
-        <NextStepNudge />
+        <NextStepNudge tradingReady={tradingReady} isFunded={isFunded} />
       )}
 
       {balances && balances.errors.length > 0 ? (
@@ -229,23 +267,70 @@ function ConnectedBody({
   );
 }
 
-function DepositHero({ address }: { address: string }): ReactElement {
+/**
+ * Visual variant of the wallet-address card.
+ *  - "deposit": pre-approval onboarding state (`!trading_ready`). Step 2.
+ *  - "fund":    approvals signed but USDC.e=0. The user is stranded without
+ *               this card — the green checkpoint shouldn't be the only thing
+ *               on screen telling them they're "ready".
+ *  - "address": fully funded + approved. Address still shown for top-ups,
+ *               but compact + neutral framing.
+ */
+type DepositVariant = "deposit" | "fund" | "address";
+
+function WalletAddressCard({
+  address,
+  variant,
+}: {
+  address: string;
+  variant: DepositVariant;
+}): ReactElement {
+  const compact = variant === "address";
+  const tone =
+    variant === "fund"
+      ? "border-warning/40 bg-gradient-to-br from-warning/10 via-transparent to-transparent"
+      : variant === "deposit"
+        ? "border-primary/30 bg-gradient-to-br from-primary/5 via-transparent to-transparent"
+        : "border-border/70 bg-card/60";
+
+  const eyebrow =
+    variant === "deposit"
+      ? "Step — Deposit"
+      : variant === "fund"
+        ? "Action needed — Fund"
+        : "Trading wallet address";
+
+  const headline =
+    variant === "deposit"
+      ? "Send USDC.e on Polygon to this address"
+      : variant === "fund"
+        ? "Fund your trading wallet to start trading"
+        : null;
+
+  const body =
+    variant === "deposit"
+      ? "Any amount works — ~$2 is enough for your first copy-trade. You also need a tiny bit of POL for gas; we suggest ~0.2 POL."
+      : variant === "fund"
+        ? "Approvals are signed, but the wallet is empty. Send USDC.e to this address on Polygon — ~$2 is enough for your first copy-trade."
+        : null;
+
   return (
     <section
-      aria-label="Deposit address"
-      className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-gradient-to-br from-primary/5 via-transparent to-transparent p-4"
+      aria-label="Trading wallet address"
+      className={`flex flex-col gap-3 rounded-lg border p-4 ${tone}`}
     >
       <div className="flex flex-col gap-1">
         <span className="font-mono text-muted-foreground text-xs uppercase tracking-widest">
-          Step — Deposit
+          {eyebrow}
         </span>
-        <h3 className="font-semibold text-base leading-tight sm:text-lg">
-          Send USDC.e on Polygon to this address
-        </h3>
-        <p className="text-muted-foreground text-xs leading-snug">
-          Any amount works — ~$2 is enough for your first copy-trade. You also
-          need a tiny bit of POL for gas; we suggest ~0.2 POL.
-        </p>
+        {headline ? (
+          <h3 className="font-semibold text-base leading-tight sm:text-lg">
+            {headline}
+          </h3>
+        ) : null}
+        {body ? (
+          <p className="text-muted-foreground text-xs leading-snug">{body}</p>
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-2 rounded-md border border-border/80 bg-background/60 p-3">
@@ -278,23 +363,25 @@ function DepositHero({ address }: { address: string }): ReactElement {
         </div>
       </div>
 
-      <div className="flex items-start gap-2 rounded-md bg-warning/10 px-3 py-2 text-warning text-xs leading-snug">
-        <ShieldAlert size={14} className="mt-0.5 shrink-0" />
-        <span>
-          <span className="font-semibold">Polygon network only.</span> Sending
-          USDC from Ethereum mainnet or any other chain will lose the funds.
-          Need to bridge?{" "}
-          <a
-            href="https://portal.polygon.technology/bridge"
-            target="_blank"
-            rel="noreferrer noopener"
-            className="underline decoration-warning/60 underline-offset-2 hover:decoration-warning"
-          >
-            Polygon Portal
-          </a>
-          .
-        </span>
-      </div>
+      {compact ? null : (
+        <div className="flex items-start gap-2 rounded-md bg-warning/10 px-3 py-2 text-warning text-xs leading-snug">
+          <ShieldAlert size={14} className="mt-0.5 shrink-0" />
+          <span>
+            <span className="font-semibold">Polygon network only.</span> Sending
+            USDC from Ethereum mainnet or any other chain will lose the funds.
+            Need to bridge?{" "}
+            <a
+              href="https://portal.polygon.technology/bridge"
+              target="_blank"
+              rel="noreferrer noopener"
+              className="underline decoration-warning/60 underline-offset-2 hover:decoration-warning"
+            >
+              Polygon Portal
+            </a>
+            .
+          </span>
+        </div>
+      )}
     </section>
   );
 }
@@ -348,11 +435,24 @@ function BalanceLine({
   );
 }
 
-function NextStepNudge(): ReactElement {
+function NextStepNudge({
+  tradingReady,
+  isFunded,
+}: {
+  tradingReady: boolean;
+  isFunded: boolean;
+}): ReactElement {
+  // Only render when the user is NOT yet at the green-light state. Caller
+  // shows a /research CTA in the funded+ready case.
+  const message =
+    tradingReady && !isFunded
+      ? "Send USDC.e to the address above. Once it lands, you'll pick a wallet to mirror on /research."
+      : !tradingReady && isFunded
+        ? "Funded — enable trading above to start placing orders."
+        : "Once USDC.e lands and trading is enabled, you'll pick a wallet to mirror on /research.";
   return (
     <div className="rounded-md border border-border/60 bg-muted/30 px-3 py-2 text-muted-foreground text-xs leading-snug">
-      Once USDC.e lands and trading is enabled, you'll pick a wallet to mirror
-      on <span className="font-medium text-foreground">/research</span>.
+      {message}
     </div>
   );
 }
