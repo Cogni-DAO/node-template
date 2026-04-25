@@ -13,10 +13,7 @@ namePrefix: resy-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:cd67db2b997e8b040d94f3adceab715d299a7527c90343b20c5c3c39d9c93bb3"
-  - name: ghcr.io/cogni-dao/cogni-template-migrate
-    newName: ghcr.io/cogni-dao/cogni-template-migrate
-    digest: "sha256:ad48b137561ecdd88c5267aa3b52c846642314b49ade1d775de72f769d04b29a"
+    digest: "sha256:1dbad0e5fecc6918d797fa732ec1822c121eede46d1547b5794e80301f5323a9"
 
 patches:
   # Node-specific ConfigMap values.
@@ -66,6 +63,12 @@ patches:
         path: /spec/template/spec/containers/0/envFrom/1/secretRef/name
         value: "resy-node-app-secrets"
       - op: replace
+        path: /spec/template/spec/initContainers/0/envFrom/1/secretRef/name
+        value: "resy-node-app-secrets"
+      - op: replace
+        path: /spec/template/spec/initContainers/0/envFrom/1/secretRef/name
+        value: "resy-node-app-secrets"
+      - op: replace
         path: /spec/template/spec/containers/0/ports/0/containerPort
         value: 3300
       - op: add
@@ -76,13 +79,6 @@ patches:
         value: "resy"
   # Migration: shared migrator image runs operator's schema (all nodes share one schema).
   # Secret ref patched to resy's secret so DATABASE_URL points to cogni_resy.
-  - target:
-      kind: Job
-      name: migrate-node-app
-    patch: |
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
-        value: "resy-node-app-secrets"
 
   # bug.0295: VM discovery via DNS (preview.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.

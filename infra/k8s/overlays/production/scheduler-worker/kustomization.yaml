@@ -12,7 +12,7 @@ resources:
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:5136aece2a0dc3b47fb403930f53dfc95b01025131619c438ef294df57f9c33a"
+    newTag: "production-placeholder-scheduler-worker"
 
 patches:
   - target:
