@@ -2,7 +2,7 @@
 id: task.0382
 type: task
 title: "`extractOwningNode(spec, paths)` — TS resolver for files-changed → owning nodeId in operator runtime"
-status: needs_merge
+status: done
 priority: 0
 rank: 1
 estimate: 1
@@ -15,7 +15,7 @@ assignees: []
 project: proj.vcs-integration
 branch: feat/task-0382-extract-owning-node-resolver
 pr: https://github.com/Cogni-DAO/node-template/pull/1057
-reviewer:
+reviewer: claude-code
 revision: 0
 blocked_by:
 deploy_verified: false
