@@ -2,7 +2,7 @@
 id: task.0368
 type: task
 title: "Reviewer adapter-boundary contract test — lock ReviewHandlerDeps before per-node scoping refactor"
-status: needs_closeout
+status: done
 priority: 1
 rank: 1
 estimate: 1

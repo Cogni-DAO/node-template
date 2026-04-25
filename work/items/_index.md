@@ -83,7 +83,6 @@
 | 1 | 1 | 2 | needs_implement | task.0360 | POST /api/v1/vcs/pr — VCS create-PR endpoint for external agents | Agentic Interoperability | proj.agentic-interop |
 | 1 | 1 | 1 | needs_merge | bug.0361 | promote-and-deploy: EXPECTED_BUILDSHA uses merge commit SHA; deploy-infra always runs | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_review | bug.0364 | promote-and-deploy: production can't promote heterogeneous preview (single source_sha assumption) | CI/CD Pipeline | proj.cicd-services-gitops |
-| 1 | 1 | 1 | needs_closeout | task.0368 | Reviewer adapter-boundary contract test — lock ReviewHandlerDeps before per-node scoping refactor | VCS Integration | proj.vcs-integration |
 | 1 | 1 | 1 | needs_review | task.0370 | Rebase every node's migrator stage on its runtime image | Database Operations | proj.database-ops |
 | 1 | 1 | 2 | needs_review | task.0371 | Kill PreSync migration hook + migrator image — step 1 hotfix | Database Operations | proj.database-ops |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
@@ -395,6 +394,7 @@
 | 1 | bug.0338 | Phase A targets never copy-trade — POST doesn't upsert kill-switch config, enumerator is boot-time only | Cogni Poly | proj.poly-copy-trading |
 | 1 | task.0358 | Poly dashboard — open vs closed positions, position history replaces order history | Cogni Poly | proj.poly-copy-trading |
 | 1 | bug.0360 | Poly research Day tab hangs indefinitely — no timeout, no error state | Cogni Poly | proj.poly-prediction-bot |
+| 1 | task.0368 | Reviewer adapter-boundary contract test — lock ReviewHandlerDeps before per-node scoping refactor | VCS Integration | proj.vcs-integration |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |
