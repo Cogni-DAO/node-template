@@ -3,7 +3,7 @@ id: task.0371
 type: task
 title: "Kill PreSync migration hook + migrator image — step 1 hotfix"
 status: needs_review
-revision: 2
+revision: 3
 priority: 1
 rank: 1
 estimate: 2
@@ -54,6 +54,12 @@ observability:
 - Loki: `{namespace="cogni-candidate-a", container="migrate"} |= "migrations applied"` shows three lines per flight (operator + poly + resy initContainer logs); poly also has a `migrate-doltgres` line with `dolt_commit stamped`.
 - `/version.buildSha` on candidate-a-{operator,poly,resy} matches the flown SHA within 2 min of dispatch.
 - Failure-path: a syntactically-broken migration leaves the pod in `Init:Error`; old ReplicaSet keeps serving; `kubectl rollout status` non-zero; `verify-buildsha` fails on the flown SHA.
+
+## Review Feedback (rev 3)
+
+Dev review on PR #1043 + my own miss caught one more:
+
+6. **(extraction)** Three near-identical `migrate.mjs` copies under `nodes/{operator,poly,resy}/app/src/adapters/server/db/` was per-node duplication of the same advisory-lock + drizzle-orm runner code (only the `NODE` constant differed). Consolidated to a single source at `scripts/db/migrate.mjs` that reads `NODE_NAME` from env. Each Dockerfile now `COPY`s from `/app/scripts/db/migrate.mjs` into `/app/nodes/<node>/app/migrate.mjs` so Node's ESM resolver still finds drizzle-orm + postgres in the standalone bundle's nested node_modules. **Single source of truth — fixing the next advisory-lock edge case is one file, not three.** poly's `migrate-doltgres.mjs` stays separate (it diverges for real reasons: trailing `dolt_commit`, no advisory lock).
 
 ## Review Feedback (rev 2)
 

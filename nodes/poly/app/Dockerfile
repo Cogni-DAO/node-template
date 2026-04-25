@@ -112,7 +112,7 @@ USER nextjs
 # invoke them directly. task.0370 step 1. Postgres + Doltgres variants ship side-by-side.
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrations /app/nodes/poly/app/migrations
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/doltgres-migrations /app/nodes/poly/app/doltgres-migrations
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrate.mjs /app/nodes/poly/app/migrate.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate.mjs /app/nodes/poly/app/migrate.mjs
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrate-doltgres.mjs /app/nodes/poly/app/migrate-doltgres.mjs
 
 EXPOSE 3100

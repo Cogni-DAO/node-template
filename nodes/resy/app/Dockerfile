@@ -110,7 +110,7 @@ USER nextjs
 # Migrate runner — bundled into runtime image so Deployment initContainers can
 # invoke `node migrate.mjs` directly. task.0370 step 1.
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/resy/app/src/adapters/server/db/migrations /app/nodes/resy/app/migrations
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/resy/app/src/adapters/server/db/migrate.mjs /app/nodes/resy/app/migrate.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate.mjs /app/nodes/resy/app/migrate.mjs
 
 EXPOSE 3300
 

@@ -1,14 +1,25 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
-//
-// biome-ignore-all lint/suspicious/noConsole: standalone Node script invoked as Job CMD; stdout is the only log surface
-// biome-ignore-all lint/style/noProcessEnv: container entry point reads DATABASE_URL directly; no env wrapper to hide behind
+
+/**
+ * Module: `@scripts/db/migrate`
+ * Purpose: Shared Postgres migrator runner invoked as the per-node Deployment initContainer. Wraps drizzle-orm/postgres-js/migrator in a blocking pg_advisory_lock so concurrent initContainers serialize cleanly.
+ * Scope: Per-node Postgres migrations only. Does not migrate Doltgres (separate script for poly's knowledge plane). Does not run drizzle-kit (CLI is dev-only).
+ * Invariants: NODE_NAME + DATABASE_URL from env. Migrations folder from argv[2]. Lock auto-releases on session end.
+ * Side-effects: IO (Postgres connect, advisory lock, migrate, unlock).
+ * Notes: COPY'd into each runtime image at /app/nodes/<node>/app/migrate.mjs. LOCK_KEY shared safely — advisory locks are database-scoped.
+ * Links: docs/spec/databases.md §2 Migration Strategy, work/items/task.0371.kill-presync-migration-hook-step-1.md
+ * @internal
+ */
+
+// biome-ignore-all lint/suspicious/noConsole: standalone Node script invoked as initContainer CMD; stdout is the only log surface
+// biome-ignore-all lint/style/noProcessEnv: container entry point reads DATABASE_URL + NODE_NAME directly; no env wrapper to hide behind
 
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 
-const NODE = "operator";
+const NODE = process.env.NODE_NAME?.trim() || "unknown";
 
 const url = process.env.DATABASE_URL?.trim();
 if (!url) {
