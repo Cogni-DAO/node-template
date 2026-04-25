@@ -33,6 +33,8 @@
 | 0 | 1 | 4 | needs_merge | task.0374 | Catalog-as-SSoT — make infra/catalog/*.yaml the single node declaration | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 2 | needs_merge | bug.0376 | poly CTF redeem sweep burns POL on a runaway loop, re-redeeming already-redeemed positions | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
 | 0 | 1 | 5 | needs_triage | task.0379 | Poly redemption sweep — top-0.1% production-grade hardening (gates + spec + anvil-fork validation) | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
+| 0 | 1 | 1 | needs_design | task.0381 | Single-node-scope CI gate — reject PRs that touch >1 node (operator = infra exemption) | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | 1 | 1 | needs_design | task.0382 | `extractOwningNode(spec, paths)` — TS resolver for files-changed → owning nodeId in operator runtime | VCS Integration | proj.vcs-integration |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -92,6 +94,7 @@
 | 1 | 1 | 1 | needs_review | task.0370 | Rebase every node's migrator stage on its runtime image | Database Operations | proj.database-ops |
 | 1 | 1 | 2 | needs_review | task.0371 | Kill PreSync migration hook + migrator image — step 1 hotfix | Database Operations | proj.database-ops |
 | 1 | 1 | 2 | needs_implement | task.0373 | candidate-flight self-heals deploy/candidate-a digests around PR rsync |  |  |
+| 1 | 1 | 1 | needs_merge | task.0380 | Node base-path resolver — `extractNodePath(spec, nodeId)` accessor + unit tests | VCS Integration | proj.vcs-integration |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD Pipeline | proj.cicd-services-gitops |
