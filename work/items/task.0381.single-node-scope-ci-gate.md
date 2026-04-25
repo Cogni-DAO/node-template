@@ -13,7 +13,7 @@ spec_refs:
   - node-ci-cd-contract
 assignees: []
 project: proj.cicd-services-gitops
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1059
 reviewer:
 revision: 0
 blocked_by:
