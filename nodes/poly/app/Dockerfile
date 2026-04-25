@@ -108,19 +108,16 @@ ENV APP_BUILD_SHA=$BUILD_SHA
 
 USER nextjs
 
+# Migrate runners — bundled into runtime image so Deployment initContainers can
+# invoke them directly. task.0370 step 1. Postgres + Doltgres variants ship side-by-side.
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrations /app/nodes/poly/app/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/doltgres-migrations /app/nodes/poly/app/doltgres-migrations
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrate.mjs /app/nodes/poly/app/migrate.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrate-doltgres.mjs /app/nodes/poly/app/migrate-doltgres.mjs
+
 EXPOSE 3100
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://localhost:3100/livez || exit 1
 
 CMD ["node", "nodes/poly/app/server.js"]
-
-# Migrator — rebased on runner so it shares layers with the runtime image. task.0370.
-# Carries both Postgres (migrate.mjs) and Doltgres (migrate-doltgres.mjs) scripts +
-# migration dirs; Doltgres Job overrides CMD to use the doltgres variant.
-FROM runner AS migrator
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrations /app/nodes/poly/app/migrations
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/doltgres-migrations /app/nodes/poly/app/doltgres-migrations
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrate.mjs /app/nodes/poly/app/migrate.mjs
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/poly/app/src/adapters/server/db/migrate-doltgres.mjs /app/nodes/poly/app/migrate-doltgres.mjs
-CMD ["node", "/app/nodes/poly/app/migrate.mjs", "/app/nodes/poly/app/migrations"]
