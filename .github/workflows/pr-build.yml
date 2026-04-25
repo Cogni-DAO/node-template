@@ -24,6 +24,19 @@ env:
   HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
 jobs:
+  validate-catalog:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Validate infra/catalog/*.yaml against schema
+        run: |
+          pipx install 'check-jsonschema==0.37.1'
+          check-jsonschema --schemafile infra/catalog/_schema.json infra/catalog/*.yaml
+
   detect:
     runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
