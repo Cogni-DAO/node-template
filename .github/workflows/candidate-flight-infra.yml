@@ -127,18 +127,25 @@ jobs:
         # already running. The infra lever rsyncs compose state which can
         # interleave with app-lever pod restarts. v0 is a noisy ::warning::
         # only — hardening to a real lease is task.0372 follow-up.
-        # Workflow-name match must stay byte-identical to candidate-flight.yml's
-        # `name:` field; CI will catch drift via grep test in pr-build.
+        # Workflow-name "Candidate Flight" must stay byte-identical to
+        # candidate-flight.yml's `name:` field for this filter to match.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          in_progress=$(gh run list \
+          # Surface gh-cli failures as warnings rather than treating them as
+          # 0-in-progress (review-feedback #2 suggestion).
+          if ! gh_output=$(gh run list \
             --repo "$GITHUB_REPOSITORY" \
             --workflow="Candidate Flight" \
             --status=in_progress \
             --json databaseId \
-            --jq 'length' 2>/dev/null || echo 0)
+            --jq 'length' 2>&1); then
+            echo "::warning::Pre-check could not query workflow runs: ${gh_output}"
+            in_progress=0
+          else
+            in_progress="$gh_output"
+          fi
           if [ "$in_progress" != "0" ]; then
             echo "::warning::${in_progress} candidate-flight (app lever) run(s) in progress — infra changes may interleave with app promotions"
           else

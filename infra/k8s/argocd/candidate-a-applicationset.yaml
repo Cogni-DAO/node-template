@@ -18,7 +18,7 @@ metadata:
   name: cogni-candidate-a
   namespace: argocd
 spec:
-  preserveResourcesOnDeletion: true # APPSET_PRESERVE_ON_TRANSITION (R4 belt-and-suspenders)
+  preserveResourcesOnDeletion: true # APPSET_PRESERVE_ON_TRANSITION
   generators:
     - git:
         repoURL: https://github.com/cogni-dao/cogni-template.git
