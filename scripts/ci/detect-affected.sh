@@ -110,6 +110,11 @@ is_global_build_input() {
 if [ "$scope_mode" = "full" ]; then
   add_all_targets
 else
+  declare -A target_prefix=()
+  for target in "${ALL_TARGETS[@]}"; do
+    target_prefix["$target"]=$(yq '.path_prefix' "${_image_tags_catalog_root}/${target}.yaml")
+  done
+
   while IFS= read -r path; do
     [ -z "$path" ] && continue
 
@@ -130,20 +135,16 @@ else
         selection_reason="shared-package-change:${path}"
         break
         ;;
-      nodes/operator/packages/* | nodes/operator/*)
-        add_target operator
-        ;;
-      nodes/poly/packages/* | nodes/poly/*)
-        add_target poly
-        ;;
-      nodes/resy/packages/* | nodes/resy/*)
-        add_target resy
-        ;;
-      services/scheduler-worker/*)
-        add_target scheduler-worker
-        ;;
       nodes/node-template/*)
         selection_reason="non-deployable-node-template-change:${path}"
+        ;;
+      *)
+        for target in "${ALL_TARGETS[@]}"; do
+          prefix="${target_prefix[$target]}"
+          case "$path" in
+            "${prefix}"*) add_target "$target" ;;
+          esac
+        done
         ;;
     esac
   done <<< "$changed_paths"
