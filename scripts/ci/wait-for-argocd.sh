@@ -28,11 +28,9 @@
 #
 # Belt-and-suspenders active sync: if an app's reported revision has not
 # caught up to EXPECTED_SHA, we (1) request a hard git refresh on the
-# Application, (2) kubectl-patch a hook sync operation. The first kick (after
-# ACTIVE_SYNC_AFTER) also deletes stale PreSync hook Jobs so Argo cannot wedge
-# on sticky Jobs; subsequent kicks repeat refresh + patch every SYNC_KICK_INTERVAL
-# until the deadline. A single silent patch was not enough on candidate-a when
-# the controller ignored the first operation (2026-04 flight stalls).
+# Application. After task.0370 step 1 retired Argo PreSync Job hooks, the
+# refresh nudge is the only kick we need — no Job to babysit, no stale hook
+# operation to clear. `kubectl rollout status` (run downstream) is the real gate.
 #
 # Usage: wait-for-argocd.sh
 # Env:
@@ -50,15 +48,14 @@
 #                       in this run may legitimately be pinned at prior digest
 #                       (e.g. sandbox-openclaw placeholder) and would false-fail.
 #   ARGOCD_TIMEOUT      (optional, default 600) per-app timeout in seconds.
-#                       600s covers poly's two serial pre-sync migration hooks
-#                       (poly-migrate-node-app + poly-migrate-poly-doltgres) +
-#                       rolling-update drain — observed 300s ceiling breach on
-#                       PR #1012 flight (run 24873868016). kubectl rollout
-#                       status exits on completion, so the extra budget is pure
-#                       headroom — fast rollouts still exit in <60s.
+#                       600s is conservative headroom — post-task.0370-step1
+#                       the runtime image is already warm for the app pod, so
+#                       initContainer migrations + rolling-update drain
+#                       typically finish well under 60s. Tighten in a follow-up
+#                       once we have post-merge flights to measure.
 #   ACTIVE_SYNC_AFTER   (optional, default 30) seconds before the first Argo kick
 #   SYNC_KICK_INTERVAL  (optional, default 45) seconds between subsequent kicks
-#                       while revision still mismatches (hard refresh + sync op)
+#                       (single hard-refresh annotation, no hook babysitting)
 #   SSH_OPTS            (optional) ssh flags
 #
 # Side-effect on success: writes ARGOCD_SYNC_VERIFIED=true to $GITHUB_ENV
@@ -191,60 +188,12 @@ rollout_check() {
   return 1
 }
 
-# Kick a manual sync on an Application by replacing the operation in its spec.
-# Argo CD's application-controller picks this up within the reconciliation loop
-# and runs it even if automated sync is disabled or misconfigured. This MUST
-# use hook sync (not apply sync) so PreSync migration jobs still execute.
-#
-# bug.0360 follow-up: merge-patching only the nested sync strategy was enough
-# to advance status.sync.revision to the new deploy SHA, but not enough to
-# clear a stale Running operation that was still waiting on a missing hook Job.
-# Rebuild the full operation payload on each kick so the controller gets an
-# explicit sync request for EXPECTED_SHA, and clear obviously-stale operations
-# that reference a hook job that no longer exists.
-#
-# Named hook Jobs are sticky: if a prior no-hook sync left them in-cluster as
-# obj->obj, Argo can decide the first out-of-sync wave is Sync/0 and never
-# recreate the PreSync Jobs even with hook sync enabled. Remove those stale
-# named Jobs first so the active sync has to materialize them again.
-#
-# bug.0361: never delete a Job whose `.status.active > 0` — that's a live
-# migration doing real work. Killing it mid-flight leaves Argo waiting for a
-# hook that no longer exists, which triggers clear_stale_missing_hook_operation
-# → Argo auto-syncs → new jobs → script kills them again (infinite loop). Only
-# Completed / Failed / absent jobs are eligible for deletion.
-delete_stale_hook_jobs() {
-  local app_name="$1"
-  local app namespace jobs=()
-  app="${app_name#${DEPLOY_ENVIRONMENT}-}"
-  namespace="cogni-${DEPLOY_ENVIRONMENT}"
-
-  case "$app" in
-    operator | poly | resy)
-      jobs+=("${app}-migrate-node-app")
-      ;;
-  esac
-
-  case "$app" in
-    poly)
-      jobs+=("${app}-migrate-poly-doltgres")
-      ;;
-  esac
-
-  if [ "${#jobs[@]}" -eq 0 ]; then
-    return 0
-  fi
-
-  for job in "${jobs[@]}"; do
-    active=$(kubectl -n "$namespace" get job "$job" -o jsonpath='{.status.active}' 2>/dev/null || true)
-    if [ "${active:-0}" -gt 0 ]; then
-      echo "    ⏭ skipping active hook job ${namespace}/${job} (still running — protecting live migration)"
-      continue
-    fi
-    echo "    🧹 deleting stale hook job ${namespace}/${job}"
-    kubectl -n "$namespace" delete job "$job" --ignore-not-found >/dev/null 2>&1 || true
-  done
-}
+# task.0370 step 1 retired Argo PreSync hook Jobs — migrations are now
+# Deployment initContainers. The pre-sync hook-Job babysitting (delete_stale_hook_jobs,
+# clear_stale_missing_hook_operation) is gone with the hooks. The kick that
+# remains is just a hard-refresh annotation poke; if Argo is in Running/phase=Running
+# during a rolling update, kubectl rollout status (run after this script) is the
+# real gate.
 
 # Prefer status.sync.revision; fall back to last successful operation revision
 # (some Argo states leave sync.revision empty while a sync completed).
@@ -268,63 +217,6 @@ request_hard_refresh() {
     '{"metadata":{"annotations":{"argocd.argoproj.io/refresh":"hard"}}}' 2>&1); then
     echo "    ⚠️  hard-refresh annotation patch failed for ${app_name}: $out" >&2
   fi
-}
-
-# Clear a stale Running operation waiting on a hook Job that no longer exists.
-# Uses direct Application spec.operation = null — no argocd CLI exec, no RBAC
-# expansion (patch on applications.argoproj.io is already held by the SA).
-clear_stale_missing_hook_operation() {
-  local app_name="$1"
-  local namespace op_phase op_message hook_job out
-  local op_revision=""
-
-  op_phase=$(kubectl -n argocd get application "$app_name" -o jsonpath='{.status.operationState.phase}' 2>/dev/null || true)
-  [ "$op_phase" = "Running" ] || return 0
-
-  op_message=$(kubectl -n argocd get application "$app_name" -o jsonpath='{.status.operationState.message}' 2>/dev/null || true)
-  hook_job=$(printf '%s' "$op_message" | sed -n 's/.*hook batch\/Job\/\([^ ]*\).*/\1/p')
-  [ -n "$hook_job" ] || return 0
-
-  namespace="cogni-${DEPLOY_ENVIRONMENT}"
-  if kubectl -n "$namespace" get job "$hook_job" >/dev/null 2>&1; then
-    return 0
-  fi
-
-  op_revision=$(kubectl -n argocd get application "$app_name" -o jsonpath='{.status.operationState.syncResult.revision}' 2>/dev/null || true)
-  op_revision=$(printf '%s' "$op_revision" | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-  echo "    🛑 ${app_name}: clearing stale Running operation at ${op_revision:0:8} (missing hook job ${namespace}/${hook_job})"
-
-  if ! out=$(kubectl -n argocd patch application "$app_name" --type=merge -p '{"operation":null}' 2>&1); then
-    echo "    ⚠️  failed to clear stale operation for ${app_name}: $out" >&2
-    return 1
-  fi
-  return 0
-}
-
-patch_sync_operation() {
-  local app_name="$1"
-  local out
-  local patch
-
-  patch=$(cat <<EOF
-{"operation":{
-  "initiatedBy":{"username":"candidate-flight"},
-  "sync":{
-    "prune":true,
-    "revision":"$EXPECTED_SHA",
-    "syncOptions":["CreateNamespace=true"],
-    "syncStrategy":{"hook":{"force":false}}
-  }
-}}
-EOF
-)
-
-  if ! out=$(kubectl -n argocd patch application "$app_name" --type=merge -p \
-    "$patch" 2>&1); then
-    echo "    ⚠️  sync operation patch failed for ${app_name}: $out" >&2
-    return 1
-  fi
-  return 0
 }
 
 # Poll a single app until it reports EXPECTED_SHA on sync.revision AND is Healthy,
@@ -390,13 +282,8 @@ wait_for_app() {
          ! can_proceed_to_rollout_check "$HEALTH" "$SYNC_PHASE" ||
          ! deployment_sync_ready "$deployment" "$deployment_status"; }; then
       kick_count=$((kick_count + 1))
-      echo "    ⚡ ${app_name}: Argo reconcile kick #${kick_count} (hard refresh + hook sync)"
+      echo "    ⚡ ${app_name}: Argo hard-refresh kick #${kick_count}"
       request_hard_refresh "$app_name"
-      if [ "$kick_count" -eq 1 ]; then
-        delete_stale_hook_jobs "$app_name"
-      fi
-      clear_stale_missing_hook_operation "$app_name" || true
-      patch_sync_operation "$app_name" || true
       next_kick=$((SECONDS + SYNC_KICK_INTERVAL))
     fi
 

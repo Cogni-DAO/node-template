@@ -107,17 +107,14 @@ ENV APP_BUILD_SHA=$BUILD_SHA
 
 USER nextjs
 
+# Migrate runner — bundled into runtime image so Deployment initContainers can
+# invoke `node migrate.mjs` directly. task.0370 step 1.
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/resy/app/src/adapters/server/db/migrations /app/nodes/resy/app/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate.mjs /app/nodes/resy/app/migrate.mjs
+
 EXPOSE 3300
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=30s --retries=3 \
   CMD curl -fsS http://localhost:3300/livez || exit 1
 
 CMD ["node", "nodes/resy/app/server.js"]
-
-# Migrator — rebased on runner so it shares layers with the runtime image. task.0370.
-# migrate.mjs + migrations live inside the standalone app dir so Node resolves
-# drizzle-orm from standalone's own node_modules.
-FROM runner AS migrator
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/resy/app/src/adapters/server/db/migrations /app/nodes/resy/app/migrations
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/resy/app/src/adapters/server/db/migrate.mjs /app/nodes/resy/app/migrate.mjs
-CMD ["node", "/app/nodes/resy/app/migrate.mjs", "/app/nodes/resy/app/migrations"]

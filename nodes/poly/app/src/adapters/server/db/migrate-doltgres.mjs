@@ -5,6 +5,13 @@
 // knowledge plane, plus a trailing `SELECT dolt_commit('-Am', ...)` so DDL
 // lands in dolt_log (Dolt DDL doesn't auto-commit — dolt#4843).
 //
+// No `pg_try_advisory_lock` guard here (cf. the Postgres migrate.mjs scripts).
+// Doltgres advisory-lock support is unverified, and postgres.js extended
+// protocol has known compat gaps on Doltgres. Single-writer is fine today
+// (replicas: 1, only poly writes to Doltgres). Multi-replica safety is a
+// follow-up: validate `pg_try_advisory_lock` against Doltgres or use an
+// app-level lease table.
+//
 // biome-ignore-all lint/suspicious/noConsole: standalone Node script invoked as Job CMD; stdout is the only log surface
 // biome-ignore-all lint/style/noProcessEnv: container entry point reads DATABASE_URL directly; no env wrapper to hide behind
 
