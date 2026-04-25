@@ -34,6 +34,8 @@ cd "$REPO_ROOT"
 
 # shellcheck source=./lib/image-tags.sh
 . "$SCRIPT_DIR/lib/image-tags.sh"
+# shellcheck source=./lib/overlay-digest.sh
+. "$SCRIPT_DIR/lib/overlay-digest.sh"
 
 if ! command -v docker >/dev/null 2>&1; then
   echo "[ERROR] docker is required" >&2
@@ -58,42 +60,6 @@ resolve_digest_ref() {
   printf '%s@%s' "$repo" "$digest"
 }
 
-# Print one line: image@sha256:... or image:tag from preview overlay kustomization.
-# After task.0370 step 1 each overlay has exactly one image entry per app.
-extract_overlay_image_ref() {
-  local app="$1"
-  local file="infra/k8s/overlays/preview/${app}/kustomization.yaml"
-  if [ ! -f "$file" ]; then
-    echo "[ERROR] missing $file" >&2
-    return 1
-  fi
-  python3 - "$file" <<'PY'
-import re
-import sys
-
-path = sys.argv[1]
-text = open(path, encoding="utf-8").read()
-blocks = re.split(r"\n[ \t]*-\s+name:\s*", "\n" + text)
-for block in blocks[1:]:
-    line = block.split("\n", 1)[0].strip()
-    if line != "ghcr.io/cogni-dao/cogni-template":
-        continue
-    rest = block.split("\n", 1)[1] if "\n" in block else ""
-    m = re.search(r'^\s*digest:\s*"(sha256:[0-9a-f]+)"', rest, re.MULTILINE)
-    if m:
-        print(f"{line}@{m.group(1)}", end="")
-        sys.exit(0)
-    m = re.search(r"^\s*newTag:\s*(\S+)", rest, re.MULTILINE)
-    if m:
-        print(f"{line}:{m.group(1).strip()}", end="")
-        sys.exit(0)
-    print(f"[ERROR] no digest/newTag under {line} in {path}", file=sys.stderr)
-    sys.exit(1)
-print(f"[ERROR] no app image block in {path}", file=sys.stderr)
-sys.exit(1)
-PY
-}
-
 desired_digest_for_target() {
   local target="$1"
   local full_tag current
@@ -102,7 +68,7 @@ desired_digest_for_target() {
     printf '%s' "$digest_ref"
     return 0
   fi
-  current=$(extract_overlay_image_ref "$target") || return 1
+  current=$(extract_overlay_image_ref preview "$target") || return 1
   if digest_ref=$(resolve_digest_ref "$current"); then
     printf '%s' "$digest_ref"
     return 0
