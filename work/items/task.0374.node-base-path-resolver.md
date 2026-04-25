@@ -2,7 +2,7 @@
 id: task.0374
 type: task
 title: "Node base-path resolver — `extractNodePath(spec, nodeId)` accessor + unit tests"
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 1
