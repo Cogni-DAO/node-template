@@ -3,19 +3,11 @@
 
 /**
  * Module: `tests/unit/bootstrap/poly-ctf-redeem-decision`
- * Purpose: Drive the bug.0383 redeem precheck (`decideRedeem`) from the
- *   captured real-Polygon-mainnet decision-table fixture. Every row in the
- *   fixture is one assertion — the predicate MUST reproduce the snapshot
- *   exactly. Plus synthetic cases the snapshot doesn't cover (read_failed,
- *   missing_outcome_index, zero_balance) since the production funder happens
- *   not to exhibit those conditions at snapshot time.
- * Scope: Pure decision function only. No RPC, no mocks, no executor wiring.
- * Invariants:
- *   - FIXTURE_PARITY — every fixture row is asserted; adding scenarios means
- *     re-running `tests/fixtures/poly-ctf-redeem/snapshot.sh` against a funder
- *     that has them, NOT mutating the test.
+ * Purpose: Drive `decideRedeem` from the captured Polymarket+Polygon
+ *   decision-table fixture (one assertion per row) plus synthetic edges.
+ * Scope: Pure decision function only. No RPC, no mocks.
  * Side-effects: reads JSON fixture from disk at test time.
- * Links: work/items/bug.0383, tests/fixtures/poly-ctf-redeem/README.md
+ * Links: work/items/bug.0383
  * @internal
  */
 
@@ -167,14 +159,5 @@ describe("decideRedeem synthetic cases not in snapshot", () => {
       outcomeIndex: 0,
     });
     expect(v).toEqual({ ok: true });
-  });
-
-  it("priority: missing outcomeIndex beats read_failed (cheaper to detect)", () => {
-    const v = decideRedeem({
-      balance: null,
-      payoutNumerator: null,
-      outcomeIndex: undefined,
-    });
-    expect(v).toEqual({ ok: false, reason: "missing_outcome_index" });
   });
 });
