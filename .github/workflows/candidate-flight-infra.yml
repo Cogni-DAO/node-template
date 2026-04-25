@@ -123,18 +123,10 @@ jobs:
       COGNI_NODE_DBS: ${{ secrets.COGNI_NODE_DBS }}
     steps:
       - name: Pre-check no candidate-flight in progress (best-effort, GR-5)
-        # task.0372 / GR-5: best-effort warning when an app-lever flight is
-        # already running. The infra lever rsyncs compose state which can
-        # interleave with app-lever pod restarts. v0 is a noisy ::warning::
-        # only — hardening to a real lease is task.0372 follow-up.
-        # Workflow-name "Candidate Flight" must stay byte-identical to
-        # candidate-flight.yml's `name:` field for this filter to match.
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Surface gh-cli failures as warnings rather than treating them as
-          # 0-in-progress (review-feedback #2 suggestion).
           if ! gh_output=$(gh run list \
             --repo "$GITHUB_REPOSITORY" \
             --workflow="Candidate Flight" \
@@ -147,9 +139,7 @@ jobs:
             in_progress="$gh_output"
           fi
           if [ "$in_progress" != "0" ]; then
-            echo "::warning::${in_progress} candidate-flight (app lever) run(s) in progress — infra changes may interleave with app promotions"
-          else
-            echo "✓ No app-lever candidate-flight runs in progress"
+            echo "::warning::${in_progress} candidate-flight run(s) in progress — infra changes may interleave"
           fi
 
       - name: Checkout (for scripts)

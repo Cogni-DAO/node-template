@@ -1,30 +1,6 @@
 name: Candidate Flight
 
-# task.0372 v4 — per-node lane isolation. Pre-merge APP LEVER for an open PR.
-#
-# Matrix-fanned across affected nodes (computed from PR diff via
-# detect-affected.sh, post-task.0374 catalog SSoT). Each cell scopes to its
-# own deploy/candidate-a-<node> branch + its own Argo Application
-# (candidate-a-<node>). Sibling-node failure cannot fail this cell —
-# isolation is structural (separate GHA jobs, fail-fast: false), not a
-# script-level filter.
-#
-# Job graph:
-#   decide ──► reconcile-appset ──► flight (matrix) ──► verify-candidate (matrix) ──► report-status
-#                                       └ fail-fast:false        └ fail-fast:false                 └ single PR-head status
-#
-# Pinned invariants (task.0372 revision 4):
-#   - LANE_ISOLATION:               cells are independent GHA jobs with fail-fast:false
-#   - BRANCH_HEAD_IS_LEASE:         no candidate-lease.json; branch ref + concurrency group is the lease
-#   - CONCURRENCY_GROUP_FORMAT:     flight-${{ matrix.env }}-${{ matrix.node }}
-#   - PROMOTED_APPS_PER_CELL:       wait-for-argocd PROMOTED_APPS=<single node>
-#   - SOURCE_SHA_MAP_PER_CELL:      single-entry map on per-node deploy branch
-#   - AFFECTED_FROM_TURBO:          detect-affected.sh (v0 path-prefix workaround for turbo)
-#   - CATALOG_EDITS_ARE_GLOBAL_BUILD_INPUT: per-cell rsync touches only this node's catalog file
-#   - APPLICATION_NAMES_UNCHANGED:  AppSets still produce candidate-a-<node>; reconcile in place
-#
-# Acquire/release-slot scripts and the report-no-acquire-failure job are
-# DELETED (BRANCH_HEAD_IS_LEASE makes them obsolete).
+# Spec: work/items/task.0372 (per-node lane isolation, matrix fan-out).
 
 on:
   workflow_dispatch:
@@ -44,9 +20,6 @@ permissions:
   pull-requests: read
   statuses: write
 
-# Workflow-level concurrency: per-PR. Cancel the previous run if a newer
-# dispatch supersedes it (e.g. PR head pushed). Per-cell concurrency
-# (flight-<env>-<node>) is the cross-workflow lease primitive — see jobs.
 concurrency:
   group: candidate-flight-${{ inputs.pr_number }}
   cancel-in-progress: true
@@ -57,7 +30,6 @@ env:
   OVERLAY_ENV: candidate-a
 
 jobs:
-  # ── Resolve PR metadata, image digests, affected node set ────────
   decide:
     runs-on: ubuntu-latest
     outputs:
@@ -91,7 +63,7 @@ jobs:
           echo "image_tag=pr-${{ inputs.pr_number }}-${HEAD_SHA}" >> "$GITHUB_OUTPUT"
           echo "status_url=${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" >> "$GITHUB_OUTPUT"
 
-      - name: Report pending candidate-flight status (single, pre-matrix)
+      - name: Report pending candidate-flight status
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
@@ -101,10 +73,6 @@ jobs:
           TARGET_URL: ${{ steps.meta.outputs.status_url }}
         run: bash scripts/ci/report-candidate-status.sh
 
-      # Affected-node detection. detect-affected.sh reads catalog path_prefix
-      # and emits a JSON matrix array. Catalog edits trigger add_all_targets
-      # (CATALOG_EDITS_ARE_GLOBAL_BUILD_INPUT) so all 4 cells run in lockstep
-      # on a catalog change.
       - name: Detect affected nodes
         id: detect
         env:
@@ -112,7 +80,6 @@ jobs:
           TURBO_SCM_HEAD: ${{ steps.meta.outputs.head_sha }}
         run: |
           set -euo pipefail
-          # Fetch the head SHA so the diff has both endpoints.
           git fetch origin "${{ steps.meta.outputs.head_sha }}" --depth=100 || true
           bash scripts/ci/detect-affected.sh
 
@@ -142,9 +109,6 @@ jobs:
           echo "::error::No pushed PR images found for ${{ steps.meta.outputs.image_tag }}"
           exit 1
 
-      # Stash the resolved digest JSON as an artifact so matrix cells can
-      # read it without re-resolving from GHCR (saves N-1 imagetools-inspect
-      # round-trips).
       - name: Upload resolved-pr-images artifact
         if: steps.detect.outputs.has_targets == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -153,10 +117,6 @@ jobs:
           path: ${{ runner.temp }}/resolved-pr-images.json
           retention-days: 1
 
-  # ── Reconcile candidate-a ApplicationSet on the VM (single, before matrix) ──
-  # Without this step the AppSet template drifts and matrix-cell Argo waits
-  # hang forever (bug.0312). Runs once per dispatch, not per cell —
-  # `kubectl apply` of one resource shouldn't race against itself.
   reconcile-appset:
     needs: decide
     if: needs.decide.outputs.has_targets == 'true'
@@ -195,13 +155,7 @@ jobs:
           scp $SSH_OPTS "$APPSET_FILE" root@"$VM_HOST":/tmp/appset.yaml
           # shellcheck disable=SC2086
           ssh $SSH_OPTS root@"$VM_HOST" "kubectl apply -f /tmp/appset.yaml -n argocd && rm -f /tmp/appset.yaml"
-          echo "✅ candidate-a ApplicationSet reconciled"
 
-  # ── Per-node flight cell ─────────────────────────────────────────
-  # Each cell scopes to one node: clones deploy/candidate-a-<node>, rsyncs
-  # only that node's overlay subdir + base + that node's catalog file,
-  # promotes one digest, pushes to its own per-node branch. Branch ref +
-  # concurrency group is the lease (BRANCH_HEAD_IS_LEASE).
   flight:
     needs: [decide, reconcile-appset]
     if: needs.decide.outputs.has_targets == 'true'
@@ -216,10 +170,6 @@ jobs:
     runs-on: ubuntu-latest
     environment: candidate-a
     outputs:
-      # Note: matrix-job outputs aggregate across cells; downstream readers
-      # see the LAST cell's value. Use needs.flight.result for cross-cell
-      # status; per-cell deploy_branch_sha is consumed inline by verify
-      # (which is also matrix-fanned).
       head_sha: ${{ needs.decide.outputs.head_sha }}
     steps:
       - name: Checkout workflow source
@@ -252,8 +202,6 @@ jobs:
           if git rev-parse --verify --quiet "refs/remotes/origin/${PER_NODE_BRANCH}" >/dev/null; then
             git checkout -B "${PER_NODE_BRANCH}" "origin/${PER_NODE_BRANCH}"
           else
-            # Bootstrap from whole-slot if per-node branch missing (should not
-            # happen post-bootstrap-script; safety net for cold-start).
             echo "::warning::Per-node branch ${PER_NODE_BRANCH} missing — bootstrapping from deploy/${{ matrix.env }}"
             git fetch origin "deploy/${{ matrix.env }}"
             git checkout -B "${PER_NODE_BRANCH}" "origin/deploy/${{ matrix.env }}"
@@ -261,11 +209,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      # task.0373 — snapshot deploy-branch overlay digests pre-rsync. On a
-      # per-node branch the snapshot still emits all 4 overlay rows
-      # (bootstrap forked from whole-slot), but only this node's row is
-      # read by Argo. Restore loop runs verbatim — writes to dead sibling
-      # subdirs are harmless; cold-start invariant is preserved.
       - name: Snapshot deploy-branch overlay digests (pre-rsync)
         id: snapshot
         working-directory: deploy-branch
@@ -277,11 +220,6 @@ jobs:
           echo "ℹ️  Pre-rsync overlay snapshot ($(wc -l < "$SNAPSHOT_FILE" | tr -d ' ') rows):"
           sed 's/^/  /' "$SNAPSHOT_FILE"
 
-      # Per-cell rsync scope (CATALOG_EDITS_ARE_GLOBAL_BUILD_INPUT):
-      #   - infra/k8s/base/                                      (kustomize base; needed for build)
-      #   - infra/k8s/overlays/candidate-a/${{ matrix.node }}/   (this node's overlay only)
-      #   - infra/catalog/${{ matrix.node }}.yaml                (this node's catalog file only)
-      # Other nodes' overlay subdirs on this branch survive harmlessly.
       - name: Sync base + per-node overlay + per-node catalog to deploy branch
         env:
           NODE: ${{ matrix.node }}
@@ -295,9 +233,7 @@ jobs:
           mkdir -p deploy-branch/infra/catalog
           cp "app-src/infra/catalog/${NODE}.yaml" "deploy-branch/infra/catalog/${NODE}.yaml"
 
-      # Promote this node's digest. resolve-pr-build-images.json carries
-      # all targets the PR built; we read just this node's entry.
-      - name: Promote this node's digest into per-node overlay
+      - name: Promote this node's digest
         id: promote
         working-directory: deploy-branch
         env:
@@ -305,19 +241,8 @@ jobs:
           OVERLAY_ENV: candidate-a
           NODE: ${{ matrix.node }}
           HEAD_SHA: ${{ needs.decide.outputs.head_sha }}
-        run: |
-          set -euo pipefail
-          # Single-app subset of the payload. promote-build-payload.sh's
-          # default mode promotes everything in the payload; we restrict via
-          # NODES env so only this matrix.node is written. update-source-sha-map
-          # records this node's source_sha into the per-node branch's single-
-          # entry .promote-state/source-sha-by-app.json (SOURCE_SHA_MAP_PER_CELL).
-          NODES="$NODE" bash ../ci-src/scripts/ci/promote-build-payload.sh
+        run: NODES="$NODE" bash ../ci-src/scripts/ci/promote-build-payload.sh
 
-      # task.0373 — restore non-promoted overlay digests from snapshot.
-      # On a per-node branch this writes to dead sibling subdirs; harmless,
-      # preserved verbatim per work item Reuses. Single-target promotion
-      # makes the inner loop a near-no-op for the AppSet's reconciliation.
       - name: Restore non-promoted overlay digests (post-rsync self-heal)
         working-directory: deploy-branch
         env:
@@ -364,16 +289,12 @@ jobs:
             exit 0
           fi
           git commit -m "candidate-flight ${NODE}: pr-${{ inputs.pr_number }} ${HEAD_SHA}"
-          # Per-cell concurrency group serializes same-(env,node) pushes;
-          # cross-cell pushes go to different branches and never race.
           git push origin "HEAD:${PER_NODE_BRANCH}"
           DEPLOY_SHA=$(git rev-parse HEAD)
           echo "deploy_branch_sha=$DEPLOY_SHA" >> "$GITHUB_OUTPUT"
 
-      # Pass per-cell deploy_branch_sha to the verify-candidate matrix via
-      # an artifact keyed by node. GHA matrix-job outputs collapse to the
-      # last cell's value, which would race; per-node artifact is the
-      # robust contract.
+      # GHA matrix-job outputs collapse to the last cell's value; per-node
+      # artifact is the per-cell contract verify-candidate reads.
       - name: Upload per-cell deploy_branch_sha artifact
         if: always()
         env:
@@ -390,9 +311,6 @@ jobs:
           path: deploy-sha-out/deploy-sha-${{ matrix.node }}.txt
           retention-days: 1
 
-  # ── Per-node verify cell ─────────────────────────────────────────
-  # Same matrix shape as flight. Each cell verifies one Argo Application
-  # at one EXPECTED_SHA against one /version.buildSha contract probe.
   verify-candidate:
     needs: [decide, flight]
     if: |
@@ -463,11 +381,6 @@ jobs:
           chmod 600 ~/.ssh/deploy_key
           ssh-keyscan -T 10 -H "$VM_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
 
-      # Argo sync gate. PROMOTED_APPS=${matrix.node} restricts the wait to
-      # this node's Argo Application. EXPECTED_SHA is the per-node branch
-      # tip the cell just pushed. wait-for-argocd writes
-      # ARGOCD_SYNC_VERIFIED=true to $GITHUB_ENV which wait-for-candidate-ready
-      # requires (gate-ordering invariant, bug.0321 Fix 4).
       - name: Wait for ArgoCD sync (per-node)
         if: steps.ssh-setup.outputs.has_vm == 'true'
         env:
@@ -501,10 +414,6 @@ jobs:
           PROMOTED_APPS: ${{ matrix.node }}
         run: bash ci-src/scripts/ci/smoke-candidate.sh
 
-      # Authoritative contract probe (per-cell). SOURCE_SHA_MAP on the
-      # per-node deploy branch carries a single entry (this node's
-      # source_sha). NODES=${matrix.node} restricts the probe to that one
-      # app. SOURCE_SHA_MAP_PER_CELL invariant.
       - name: Verify buildSha on endpoint (per-node)
         if: steps.ssh-setup.outputs.has_vm == 'true'
         env:
@@ -514,11 +423,6 @@ jobs:
           NODES: ${{ matrix.node }}
         run: bash ci-src/scripts/ci/verify-buildsha.sh
 
-  # ── Aggregate cell results into a single PR commit-status ────────
-  # Single status check on the PR head SHA, NOT matrix-fanned (avoids
-  # racing same-head status writes). Aggregates: success iff all matrix
-  # cells succeeded; failure if any failed; skipped if decide had no
-  # targets.
   report-status:
     needs: [decide, flight, verify-candidate]
     if: always() && needs.decide.result == 'success'
@@ -550,7 +454,6 @@ jobs:
             STATE=failure
             DESC="Candidate flight cancelled"
           else
-            # skipped + has_targets = something is wrong
             STATE=failure
             DESC="Candidate flight indeterminate (flight=${FLIGHT_RESULT} verify=${VERIFY_RESULT})"
           fi

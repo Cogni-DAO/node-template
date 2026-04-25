@@ -1,30 +1,13 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# ApplicationSet for candidate-a environment.
-#
-# task.0372 v4 — per-node lane isolation. Four git generators, one per
-# catalog entry, each tracking its own deploy/candidate-a-<node> branch.
-# Template metadata.name stays "candidate-a-{{name}}" so Argo Applications
-# reconcile in place across the 1→4 generator transition
-# (APPLICATION_NAMES_UNCHANGED).
-#
-# GR-1: Argo's git generator does not template `revision` per file, so each
-# (env, node) pair gets its own generator entry. ONE_APPSET_PER_ENV is
-# preserved — still one ApplicationSet resource, four generators inside.
+# Spec: work/items/task.0372 (per-node lane isolation, GR-1 four-generator shape).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: cogni-candidate-a
   namespace: argocd
 spec:
-  # APPSET_PRESERVE_ON_TRANSITION (belt-and-suspenders) was attempted but the
-  # candidate-a cluster's Argo CRD pre-dates `spec.preserveResourcesOnDeletion`
-  # — strict-decoding rejects the field at apply time. Removed because:
-  # APPLICATION_NAMES_UNCHANGED (`<env>-<node>`) is the actual primary safety
-  # for the 1→4 generator transition; Argo reconciles each Application in
-  # place when names are byte-identical. preserveResourcesOnDeletion only
-  # mattered if the AppSet were deleted entirely. (See task.0372 v4.)
   generators:
     - git:
         repoURL: https://github.com/cogni-dao/cogni-template.git

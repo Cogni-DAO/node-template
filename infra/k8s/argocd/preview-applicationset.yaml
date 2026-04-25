@@ -1,21 +1,13 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# ApplicationSet for preview environment.
-#
-# task.0372 v4 — per-node lane isolation. Four git generators, one per
-# catalog entry, each tracking its own deploy/preview-<node> branch.
-# Application names stay "preview-{{name}}" (APPLICATION_NAMES_UNCHANGED).
-# See candidate-a-applicationset.yaml for the design reference.
+# Spec: work/items/task.0372 (per-node lane isolation, GR-1 four-generator shape).
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: cogni-preview
   namespace: argocd
 spec:
-  # See candidate-a-applicationset.yaml — preserveResourcesOnDeletion
-  # rejected by candidate-a CRD; APPLICATION_NAMES_UNCHANGED is the primary
-  # safety. Keeping AppSets symmetric across envs.
   generators:
     - git:
         repoURL: https://github.com/cogni-dao/cogni-template.git
