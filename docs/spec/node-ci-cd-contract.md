@@ -133,15 +133,16 @@ Centralizing lint/depcruise configs causes fork friction, policy fights, and los
 
 ### File Pointers
 
-| File                                       | Purpose                          |
-| ------------------------------------------ | -------------------------------- |
-| `.github/workflows/ci.yaml`                | CI entrypoint                    |
-| `.github/workflows/build-multi-node.yml`   | Image build                      |
-| `.github/workflows/promote-and-deploy.yml` | Promote + deploy + verify        |
-| `.github/workflows/e2e.yml`                | E2E + promotion chain            |
-| `scripts/check-fast.sh`                    | `pnpm check:fast` implementation |
-| `scripts/check-all.sh`                     | `pnpm check` implementation      |
-| `scripts/check-full.sh`                    | `pnpm check:full` implementation |
+| File                                       | Purpose                                                                               |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `.github/workflows/ci.yaml`                | CI entrypoint                                                                         |
+| `.github/workflows/build-multi-node.yml`   | Image build                                                                           |
+| `.github/workflows/promote-and-deploy.yml` | Promote + deploy + verify                                                             |
+| `.github/workflows/e2e.yml`                | E2E + promotion chain                                                                 |
+| `scripts/check-fast.sh`                    | `pnpm check:fast` implementation                                                      |
+| `scripts/check-all.sh`                     | `pnpm check` implementation                                                           |
+| `scripts/check-full.sh`                    | `pnpm check:full` implementation                                                      |
+| `tests/ci-invariants/`                     | Static pins on workflow shape, action SHA-pins, single-node-scope classifier fixtures |
 
 ## Acceptance Checks
 
