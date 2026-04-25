@@ -13,10 +13,7 @@ namePrefix: operator-
 images:
   - name: ghcr.io/cogni-dao/cogni-template
     newName: ghcr.io/cogni-dao/cogni-template
-    digest: "sha256:bbae041d190ffc198723d97f49988d0f5e571ee8ebd3d16de7d7ebd0e4c4dc57"
-  - name: ghcr.io/cogni-dao/cogni-template-migrate
-    newName: ghcr.io/cogni-dao/cogni-template-migrate
-    digest: "sha256:e1013aa5e6b0ec3dc3e673d82e068f1552f9e349df4c740dfeabda9c92c3c007"
+    digest: "sha256:ca48a49aadd988a0c69228aa6f272598b36995dfeec6035c5bda96210ea4a87a"
 
 patches:
   # Node-specific ConfigMap values.
@@ -65,19 +62,18 @@ patches:
       - op: replace
         path: /spec/template/spec/containers/0/envFrom/1/secretRef/name
         value: "operator-node-app-secrets"
+      - op: replace
+        path: /spec/template/spec/initContainers/0/envFrom/1/secretRef/name
+        value: "operator-node-app-secrets"
+      - op: replace
+        path: /spec/template/spec/initContainers/0/envFrom/1/secretRef/name
+        value: "operator-node-app-secrets"
       - op: add
         path: /spec/selector/matchLabels/app.kubernetes.io~1instance
         value: "operator"
       - op: add
         path: /spec/template/metadata/labels/app.kubernetes.io~1instance
         value: "operator"
-  - target:
-      kind: Job
-      name: migrate-node-app
-    patch: |
-      - op: replace
-        path: /spec/template/spec/containers/0/env/0/valueFrom/secretKeyRef/name
-        value: "operator-node-app-secrets"
 
   # bug.0295: VM discovery via DNS (preview.vm.cognidao.org).
   # Convert base headless Services → ExternalName; delete EndpointSlices.
