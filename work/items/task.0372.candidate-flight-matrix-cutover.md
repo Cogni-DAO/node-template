@@ -1,23 +1,22 @@
 ---
 id: task.0372
 type: task
-title: Per-node cutover — refactor 3 AppSets + matrix fan-out across all flight workflows
-status: needs_implement
+title: Per-node candidate-flight matrix + AppSet substrate
+status: needs_merge
 priority: 0
 rank: 99
 estimate: 4
-summary: "Symmetric per-node lanes across candidate-a + preview + production in one atomic PR. Each (env, node) gets its own deploy/<env>-<node> branch, its own Argo Application generator, its own GHA matrix cell with fail-fast:false. Refactors 3 ApplicationSets (1 git generator → 4 each). Adds aggregator job that updates deploy/<env>/.promote-state/current-sha after all-cells-green so release.yml's read stays unchanged. Catalog SSoT (task.0374) makes the bootstrap a one-liner."
+summary: "Per-node lane isolation for candidate-a. AppSets 1→4 generators across all 3 envs (candidate-a, preview, production). candidate-flight.yml fanned out into a per-node matrix with fail-fast:false; each cell scopes to its own deploy/candidate-a-<node> branch + its own Argo Application. Bootstrap script seeds 12 dormant per-env per-node deploy branches. Live-validated end-to-end on PR #1033. Preview + production workflow cutover ships separately as task.0376."
 outcome: |
-  - All 3 ApplicationSets refactored: `infra/k8s/argocd/{candidate-a,preview,production}-applicationset.yaml` each goes from 1 git generator → 4 per-node git generators reading `deploy/<env>-<node>` and `files: [infra/catalog/<node>.yaml]`. `source.targetRevision` templates from `{{<env>_branch}}` (fields declared in task.0320).
-  - `candidate-flight.yml` / `flight-preview.yml` / `promote-and-deploy.yml` all fan out via `strategy.matrix` with `fail-fast: false` — one job per affected node, each scoped to its own per-env branch + per-node Argo Application.
-  - Affected-node list comes from `turbo ls --affected --filter=...[$BASE]` (candidate-a: vs origin/main; preview/prod: vs the previous promoted SHA per env).
-  - Each matrix cell pushes to `deploy/<env>-<node>` and waits on `<env>-<node>` Argo Application only. Sibling node failure cannot fail this cell.
-  - `concurrency: { group: flight-${{ matrix.env }}-${{ matrix.node }}, cancel-in-progress: false }` prevents same-branch racing across workflow types.
-  - `infra/control/candidate-lease.json`, `scripts/ci/acquire-candidate-slot.sh`, `scripts/ci/release-candidate-slot.sh` deleted if no remaining callers.
-  - `candidate-flight-infra.yml` gains a best-effort pre-check querying in-progress flight runs (v0 per GR-5).
-  - `.claude/skills/pr-coordinator-v0/SKILL.md` rewritten: drops lease-acquire steps, confirms Turbo-affected nodes, reads per-node branch heads in the Live Build Matrix.
-  - `docs/spec/ci-cd.md` updated with per-node-branch model + Kargo-alignment note (task.0320 already added the two-part prose; task.0372 tightens it once the cutover is live).
-  - Preserves invariants from task.0320 design review GR-1..GR-6. Adds preserveResourcesOnDeletion: true to all 3 AppSets as transition belt-and-suspenders.
+  - All 3 ApplicationSets refactored: `infra/k8s/argocd/{candidate-a,preview,production}-applicationset.yaml` go from 1 git generator → 4 per-node git generators. Each generator pins `revision: deploy/<env>-<node>` and `files: [infra/catalog/<node>.yaml]`. Template `targetRevision` is hardcoded to `deploy/<env>-{{.name}}` — the catalog `*_branch` fields from task.0320 are declarative metadata only, not consumed at runtime (convention-over-config makes the AppSet robust to in-flight pre-task.0320 PRs).
+  - `goTemplate: true` on all 3 AppSets so `{{.name}}` substitution works; default fasttemplate didn't expose arbitrary catalog fields.
+  - `candidate-flight.yml` fans out via `strategy.matrix` with `fail-fast: false`. Job graph: `decide → reconcile-appset → flight (matrix) → verify-candidate (matrix) → report-status`. Each cell scopes to one node's deploy branch + one Argo Application. `concurrency: flight-${{ matrix.env }}-${{ matrix.node }}` is the cross-workflow lease primitive (BRANCH_HEAD_IS_LEASE).
+  - `acquire-candidate-slot.sh` + `release-candidate-slot.sh` no longer called by `candidate-flight.yml`. Files remain on disk (task.0376 cleanup).
+  - `scripts/ops/bootstrap-per-node-deploy-branches.sh` is idempotent + fast-forwarding (BOOTSTRAP_FAST_FORWARDS_BEFORE_MERGE). Pushed all 12 `deploy/{candidate-a,preview,production}-{operator,poly,resy,scheduler-worker}` branches at their parent whole-slot tips. preview + production branches are dormant until task.0376 cuts those workflows over.
+  - `scripts/ci/detect-affected.sh` treats `infra/catalog/**` and `scripts/ci/lib/image-tags.sh` as global build inputs (CATALOG_EDITS_ARE_GLOBAL_BUILD_INPUT) so any catalog edit triggers a full matrix.
+  - `scripts/ci/wait-for-argocd.sh` uses per-invocation `$$.$RANDOM.$RANDOM` suffix on remote `/tmp/` paths so concurrent matrix cells don't race each other's cleanup.
+  - `candidate-flight-infra.yml` carries a best-effort `gh run list` pre-check (GR-5) warning when an app-lever flight is in progress.
+  - Out of scope (filed as task.0376): `flight-preview.yml` matrix + `aggregate-preview` job, `promote-and-deploy.yml` workflow_call + matrix + `aggregate-production`, lock/unlock-preview move into aggregator, deletion of lease scripts/state, `pr-coordinator-v0` SKILL rewrite, `docs/spec/ci-cd.md` `BRANCH_HEAD_IS_LEASE` axiom prose.
 spec_refs:
   - docs/spec/ci-cd.md
 assignees: []

@@ -2,7 +2,7 @@
 id: task.0372.handoff
 type: handoff
 work_item_id: task.0372
-status: active
+status: archived
 created: 2026-04-25
 updated: 2026-04-25
 branch: feat/task.0372-matrix-cutover
