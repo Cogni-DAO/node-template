@@ -40,7 +40,14 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
 elif [[ -f /etc/debian_version ]]; then
     log_info "Installing yq via mikefarah/yq GitHub release (apt's yq is the wrong variant)..."
     YQ_VERSION="${YQ_VERSION:-v4.52.5}"
-    YQ_BINARY="yq_linux_amd64"
+    case "$(uname -m)" in
+        x86_64)  YQ_BINARY="yq_linux_amd64" ;;
+        aarch64 | arm64) YQ_BINARY="yq_linux_arm64" ;;
+        *)
+            log_error "Unsupported architecture: $(uname -m). Install mikefarah/yq manually: https://github.com/mikefarah/yq#install"
+            exit 1
+            ;;
+    esac
     sudo curl -fsSL "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY}" -o /usr/local/bin/yq
     sudo chmod +x /usr/local/bin/yq
 
