@@ -201,6 +201,9 @@ jobs:
       # were just written by promote-build-payload above and must stay.
       # Snapshot rows without a digest pin (`:tag` form, only possible on
       # cold-start) are skipped — promote-k8s-image.sh requires `@sha256:`.
+      # PROMOTED_APPS comes from promote-build-payload.sh as a comma-
+      # separated list (e.g. `operator,poly,resy,scheduler-worker`); we
+      # normalize to space-delimited for the membership check.
       - name: Restore non-promoted overlay digests (post-rsync self-heal)
         if: steps.acquire-summary.outputs.acquired == 'true'
         working-directory: deploy-branch
@@ -219,8 +222,12 @@ jobs:
           while IFS=$'\t' read -r app ref; do
             [ -n "$app" ] && snap["$app"]="$ref"
           done < "$SNAPSHOT_FILE"
+          # Normalize comma- or space-delimited PROMOTED_APPS to a single
+          # space-padded string so ` $target ` membership check is exact.
+          promoted_padded=" $(echo "$PROMOTED_APPS" | tr ',' ' ' | tr -s ' ') "
+          echo "ℹ️  PROMOTED_APPS (normalized): ${promoted_padded}"
           for target in "${ALL_TARGETS[@]}"; do
-            if printf ' %s ' "$PROMOTED_APPS" | grep -q " $target "; then
+            if [[ "$promoted_padded" == *" $target "* ]]; then
               echo "  promoted: $target — keep newly-built digest"
               continue
             fi
