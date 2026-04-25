@@ -15,7 +15,7 @@ project: proj.vcs-integration
 branch: feat/task-0374-node-base-path-resolver
 pr: https://github.com/Cogni-DAO/node-template/pull/1055
 reviewer:
-revision: 1
+revision: 2
 blocked_by:
 deploy_verified: false
 created: 2026-04-25
@@ -145,3 +145,33 @@ observability: |
   green: typecheck (function signature), lint, format, arch:check (shared-package
   rule), check:docs.
 ```
+
+## Review Feedback — Strategic Alignment (revision 2)
+
+Implementation review against task.0372 multi-node CI/CD plan + the two reviewer-policy requirements. APPROVE for what the PR claims to be (accessor + fixtures, both correct and locked); flagged that this is **necessary-but-not-sufficient** for the per-node reviewer story.
+
+### Gap inventory (what this PR does NOT deliver)
+
+1. **Static single-node-scope CI gate** — "PR can only touch 1 node scope (operator = infra)" is an invariant that requires a CI check, not a TS function. Best implemented as a bash gate over `turbo ls --affected --filter='./nodes/*/...'` (already integrated by task.0372) with an operator-infra path allowlist (`nodes/operator/**`, `infra/**`, `.github/**`, `packages/**`, `docs/**`, `work/**`). File as a separate task.
+
+2. **Files-changed → owning-node TS resolver** — the AI reviewer runs inside the operator runtime where shelling to turbo is not available. Needs a TS sibling to `extractNodePath` with the inverse direction:
+
+   ```ts
+   extractOwningNode(spec: RepoSpec, paths: readonly string[]):
+     | { kind: "single"; nodeId: string }
+     | { kind: "operator-infra" }
+     | { kind: "conflict"; nodes: readonly string[] }
+     | { kind: "miss" }
+   ```
+
+   Path-prefix match against `spec.nodes[].path`, longest-match-wins, with explicit operator-infra recognition. **This is the load-bearing function** for routing reviews to per-node rules. File as a separate task.
+
+3. **Reviewer wiring** — once #2 lands, `dispatch.server.ts` resolves owning node from PR diff, threads `nodeId` through `PrReviewWorkflowInput` (already on the wire, currently unused), and `extractNodePath` (this PR) provides the base path for `createReviewAdapterDeps(installationId, appId, key, nodeBasePath)`.
+
+### Why ship this PR anyway
+
+`extractNodePath` is the third of three composable steps (paths → nodeId → path → factory). Building all three in one PR would conflate concerns; building them separately keeps each gate-locked. Same gate-ladder discipline as task.0368.
+
+### Position relative to task.0372
+
+Task.0372 is **CI-side** matrix fan-out (multi-node PRs supported via parallel cells). The two reviewer-policy requirements above are **policy-side** (single-node-scope is forbidden, not just split). The two are not in conflict but they are not aligned either: task.0372 _can_ fan out across nodes; the policy _requires_ PRs to be single-node. The static gate above (#1) is what closes that policy gap and makes task.0372's matrix mostly degenerate to one cell per PR in practice (operator-infra PRs being the exception that legitimately has no node cells).
