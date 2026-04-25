@@ -1,14 +1,14 @@
 ---
 id: task.0373
 type: task
-title: "CI-owned candidate-a digest seed (mirror task.0349 for candidate-a)"
+title: "candidate-flight self-heals deploy/candidate-a digests around PR rsync"
 status: needs_implement
 priority: 1
 rank: 1
-estimate: 3
+estimate: 2
 branch: chore/task.0373-handoff
-summary: "Apply task.0349's pattern (CI owns preview digest seed on main, rsync stops being authority) to the candidate-a environment. Kills the rsync-clobber regression class where stale PR-branch overlay digests roll unrelated nodes to bad images during candidate-flight."
-outcome: "After each successful candidate-flight, exactly one `chore(candidate-a): …` commit updates `main:infra/k8s/overlays/candidate-a/**` digest pins for promoted apps; non-promoted overlays retain prior pin. PR-branch rsync onto deploy/candidate-a stops introducing digest regressions because every PR's branch (post-rebase or freshly opened) inherits a current seed from main. Rebase-before-flight bandage retired."
+summary: "Snapshot-restore deploy/candidate-a overlay digests around the PR-branch rsync inside candidate-flight.yml. Kills the rsync-clobber regression class (stale PR overlay rolls unrelated nodes to bad images) without introducing a new main-write path. Replaces the v1 'mirror task.0349 main-seed' design rejected by /review-design."
+outcome: "After every candidate-flight, deploy/candidate-a overlay digests for non-promoted apps equal their pre-flight values (no rsync regression); promoted apps carry the freshly-built pr-{N}-{HEAD_SHA} digest. Zero writes to main, zero new workflows, zero new PATs. Rebase-before-flight bandage retired."
 spec_refs:
   - ci-cd
 assignees: []
@@ -21,7 +21,7 @@ external_refs:
   - docs/spec/ci-cd.md
 ---
 
-# task.0373 — CI-owned candidate-a digest seed
+# task.0373 — candidate-flight self-heals deploy/candidate-a digests around PR rsync
 
 ## Problem
 
@@ -31,177 +31,141 @@ Operational bandage: rebase every PR onto current main before flight. Brittle; a
 
 ## Authority model
 
-Single writer for candidate-a digest seed on `main`: `infra/k8s/overlays/candidate-a/<app>/kustomization.yaml` digest fields. Same model as task.0349 v3 (preview).
+`deploy/candidate-a` is the source of truth for "what's on candidate-a right now". `candidate-flight.yml` self-heals it: snapshot before the PR-branch rsync, restore non-promoted apps after promote-build-payload writes promoted apps' digests. `main:infra/k8s/overlays/candidate-a/**` is **advisory and may lag** — it has no consumer (candidate-flight rsyncs from PR branch, not main, unlike preview's `promote-and-deploy`).
 
-`deploy/candidate-a` stays machine state + `.promote-state/`. Unchanged ownership.
-
-## Approach (mirror task.0349)
-
-- **Reference implementation**: [`scripts/ci/promote-preview-seed-main.sh`](../../scripts/ci/promote-preview-seed-main.sh) + [`.github/workflows/promote-preview-digest-seed.yml`](../../.github/workflows/promote-preview-digest-seed.yml). Mirror the shape, do not re-derive.
-- **Trigger**: open question — `workflow_run` on Candidate Flight success vs. an explicit step inside `candidate-flight.yml` after promote. Argue in design.
-- **Tri-state digest resolution**: same as task.0349. Resolve `imagetools` → else retain main pin if still valid → else fail.
-- **Skip-self prefix**: extend the existing maintenance-prefix table in `flight-preview.yml` and add the same to `candidate-flight.yml`. Use `chore(candidate-a):`, or unify under `chore(seed):` if it can replace the preview prefix without breakage (argue).
-- **Canonical target list**: [`scripts/ci/lib/image-tags.sh`](../../scripts/ci/lib/image-tags.sh) `ALL_TARGETS` / `NODE_TARGETS`. Never hardcode.
-- **Spec**: update [`docs/spec/ci-cd.md`](../../docs/spec/ci-cd.md) authority section to extend task.0349's axiom to candidate-a.
+Contrast with task.0349 (preview): preview's `promote-and-deploy` rsyncs **from main**, so main is load-bearing and required a CI-owned seed. Candidate-a does not have that property → no main-seed needed.
 
 ## Out of scope
 
-- Touching the shipped preview seed pieces. Additive only.
-- Changing the `candidate-flight.yml` rsync model. The rsync stays; the seed makes its writes harmless.
+- `main:infra/k8s/overlays/candidate-a/**` writes. Explicitly **not** mirrored from task.0349 (see design v2 below).
+- Changing `candidate-flight.yml`'s rsync model. The rsync stays; snapshot/restore make its overlay clobber idempotent on non-promoted apps.
+- Preview seed pieces — task.0349 stays untouched except for an internal lib refactor that produces byte-identical behaviour.
 - Production / canary digest seed. Different env, different task if needed.
 
 ## Validation
 
 ### exercise
 
-1. Land this task; observe one `chore(candidate-a): …` commit on main after the next candidate-flight that promotes any image.
-2. Take an open PR whose branch predates the seed (do not rebase). Dispatch candidate-flight.
-3. Confirm operator/poly/resy not promoted by the PR retain the digests from main's seed (no rollout, no bad image).
-4. Confirm the promoted node flies clean (`/version.buildSha` matches PR head_sha).
+1. Land this task. Take a stale PR (one whose branch predates the most recent candidate-a digest bumps; do **not** rebase). Confirm `git diff origin/main -- infra/k8s/overlays/candidate-a/<non-promoted-node>/kustomization.yaml` shows a different digest than `git show deploy/candidate-a:infra/k8s/overlays/candidate-a/<non-promoted-node>/kustomization.yaml` — i.e., the PR branch carries a stale digest that would clobber.
+2. Dispatch candidate-flight on that PR.
+3. After flight job ends: `git show deploy/candidate-a:infra/k8s/overlays/candidate-a/<non-promoted-node>/kustomization.yaml` digest must match its pre-flight value (snapshot/restore worked).
+4. Promoted node digest on `deploy/candidate-a` must match the freshly-built `pr-{N}-{HEAD_SHA}{suffix}` in GHCR.
+5. `verify-candidate` job stays green; `/version.buildSha` matches `head_sha` for promoted apps.
 
 ### observability
 
-- GHA: digest-seed workflow summary lists per-target resolution outcome (resolved / retained / failed).
+- GHA flight job logs: explicit "Snapshot pre-rsync overlay digests" and "Restore non-promoted overlay digests" steps with per-target output (snapshotted / restored / promoted-skipped / no-overlay-skipped).
 - `kubectl rollout status deployment/<node>-node-app -n cogni-candidate-a` succeeds for all 3 nodes within `verify-candidate` timeout, including for affected-only flights.
 
 ## Success criteria
 
 - Zero rsync-clobber incidents (operator/resy rolling to stale digests because of a stale PR overlay) on candidate-flights post-merge.
 - Rebase-before-flight bandage retired from operational guidance / agent rules.
+- No new files under `.github/workflows/`; no new push paths to `main`; no new PATs.
 
-## Design
+## Design (v2 — deploy-branch-local snapshot/restore)
+
+> **v1 (CI-owned main seed) rejected by /review-design 2026-04-25.** Preview's
+> main-seed pattern exists because `promote-and-deploy` rsyncs **from main** as
+> the source of truth (Axiom `INFRA_K8S_MAIN_DERIVED`). `candidate-flight`
+> rsyncs from the **PR branch**, so `main:infra/k8s/overlays/candidate-a/**`
+> digests have no consumer — seeding them is theatre. Self-heal on
+> `deploy/candidate-a` instead. Strictly simpler, no new privileged push to
+> main, no new workflow file, no skip-prefix tax, scales to N envs without
+> per-env workflows.
 
 ### Outcome
 
-Every successful candidate-flight that promotes ≥1 app produces exactly one
-`chore(candidate-a): …` commit on `main` updating
-`infra/k8s/overlays/candidate-a/<promoted_app>/kustomization.yaml` digest pins.
-Non-promoted overlays untouched. The next PR's `Sync base and catalog to deploy
-branch` rsync therefore inherits a current seed from main and cannot regress an
-unrelated node's digest.
+After every candidate-flight, `deploy/candidate-a:infra/k8s/overlays/candidate-a/<app>/kustomization.yaml`
+holds the freshly-built digest for each promoted app **and** the prior
+deploy-branch digest for each non-promoted app — never the stale digest the
+PR branch carried. The rsync's overlay clobber becomes harmless: anything it
+clobbers gets restored from a pre-rsync snapshot before commit.
 
 ### Approach
 
-**Solution**
+**Solution — three new steps inside the existing `flight` job in
+[`candidate-flight.yml`](../../.github/workflows/candidate-flight.yml):**
 
-1. New script [`scripts/ci/promote-candidate-seed-main.sh`](../../scripts/ci/promote-candidate-seed-main.sh)
-   — affected-only walk over `PROMOTED_APPS` from the flight job. For each
-   promoted app: resolve the freshly-built digest from GHCR
-   (`pr-${PR_NUMBER}-${HEAD_SHA}` ± per-target suffix via
-   `image_tag_for_target`), then call
-   `promote-k8s-image.sh --no-commit --env candidate-a --app <app> --digest <ref>`.
-   Non-promoted apps are not iterated, so their main pins are untouched by
-   construction.
-2. New job `seed-main` inside [`.github/workflows/candidate-flight.yml`](../../.github/workflows/candidate-flight.yml)
-   — `needs: [flight, verify-candidate]`,
-   `if: needs.verify-candidate.result == 'success' && needs.flight.outputs.promoted_apps != ''`.
-   Checks out `main` with `ACTIONS_AUTOMATION_BOT_PAT`, runs the script, commits
-   `chore(candidate-a): refresh digest seed pr-${N} ${shortSha}`, and pushes —
-   with the same race-safe guard pattern as
-   [`promote-preview-digest-seed.yml`](../../.github/workflows/promote-preview-digest-seed.yml)
-   (re-fetch `origin/main`, abort if it advanced; reset on conflict).
-3. Skip rule on [`.github/workflows/flight-preview.yml`](../../.github/workflows/flight-preview.yml)
-   — extend the existing maintenance-prefix table to also skip
-   `chore(candidate-a):` so the new seed commits don't false-trigger a Flight
-   Preview attempt.
-4. Spec — extend [`docs/spec/ci-cd.md`](../../docs/spec/ci-cd.md) authority
-   section to document candidate-a's CI-owned seed alongside preview's.
+1. **Snapshot (pre-rsync):** before the existing `Sync base and catalog to
+deploy branch` step (line 138), read each existing
+   `deploy-branch/infra/k8s/overlays/candidate-a/<target>/kustomization.yaml`
+   digest pin into a TSV at `$RUNNER_TEMP/candidate-a-overlay-snapshot.tsv`
+   (one line per `target` in `ALL_TARGETS` whose overlay file exists, format
+   `<target>\t<image-ref>` where `image-ref` is `repo@sha256:…` or `repo:tag`).
+2. **(unchanged)** Existing rsync clobbers overlays. Existing
+   `promote-build-payload.sh` writes correct digests for `PROMOTED_APPS`.
+3. **Restore (post-promote, pre-commit):** for each `target` in
+   `ALL_TARGETS \ PROMOTED_APPS` whose snapshot row exists, call
+   `promote-k8s-image.sh --no-commit --env candidate-a --app <target> --digest <snapshot-ref>`.
+   Existing `Commit and push deploy/candidate-a` step then commits the
+   merged-correct overlay state to `deploy/candidate-a`.
 
-**Reuses**
+**Bootstrap (cold-start) behaviour:** the very first flight against a
+newly-created `deploy/candidate-a` (or one cloned fresh from `head_sha`) has
+no prior good state — snapshot reads the PR-branch overlay, restore is a
+no-op. This is acceptable: there is no "good prior" to preserve.
+
+**No `main` writes. No new workflow file. No new PAT. No skip-prefix
+maintenance. No verify-gate (irrelevant — promote-build-payload's writes
+were already happening before verify; this just stops the rsync from undoing
+them on non-promoted overlays).**
+
+**Lib extraction (per /review-design ask):** lift the python overlay-image
+extractor out of `promote-preview-seed-main.sh` into
+[`scripts/ci/lib/overlay-digest.sh`](../../scripts/ci/lib/overlay-digest.sh)
+exposing `extract_overlay_image_ref ENV APP` (writes `repo@sha256:…` or
+`repo:tag` to stdout). Refactor `promote-preview-seed-main.sh` to source it
+(behaviour unchanged). The new snapshot step + future seed paths share one
+parser.
+
+### Reuses
 
 - [`scripts/ci/lib/image-tags.sh`](../../scripts/ci/lib/image-tags.sh)
-  (`image_name_for_target`, `image_tag_for_target`, `NODE_TARGETS`) —
-  canonical target catalog.
+  (`ALL_TARGETS`) — canonical target catalog.
 - [`scripts/ci/promote-k8s-image.sh`](../../scripts/ci/promote-k8s-image.sh)
-  `--no-commit` — same per-app digest writer used by preview seed.
-- `resolve_digest_ref` shape (imagetools inspect → `repo@sha256:…`) lifted
-  verbatim from [`promote-preview-seed-main.sh`](../../scripts/ci/promote-preview-seed-main.sh).
-- `flight.outputs.promoted_apps` (already emitted) and
-  `flight.outputs.head_sha` — no new flight outputs needed.
+  `--no-commit` — per-app digest writer.
+- Existing flight-job structure: same checkout, same rsync, same
+  `promote-build-payload.sh`, same commit/push.
 
-**Trigger choice (decided): inline `seed-main` job, not `workflow_run`.**
+### Rejected
 
-| Dimension                   | `workflow_run` (preview pattern)                                                                 | Inline `seed-main` job (chosen)                                                             |
-| --------------------------- | ------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
-| Trigger event of source WF  | `push` to main (untrusted ref, CodeQL needs `head_sha` re-verification + artifact-passing dance) | `workflow_dispatch` only — already privileged, no untrusted ref to verify                   |
-| Knowing what was promoted   | Out-of-band artifact (`preview-flight-outcome.txt`)                                              | `needs.flight.outputs.promoted_apps` directly                                               |
-| Knowing the rollout was OK  | Doesn't (preview seed runs on flight success, before rollout)                                    | Gates on `needs.verify-candidate.result == 'success'` — proven-rolling digests only         |
-| Files added                 | New workflow + script + outcome artifact wiring                                                  | New script + ~30-line job in existing workflow                                              |
-| Pattern parity with preview | High                                                                                             | Lower — but candidate-a's trigger model (dispatch + sync flight) is intrinsically different |
-
-The `workflow_run` indirection on preview exists to bridge from a `push`-driven
-flight to a `contents:write` seed without breaking CodeQL's untrusted-ref rule.
-candidate-flight already runs from `workflow_dispatch` with the PR head treated
-as trusted (it promotes those digests synchronously), and the script writes to
-**main**, not to PR-controlled paths — so the indirection has no security value
-here. Inline wins on simplicity and lets us gate the seed on
-`verify-candidate` success (a real "this digest rolls clean" signal) instead of
-just "flight job exited 0".
-
-**Skip-self prefix (decided): `chore(candidate-a):`, not unified `chore(seed):`.**
-Unifying would require coordinated edits to every existing `chore(preview):`
-filter (flight-preview job-level `if`, promote-preview-digest-seed gate, any
-runbook docs) — regression risk for zero ergonomic benefit. Keep prefixes
-parallel: `chore(preview):` for preview seed, `chore(candidate-a):` for
-candidate-a seed.
-
-**Bi-state, not tri-state.** Preview's tri-state (resolve → retain → fail)
-exists because preview retag is affected-only and the seed must walk the full
-catalog (untouched apps must explicitly retain). Candidate-a's seed walks only
-`promoted_apps`, so:
-
-- **Resolve** the freshly-built `pr-${N}-${HEAD_SHA}{suffix}` digest in GHCR
-  → use it (must succeed; the flight job just promoted it; failure is a real
-  bug, fail loud).
-- Non-promoted apps are not iterated → their main pins are untouched by
-  construction. No "retain" branch needed.
-
-**Rejected**
-
-- _Trigger via `workflow_run` mirroring preview exactly_ — adds an artifact-
-  passing dance and a verified `head_sha` checkout step solving a problem
-  (untrusted `push` ref) that doesn't exist for `workflow_dispatch`. Higher
-  surface area, no ergonomic or security gain.
-- _Reuse `promote-preview-seed-main.sh` with an `OVERLAY_ENV` env arg_ — the
-  preview script's tri-state walks the full catalog (`NODE_TARGETS` +
-  `scheduler-worker`); candidate-a needs an affected-only walk over
-  `PROMOTED_APPS` and a different base tag (`pr-${N}-${HEAD_SHA}` vs
-  `preview-${MERGE_SHA}`). The shared logic worth extracting is
-  `resolve_digest_ref` (~10 lines) — duplicate it; promotion to a shared lib
-  costs more than it buys today.
-- _Have the seed copy digests directly out of `deploy/candidate-a` overlay
-  files instead of re-resolving from GHCR_ — tighter coupling, requires
-  parsing the deploy branch checkout, and breaks if `deploy/candidate-a`
-  drifts. GHCR `imagetools` is the same source of truth the flight job used
-  ~1 minute earlier; re-resolving is cheap and self-contained.
-- _Add `chore(candidate-a):` skip to `candidate-flight.yml` itself_ — not
-  needed; candidate-flight is `workflow_dispatch` only and never fires on
-  pushes to main.
+- **v1: New `seed-main` job + `promote-candidate-seed-main.sh` writing to
+  main.** Solves a non-problem: main's candidate-a digest pins have no
+  downstream consumer (rsync is from PR branch, not main). Adds new
+  privileged push path, new PAT exposure, new `chore(candidate-a):` skip
+  prefix in `flight-preview.yml`, near-duplicate seed script. Per-env tax.
+- **Drop the overlay rsync entirely.** Would prevent PR-side structural
+  overlay edits (replicas, env tweaks, new kustomize files) from reaching
+  the deploy branch. Real regression for legitimate overlay changes.
+- **Smarter rsync that excludes digest fields.** `rsync` has no awareness
+  of YAML semantics; would require a yq/python pre/post pass that's
+  effectively the same as snapshot/restore but inside the rsync step.
+  Snapshot/restore is more legible.
 
 ### Invariants
 
 <!-- CODE REVIEW CRITERIA -->
 
-- [ ] CANDIDATE_A_SEED_AUTHORITY: `main:infra/k8s/overlays/candidate-a/<app>/kustomization.yaml` digest fields are written **only** by the new `seed-main` job after a green candidate-flight (humans editing during a feature PR is fine; the rsync on `deploy/candidate-a` is downstream/derived). (spec: ci-cd)
-- [ ] AFFECTED_ONLY_NO_CLOBBER: The seed iterates **only** `flight.outputs.promoted_apps`; non-promoted overlays must be byte-identical post-job. (spec: ci-cd)
-- [ ] VERIFY_GATED_SEED: The `seed-main` job runs only when `needs.verify-candidate.result == 'success'`. A failed verify must not seed main with a digest that didn't roll. (spec: ci-cd)
-- [ ] NO_NOOP_COMMIT: When digest resolution produces no working-tree change, exit 0 with no commit and no push. Mirrors preview's `git diff --cached --quiet` short-circuit. (spec: ci-cd)
-- [ ] RACE_SAFE_PUSH: Re-fetch `origin/main` before commit and before push; abort (warning + reset) if it advanced. Mirrors `promote-preview-digest-seed.yml`. (spec: ci-cd)
-- [ ] FLIGHT_PREVIEW_SKIPS_SEED_COMMITS: `flight-preview.yml`'s job-level `if:` skips `chore(candidate-a):` exactly as it skips `chore(preview):`. (spec: ci-cd)
-- [ ] CANONICAL_TARGET_CATALOG: All target/tag derivation goes through `scripts/ci/lib/image-tags.sh`. No hardcoded app names in the new script or workflow. (spec: ci-cd)
-- [ ] PREVIEW_SEED_UNTOUCHED: Diff must show zero changes to `promote-preview-seed-main.sh`, `promote-preview-digest-seed.yml`, or the preview AppSet. Additive only. (spec: ci-cd)
-- [ ] SIMPLE_SOLUTION: Reuses `promote-k8s-image.sh --no-commit` + `image-tags.sh`; no new abstractions; ~30-line job + ~80-line script.
-- [ ] ARCHITECTURE_ALIGNMENT: Single-writer-on-main authority (Axiom `INFRA_K8S_MAIN_DERIVED`). `deploy/candidate-a` remains machine state. (spec: ci-cd)
+- [ ] DEPLOY_BRANCH_SELF_HEAL: `deploy/candidate-a` overlay digests for non-promoted apps must equal their pre-flight value (idempotent on re-flight, no rsync regression). (spec: ci-cd)
+- [ ] PROMOTED_DIGESTS_WIN: For apps in `PROMOTED_APPS`, the post-flight digest must be the freshly-built `pr-{N}-{HEAD_SHA}` digest (restore must run BEFORE the existing `Commit and push deploy/candidate-a` step but MUST NOT touch promoted apps). (spec: ci-cd)
+- [ ] BOOTSTRAP_SAFE: First flight against a fresh `deploy/candidate-a` must succeed even though snapshot reads the PR-branch state (cold-start = no prior good state). (spec: ci-cd)
+- [ ] NO_MAIN_WRITES: No new write to `main`. No new PAT. No new workflow. (spec: ci-cd)
+- [ ] CANONICAL_TARGET_CATALOG: All target enumeration goes through `ALL_TARGETS` from `scripts/ci/lib/image-tags.sh`. No hardcoded app names. (spec: ci-cd)
+- [ ] LIB_DEDUPED: `promote-preview-seed-main.sh` and the new snapshot path share `extract_overlay_image_ref` via `scripts/ci/lib/overlay-digest.sh`. No duplicated python overlay parser. (spec: ci-cd)
+- [ ] PREVIEW_SEED_BEHAVIOUR_UNCHANGED: After the lib refactor, `promote-preview-seed-main.sh` produces byte-identical output for the same inputs. (spec: ci-cd)
+- [ ] SIMPLE_SOLUTION: Zero new workflows, zero new privileged pushes, ~3 new steps in `candidate-flight.yml`, one small lib + one small snapshot script. (spec: architecture)
 
 ### Files
 
 <!-- High-level scope -->
 
-- Create: `scripts/ci/promote-candidate-seed-main.sh` — affected-only digest seed loop. Inputs: `PR_NUMBER`, `HEAD_SHA`, `PROMOTED_APPS` (space-separated). Resolves `pr-${PR_NUMBER}-${HEAD_SHA}{suffix}` per app, calls `promote-k8s-image.sh --no-commit --env candidate-a`. No git operations.
-- Modify: `.github/workflows/candidate-flight.yml` — add `seed-main` job (needs flight + verify-candidate, gated on success + non-empty promoted_apps). Checkout main with `ACTIONS_AUTOMATION_BOT_PAT`, run script, commit `chore(candidate-a): refresh digest seed pr-${N} ${shortSha}`, race-safe push.
-- Modify: `.github/workflows/flight-preview.yml` — extend job-level `if:` skip table with `chore(candidate-a):`.
-- Modify: `docs/spec/ci-cd.md` — extend the task.0349 authority section to cover candidate-a; document the new maintenance prefix and the verify-gated trigger.
-- Test: manual validation per the `## Validation` block — no shellcheck-only path. (Optionally add a fixture-driven unit test of `promote-candidate-seed-main.sh` if `verify-buildsha.test.sh`-style harness lands cheap; not blocking.)
+- Create: `scripts/ci/lib/overlay-digest.sh` — sourceable; exposes `extract_overlay_image_ref ENV APP`.
+- Create: `scripts/ci/snapshot-overlay-digests.sh` — given `OVERLAY_ENV` + cwd at deploy-branch root, prints `<target>\t<image-ref>` lines for `ALL_TARGETS` overlays that exist. Used by the snapshot step.
+- Modify: `scripts/ci/promote-preview-seed-main.sh` — drop the inlined python parser, source `lib/overlay-digest.sh`. Behaviour unchanged.
+- Modify: `.github/workflows/candidate-flight.yml` — add Snapshot step before `Sync base and catalog to deploy branch`; add Restore step between `Promote resolved digests into candidate-a overlay` and `Commit and push deploy/candidate-a`.
+- Modify: `docs/spec/ci-cd.md` — replace "single-writer-on-main for candidate-a" expectation with the deploy-branch self-heal axiom; explicitly note that for envs whose `promote-and-deploy` rsync does **not** read main (candidate-a today), main's overlay digests are advisory and may lag.
+- Test: `scripts/ci/tests/snapshot-overlay-digests.test.sh` — fixture-driven; covers (a) all overlays present with mixed `digest:`/`newTag:`, (b) missing overlay file → omitted from output, (c) snapshot+restore round-trip via temp tree.
 
 ## PR / Links
 
