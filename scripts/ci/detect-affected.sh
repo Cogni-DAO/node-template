@@ -130,20 +130,16 @@ else
         selection_reason="shared-package-change:${path}"
         break
         ;;
-      nodes/operator/packages/* | nodes/operator/*)
-        add_target operator
-        ;;
-      nodes/poly/packages/* | nodes/poly/*)
-        add_target poly
-        ;;
-      nodes/resy/packages/* | nodes/resy/*)
-        add_target resy
-        ;;
-      services/scheduler-worker/*)
-        add_target scheduler-worker
-        ;;
       nodes/node-template/*)
         selection_reason="non-deployable-node-template-change:${path}"
+        ;;
+      *)
+        for target in "${ALL_TARGETS[@]}"; do
+          prefix=$(yq '.path_prefix' "${_image_tags_catalog_root}/${target}.yaml")
+          case "$path" in
+            "${prefix}"*) add_target "$target" ;;
+          esac
+        done
         ;;
     esac
   done <<< "$changed_paths"
