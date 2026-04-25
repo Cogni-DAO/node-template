@@ -2,19 +2,44 @@
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
 # ApplicationSet for candidate-a environment.
-# Single-slot pre-merge validation lane.
+#
+# task.0372 v4 — per-node lane isolation. Four git generators, one per
+# catalog entry, each tracking its own deploy/candidate-a-<node> branch.
+# Template metadata.name stays "candidate-a-{{name}}" so Argo Applications
+# reconcile in place across the 1→4 generator transition
+# (APPLICATION_NAMES_UNCHANGED).
+#
+# GR-1: Argo's git generator does not template `revision` per file, so each
+# (env, node) pair gets its own generator entry. ONE_APPSET_PER_ENV is
+# preserved — still one ApplicationSet resource, four generators inside.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
   name: cogni-candidate-a
   namespace: argocd
 spec:
+  preserveResourcesOnDeletion: true # APPSET_PRESERVE_ON_TRANSITION (R4 belt-and-suspenders)
   generators:
     - git:
         repoURL: https://github.com/cogni-dao/cogni-template.git
-        revision: deploy/candidate-a
+        revision: deploy/candidate-a-operator
         files:
-          - path: "infra/catalog/*.yaml"
+          - path: "infra/catalog/operator.yaml"
+    - git:
+        repoURL: https://github.com/cogni-dao/cogni-template.git
+        revision: deploy/candidate-a-poly
+        files:
+          - path: "infra/catalog/poly.yaml"
+    - git:
+        repoURL: https://github.com/cogni-dao/cogni-template.git
+        revision: deploy/candidate-a-resy
+        files:
+          - path: "infra/catalog/resy.yaml"
+    - git:
+        repoURL: https://github.com/cogni-dao/cogni-template.git
+        revision: deploy/candidate-a-scheduler-worker
+        files:
+          - path: "infra/catalog/scheduler-worker.yaml"
   template:
     metadata:
       name: "candidate-a-{{name}}"
@@ -25,7 +50,7 @@ spec:
       project: default
       source:
         repoURL: https://github.com/cogni-dao/cogni-template.git
-        targetRevision: deploy/candidate-a
+        targetRevision: "{{candidate_a_branch}}"
         path: "infra/k8s/overlays/candidate-a/{{name}}"
       destination:
         server: https://kubernetes.default.svc
