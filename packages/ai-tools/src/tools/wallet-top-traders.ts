@@ -24,6 +24,24 @@ import type { BoundTool, ToolContract, ToolImplementation } from "../types";
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Per-wallet windowed stats — returned by getWalletWindowStats.
+ * DI interface copy: keep in sync with WalletWindowStats in @cogni/node-contracts
+ * (poly.wallet-window-stats.v1.contract.ts). The canonical Zod schema lives there;
+ * this interface exists here because @cogni/ai-tools cannot depend on @cogni/node-contracts.
+ */
+export interface WalletWindowStats {
+  proxyWallet: string;
+  timePeriod: "DAY" | "WEEK" | "MONTH" | "ALL";
+  volumeUsdc: number;
+  pnlUsdc: number;
+  pnlKind: "authoritative";
+  roiPct: number | null;
+  numTrades: number;
+  numTradesCapped: boolean;
+  computedAt: string;
+}
+
+/**
  * Wallet capability — thin interface over the Polymarket Data API.
  * Resolved at runtime from the container; tools never import adapters directly.
  */
@@ -33,6 +51,11 @@ export interface WalletCapability {
     orderBy?: "PNL" | "VOL";
     limit?: number;
   }): Promise<WalletTopTradersOutput>;
+
+  getWalletWindowStats(params: {
+    address: string;
+    timePeriod: "DAY" | "WEEK" | "MONTH" | "ALL";
+  }): Promise<WalletWindowStats>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
