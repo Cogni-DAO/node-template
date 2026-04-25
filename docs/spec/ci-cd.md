@@ -160,15 +160,15 @@ Promotion environments run accepted code only.
 
 This spec does not require a `canary` environment. If one is retained during migration, it must be described explicitly as a post-merge soak lane and not as a branch or as a pre-merge safety lane.
 
-### Per-Node Deploy Branches (task.0320)
+### Per-Node Deploy Branches (task.0320 + task.0372)
 
-Each environment additionally carries one `deploy/<env>-<node>` branch per catalog entry — e.g. `deploy/candidate-a-poly`, `deploy/preview-operator`, `deploy/production-scheduler-worker`. Twelve refs in total across four nodes × three envs.
+Per-node flighting lands in two parts to keep the rollout reversible and to preserve the promotion pipeline across the transition:
 
-Each env's ApplicationSet (`infra/k8s/argocd/<env>-applicationset.yaml`) contains **one git generator per node**, with `revision: deploy/<env>-<node>` and `files: [infra/catalog/<node>.yaml]`. Each catalog file declares the matching branch name in its `{candidate_a,preview,production}_branch` field, consumed by the template's `targetRevision`. The generated Application names are unchanged (`<env>-<node>`) — only each Application's tracked ref differs from the pre-task.0320 shape.
+**task.0320 (substrate, this PR)**: each `infra/catalog/<node>.yaml` declares three per-env branch fields (`candidate_a_branch`, `preview_branch`, `production_branch`). These fields are **dormant** — no AppSet or workflow reads them yet. Post-merge, 12 deploy branches (`deploy/<env>-<node>` for each env × node) are pushed off each env's current HEAD, also dormant. The substrate introduces no behavior change; both the catalog fields and the new branches sit unused until task.0372.
 
-**Today** (post-task.0320, pre-task.0372): the per-(env, node) branches exist as additional GitOps tracking points and are held at the same SHA as the parent `deploy/<env>` branch by an initial one-shot push. Flight workflows still write the whole-slot `deploy/<env>` branch. ApplicationSet regeneration produces the same twelve Application names reconciling to the same state — this substrate is a behavioral no-op at merge.
+**task.0372 (cutover)**: a single atomic PR refactors all three `infra/k8s/argocd/<env>-applicationset.yaml` files to 4 per-node git generators (each with `revision: deploy/<env>-<node>` and `files: [infra/catalog/<node>.yaml]`) AND cuts the flight workflows (`candidate-flight.yml`, `flight-preview.yml`, `promote-and-deploy.yml`) to `strategy.matrix` fan-out with `fail-fast: false`. Each matrix cell pushes only to its per-(env, node) branch and waits on only the matching Argo Application. AppSet-read and workflow-write flip to the per-node branches in the same merge — no window where the pipeline can get stuck writing to a ref that AppSets no longer watch.
 
-**Task.0372** flips the flight workflows (`candidate-flight.yml`, `flight-preview.yml`, `promote-and-deploy.yml`) to a `strategy.matrix` fan-out with `fail-fast: false`, where each matrix cell pushes only to `deploy/<env>-<node>` and waits on only the matching Argo Application. Lane isolation becomes structural — a failed verify on one node cannot fail another node's lane. The whole-slot `deploy/<env>` branches are retired after the cutover validates.
+Application names stay `<env>-<node>` across the transition — the AppSet template name is unchanged. Only each Application's `targetRevision` flips from the whole-slot `deploy/<env>` to the per-node `deploy/<env>-<node>`.
 
 The branch-per-(env, node) primitive mirrors [Kargo](https://kargo.akuity.io) Stage semantics (`Stage = per-env-per-node Application` tracking its own immutable-per-promotion ref), implemented on existing ApplicationSet + deploy-branch infrastructure without introducing new CRDs, controllers, or long-running services.
 

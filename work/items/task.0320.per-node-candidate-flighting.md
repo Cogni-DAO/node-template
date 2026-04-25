@@ -2,7 +2,7 @@
 id: task.0320
 type: task
 title: "Per-node flighting substrate — per-env deploy branches + per-node AppSets (candidate-a + preview + production)"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 99
 estimate: 2
@@ -11,11 +11,10 @@ branch: design/task-0320-per-node-flighting
 pr: https://github.com/Cogni-DAO/node-template/pull/1044
 summary: "Substrate for lane isolation across all three environments. Each node gets its own deploy branch per env (deploy/<env>-<node>), each env AppSet is refactored into N per-node git generators, each catalog file declares its per-env branches. Branch head = Kargo Stage promotion lease. PR #1043 (task.0371 step 1) lands the PreSync hook deletion in parallel, eliminating the hook failure class at the source. Matrix cutover of the 3 flight workflows is task.0372."
 outcome: |
-  - Each of the 4 catalog files (`operator/poly/resy/scheduler-worker`) declares three per-env branches: `candidate_a_branch`, `preview_branch`, `production_branch`.
-  - All three ApplicationSets (`candidate-a-`, `preview-`, `production-applicationset.yaml`) refactored to 4 git generators each — one per node, each targeting its own `deploy/<env>-<node>` branch and catalog file.
-  - 12 new deploy branches pushed post-merge: `deploy/{candidate-a,preview,production}-{operator,poly,resy,scheduler-worker}` off each env's current HEAD.
-  - Substrate is a behavioral no-op: Argo reconciles the 12 new Applications (same names preserved) to the same state as before. No flight-workflow changes yet; those come in task.0372.
-  - Applies uniformly — no per-env asymmetry in the failure-isolation primitive.
+  - Each of the 4 catalog files (`operator/poly/resy/scheduler-worker`) declares three per-env branch fields: `candidate_a_branch`, `preview_branch`, `production_branch`. Fields are DORMANT — no AppSet or workflow reads them until task.0372.
+  - 12 new deploy branches pushed post-merge: `deploy/{candidate-a,preview,production}-{operator,poly,resy,scheduler-worker}` off each env's current HEAD. Branches are DORMANT — no AppSet currently tracks them.
+  - ApplicationSet YAMLs unchanged in this PR. AppSet refactor (single-generator → 4-per-node generators) + flight workflow cutover ship atomically in task.0372.
+  - Zero behavioral change at merge; zero pipeline-freeze window. Substrate is truly passive.
 spec_refs:
   - docs/spec/ci-cd.md
 assignees: []
@@ -139,49 +138,38 @@ Scoped uniformly to candidate-a + preview + production. No per-env asymmetry: sa
 - [ ] SIMPLE_SOLUTION: Net new code is ~1 catalog field, ~5 lines of AppSet templating, ~30 lines of GHA matrix plumbing, plus a branch-creation one-shot. No new scripts. No new packages.
 - [ ] ARCHITECTURE_ALIGNMENT: Rides existing ApplicationSet + deploy branches + GHA (spec: architecture).
 
-### Files (task.0320 scope — substrate across all 3 envs)
+### Files (task.0320 scope — dormant substrate; Option A per review revision 1)
 
-<!-- Unified 3-env scope per 2026-04-25 revision. Earlier draft was candidate-a-only; the resy-stuck-hook bug recurs identically on preview + production (same single-branch all-or-nothing AppSet shape). PR #1043 / task.0371 eliminates the Argo PreSync hook failure class globally, which lets this task stay scoped purely to the per-node-branch primitive. -->
+<!-- Revision 1 fix path: AppSet refactor dropped after blocker analysis showed a post-PR `deploy/<env>` → `deploy/<env>-<node>` read/write split would freeze the promotion pipeline across all 3 envs until task.0372 ships. Scope here is catalog fields + branch creation + prose updates only. AppSet refactor + workflow cutover ship atomically in task.0372 — no ref-read/ref-write split window. -->
 
-- Modify: `infra/catalog/{operator,poly,resy,scheduler-worker}.yaml` — each gains three fields: `candidate_a_branch`, `preview_branch`, `production_branch`. ~12 lines total.
-- Modify: `infra/k8s/argocd/candidate-a-applicationset.yaml` — replace single git generator with 4 per-node entries. Template `targetRevision: "{{candidate_a_branch}}"`.
-- Modify: `infra/k8s/argocd/preview-applicationset.yaml` — same refactor: 4 per-node git generators, `targetRevision: "{{preview_branch}}"`.
-- Modify: `infra/k8s/argocd/production-applicationset.yaml` — same refactor: 4 per-node git generators, `targetRevision: "{{production_branch}}"`.
-- Create (one-shot, post-merge git push): 12 branches off each env's current HEAD:
+- Modify: `infra/catalog/{operator,poly,resy,scheduler-worker}.yaml` — each gains three fields: `candidate_a_branch`, `preview_branch`, `production_branch`. ~12 lines total. Fields are DECLARED but have no consumer until task.0372 refactors the AppSets.
+- Create (post-merge git push, serialized after PR #1043's candidate-a validation clears): 12 branches off each env's current HEAD:
   - `deploy/candidate-a-{operator,poly,resy,scheduler-worker}` off `deploy/candidate-a`
   - `deploy/preview-{operator,poly,resy,scheduler-worker}` off `deploy/preview`
   - `deploy/production-{operator,poly,resy,scheduler-worker}` off `deploy/production`
-    Done via scripted loop at merge time, not in a workflow. Additive — no mutation of existing refs.
-- Test: each of the 12 new Argo Applications (`<env>-<node>`) reconciles to Healthy at the same digest set as before; no behavioral drift.
+    Additive — no mutation of existing refs. Branches are DORMANT until task.0372 flips the AppSets to track them.
+- Modify: `docs/spec/ci-cd.md` — describe the two-part rollout (dormant substrate here + cutover in task.0372). Matches code.
+- Modify: `infra/AGENTS.md` — relax "catalog stays thin" boundary to name the three `*_branch` fields. Done.
+- Modify: `work/projects/proj.cicd-services-gitops.md` — frame task.0320 + task.0372 as two halves of one decoupling.
 
-**Out of scope for task.0320** (tracked as task.0372):
+**Out of scope for task.0320** — all moved to task.0372:
 
+- ApplicationSet refactor (all 3 AppSets, 1-generator → 4-per-node-generator).
 - Workflow cutover: `candidate-flight.yml`, `flight-preview.yml`, `promote-and-deploy.yml` matrix fan-out.
 - Deletion of `candidate-lease.json`, `acquire-candidate-slot.sh`, `release-candidate-slot.sh`.
 - `pr-coordinator-v0` skill rewrite.
 - Retirement of `deploy/{candidate-a,preview,production}` whole-slot branches.
-- `docs/spec/ci-cd.md` rewrite.
 
-task.0320 substrate is a **pure behavioral no-op**. Workflows keep pushing to `deploy/<env>` during task.0372 rollout; task.0320 just gives us the per-(env,node) Argo Applications as additional observers of the same state. Lane isolation lights up only when task.0372 flips promote targets to the per-node branches.
+task.0320 substrate is a **pure declaration**. Nothing in the running system reads the catalog `*_branch` fields or the 12 new deploy branches until task.0372. Safe to merge independently of PR #1043; safe to merge regardless of operational state of candidate-a/preview/production.
 
 ### Implementation Order
 
-One PR for task.0320 substrate. Validatable independently of task.0372.
+One PR — entirely declarative.
 
-**PR 1 (this task) — Substrate across all 3 envs:**
-
-1. Add `{candidate_a,preview,production}_branch` fields to all 4 catalog files.
-2. Refactor all 3 ApplicationSet YAMLs to 4 per-node git generators each.
-3. Merge.
-4. Post-merge: push the 12 per-(env, node) deploy branches off each env's current HEAD (scripted one-shot).
-5. Observe: Argo ApplicationSet controller regenerates 12 Applications (names preserved: `<env>-<node>`). Each reconciles to the same digest state it had before. No pod churn.
-
-**Validation (PR 1):**
-
-- Diff of `kubectl -n argocd get applications -o name` before/after: same 12 names (e.g. `candidate-a-operator`, `preview-poly`, `production-resy`).
-- Each Application's `.spec.source.targetRevision` reflects its per-node branch.
-- Each Application's `.status.sync.status == Synced` and `.status.health.status == Healthy` post-merge.
-- No change to live pod replicas or image digests.
+1. Add `{candidate_a,preview,production}_branch` fields to all 4 catalog files. (Code.)
+2. Merge.
+3. Post-merge ops: push the 12 per-(env, node) deploy branches off each env's current HEAD (scripted one-shot). No Argo reconcile consequence — AppSets don't read these refs yet.
+4. Done. task.0372 consumes the substrate later in its own PR with its own flight validation.
 
 ## Design Review (2026-04-24)
 
@@ -219,17 +207,9 @@ Revised 2026-04-25 after readiness scorecard showed preview + production have id
   - Todos:
     - [ ] Add `preview_branch: deploy/preview-<name>` + `production_branch: deploy/production-<name>` to each of 4 catalog files.
   - Validation: `pnpm check:docs` clean.
-- [x] **Checkpoint 2 — candidate-a ApplicationSet four-generator split** ✅
-  - Milestone: `cogni-candidate-a` AppSet has 4 per-node git generators. Done in commit 10af2bb84.
-- [x] **Checkpoint 2b — preview + production ApplicationSet four-generator splits** ✅
-  - Milestone: Both `cogni-preview` and `cogni-production` AppSets refactored to the same 4-per-node-generator shape as candidate-a.
-  - Invariants: NO_NEW_CONTROLLERS (still three AppSet resources total, one per env); ONE_APPSET_SOURCE_OF_TRUTH; KARGO_ALIGNMENT; GR-6.
-  - Todos:
-    - [ ] Rewrite `infra/k8s/argocd/preview-applicationset.yaml` — 4 git generators targeting `deploy/preview-<node>`; `targetRevision: "{{preview_branch}}"`.
-    - [ ] Rewrite `infra/k8s/argocd/production-applicationset.yaml` — 4 git generators targeting `deploy/production-<node>`; `targetRevision: "{{production_branch}}"`.
-    - [ ] Application name templates stay `preview-{{name}}` / `production-{{name}}` (no rename — preserves Argo app identity).
-  - Validation: YAML parses; 12 Application names preserved across the 3 AppSets.
-- [x] **Checkpoint 3 — Deployment impact documented (12 branches, one scripted push)** ✅
+- [x] **Checkpoint 2 (REMOVED per review revision 1)** — AppSet refactor moved to task.0372 after blocker analysis showed the post-PR `deploy/<env>` → `deploy/<env>-<node>` read/write split would freeze the promotion pipeline across all 3 envs until task.0372 ships. Reverted in commit following review.
+- [x] **Checkpoint 2b (REMOVED per review revision 1)** — See Checkpoint 2. preview + production AppSets reverted to main's single-generator shape. All AppSet work ships atomically in task.0372.
+- [x] **Checkpoint 3 — Deployment impact documented (12 branches, one scripted push; safe because no consumer reads them yet)** ✅
   - Milestone: PR body carries the exact branch-push script, including the 8 new branches on top of the original 4.
   - Todos:
     - [ ] Update PR body's Deployment Impact section with: `for env in candidate-a preview production; do for node in operator poly resy scheduler-worker; do git push origin refs/remotes/origin/deploy/$env:refs/heads/deploy/$env-$node; done; done`
@@ -239,6 +219,57 @@ Revised 2026-04-25 after readiness scorecard showed preview + production have id
     - [x] File renamed: `task.0371.candidate-flight-matrix-cutover.md` → `task.0372.candidate-flight-matrix-cutover.md`
     - [x] Scope expanded to cover all 3 flight workflows (candidate-flight / flight-preview / promote-and-deploy), not just candidate-flight.yml
     - [x] `_index.md` updated.
+
+## Validation Plan (revision 1 — Option A, no candidate-a flight needed)
+
+Because task.0320 substrate is pure declaration — no AppSet or workflow reads the new catalog fields or per-node branches — validation is static + offline. **Intentionally does not run `candidate-flight.yml`:** PR #1043 is using that slot today (via `--ref fix/task.0370-step1-init-container-cleanup`) to validate the migration-hook deletion. Sharing the lease would collide. Two PRs, two days of green distance, one slot at a time.
+
+### Pre-merge (runs locally in the worktree — already clean on commit `c62bb375b`)
+
+- [x] `pnpm check:docs` clean — catalog files pass header + metadata validators; work-item index parses.
+- [x] `pnpm format` applied — no prettier drift.
+- [x] AppSet YAMLs reverted to `main` state — verified by `git diff origin/main -- infra/k8s/argocd/`. No Argo-facing change in this PR.
+- [x] `git grep candidate_a_branch preview_branch production_branch` confirms only the 4 catalog files reference the new fields. Nothing else reads them — true dormancy.
+- [x] Each catalog YAML parses with `python3 -c "import yaml; yaml.safe_load(open('infra/catalog/<node>.yaml'))"` — all 4 succeed.
+
+### Post-merge branch push (run only after PR #1043's candidate-a validation clears)
+
+```bash
+# Serialize after PR #1043's validation:
+#   1. gh run list --workflow=candidate-flight.yml --repo Cogni-DAO/node-template --limit 3
+#      → confirm the #1043 --ref flight is 'completed' (success or failure, either closes the lease window)
+#   2. gh api repos/Cogni-DAO/node-template/contents/infra/control/candidate-lease.json
+#      → confirm lease.state != 'leased'
+
+git fetch origin deploy/candidate-a deploy/preview deploy/production --quiet
+for env in candidate-a preview production; do
+  for node in operator poly resy scheduler-worker; do
+    git push origin refs/remotes/origin/deploy/$env:refs/heads/deploy/$env-$node
+  done
+done
+```
+
+- [ ] All 12 branches reported as `[new branch]` by `git push` (0 errors).
+- [ ] `gh api repos/Cogni-DAO/node-template/branches | jq -r '.[].name' | grep -E "^deploy/(candidate-a|preview|production)-" | wc -l` returns `12`.
+
+### Post-merge Argo no-op check (passive observation — nothing should change)
+
+- [ ] `kubectl -n argocd get applications -o name` returns the same 12 Application names as pre-merge (unchanged; AppSets untouched in this PR).
+- [ ] `kubectl -n argocd get applications -o json | jq '.items[].spec.source.targetRevision'` returns `deploy/candidate-a` / `deploy/preview` / `deploy/production` — whole-slot refs, NOT per-node. (AppSets still read the whole-slot branches because this PR reverted that refactor.)
+- [ ] `kubectl -n cogni-candidate-a get pods -o jsonpath='{.items[*].spec.containers[*].image}'` image digests match pre-merge — zero pod churn expected.
+
+### Green-distance discipline vs PR #1043
+
+PR #1043's validation flight via `gh workflow run candidate-flight.yml --ref fix/task.0370-step1-init-container-cleanup -f pr_number=1043 -f head_sha=c4ab9f08bd39f7ff4b528bdd5abd4d80226ead29` is actively exercising:
+
+- `wait-for-argocd.sh` (-94 lines, hook-babysitting removal)
+- `infra/k8s/base/node-app/deployment.yaml` (initContainer addition)
+- all 12 overlay `kustomization.yaml` files (Job → Deployment patch retarget)
+- `scripts/ci/lib/image-tags.sh` (migrator target retirement)
+
+task.0320 touches **none of the above**. Merge-time conflict risk: zero (different files). Runtime conflict risk: zero (task.0320 produces nothing that runs). The one shared resource is the candidate-a lease, which this task does not need.
+
+**Recommended merge order**: PR #1043 → validate on candidate-a via `--ref` flight → merge #1043 → then task.0320 (#1044) → 12 branches pushed post-merge. That way task.0320 merges into a main where the initContainer world is the state of nature — simpler to reason about, though functionally independent.
 
 ## Review Feedback (revision 1 — 2026-04-25)
 

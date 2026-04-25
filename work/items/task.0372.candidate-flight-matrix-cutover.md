@@ -1,13 +1,14 @@
 ---
 id: task.0372
 type: task
-title: Per-node matrix cutover across candidate-a / preview / production workflows
+title: Per-node cutover — refactor 3 AppSets + matrix fan-out across all flight workflows
 status: needs_implement
 priority: 0
 rank: 99
-estimate: 3
-summary: "Second half of task.0320 — cut candidate-flight.yml, flight-preview.yml, and promote-and-deploy.yml over to a strategy.matrix fan-out with fail-fast:false. Compute affected nodes via Turbo, delete whole-slot lease + acquire/release scripts, rewrite pr-coordinator-v0. Matrix applies uniformly across all three envs so lane isolation is structural at every gate."
+estimate: 4
+summary: "Atomic cutover PR. Refactors candidate-a/preview/production ApplicationSets from 1 git generator → 4 per-node git generators each, AND cuts candidate-flight.yml, flight-preview.yml, and promote-and-deploy.yml over to a strategy.matrix fan-out with fail-fast:false. AppSet-read and workflow-write flip to per-node branches in the same merge — no window where AppSets read deploy/<env>-<node> while workflows still write deploy/<env>. Absorbs the AppSet work originally planned for task.0320 after review revision 1 flagged the read/write split risk."
 outcome: |
+  - All 3 ApplicationSets refactored: `infra/k8s/argocd/{candidate-a,preview,production}-applicationset.yaml` each goes from 1 git generator → 4 per-node git generators reading `deploy/<env>-<node>` and `files: [infra/catalog/<node>.yaml]`. `source.targetRevision` templates from `{{<env>_branch}}` (fields declared in task.0320).
   - `candidate-flight.yml` / `flight-preview.yml` / `promote-and-deploy.yml` all fan out via `strategy.matrix` with `fail-fast: false` — one job per affected node, each scoped to its own per-env branch + per-node Argo Application.
   - Affected-node list comes from `turbo ls --affected --filter=...[$BASE]` (candidate-a: vs origin/main; preview/prod: vs the previous promoted SHA per env).
   - Each matrix cell pushes to `deploy/<env>-<node>` and waits on `<env>-<node>` Argo Application only. Sibling node failure cannot fail this cell.
@@ -15,7 +16,8 @@ outcome: |
   - `infra/control/candidate-lease.json`, `scripts/ci/acquire-candidate-slot.sh`, `scripts/ci/release-candidate-slot.sh` deleted if no remaining callers.
   - `candidate-flight-infra.yml` gains a best-effort pre-check querying in-progress flight runs (v0 per GR-5).
   - `.claude/skills/pr-coordinator-v0/SKILL.md` rewritten: drops lease-acquire steps, confirms Turbo-affected nodes, reads per-node branch heads in the Live Build Matrix.
-  - `docs/spec/ci-cd.md` updated with per-node-branch model + Kargo-alignment note.
+  - `docs/spec/ci-cd.md` updated with per-node-branch model + Kargo-alignment note (task.0320 already added the two-part prose; task.0372 tightens it once the cutover is live).
+  - Preserves invariants from task.0320 design review GR-1..GR-6. Adds preserveResourcesOnDeletion: true to all 3 AppSets as transition belt-and-suspenders.
 spec_refs:
   - docs/spec/ci-cd.md
 assignees: []
