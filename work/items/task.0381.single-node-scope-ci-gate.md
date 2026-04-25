@@ -2,7 +2,8 @@
 id: task.0381
 type: task
 title: "Single-node-scope CI gate — reject PRs that touch >1 node domain (operator owns repo infra)"
-status: needs_design
+status: needs_closeout
+branch: feat/task-0381-single-node-scope-ci-gate
 priority: 0
 rank: 1
 estimate: 1
@@ -12,7 +13,6 @@ spec_refs:
   - node-ci-cd-contract
 assignees: []
 project: proj.cicd-services-gitops
-branch:
 pr:
 reviewer:
 revision: 0

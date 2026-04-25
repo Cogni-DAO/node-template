@@ -9,7 +9,7 @@ read_when: Modifying CI workflows, adding checks to merge gate, or planning mult
 implements: []
 owner: cogni-dev
 created: 2025-12-22
-verified: 2026-04-04
+verified: 2026-04-25
 tags:
   - ci-cd
   - deployment
@@ -42,11 +42,13 @@ Define the CI/CD invariants, merge gate, and file ownership boundaries that ensu
 
 4. **NO_RUNTIME_FETCHES**: Workflows never fetch config from outside repo.
 
-5. **SCRIPTS_ARE_THE_API**: Workflows orchestrate by calling named pnpm scripts; no inline command duplication.
+5. **SCRIPTS_ARE_THE_API**: Workflows orchestrate by calling named pnpm scripts; no inline command duplication. Targets logic _duplicated across ≥2 workflows_ — that must live in `scripts/` to prevent drift. Gate-specific inline policy that is small, unique to one workflow, and pinned by a meta-test is allowed; the `single-node-scope` job in `ci.yaml` is the canonical example.
 
 6. **BUILD_ONCE_PROMOTE_DIGEST**: Images build on canary. Staging and production deploy the exact same digests. No per-environment rebuilds.
 
 7. **SINGLE_RESPONSIBILITY**: Each workflow file owns one concern (build, promote+deploy, E2E+release). No monoliths.
+
+8. **SINGLE_DOMAIN_HARD_FAIL**: PRs may touch exactly one node's domain. Each non-operator node owns `nodes/<X>/`; the operator node owns `nodes/operator/` plus everything else in the repo (infra, packages, .github, docs, work, scripts, root configs) as one domain. Cross-domain PRs are rejected by the `single-node-scope` job in `ci.yaml`. Bounded exception: `pnpm-lock.yaml` may ride a single non-operator node PR (mechanical side-effect of node-level `package.json` changes; see `work/items/task.0381.*` for rationale).
 
 ---
 
@@ -54,15 +56,16 @@ Define the CI/CD invariants, merge gate, and file ownership boundaries that ensu
 
 ### Merge Gate (Required for PR Merge)
 
-| Check                               | Local            | CI             |
-| ----------------------------------- | ---------------- | -------------- |
-| `pnpm typecheck`                    | yes              | static job     |
-| `pnpm lint`                         | yes              | static job     |
-| `pnpm format:check`                 | yes              | unit job       |
-| `pnpm test:ci` (unit/contract/meta) | yes              | unit job       |
-| `pnpm arch:check`                   | yes              | unit job       |
-| `pnpm test:component`               | yes              | component job  |
-| `pnpm test:stack:docker`            | no (needs infra) | stack-test job |
+| Check                                  | Local            | CI                    |
+| -------------------------------------- | ---------------- | --------------------- |
+| `pnpm typecheck`                       | yes              | static job            |
+| `pnpm lint`                            | yes              | static job            |
+| `pnpm format:check`                    | yes              | unit job              |
+| `pnpm test:ci` (unit/contract/meta)    | yes              | unit job              |
+| `pnpm arch:check`                      | yes              | unit job              |
+| `pnpm test:component`                  | yes              | component job         |
+| `pnpm test:stack:docker`               | no (needs infra) | stack-test job        |
+| **SINGLE_DOMAIN_HARD_FAIL** (PR scope) | no               | single-node-scope job |
 
 **Optional** (not blocking): coverage upload, SonarCloud scan.
 
