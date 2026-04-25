@@ -38,9 +38,19 @@
  *     call. Subsequent calls reuse the cached instance until the process exits.
  *   - SHARED_PUBLIC_CLIENT — the `viem.PublicClient` used for RPC reads is a
  *     process-level singleton; wallet clients fan out per tenant.
+ *   - SWEEP_TRIGGERED_BY_ON_CHAIN_BALANCE — `redeemAllRedeemableResolvedPositions`
+ *     selects redemption candidates by ERC1155 `balanceOf(funder, asset) > 0`
+ *     against `POLYGON_CONDITIONAL_TOKENS`, NOT by Data-API `Position.redeemable`.
+ *     Predicate is on-chain truth; Data-API positions are only the enumeration
+ *     source. Sweep emits structured events: `poly.ctf.redeem.skip_zero_balance`
+ *     (info), `poly.ctf.redeem.balance_read_failed` (warn, multicall element
+ *     failure), `poly.ctf.redeem.error` (warn, post-balance-check redeem failure).
+ *     See bug.0376.
  * Side-effects: on first `placeIntent` for a new tenant: HTTPS to
- *   Polymarket CLOB + Privy API. Subsequent calls reuse cached clients.
- * Links: work/items/task.0318 (Phase B3), docs/spec/poly-trader-wallet-port.md
+ *   Polymarket CLOB + Privy API. Subsequent calls reuse cached clients. Sweep
+ *   path additionally issues one `eth_call` (multicall) per tick.
+ * Links: work/items/task.0318 (Phase B3), work/items/bug.0376,
+ *   docs/spec/poly-trader-wallet-port.md
  * @public
  */
 
@@ -657,11 +667,15 @@ async function buildExecutor(
   async function redeemAllRedeemableResolvedPositions(): Promise<
     Array<{ condition_id: string; tx_hash: `0x${string}` }>
   > {
+    // Predicate is on-chain ERC1155 balance, NOT Data-API `redeemable`. The
+    // Data-API flag is the bug source (it stays true for already-redeemed
+    // positions); the chain is the truth source. The positions list is just
+    // the *enumeration source* — which token ids to check. See bug.0376.
     const positions = await dataApiClient.listUserPositions(funderAddress);
+    const candidates: Array<{ condition_id: string; asset: bigint }> = [];
     const seen = new Set<string>();
-    const out: Array<{ condition_id: string; tx_hash: `0x${string}` }> = [];
     for (const p of positions) {
-      if (!p.redeemable || !p.conditionId) continue;
+      if (!p.conditionId) continue;
       let norm: string;
       try {
         norm = normalizePolygonConditionId(p.conditionId);
@@ -670,20 +684,81 @@ async function buildExecutor(
       }
       if (seen.has(norm)) continue;
       seen.add(norm);
+      if (!p.asset) continue;
+      let asset: bigint;
       try {
-        const r = await redeemResolvedPosition({
-          condition_id: p.conditionId,
-        });
-        out.push({ condition_id: p.conditionId, tx_hash: r.tx_hash });
-      } catch (err) {
+        asset = BigInt(p.asset);
+      } catch {
+        continue;
+      }
+      candidates.push({ condition_id: p.conditionId, asset });
+    }
+    if (candidates.length === 0) return [];
+
+    const balances = await publicClient.multicall({
+      contracts: candidates.map((c) => ({
+        address: POLYGON_CONDITIONAL_TOKENS as `0x${string}`,
+        abi: polymarketCtfRedeemAbi,
+        functionName: "balanceOf" as const,
+        args: [funderAddress as `0x${string}`, c.asset] as const,
+      })),
+      allowFailure: true,
+    });
+
+    const out: Array<{ condition_id: string; tx_hash: `0x${string}` }> = [];
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      const result = balances[i];
+      if (!c) continue;
+      if (!result || result.status !== "success") {
         deps.logger.warn(
           {
-            event: "poly.ctf.redeem.sweep_skip",
+            event: "poly.ctf.redeem.balance_read_failed",
             billing_account_id: billingAccountId,
-            condition_id: p.conditionId,
+            condition_id: c.condition_id,
+            asset: c.asset.toString(),
+            err:
+              result?.status === "failure"
+                ? result.error instanceof Error
+                  ? result.error.message
+                  : String(result.error)
+                : "missing result",
+          },
+          "poly-trade-executor: balanceOf read failed; skipping condition"
+        );
+        continue;
+      }
+      const balance = result.result as bigint;
+      if (balance === 0n) {
+        deps.logger.info(
+          {
+            event: "poly.ctf.redeem.skip_zero_balance",
+            billing_account_id: billingAccountId,
+            condition_id: c.condition_id,
+            asset: c.asset.toString(),
+            funder: funderAddress,
+          },
+          "poly-trade-executor: redeem sweep skipped — funder holds zero ERC1155 balance"
+        );
+        continue;
+      }
+      try {
+        const r = await redeemResolvedPosition({
+          condition_id: c.condition_id,
+        });
+        out.push({ condition_id: c.condition_id, tx_hash: r.tx_hash });
+      } catch (err) {
+        // Post-balance-check error path: balanceOf said >0 but
+        // redeemResolvedPosition's own Data-API match failed (e.g. Data-API
+        // marked the position not redeemable, RPC failure). Rare; warn-level.
+        deps.logger.warn(
+          {
+            event: "poly.ctf.redeem.error",
+            billing_account_id: billingAccountId,
+            condition_id: c.condition_id,
             err: err instanceof Error ? err.message : String(err),
           },
-          "poly-trade-executor: redeem sweep skipped one condition"
+          "poly-trade-executor: redeem failed after balance precheck"
         );
       }
     }
