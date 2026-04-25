@@ -31,6 +31,8 @@
 | 0 | 1 | 3 | needs_merge | bug.0334 | Overlay EndpointSlice IPs via env-state.yaml + workflow rsync — establish INFRA_K8S_MAIN_DERIVED | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 1 | needs_review | bug.0363 | wait-for-argocd `delete_stale_hook_jobs` kills live migration jobs → infinite stuck-Running loop | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 1 | 4 | needs_merge | task.0374 | Catalog-as-SSoT — make infra/catalog/*.yaml the single node declaration | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | 1 | 2 | needs_merge | bug.0376 | poly CTF redeem sweep burns POL on a runaway loop, re-redeeming already-redeemed positions | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
+| 0 | 1 | 5 | needs_triage | task.0379 | Poly redemption sweep — top-0.1% production-grade hardening (gates + spec + anvil-fork validation) | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -84,6 +86,7 @@
 | 1 | 1 | 2 | needs_implement | task.0360 | POST /api/v1/vcs/pr — VCS create-PR endpoint for external agents | Agentic Interoperability | proj.agentic-interop |
 | 1 | 1 | 1 | needs_merge | bug.0361 | promote-and-deploy: EXPECTED_BUILDSHA uses merge commit SHA; deploy-infra always runs | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_review | bug.0364 | promote-and-deploy: production can't promote heterogeneous preview (single source_sha assumption) | CI/CD Pipeline | proj.cicd-services-gitops |
+| 1 | 1 | 1 | needs_merge | task.0368 | Reviewer adapter-boundary contract test — lock ReviewHandlerDeps before per-node scoping refactor | VCS Integration | proj.vcs-integration |
 | 1 | 1 | 2 | needs_triage | bug.0369 | Reown/WalletConnect origin allowlist missing for poly-test (and no sync workflow across node × env matrix) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_review | bug.0370 | LiteLLM billing callback DNS-fails since k3s migration — every prod LLM call drops on the floor | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_review | task.0370 | Rebase every node's migrator stage on its runtime image | Database Operations | proj.database-ops |
@@ -235,6 +238,8 @@
 | 2 | 50 | 2 | needs_merge | task.0324 | Per-node DB schema split (minimal — no new tooling) | Database Operations | proj.database-ops |
 | 2 | 50 | 3 | needs_triage | bug.0330 | poly /api/v1/chat/completions intermittently returns empty body on candidate-a | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 50 | 2 | needs_triage | bug.0337 | Per-node testcontainers setup uses operator's migrations — drift once any node diverges | Database Operations | proj.database-ops |
+| 2 | 50 | 3 | needs_triage | task.0377 | poly CTF redeem sweep — reactive architecture (replace per-tick RPC fan-out) | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
+| 2 | 60 | 3 | needs_triage | task.0378 | poly anvil-fork test harness — verify CTF semantics against real Polygon chain state | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
 | 2 | 99 | 1 | needs_design | bug.0093 | Ownership facade N+1 — sequential DB queries per epoch | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 99 | 2 | needs_design | task.0104 | Ledger production hardening — upsert batching, connection pooling, activity tests | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 99 | 3 | needs_design | task.0105 | Allocation algorithm expansion — multi-source credit estimate algos + per-source weight derivation | Transparent Credit Payouts | proj.transparent-credit-payouts |
