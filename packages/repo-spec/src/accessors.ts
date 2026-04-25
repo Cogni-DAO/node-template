@@ -303,3 +303,110 @@ export function extractNodePath(spec: RepoSpec, nodeId: string): string | null {
   const entry = (spec.nodes ?? []).find((n) => n.node_id === nodeId);
   return entry?.path ?? null;
 }
+
+// ---------------------------------------------------------------------------
+// Owning-node resolution (paths → owning node)
+// ---------------------------------------------------------------------------
+
+/**
+ * Discriminated outcome of `extractOwningNode`. The reviewer (and any other
+ * consumer) dispatches on `kind`:
+ *
+ * - `single`         — exactly one sovereign node owns every path; review against `nodes/<...>/.cogni/rules/`.
+ * - `operator-infra` — every path is infra (outside `nodes/` or under `nodes/operator/`); review against root `.cogni/rules/`.
+ * - `conflict`       — two or more sovereign nodes touched; refuse to review (post diagnostic, ask for split).
+ * - `miss`           — paths empty, OR at least one path is under `nodes/<x>/` where `<x>` is neither `operator` nor a registered node.
+ */
+export type OwningNode =
+  | { kind: "single"; nodeId: string; path: string }
+  | { kind: "operator-infra" }
+  | {
+      kind: "conflict";
+      nodes: ReadonlyArray<{ nodeId: string; path: string }>;
+    }
+  | { kind: "miss" };
+
+type PathClass =
+  | { kind: "infra" }
+  | { kind: "sovereign"; nodeId: string; path: string }
+  | { kind: "unregistered" };
+
+/**
+ * Classify a single changed path. The rule (matches task.0381's CI gate exactly):
+ *
+ * - Top-level dir is not `nodes/` → infra.
+ * - Top-level segment under `nodes/` is `operator` → infra (operator IS the control plane).
+ * - Top-level segment under `nodes/` matches a registry entry's top-level segment → sovereign(nodeId, registryPath).
+ * - Top-level segment under `nodes/` matches no registry entry → unregistered.
+ */
+function classifyPath(
+  path: string,
+  registry: readonly NodeRegistryEntry[]
+): PathClass {
+  const segments = path.split("/");
+  if (segments[0] !== "nodes" || segments.length < 2 || segments[1] === "") {
+    return { kind: "infra" };
+  }
+  const top = segments[1];
+  if (top === "operator") return { kind: "infra" };
+
+  const entry = registry.find((e) => e.path.split("/")[1] === top);
+  if (!entry) return { kind: "unregistered" };
+  return { kind: "sovereign", nodeId: entry.node_id, path: entry.path };
+}
+
+/**
+ * Resolve which node owns a set of changed paths. Pure function — no I/O, no env,
+ * no logging. Same policy as task.0381's CI gate (`OPERATOR_IS_INFRA`,
+ * directory-listing-as-source-of-truth), expressed in code that runs inside the
+ * operator runtime where shelling out to `turbo` is not available.
+ *
+ * Algorithm: classify each path against the registry by top-level-under-`nodes/`
+ * segment. Aggregate:
+ * - empty input or any unregistered `nodes/<x>/` path → `miss`
+ * - all paths classified as infra → `operator-infra`
+ * - exactly one distinct sovereign node → `single`
+ * - two or more distinct sovereign nodes → `conflict` (sorted by nodeId)
+ *
+ * Path safety: paths are consumed verbatim. No `..` rejection, no absolute-path
+ * detection. Same boundary as `extractNodePath` — the caller validates.
+ */
+export function extractOwningNode(
+  spec: RepoSpec,
+  paths: readonly string[]
+): OwningNode {
+  if (paths.length === 0) return { kind: "miss" };
+
+  const registry = spec.nodes ?? [];
+  const sovereigns = new Map<string, { nodeId: string; path: string }>();
+  let hasUnregistered = false;
+  let hasInfra = false;
+
+  for (const p of paths) {
+    const cls = classifyPath(p, registry);
+    if (cls.kind === "unregistered") {
+      hasUnregistered = true;
+    } else if (cls.kind === "infra") {
+      hasInfra = true;
+    } else {
+      sovereigns.set(cls.nodeId, { nodeId: cls.nodeId, path: cls.path });
+    }
+  }
+
+  if (hasUnregistered) return { kind: "miss" };
+  if (sovereigns.size === 0) {
+    // All paths classified as infra (we know paths.length > 0 here, hasInfra is true).
+    return hasInfra ? { kind: "operator-infra" } : { kind: "miss" };
+  }
+  if (sovereigns.size === 1) {
+    const only = sovereigns.values().next().value as {
+      nodeId: string;
+      path: string;
+    };
+    return { kind: "single", nodeId: only.nodeId, path: only.path };
+  }
+  const sorted = [...sovereigns.values()].sort((a, b) =>
+    a.nodeId < b.nodeId ? -1 : a.nodeId > b.nodeId ? 1 : 0
+  );
+  return { kind: "conflict", nodes: sorted };
+}

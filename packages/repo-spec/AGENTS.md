@@ -47,6 +47,7 @@ Pure parsing and typed extraction for `.cogni/repo-spec.yaml` — the governance
   - `extractNodeId(spec)` — Node identity UUID
   - `extractNodes(spec)` — Node registry entries (operator-only, returns `[]` for non-operator specs)
   - `extractNodePath(spec, nodeId)` — Resolve a node UUID to its registered relative path; returns `null` on miss (caller decides fallback)
+  - `extractOwningNode(spec, paths)` — Inverse direction: paths → owning node. Returns a discriminated union (`single | operator-infra | conflict | miss`). Operator is structurally infra. Pairs with task.0381's CI gate.
   - `extractScopeId(spec)` — Scope identity UUID (throws if missing)
   - `extractChainId(spec)` — Numeric chain ID from cogni_dao section
   - Zod schemas: `repoSpecSchema`, `nodeRegistryEntrySchema`, `creditsTopupSpecSchema`, `governanceScheduleSchema`, etc.

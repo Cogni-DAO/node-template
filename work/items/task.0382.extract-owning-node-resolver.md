@@ -2,7 +2,7 @@
 id: task.0382
 type: task
 title: "`extractOwningNode(spec, paths)` — TS resolver for files-changed → owning nodeId in operator runtime"
-status: needs_design
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 1
@@ -13,14 +13,14 @@ spec_refs:
   - node-operator-contract
 assignees: []
 project: proj.vcs-integration
-branch:
+branch: feat/task-0382-extract-owning-node-resolver
 pr:
 reviewer:
 revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-04-25
-updated: 2026-04-25
+updated: 2026-04-26
 labels: [vcs, review, repo-spec, accessor, monorepo]
 ---
 
@@ -74,26 +74,34 @@ The reviewer dispatches on `kind`:
    - All paths fail to classify (path under nodes/ but no registry match) → { kind: "miss" }
 ```
 
-**Operator-infra recognition**: derived from the registry. The operator's registry entry has `path: "nodes/operator"` (or whatever root declares). Paths that match `packages/**`, `infra/**`, `.github/**`, `docs/**`, `work/**`, `services/**`, `scripts/**`, root configs — i.e., paths that are _not_ under any registered node — are classified as "infra" and silently ignored when computing the owning node. A PR touching only infra paths returns `{ kind: "operator-infra" }`.
+**Operator-infra recognition** — must agree byte-for-byte with task.0381's CI rule. A path is **infra** iff EITHER:
 
-**Mixed infra + single-node**: a PR touching `packages/repo-spec/src/foo.ts` AND `nodes/poly/app/bar.ts` returns `{ kind: "single", nodeId: poly }` — the single sovereign node owns the review, with infra changes riding along. This matches task.0381's exemption logic (infra is allowed alongside any other path).
+1. Its top-level dir is not `nodes/` (e.g. `packages/**`, `infra/**`, `.github/**`, `docs/**`, `work/**`, `services/**`, `scripts/**`, root configs), OR
+2. Its top-level-under-`nodes/` segment is `operator` (i.e. `nodes/operator/**`).
 
-### Path-prefix matching — "longest prefix wins"
+In other words: only directories directly under `nodes/` _other than_ `operator` are sovereign. Operator is structurally exempt — not because of its registry entry, but because it IS the control plane. This mirrors task.0381's `OPERATOR_IS_INFRA` invariant exactly; without this, the two layers will disagree on `nodes/operator + nodes/poly` PRs (CI passes, reviewer refuses).
 
-Required because registry paths can nest: a hypothetical `path: "nodes/poly/app"` would shadow `path: "nodes/poly"` for files under `app/`. Standard file-system routing semantics. Prevents ambiguity if the registry ever gets fine-grained.
+**Mixed infra + single-node**: a PR touching `packages/repo-spec/src/foo.ts` AND `nodes/poly/app/bar.ts` returns `{ kind: "single", nodeId: poly }` — the single sovereign node owns the review, with infra changes riding along. Same applies for `nodes/operator/foo + nodes/poly/bar` → `{ kind: "single", nodeId: poly }`.
+
+### Path matching — flat top-level under `nodes/`
+
+The match key is `path.split("/")[1]` when `path.split("/")[0] === "nodes"`. Compare against `entry.path.split("/")[1]` for each registry entry. No longest-prefix-wins, no nesting — the registry is flat by convention (`nodes/operator`, `nodes/poly`, `nodes/resy`, `nodes/node-template`) and the schema can be tightened to enforce it. If/when nesting is introduced, add LPW _then_ — not speculatively now. Matches task.0381's algorithm exactly.
+
+`node-template` is sovereign by this rule (it's under `nodes/`, name is not `operator`). This is the desired behavior: template edits should not ride alongside poly edits.
 
 ### Reuses
 
 - Existing `RepoSpec` type + `nodeRegistryEntrySchema` (`packages/repo-spec/src/schema.ts:259-272`)
 - Existing `extractNodes(spec)` accessor (returns the array we iterate)
-- task.0380's `extractNodePath` is the _return-side_ sibling — both can compose: `extractNodePath(spec, extractOwningNode(spec, paths).nodeId)` would be redundant, but the same registry data backs both functions.
-- Native `Array.prototype.reduce` / `.find` / `.startsWith` — no library
+- task.0380's `extractNodePath` is the _return-side_ sibling — both consume the same registry data; composition only makes sense when narrowed (`if (r.kind === "single") extractNodePath(spec, r.nodeId)`).
+- Native `Array.prototype.find` / `String.prototype.split` — no library, no regex.
 
 ### Rejected
 
 - _Returning `string | null` like `extractNodePath` does_ — collapses three meaningful outcomes (single/conflict/miss/infra) into one. Caller would need a sentinel value or out-of-band signal for conflict. Discriminated union is the honest type.
 - _Throwing on conflict_ — exceptions for control flow are wrong here; "conflict" is a _result_, not an error condition. Reviewer wants to dispatch on it, not catch it.
-- _Special-casing the operator's registry entry to mean "infra"_ — instead, "infra" is "no registered node owns this path", which is a property of the path set, not of any specific registry entry. This stays consistent if the operator's registry entry changes shape (e.g., to `path: "."`).
+- _Treating operator as a sovereign node when its registry entry exists_ — earlier draft did this and conflicted with task.0381's `OPERATOR_IS_INFRA` invariant. Now: `nodes/operator/**` is structurally infra (top-level-segment check), independent of registry contents. Single canonical rule, no caller-side resolution needed.
+- _Longest-prefix-wins for nested registry paths_ — premature; current registry is flat by convention. Add LPW the day a nested entry appears, not before.
 - _Putting it in `nodes/operator/app/src/features/review/`_ — couples to one consumer. Future scope router, scheduler routing, attribution may all want this.
 - _Bundling it with task.0381's CI gate_ — wrong altitude. Bash + turbo at CI time vs. TS + RepoSpec inside operator runtime. Both implement the same policy from different layers; both belong but separately.
 - _Bundling it with the reviewer factory parameterization_ — defeats the gate-ladder. Function locked alone first, consumer rides on top.
@@ -106,8 +114,11 @@ Required because registry paths can nest: a hypothetical `path: "nodes/poly/app"
 - [ ] **DISCRIMINATED_UNION**: Return type is the four-case discriminated union. No sentinel strings, no null-as-conflict. Locked by type-level test.
 - [ ] **LONGEST_PREFIX_WINS**: When registry has nested paths, the longest matching prefix owns the file. Locked by a scenario fixture.
 - [ ] **INFRA_RIDE_ALONG**: A mix of infra paths + a single sovereign node returns `{ kind: "single", nodeId }` — infra rides along, does not trigger conflict. Matches task.0381 exemption logic.
-- [ ] **EMPTY_INPUT**: `extractOwningNode(spec, [])` returns `{ kind: "operator-infra" }` (vacuous truth: no paths, no node violations). Edge case, locked by test.
+- [ ] **EMPTY_INPUT**: `extractOwningNode(spec, [])` returns `{ kind: "miss" }`. (Was `operator-infra` — changed to `miss` so an empty diff produces a "no changes to review" neutral check at the dispatcher rather than an accidental root-rules invocation.)
+- [ ] **OPERATOR_IS_INFRA**: Paths whose top-level-under-`nodes/` is `operator` are classified as infra, NOT as a sovereign node, regardless of whether the operator has a registry entry. Locked by parity with task.0381.
+- [ ] **CONFLICT_ORDERING**: `conflict.nodes` is sorted by `nodeId` (string compare) — deterministic so reviewer diagnostic comments don't flap.
 - [ ] **NO_CROSS_VALIDATION**: This function does not validate path safety (no `..`, no absolute paths). Caller responsibility, same as `extractNodePath`. Documented in TSDoc.
+- [ ] **CANONICAL_POLICY_HOME**: This function is the single source of truth for "which node owns these paths" across the workspace. Task.0381's bash gate consumes it via a thin CLI wrapper shipped from `@cogni/repo-spec` (deferred to a follow-on; tracked in the parity-test task), not by re-implementing the rule in shell.
 
 ### Files
 
@@ -119,15 +130,15 @@ Required because registry paths can nest: a hypothetical `path: "nodes/poly/app"
 ### Test scenarios
 
 1. **Single sovereign node** — paths all under `nodes/poly/...` → `{ kind: "single", nodeId: poly, path: "nodes/poly" }`.
-2. **All infra** — paths all under `packages/`, `infra/`, `docs/` → `{ kind: "operator-infra" }`.
-3. **Mixed sovereign node + infra** — `nodes/poly/foo.ts` + `packages/repo-spec/bar.ts` → `{ kind: "single", nodeId: poly }`.
-4. **Conflict — two sovereign nodes** — `nodes/poly/foo.ts` + `nodes/resy/bar.ts` → `{ kind: "conflict", nodes: [poly, resy] }`.
-5. **Conflict — three sovereign nodes** → all three named in the conflict result.
-6. **Miss** — path under `nodes/unregistered-node/foo.ts` (no registry entry) → `{ kind: "miss" }`.
-7. **Empty input** — `[]` → `{ kind: "operator-infra" }`.
-8. **Longest-prefix wins** — registry has both `nodes/poly` and `nodes/poly/app`; path under `nodes/poly/app/...` resolves to the more-specific entry.
-9. **Operator-as-registry-entry** — registry has operator at `path: "nodes/operator"`; paths under it return `{ kind: "single", nodeId: operator, path: "nodes/operator" }` (NOT auto-classified as infra). Caller (the reviewer) decides whether to treat operator-as-node identically to operator-as-infra.
-10. **Trailing-slash and edge paths** — `nodes/poly` (no trailing slash) and `nodes/poly/` both resolve correctly.
+2. **All infra (non-`nodes/`)** — paths all under `packages/`, `infra/`, `docs/` → `{ kind: "operator-infra" }`.
+3. **All infra (operator)** — paths all under `nodes/operator/...` → `{ kind: "operator-infra" }` (operator is structurally infra, regardless of registry).
+4. **Mixed sovereign node + non-`nodes/` infra** — `nodes/poly/foo.ts` + `packages/repo-spec/bar.ts` → `{ kind: "single", nodeId: poly }`.
+5. **Mixed sovereign node + operator** — `nodes/poly/foo.ts` + `nodes/operator/app/bar.ts` → `{ kind: "single", nodeId: poly }` (operator rides along; matches task.0381 exemption).
+6. **Conflict — two sovereign nodes** — `nodes/poly/foo.ts` + `nodes/resy/bar.ts` → `{ kind: "conflict", nodes: [poly, resy] }` (sorted by nodeId).
+7. **Conflict — three sovereign nodes** → all three named in the conflict result, sorted by nodeId.
+8. **Miss** — path under `nodes/unregistered-node/foo.ts` (top-level segment is not `operator` and no registry entry matches) → `{ kind: "miss" }`.
+9. **Empty input** — `[]` → `{ kind: "miss" }`.
+10. **node-template is sovereign** — paths under `nodes/node-template/...` resolve as a sovereign node (or `miss` if not registered), NOT as infra. Confirms node-template participates in single-node-scope policy.
 
 ### Pairing with task.0381
 
