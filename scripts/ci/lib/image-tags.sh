@@ -28,18 +28,25 @@ mapfile -t ALL_TARGETS  < <(yq -N '.name' "$_image_tags_catalog_root"/*.yaml)
 # shellcheck disable=SC2034
 mapfile -t NODE_TARGETS < <(yq -N 'select(.type == "node") | .name' "$_image_tags_catalog_root"/*.yaml)
 
+declare -A _image_tags_suffix_cache=()
+for _t in "${ALL_TARGETS[@]}"; do
+  _s=$(yq '.image_tag_suffix' "${_image_tags_catalog_root}/${_t}.yaml")
+  [ "$_s" = "null" ] && _s=""
+  _image_tags_suffix_cache["$_t"]="$_s"
+done
+unset _t _s
+
 image_name_for_target() {
   printf '%s' "$IMAGE_NAME_APP"
 }
 
 tag_suffix_for_target() {
-  local target="$1" suffix
-  suffix=$(yq -e ".image_tag_suffix" "${_image_tags_catalog_root}/${target}.yaml" 2>/dev/null) || {
+  local target="$1"
+  if [ -z "${_image_tags_suffix_cache[$target]+x}" ]; then
     echo "[ERROR] image-tags: unknown target: $target" >&2
     return 1
-  }
-  [ "$suffix" = "null" ] && suffix=""
-  printf '%s' "$suffix"
+  fi
+  printf '%s' "${_image_tags_suffix_cache[$target]}"
 }
 
 image_tag_for_target() {
