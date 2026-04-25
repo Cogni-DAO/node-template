@@ -1,11 +1,10 @@
 {
   "slot": "candidate-a",
-  "state": "leased",
-  "pr_number": 1040,
-  "head_sha": "85a357b8260cbf9440faff9e4f9d9cb805a2c5c8",
-  "run_id": "24920672851",
-  "owner": "github-actions",
-  "acquired_at": "2026-04-25T02:42:02.636161Z",
-  "expires_at": "2026-04-25T03:42:02.636161Z",
-  "status_url": "https://github.com/Cogni-DAO/node-template/actions/runs/24920672851"
+  "state": "failed",
+  "released_at": "2026-04-25T02:49:16.536881Z",
+  "last_owner": {
+    "pr_number": 1040,
+    "head_sha": "85a357b8260cbf9440faff9e4f9d9cb805a2c5c8",
+    "run_id": "24920672851"
+  }
 }
