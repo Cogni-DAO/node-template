@@ -204,26 +204,19 @@ jobs:
           # shellcheck source=scripts/ci/lib/image-tags.sh
           . app-src/scripts/ci/lib/image-tags.sh
           if [ "$PREVIEW_FORWARD" = "true" ]; then
-            PREVIEW_OVERLAY="${{ github.workspace }}/preview-src/infra/k8s/overlays/preview/${NODE}"
-            DIGEST=$(python3 - "$PREVIEW_OVERLAY" <<'PY'
-          import os, re, sys, glob
-          root = sys.argv[1]
-          # Collect images[] blocks across overlay yamls; emit the first <name>@<sha256:...>.
-          for path in sorted(glob.glob(os.path.join(root, "*.yaml")) + glob.glob(os.path.join(root, "*.yml"))):
-            with open(path) as f:
-              text = f.read()
-            m = re.search(r'newName:\s*(\S+)\s*\n\s*digest:\s*(sha256:[a-f0-9]+)', text)
-            if m:
-              print(f"{m.group(1)}@{m.group(2)}")
-              sys.exit(0)
-            m = re.search(r'newName:\s*(\S+)\s*\n\s*newTag:.*@(sha256:[a-f0-9]+)', text)
-            if m:
-              print(f"{m.group(1)}@{m.group(2)}")
-              sys.exit(0)
-          PY
-          )
+            # Reuse the existing per-overlay digest resolver (battle-tested);
+            # it emits digests_json={...} for ALL_TARGETS, then we index by NODE.
+            PREVIEW_OVERLAY_ROOT="${{ github.workspace }}/preview-src/infra/k8s/overlays/preview"
+            export PREVIEW_OVERLAY_ROOT
+            DIGESTS_JSON=$(bash app-src/scripts/ci/resolve-digests-from-preview.sh \
+              | grep '^digests_json=' | head -1 | sed 's/^digests_json=//')
+            if [ -z "$DIGESTS_JSON" ]; then
+              echo "::error::preview-forward: resolve-digests-from-preview emitted no digests_json"
+              exit 1
+            fi
+            DIGEST=$(printf '%s' "$DIGESTS_JSON" | jq -r --arg k "$NODE" '.[$k] // ""')
             if [ -z "$DIGEST" ]; then
-              echo "::error::preview-forward: no digest for $NODE in $PREVIEW_OVERLAY"
+              echo "::error::preview-forward: no digest for $NODE in deploy/preview-$NODE"
               exit 1
             fi
             APP_SOURCE_SHA=$(jq -r --arg k "$NODE" '.[$k] // ""' "${{ github.workspace }}/preview-src/.promote-state/source-sha-by-app.json")
@@ -698,6 +691,14 @@ jobs:
       group: aggregate-preview
       cancel-in-progress: false
     steps:
+      - name: Download all per-cell artifacts
+        if: always()
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
+        with:
+          pattern: cell-*
+          path: ${{ runner.temp }}/cells/
+          merge-multiple: true
+
       - name: Decide outcome
         id: outcome
         env:
@@ -706,9 +707,27 @@ jobs:
           VERIFY_RESULT: ${{ needs.verify.result }}
           VERIFY_DEPLOY_RESULT: ${{ needs.verify-deploy.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
+          CELLS_DIR: ${{ runner.temp }}/cells
         run: |
           set -euo pipefail
-          if [ "$PROMOTE_RESULT" = "success" ] \
+          # Require at least one cell to have actually promoted. All-cells-skipped
+          # (e.g., all GHCR resolves missed) would otherwise silent-green the
+          # aggregator and lock-preview at unchanged current-sha.
+          any_promoted=false
+          if [ -d "$CELLS_DIR" ]; then
+            shopt -s nullglob
+            for f in "$CELLS_DIR"/promoted-*.txt; do
+              if [ "$(cat "$f" 2>/dev/null || true)" = "true" ]; then
+                any_promoted=true
+                break
+              fi
+            done
+          fi
+          echo "any_promoted=$any_promoted"
+          if [ "$any_promoted" != "true" ]; then
+            echo "::error::aggregate-preview: no cell reported promoted=true — refusing to advance lease"
+            echo "outcome=failed" >> "$GITHUB_OUTPUT"
+          elif [ "$PROMOTE_RESULT" = "success" ] \
              && [ "$VERIFY_RESULT" = "success" ] \
              && [ "$VERIFY_DEPLOY_RESULT" = "success" ] \
              && [ "$E2E_RESULT" = "success" ] \
@@ -771,6 +790,31 @@ jobs:
       group: aggregate-production
       cancel-in-progress: false
     steps:
+      - name: Download all per-cell artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.1.8
+        with:
+          pattern: cell-*
+          path: ${{ runner.temp }}/cells/
+          merge-multiple: true
+
+      - name: Require at least one cell promoted
+        env:
+          CELLS_DIR: ${{ runner.temp }}/cells
+        run: |
+          set -euo pipefail
+          any_promoted=false
+          shopt -s nullglob
+          for f in "$CELLS_DIR"/promoted-*.txt; do
+            if [ "$(cat "$f" 2>/dev/null || true)" = "true" ]; then
+              any_promoted=true
+              break
+            fi
+          done
+          if [ "$any_promoted" != "true" ]; then
+            echo "::error::aggregate-production: no cell reported promoted=true — refusing to advance current-sha"
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           ref: main

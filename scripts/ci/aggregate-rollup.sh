@@ -35,7 +35,10 @@ REPO_URL="${REPO_URL:-https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REP
 work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 
-git clone --depth=1 --branch "$DEPLOY_BRANCH" "$REPO_URL" "$work/whole" >/dev/null 2>&1
+# --depth=50: rebase-retry on push contention needs enough history to find
+# the merge-base of our local commit and origin's advanced tip. depth=1
+# would break the retry loop on any concurrent push.
+git clone --depth=50 --branch "$DEPLOY_BRANCH" "$REPO_URL" "$work/whole" >/dev/null 2>&1
 cd "$work/whole"
 git config user.name "github-actions[bot]"
 git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -50,7 +53,7 @@ for node in "${ALL_TARGETS[@]}"; do
     exit 1
   fi
   per_node_shas+=("$sha")
-  git fetch --depth=1 origin "${per_branch}" >/dev/null 2>&1
+  git fetch --depth=50 origin "${per_branch}" >/dev/null 2>&1
   if git cat-file -e "${sha}:.promote-state/source-sha-by-app.json" 2>/dev/null; then
     per_node_maps[$node]=$(git show "${sha}:.promote-state/source-sha-by-app.json")
   fi
