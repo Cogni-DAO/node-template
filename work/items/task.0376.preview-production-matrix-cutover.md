@@ -22,6 +22,8 @@ spec_refs:
   - docs/spec/ci-cd.md
 assignees: []
 project: proj.cicd-services-gitops
+branch: feat/task.0376-preview-prod-matrix
+pr: https://github.com/Cogni-DAO/node-template/pull/1062
 created: 2026-04-25
 updated: 2026-04-25
 labels: [cicd, deployment, task.0372-followup]
