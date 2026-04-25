@@ -120,6 +120,12 @@ jobs:
   reconcile-appset:
     needs: decide
     if: needs.decide.outputs.has_targets == 'true'
+    # Single shared write to the candidate-a VM (kubectl apply on the AppSet).
+    # Without this guard, two concurrent flights from different PRs race the
+    # apply. See work/items/bug.0378.reconcile-appset-shared-write-race.md.
+    concurrency:
+      group: reconcile-appset-candidate-a
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
     steps:
