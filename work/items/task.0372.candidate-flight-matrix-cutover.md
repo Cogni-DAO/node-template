@@ -23,7 +23,7 @@ assignees: []
 credit:
 project: proj.cicd-services-gitops
 branch: feat/task.0372-matrix-cutover
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1060
 reviewer:
 revision: 4
 deploy_verified: false
