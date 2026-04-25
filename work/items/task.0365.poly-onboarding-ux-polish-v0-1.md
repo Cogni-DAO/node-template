@@ -2,12 +2,12 @@
 id: task.0365
 type: task
 title: "Poly onboarding UX polish (v0.1) — Money page layout, funding tip, approval-state design"
-status: needs_merge
+status: done
 priority: 1
 rank: 2
 estimate: 3
 created: 2026-04-24
-updated: 2026-04-24
+updated: 2026-04-25
 summary: "Follow-up polish after task.0361's first-user onboarding flow shipped. The flow is now functionally continuous, but Derek's own walkthrough on candidate-a flagged real UX issues: the two-column Money page layout crams the wallet panel (text wraps awkwardly, Enable Trading button feels tight), there is no prominent 'send 1 POL to this address' tip for users new to Polygon, and the post-approval 'Trading enabled' row + Polymarket 6-approval checklist are not visually polished. Separately, the first `pnpm test` pass at root shows a `mcp-real-server.test.ts` bootstrap fragility that bit the initial QA loop — not strictly in scope but worth flagging."
 outcome: "A non-technical aspiring user lands on /credits, sees a single column that reads top-to-bottom (balance + prominent fund tip → Enable Trading → Next step), and never thinks 'this looks broken'. Includes a tested 'Send 1 POL on Polygon' funding affordance with a one-click address copy. Passes Derek's manual walkthrough with zero 'ugly' or 'formatting' feedback."
 spec_refs: []
