@@ -2,7 +2,7 @@
 id: task.0374
 type: task
 title: "Catalog-as-SSoT — make infra/catalog/*.yaml the single node declaration"
-status: needs_design
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 4
