@@ -110,6 +110,11 @@ is_global_build_input() {
 if [ "$scope_mode" = "full" ]; then
   add_all_targets
 else
+  declare -A target_prefix=()
+  for target in "${ALL_TARGETS[@]}"; do
+    target_prefix["$target"]=$(yq '.path_prefix' "${_image_tags_catalog_root}/${target}.yaml")
+  done
+
   while IFS= read -r path; do
     [ -z "$path" ] && continue
 
@@ -135,7 +140,7 @@ else
         ;;
       *)
         for target in "${ALL_TARGETS[@]}"; do
-          prefix=$(yq '.path_prefix' "${_image_tags_catalog_root}/${target}.yaml")
+          prefix="${target_prefix[$target]}"
           case "$path" in
             "${prefix}"*) add_target "$target" ;;
           esac
