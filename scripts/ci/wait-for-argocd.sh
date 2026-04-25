@@ -138,7 +138,7 @@ rev_includes_expected() {
     | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d.get("status",""))' 2>/dev/null \
     || echo "")
   case "$status" in
-    identical|behind)
+    identical|ahead)
       ANCESTRY_CACHE_RESULT=0
       return 0
       ;;
