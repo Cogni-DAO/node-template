@@ -13,7 +13,7 @@ outcome: One integration test that forks Polygon mainnet at a known resolved-mar
 spec_refs:
 assignees: []
 credit:
-project:
+project: proj.poly-web3-security-hardening
 pr:
 reviewer:
 revision: 0

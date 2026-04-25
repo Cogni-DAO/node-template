@@ -12,7 +12,7 @@ outcome: Sweep dedups against actual on-chain redemption state (or a short-lived
 spec_refs:
 assignees: []
 credit:
-project:
+project: proj.poly-web3-security-hardening
 pr: https://github.com/Cogni-DAO/node-template/pull/1051
 reviewer:
 revision: 1

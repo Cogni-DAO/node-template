@@ -12,7 +12,7 @@ outcome: Redeem sweep stops running on every mirror tick. Each resolved position
 spec_refs:
 assignees: []
 credit:
-project:
+project: proj.poly-web3-security-hardening
 pr:
 reviewer:
 revision: 0
