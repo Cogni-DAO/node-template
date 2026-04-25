@@ -7,6 +7,7 @@ priority: 0
 rank: 99
 estimate: 2
 branch: design/task-0320-per-node-flighting
+pr: https://github.com/Cogni-DAO/node-template/pull/1044
 summary: "Substrate for lane isolation across all three environments. Each node gets its own deploy branch per env (deploy/<env>-<node>), each env AppSet is refactored into N per-node git generators, each catalog file declares its per-env branches. Branch head = Kargo Stage promotion lease. PR #1043 (task.0371 step 1) lands the PreSync hook deletion in parallel, eliminating the hook failure class at the source. Matrix cutover of the 3 flight workflows is task.0372."
 outcome: |
   - Each of the 4 catalog files (`operator/poly/resy/scheduler-worker`) declares three per-env branches: `candidate_a_branch`, `preview_branch`, `production_branch`.
