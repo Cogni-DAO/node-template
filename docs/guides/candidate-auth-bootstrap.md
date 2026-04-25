@@ -98,7 +98,20 @@ The profile now persists under `.local-auth/chrome-profile/`. Future launches re
 
    Writes `.local-auth/candidate-a-poly.storageState.json` and prints cookie/domain counts as sanity check.
 
-## Using captured state from Playwright
+## Using captured state
+
+Two valid consumers:
+
+**1. Ad-hoc / `/validate-candidate` skill — `playwright-cli`** (preferred for one-off validation runs):
+
+```bash
+playwright-cli -s=validate state-load .local-auth/candidate-a-poly.storageState.json
+playwright-cli -s=validate open https://poly-test.cognidao.org
+playwright-cli -s=validate snapshot
+playwright-cli -s=validate close
+```
+
+**2. Committed Playwright test files — `@playwright/test`** (for code that lives in the repo and runs in CI):
 
 ```ts
 import { chromium } from "@playwright/test";
@@ -115,6 +128,8 @@ const page = await ctx.newPage();
 await page.goto("https://poly-test.cognidao.org");
 // already signed in — no MetaMask needed
 ```
+
+The two paths read the **same JSON schema** — `playwright-cli state-save` and `@playwright/test` `storageState` are interchangeable. Pick by context: validation runs use the CLI (zero artifacts, snapshot-driven); committed tests use the library API.
 
 ## Refresh cadence
 
