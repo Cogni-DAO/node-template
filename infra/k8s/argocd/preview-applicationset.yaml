@@ -13,7 +13,9 @@ metadata:
   name: cogni-preview
   namespace: argocd
 spec:
-  preserveResourcesOnDeletion: true # APPSET_PRESERVE_ON_TRANSITION
+  # See candidate-a-applicationset.yaml — preserveResourcesOnDeletion
+  # rejected by candidate-a CRD; APPLICATION_NAMES_UNCHANGED is the primary
+  # safety. Keeping AppSets symmetric across envs.
   generators:
     - git:
         repoURL: https://github.com/cogni-dao/cogni-template.git
