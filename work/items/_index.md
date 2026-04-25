@@ -92,6 +92,7 @@
 | 1 | 1 | 2 | needs_triage | bug.0369 | Reown/WalletConnect origin allowlist missing for poly-test (and no sync workflow across node × env matrix) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_review | bug.0370 | LiteLLM billing callback DNS-fails since k3s migration — every prod LLM call drops on the floor | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 1 | needs_review | task.0370 | Rebase every node's migrator stage on its runtime image | Database Operations | proj.database-ops |
+| 1 | 1 | 1 | needs_review | bug.0371 | wait-for-argocd rollout-status gate over-strict on scheduler-worker — false-fails verify-deploy + drops preview lock | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 1 | 2 | needs_review | task.0371 | Kill PreSync migration hook + migrator image — step 1 hotfix | Database Operations | proj.database-ops |
 | 1 | 1 | 2 | needs_implement | task.0373 | candidate-flight self-heals deploy/candidate-a digests around PR rsync |  |  |
 | 1 | 1 | 1 | needs_merge | task.0380 | Node base-path resolver — `extractNodePath(spec, nodeId)` accessor + unit tests | VCS Integration | proj.vcs-integration |
