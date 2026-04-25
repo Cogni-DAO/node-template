@@ -160,6 +160,18 @@ Promotion environments run accepted code only.
 
 This spec does not require a `canary` environment. If one is retained during migration, it must be described explicitly as a post-merge soak lane and not as a branch or as a pre-merge safety lane.
 
+### Per-Node Deploy Branches (task.0320 + task.0372)
+
+Per-node flighting lands in two parts to keep the rollout reversible and to preserve the promotion pipeline across the transition:
+
+**task.0320 (substrate, this PR)**: each `infra/catalog/<node>.yaml` declares three per-env branch fields (`candidate_a_branch`, `preview_branch`, `production_branch`). These fields are **dormant** — no AppSet or workflow reads them yet. Post-merge, 12 deploy branches (`deploy/<env>-<node>` for each env × node) are pushed off each env's current HEAD, also dormant. The substrate introduces no behavior change; both the catalog fields and the new branches sit unused until task.0372.
+
+**task.0372 (cutover)**: a single atomic PR refactors all three `infra/k8s/argocd/<env>-applicationset.yaml` files to 4 per-node git generators (each with `revision: deploy/<env>-<node>` and `files: [infra/catalog/<node>.yaml]`) AND cuts the flight workflows (`candidate-flight.yml`, `flight-preview.yml`, `promote-and-deploy.yml`) to `strategy.matrix` fan-out with `fail-fast: false`. Each matrix cell pushes only to its per-(env, node) branch and waits on only the matching Argo Application. AppSet-read and workflow-write flip to the per-node branches in the same merge — no window where the pipeline can get stuck writing to a ref that AppSets no longer watch.
+
+Application names stay `<env>-<node>` across the transition — the AppSet template name is unchanged. Only each Application's `targetRevision` flips from the whole-slot `deploy/<env>` to the per-node `deploy/<env>-<node>`.
+
+The branch-per-(env, node) primitive mirrors [Kargo](https://kargo.akuity.io) Stage semantics (`Stage = per-env-per-node Application` tracking its own immutable-per-promotion ref), implemented on existing ApplicationSet + deploy-branch infrastructure without introducing new CRDs, controllers, or long-running services.
+
 ### Preview Review Lock
 
 `deploy/preview` holds a small state directory, `.promote-state/`, that drives merge-to-main flighting. Three files:
