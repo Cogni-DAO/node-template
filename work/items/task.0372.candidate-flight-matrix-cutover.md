@@ -2,11 +2,11 @@
 id: task.0372
 type: task
 title: Per-node cutover — refactor candidate-a + preview AppSets + matrix fan-out
-status: blocked
+status: needs_implement
 priority: 0
 rank: 99
 estimate: 4
-summary: "FROZEN 2026-04-25 — pending task.0374 (catalog SSoT) and dev2 gap-2 / gap-3 resolution. Scope reduced to candidate-a + preview only; production stays whole-slot until release.yml current-sha semantics are designed (filed as task.0375 follow-up). Cutover refactors 2 AppSets from 1 git generator → 4 per-node git generators each, and cuts candidate-flight.yml + flight-preview.yml + (preview half of) promote-and-deploy.yml to strategy.matrix fan-out with fail-fast:false."
+summary: "Unblocked 2026-04-25 by task.0374 (catalog SSoT). Scope: candidate-a + preview only; production stays whole-slot until release.yml current-sha semantics are designed (filed as task.0375 follow-up). Cutover refactors 2 AppSets from 1 git generator → 4 per-node git generators each, and cuts candidate-flight.yml + flight-preview.yml + (preview half of) promote-and-deploy.yml to strategy.matrix fan-out with fail-fast:false."
 outcome: |
   - All 3 ApplicationSets refactored: `infra/k8s/argocd/{candidate-a,preview,production}-applicationset.yaml` each goes from 1 git generator → 4 per-node git generators reading `deploy/<env>-<node>` and `files: [infra/catalog/<node>.yaml]`. `source.targetRevision` templates from `{{<env>_branch}}` (fields declared in task.0320).
   - `candidate-flight.yml` / `flight-preview.yml` / `promote-and-deploy.yml` all fan out via `strategy.matrix` with `fail-fast: false` — one job per affected node, each scoped to its own per-env branch + per-node Argo Application.
@@ -23,11 +23,10 @@ spec_refs:
 assignees: []
 credit:
 project: proj.cicd-services-gitops
-branch: feat/task.0372-per-node-matrix
+branch: feat/task.0372-matrix-cutover
 pr:
 reviewer:
 revision: 2
-blocked_by: task.0374
 deploy_verified: false
 created: 2026-04-24
 updated: 2026-04-25
@@ -351,3 +350,10 @@ Best-effort warning, not a hard gate — explicitly per GR-5 deferred to follow-
 - **Branch-protection rules on `deploy/*`.** If `deploy/*` glob is protected against new branches by an org rule, bootstrap step will fail. Pre-PR check: try pushing one branch (`deploy/candidate-a-operator`) first; if it fails, address the rule before continuing.
 - **`detect-affected.sh` BASE selection for preview/prod**. candidate-flight uses `origin/main` as base. flight-preview's base should be the previous preview SHA (read from `deploy/preview/.promote-state/current-sha`). promote-and-deploy's base for preview-forward is the previous preview SHA; for production it's the previous production SHA. The decide job sets `TURBO_SCM_BASE` per workflow; existing `detect-affected.sh` honors it without modification.
 - **Old whole-slot `deploy/candidate-a` etc. continue to receive writes from any in-flight runs that started pre-merge.** Acceptable: those runs complete on the old paths; the next dispatch picks up the new matrix workflow.
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0372.handoff.md)
+- Substrate: [task.0320](task.0320.per-node-candidate-flighting.md), [task.0374 PR #1053](https://github.com/Cogni-DAO/node-template/pull/1053)
+- Reuses: [task.0373 PR #1047](https://github.com/Cogni-DAO/node-template/pull/1047) snapshot/restore
+- Production follow-up: [task.0375](task.0375.production-matrix-cutover.md)
