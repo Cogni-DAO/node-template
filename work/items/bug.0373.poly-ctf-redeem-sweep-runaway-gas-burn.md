@@ -2,7 +2,7 @@
 id: bug.0373
 type: bug
 title: poly CTF redeem sweep burns POL on a runaway loop, re-redeeming already-redeemed positions
-status: needs_closeout
+status: needs_implement
 priority: 0
 rank: 1
 estimate: 2
@@ -15,7 +15,7 @@ credit:
 project:
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-04-25
@@ -389,6 +389,33 @@ redeemable position observed at resolution time.
 - Sample drain tx (Polygonscan): https://polygonscan.com/tx/0x4765f49bc03af618ee8f99d912522b3e5cd414363fb0f31ddeb7689167f617b4
 - Operator trading wallet: https://polygonscan.com/address/0x95e407fE03996602Ed1BF4289ecb3B5AF88b5134
 - Pod: `poly-node-app-db778595-dmf2b` (cogni-production)
+
+## Review Feedback (revision 1, 2026-04-25)
+
+From `/review-implementation`:
+
+**B1 (blocking) — Dedup by normalized conditionId.**
+`poly-trade-executor.ts:674` dedupes by raw `p.conditionId`; the old loop dedupes
+by `normalizePolygonConditionId(p.conditionId)`. Two rows with the same value in
+different case (e.g. `0xABC…` vs `0xabc…`) would multicall twice. Capture the
+normalized form into `norm` and use `seen.has(norm)` / `seen.add(norm)`.
+
+**B2 (blocking) — Add three missing test cases.**
+
+- All-balances-non-zero → all positions redeem in order (currently we only
+  cover one-redeems-one-skips).
+- `multicall` returning a `failure` element (`[{ status: "failure", error }, { status: "success", result: 100n }]`) → first warns,
+  second still redeems.
+- Empty positions list → no `multicall` call at all (covers the `if (candidates.length === 0) return [];` short-circuit).
+
+**S1 (suggestion) — Honor the design's logging change.**
+Either downgrade `poly.ctf.redeem.sweep_skip` to `debug`, or rename to
+`poly.ctf.redeem.error` to reflect that it now only fires when
+`redeemResolvedPosition` itself throws (rare, post-balance-check).
+
+**S2 (suggestion) — Guard `BigInt(p.asset)`** with `if (!p.asset) continue;`
+before the `try/catch`. `BigInt("")` returns `0n`, currently silently filtered
+by the balance check — fine, but cheaper to short-circuit.
 
 ## Attribution
 
