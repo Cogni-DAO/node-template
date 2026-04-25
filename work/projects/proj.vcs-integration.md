@@ -47,7 +47,7 @@ Consolidate all VCS integration into this repo: a shared auth package (`packages
 | Create Admin GitHub App (contents:write, admin:write, members:write)                  | Not Started | 0.5 | (create at P1 start) |
 | Review handler — PR review via graphExecutor                                          | In Review   | 3   | task.0153            |
 | Reviewer adapter-boundary contract test — lock ReviewHandlerDeps                      | Done        | 1   | task.0368            |
-| `extractNodePath` accessor + `@cogni/repo-spec/testing` fixtures                      | In Review   | 1   | task.0374            |
+| `extractNodePath` accessor + `@cogni/repo-spec/testing` fixtures                      | In Review   | 1   | task.0380            |
 | Admin handler — merge PR, grant/revoke collaborator (on-chain authorized)             | Not Started | 2   | (create at P1 start) |
 | Onchain webhook — Alchemy HMAC verify + CogniAction parse                             | Not Started | 1   | (create at P1 start) |
 | Authorization policy — DAO allowlist enforcement                                      | Not Started | 1   | (create at P1 start) |

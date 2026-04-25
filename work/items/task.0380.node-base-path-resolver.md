@@ -1,5 +1,5 @@
 ---
-id: task.0374
+id: task.0380
 type: task
 title: "Node base-path resolver — `extractNodePath(spec, nodeId)` accessor + unit tests"
 status: needs_merge
