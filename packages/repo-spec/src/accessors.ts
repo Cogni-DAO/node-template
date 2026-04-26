@@ -314,7 +314,9 @@ export function extractNodePath(spec: RepoSpec, nodeId: string): string | null {
  * - `single`   — exactly one domain owns every path. When `nodeId` is the operator,
  *                this is an "operator-only" PR — `nodes/operator/**` ∪ `packages/**` ∪
  *                `.github/**` ∪ `docs/**` ∪ root configs are all the operator's territory.
- *                `lockfileInheritsApplied: true` flags the bounded `pnpm-lock.yaml` carve-out.
+ *                `rideAlongApplied: true` flags a bounded carve-out where operator-domain
+ *                paths matching the ride-along whitelist (`pnpm-lock.yaml`, `work/items/**`)
+ *                tagged along a single non-operator node PR.
  * - `conflict` — two or more domains touched. Refuse to review (post diagnostic).
  * - `miss`     — empty input. The reviewer surfaces a no-op neutral check.
  *
@@ -326,7 +328,7 @@ export type OwningNode =
       kind: "single";
       nodeId: string;
       path: string;
-      lockfileInheritsApplied?: true;
+      rideAlongApplied?: true;
     }
   | {
       kind: "conflict";
@@ -336,7 +338,26 @@ export type OwningNode =
 
 const OPERATOR_TOP = "operator";
 const NODES_PREFIX = "nodes/";
-const LOCKFILE_PATH = "pnpm-lock.yaml";
+
+/**
+ * Operator-domain paths that may ride along a single non-operator node PR.
+ * Mirrors `tests/ci-invariants/classify.ts` `RIDE_ALONG_PATTERNS`. Adding to
+ * this list weakens the gate; do so deliberately and only for mechanical
+ * side-effects or cross-cutting node intent that hasn't yet been migrated out
+ * of operator territory.
+ *
+ * - `pnpm-lock.yaml`: mechanical side-effect of node-level package.json edits.
+ * - `work/items/**`: per-task work items; high merge-conflict + index-regen
+ *   churn. Ride-along until task tracking moves to Dolt.
+ */
+const RIDE_ALONG_PATTERNS: ReadonlyArray<(p: string) => boolean> = [
+  (p) => p === "pnpm-lock.yaml",
+  (p) => p.startsWith("work/items/"),
+];
+
+function isRideAlong(p: string): boolean {
+  return RIDE_ALONG_PATTERNS.some((m) => m(p));
+}
 
 /** Top-level segment under `nodes/`, or null if the path is not under `nodes/<x>/`. */
 function topUnderNodes(p: string): string | null {
@@ -360,8 +381,9 @@ function topUnderNodes(p: string): string | null {
  * - exactly one distinct domain → `single`
  * - two or more → `conflict` (sorted by `nodeId.localeCompare`)
  *
- * `LOCKFILE_INHERITS` exception: when domains is exactly `{operator, X}` and the only
- * operator-domain path is `pnpm-lock.yaml`, drop operator → `single { X, lockfileInheritsApplied: true }`.
+ * `RIDE_ALONG` exception: when domains is exactly `{operator, X}` and every operator-domain
+ * path matches the ride-along whitelist (`pnpm-lock.yaml`, `work/items/**`), drop operator →
+ * `single { X, rideAlongApplied: true }`.
  *
  * Path safety: paths are consumed verbatim — no `..` rejection. Same boundary as `extractNodePath`.
  *
@@ -402,17 +424,17 @@ export function extractOwningNode(
     }
   }
 
-  // Lockfile-inherits exception: drop operator from a 2-domain {operator, X} diff
-  // when the only operator-domain path is exactly pnpm-lock.yaml.
-  let lockfileInheritsApplied = false;
+  // Ride-along exception: drop operator from a 2-domain {operator, X} diff
+  // when EVERY operator-domain path matches the ride-along whitelist.
+  let rideAlongApplied = false;
   let operatorTouched = operatorPaths.length > 0;
   if (
     sovereigns.size === 1 &&
-    operatorPaths.length === 1 &&
-    operatorPaths[0] === LOCKFILE_PATH
+    operatorPaths.length > 0 &&
+    operatorPaths.every(isRideAlong)
   ) {
     operatorTouched = false;
-    lockfileInheritsApplied = true;
+    rideAlongApplied = true;
   }
 
   const totalDomains = sovereigns.size + (operatorTouched ? 1 : 0);
@@ -421,12 +443,12 @@ export function extractOwningNode(
     if (sovereigns.size === 1) {
       const [only] = sovereigns.values();
       const owner = only as { nodeId: string; path: string };
-      return lockfileInheritsApplied
+      return rideAlongApplied
         ? {
             kind: "single",
             nodeId: owner.nodeId,
             path: owner.path,
-            lockfileInheritsApplied: true,
+            rideAlongApplied: true,
           }
         : { kind: "single", nodeId: owner.nodeId, path: owner.path };
     }

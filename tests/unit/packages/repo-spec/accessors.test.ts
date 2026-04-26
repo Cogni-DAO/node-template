@@ -524,7 +524,7 @@ describe("extractOwningNode", () => {
     });
   });
 
-  it("LOCKFILE_INHERITS: poly + pnpm-lock.yaml → single { poly, lockfileInheritsApplied: true }", () => {
+  it("RIDE_ALONG: poly + pnpm-lock.yaml → single { poly, rideAlongApplied: true }", () => {
     const result = extractOwningNode(standardSpec(), [
       "nodes/poly/app/package.json",
       "pnpm-lock.yaml",
@@ -533,11 +533,39 @@ describe("extractOwningNode", () => {
       kind: "single",
       nodeId: TEST_NODE_IDS.poly,
       path: "nodes/poly",
-      lockfileInheritsApplied: true,
+      rideAlongApplied: true,
     });
   });
 
-  it("LOCKFILE_INHERITS bounded: poly + lockfile + .github/foo defeats the exception → conflict", () => {
+  it("RIDE_ALONG: poly + work/items/wi.foo.md → single { poly, rideAlongApplied: true }", () => {
+    const result = extractOwningNode(standardSpec(), [
+      "nodes/poly/app/src/foo.ts",
+      "work/items/wi.poly-feature.md",
+    ]);
+    expect(result).toEqual({
+      kind: "single",
+      nodeId: TEST_NODE_IDS.poly,
+      path: "nodes/poly",
+      rideAlongApplied: true,
+    });
+  });
+
+  it("RIDE_ALONG: poly + lockfile + work/items/_index → combined whitelist applies", () => {
+    const result = extractOwningNode(standardSpec(), [
+      "nodes/poly/app/package.json",
+      "pnpm-lock.yaml",
+      "work/items/_index.md",
+      "work/items/wi.poly-feature.md",
+    ]);
+    expect(result).toEqual({
+      kind: "single",
+      nodeId: TEST_NODE_IDS.poly,
+      path: "nodes/poly",
+      rideAlongApplied: true,
+    });
+  });
+
+  it("RIDE_ALONG bounded: poly + lockfile + .github/foo defeats the exception → conflict", () => {
     const result = extractOwningNode(standardSpec(), [
       "nodes/poly/app/package.json",
       "pnpm-lock.yaml",

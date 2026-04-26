@@ -72,18 +72,18 @@ describe("single-node-scope · CI gate side (reference classifier)", () => {
  */
 function toClassifyResult(o: OwningNode): ClassifyResult {
   if (o.kind === "miss") {
-    return { domains: [], pass: true, lockfileInheritsApplied: false };
+    return { domains: [], pass: true, rideAlongApplied: false };
   }
   if (o.kind === "single") {
     const name = o.path.split("/")[1] ?? "";
     return {
       domains: [name],
       pass: true,
-      lockfileInheritsApplied: o.lockfileInheritsApplied === true,
+      rideAlongApplied: o.rideAlongApplied === true,
     };
   }
   const names = o.nodes.map((n) => n.path.split("/")[1] ?? "").sort();
-  return { domains: names, pass: false, lockfileInheritsApplied: false };
+  return { domains: names, pass: false, rideAlongApplied: false };
 }
 
 describe("single-node-scope · runtime resolver side (task.0382)", () => {

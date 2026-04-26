@@ -261,6 +261,7 @@
 | 2 | 99 | 3 | needs_review | task.0323 | Poly copy-trade v1 hardening — close the v0 gaps uncovered during candidate-a validation | Cogni Poly | proj.poly-copy-trading |
 | 3 | 3 | 2 | needs_design | task.0362 | Node-owned hostname declaration for verify + ingress | CI/CD Pipeline | proj.cicd-services-gitops |
 | 3 | 5 | 5 | needs_design | story.0248 | Dolt Branching CI/CD — experiment branches, A/B evaluation, confidence-gated promotion to main | Cogni Poly | proj.poly-prediction-bot |
+| 3 | 5 | 2 | needs_design | task.0383 | First-class shared `readyz`/env-invariants into operator territory so cross-cutting infra fixes can land as a single PR | CI/CD Pipeline | proj.cicd-services-gitops |
 | 3 | 6 | 2 | needs_design | task.0326 | Ledger/attribution worker: rename DATABASE_URL and enforce no-DB-creds invariant on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |
 | 3 | 7 | 2 | needs_triage | bug.0034 | Secrets redaction uses regex on serialized JSON — adopt fast-redact for structured fields |  |  |
 | 3 | 7 | 2 | needs_design | task.0327 | Drain legacy Temporal queue + add HTTP circuit breaker on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |

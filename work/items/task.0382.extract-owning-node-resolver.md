@@ -6,7 +6,7 @@ status: needs_merge
 priority: 0
 rank: 1
 estimate: 1
-summary: "Pure TS function in `@cogni/repo-spec` that takes a `RepoSpec` and a list of changed file paths and returns the owning domain: `{ kind: 'single', nodeId, lockfileInheritsApplied? } | { kind: 'conflict', nodes } | { kind: 'miss' }`. The load-bearing function for routing AI PR reviews per-node. Inverse direction of task.0380's `extractNodePath`. Mirrors `tests/ci-invariants/classify.ts` (the CI gate's reference classifier) byte-for-byte; locked by shared-fixture parity test. Operator is a sovereign domain (Reading A per spec § Single-Domain Scope), not an infra exemption."
+summary: "Pure TS function in `@cogni/repo-spec` that takes a `RepoSpec` and a list of changed file paths and returns the owning domain: `{ kind: 'single', nodeId, rideAlongApplied? } | { kind: 'conflict', nodes } | { kind: 'miss' }`. The load-bearing function for routing AI PR reviews per-node. Inverse direction of task.0380's `extractNodePath`. Mirrors `tests/ci-invariants/classify.ts` (the CI gate's reference classifier) byte-for-byte; locked by shared-fixture parity test. Operator is a sovereign domain (Reading A per spec § Single-Domain Scope), not an infra exemption."
 outcome: "When the AI reviewer fires on a PR webhook, `dispatch.server.ts` can call `extractOwningNode(rootSpec, changedPaths)` and route the review handler to the correct per-node `.cogni/rules/` directory deterministically — or refuse to review (returning a clear status) when the PR violates the single-node-scope policy that task.0381 enforces statically. Same routing logic, two enforcement points (CI for hard fail, reviewer for graceful skip + diagnostic comment)."
 spec_refs:
   - vcs-integration
@@ -50,7 +50,7 @@ type OwningNode =
       kind: "single";
       nodeId: string;
       path: string;
-      lockfileInheritsApplied?: true;
+      rideAlongApplied?: true;
     }
   | { kind: "conflict"; nodes: ReadonlyArray<{ nodeId: string; path: string }> }
   | { kind: "miss" };
@@ -75,7 +75,7 @@ Operator IS a domain — not an exemption. The operator owns its own node direct
 
 **Mixed sovereign + operator → conflict**: `nodes/poly/foo.ts + nodes/operator/app/bar.ts` returns `{ kind: "conflict", nodes: [operator, poly] }`. Same for `nodes/poly/foo.ts + packages/repo-spec/x.ts` — packages/ is operator territory.
 
-**Lockfile-inherits exception** (`LOCKFILE_INHERITS`): when domains is exactly `{operator, X}` and the only operator-domain path is `pnpm-lock.yaml`, drop operator → `{ kind: "single", nodeId: X, lockfileInheritsApplied: true }`. Mechanical side-effect of node-level `package.json` bumps; pnpm-lock.yaml only.
+**Ride-along exception** (`RIDE_ALONG`): when domains is exactly `{operator, X}` and the only operator-domain path is `pnpm-lock.yaml`, drop operator → `{ kind: "single", nodeId: X, rideAlongApplied: true }`. Mechanical side-effect of node-level `package.json` bumps; pnpm-lock.yaml only.
 
 ### Path matching — flat top-level under `nodes/`
 
@@ -107,7 +107,7 @@ The match key is `path.split("/")[1]` when path starts with `nodes/`. Compare ag
 - [ ] **PURE_RESOLVER**: `extractOwningNode` performs no I/O, no env reads, no logging. `(RepoSpec, readonly string[]) → OwningNode` and nothing else.
 - [ ] **DISCRIMINATED_UNION**: Return type is the three-case union (`single | conflict | miss`). No sentinel strings, no null-as-conflict.
 - [ ] **OPERATOR_IS_A_DOMAIN**: Operator is a sovereign domain — `nodes/operator/**` ∪ `packages/**` ∪ `.github/**` ∪ `docs/**` ∪ root configs all classify as `operator`. Mixing with another sovereign returns `conflict`. (Was `OPERATOR_IS_INFRA`/exemption — flipped per spec § Single-Domain Scope.)
-- [ ] **LOCKFILE_INHERITS**: When domains is `{operator, X}` and the only operator path is `pnpm-lock.yaml`, drop operator → `single { X, lockfileInheritsApplied: true }`. The only carve-out from `OPERATOR_IS_A_DOMAIN`.
+- [ ] **RIDE_ALONG**: When domains is `{operator, X}` and the only operator path is `pnpm-lock.yaml`, drop operator → `single { X, rideAlongApplied: true }`. The only carve-out from `OPERATOR_IS_A_DOMAIN`.
 - [ ] **EMPTY_INPUT**: `extractOwningNode(spec, [])` returns `{ kind: "miss" }`. CI passes; the reviewer surfaces a no-op neutral check.
 - [ ] **CONFLICT_ORDERING**: `conflict.nodes` is sorted by `nodeId.localeCompare` — deterministic so reviewer diagnostic comments don't flap.
 - [ ] **NO_CROSS_VALIDATION**: This function does not validate path safety (no `..`, no absolute paths). Caller responsibility, same as `extractNodePath`. Documented in TSDoc.
@@ -133,8 +133,8 @@ The match key is `path.split("/")[1]` when path starts with `nodes/`. Compare ag
 8. **Unregistered `nodes/<x>/` falls through to operator** — meta-test catches the registry/filesystem drift; resolver classifies as operator (matches bash gate's filesystem-driven default).
 9. **Empty input** — `[]` → `{ kind: "miss" }`.
 10. **node-template is sovereign** — paths under `nodes/node-template/...` resolve as sovereign when registered.
-11. **`LOCKFILE_INHERITS`** — `nodes/poly/app/package.json + pnpm-lock.yaml` → `{ kind: "single", nodeId: poly, lockfileInheritsApplied: true }`.
-12. **`LOCKFILE_INHERITS` bounded** — `nodes/poly + pnpm-lock.yaml + .github/foo.yml` → `{ kind: "conflict", nodes: [operator, poly] }` (any extra operator-domain path defeats the carve-out).
+11. **`RIDE_ALONG`** — `nodes/poly/app/package.json + pnpm-lock.yaml` → `{ kind: "single", nodeId: poly, rideAlongApplied: true }`.
+12. **`RIDE_ALONG` bounded** — `nodes/poly + pnpm-lock.yaml + .github/foo.yml` → `{ kind: "conflict", nodes: [operator, poly] }` (any extra operator-domain path defeats the carve-out).
 13. **Throws when operator missing from registry on operator-only PR** — `REGISTRY_MIRRORS_FILESYSTEM` invariant enforcement.
 14. **Parity with task.0381** — all 8 fixtures in `tests/ci-invariants/fixtures/single-node-scope/` produce identical verdicts when run through `extractOwningNode` (via the `OwningNode → ClassifyResult` translator) and `tests/ci-invariants/classify.ts`. Locked by `tests/ci-invariants/single-node-scope-parity.spec.ts`.
 
