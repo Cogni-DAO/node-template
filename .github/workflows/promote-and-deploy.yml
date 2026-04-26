@@ -695,7 +695,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 1
           token: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
 
@@ -765,6 +765,10 @@ jobs:
       group: aggregate-production
       cancel-in-progress: false
     steps:
+      # Production aggregator scripts are pinned to main so a
+      # workflow_dispatch from any other ref cannot inject scripts that
+      # write to deploy/production. Branch protection on main is the
+      # gate; the dispatched workflow YAML can call only what main ships.
       - uses: actions/checkout@v4
         with:
           ref: main
