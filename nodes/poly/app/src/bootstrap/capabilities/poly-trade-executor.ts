@@ -42,6 +42,20 @@
  *     autonomous sweep gate `redeemPositions` on `decideRedeem`: balance>0
  *     AND payoutNumerator>0. Data-API `redeemable` is enumeration-only.
  *     See bug.0376 (chain-truth predicate) and bug.0383 (winning-outcome gate).
+ *   - REDEEM_RACE_GUARDS — bug.0384: (1) module-scope `sweepInFlight` mutex
+ *     blocks inter-tick sweep overlap; (2) module-scope
+ *     `redeemCooldownByConditionId` 60s cooldown blocks manual ↔ sweep
+ *     races and double-clicks on the manual route. Both load-bearing for
+ *     different scenarios — see code docs at `REDEEM_COOLDOWN_MS` /
+ *     `sweepInFlight` for justification. Sweep wall-clock duration is
+ *     emitted on every completion (`poly.ctf.redeem.sweep_completed`) so
+ *     the next race-class issue is visible in Loki within the hour.
+ *   - SINGLE_POD_ASSUMPTION — the cooldown Map and mutex are in-process.
+ *     Scaling poly to >1 replica reintroduces the race; the deployment
+ *     must stay single-replica until task.0377 (event-driven sweep via
+ *     CTF `ConditionResolution` + own `PayoutRedemption` event subscription)
+ *     replaces this polling architecture entirely. **bug.0384 is a
+ *     band-aid; task.0377 is the real fix.**
  * Side-effects: on first `placeIntent` for a new tenant: HTTPS to
  *   Polymarket CLOB + Privy API. Subsequent calls reuse cached clients. Sweep
  *   path additionally issues one `eth_call` (multicall) per tick.
@@ -169,7 +183,8 @@ export type RedeemSkipReason =
   | "zero_balance"
   | "losing_outcome"
   | "missing_outcome_index"
-  | "read_failed";
+  | "read_failed"
+  | "pending_redeem";
 
 export function decideRedeem(input: {
   balance: bigint | null;
@@ -187,6 +202,79 @@ export function decideRedeem(input: {
     return { ok: false, reason: "losing_outcome" };
   }
   return { ok: true };
+}
+
+/**
+ * bug.0384 — per-condition in-process cooldown.
+ *
+ * Why this AND the sweep mutex? They cover different races:
+ *   - Mutex: catches inter-tick sweep overlap (tick B starts before tick A
+ *     finishes its serial per-candidate await). This is the prod-observed
+ *     case from 2026-04-26 (82 txs / 3 payouts after 1 POL refund).
+ *   - Cooldown: catches manual ↔ sweep races and double-clicks on
+ *     /api/v1/poly/wallet/positions/redeem. Mutex doesn't help these
+ *     because the manual route doesn't take the sweep mutex.
+ *
+ * Window rationale (60s = REDEEM_COOLDOWN_MS):
+ *   Polygon block time 2s, probabilistic finality ~3-5 blocks (~10s),
+ *   Alchemy RPC propagation lag adds a few seconds → mined-and-readable
+ *   ≈ 15-30s end-to-end. 60s is a 2× safety margin without being so long
+ *   that a legitimate retry-after-failure stalls.
+ *
+ * Map is module-scope so all tenant executors in this process share one
+ * cooldown table. SINGLE_POD_ASSUMPTION: this and the mutex below break
+ * the moment the poly node scales to >1 replica. Multi-pod idempotency
+ * (Redis SETNX, on-chain event-driven sweep) tracked in task.0377 +
+ * task.0379. Until then, the deployment must stay single-replica.
+ */
+const REDEEM_COOLDOWN_MS = 60_000;
+const redeemCooldownByConditionId = new Map<string, number>();
+
+/** Test-only: clear the cooldown table (used by unit tests). @internal */
+export function _resetRedeemCooldownForTests(): void {
+  redeemCooldownByConditionId.clear();
+}
+
+/** Returns ms remaining until cooldown expires, or 0 if not pending. */
+function pendingRedeemMsRemaining(conditionIdHex: string): number {
+  const expiry = redeemCooldownByConditionId.get(conditionIdHex);
+  if (expiry === undefined) return 0;
+  const remaining = expiry - Date.now();
+  if (remaining <= 0) {
+    redeemCooldownByConditionId.delete(conditionIdHex);
+    return 0;
+  }
+  return remaining;
+}
+
+/** Mark a condition as pending redeem; called immediately after `writeContract`. */
+function markRedeemPending(conditionIdHex: string): void {
+  redeemCooldownByConditionId.set(
+    conditionIdHex,
+    Date.now() + REDEEM_COOLDOWN_MS
+  );
+}
+
+/**
+ * bug.0384 — sweep-level mutex. `redeemAllRedeemableResolvedPositions`
+ * iterates candidates with `await redeemResolvedPosition(...)`, which itself
+ * awaits `waitForTransactionReceipt`. With N winners, total sweep wall-clock
+ * = N × (writeContract + receipt wait) ≈ 5-30s per condition. mirror-pipeline
+ * ticks every ~30s. With even 2 winners under load, ticks overlap.
+ *
+ * Without this mutex: tick B starts mid-tick-A, multicall reads all balances
+ * pre-burn (tick A still on candidate 1), predicate passes for candidates
+ * 2..N (cooldown only set on candidate 1), tick B fires writes that race
+ * tick A's still-pending writes. Cooldown alone can't prevent this because
+ * cooldown for candidates 2..N hasn't been set yet.
+ *
+ * SINGLE_POD_ASSUMPTION applies (see cooldown doc above).
+ */
+let sweepInFlight = false;
+
+/** Test-only: clear the mutex (used by unit tests). @internal */
+export function _resetSweepMutexForTests(): void {
+  sweepInFlight = false;
 }
 
 function errMsg(
@@ -653,6 +741,18 @@ async function buildExecutor(
       );
     }
 
+    // bug.0384 cooldown gate: refuse if a redeem is already in flight for
+    // this conditionId. Defeats double-click on the dashboard and any
+    // sweep-vs-manual race window.
+    const pendingMs = pendingRedeemMsRemaining(normalized);
+    if (pendingMs > 0) {
+      throw new PolyTradeExecutorError(
+        "not_redeemable",
+        `poly-trade-executor: redeem already pending for conditionId=${params.condition_id} (${pendingMs}ms remaining)`,
+        "pending_redeem"
+      );
+    }
+
     // bug.0383 precheck: balance > 0 AND payoutNumerator > 0. CTF
     // `redeemPositions` succeeds-with-payout=0 on losers; gate before signing.
     let positionId: bigint;
@@ -716,6 +816,10 @@ async function buildExecutor(
         chain: polygon,
         account: accountAny,
       });
+      // bug.0384: mark pending immediately after submission so the next
+      // sweep tick (within ~30s, possibly before this tx mines) skips this
+      // condition rather than re-firing it.
+      markRedeemPending(normalized);
       const receipt = await publicClient.waitForTransactionReceipt({
         hash,
       });
@@ -749,10 +853,54 @@ async function buildExecutor(
   async function redeemAllRedeemableResolvedPositions(): Promise<
     Array<{ condition_id: string; tx_hash: `0x${string}` }>
   > {
+    // bug.0384 mutex: one sweep cycle in flight per process. mirror-pipeline
+    // ticks every ~30s but a sweep with N winners + receipt waits exceeds
+    // that. Without this, two ticks compute predicates against pre-burn
+    // chain state and both fire the same conditions.
+    if (sweepInFlight) {
+      deps.logger.info(
+        {
+          event: "poly.ctf.redeem.sweep_skip_in_flight",
+          billing_account_id: billingAccountId,
+          funder: funderAddress,
+        },
+        "poly-trade-executor: redeem sweep tick skipped — previous sweep still in flight"
+      );
+      return [];
+    }
+    sweepInFlight = true;
+    const startedAt = Date.now();
+    try {
+      const out = await runRedeemSweep();
+      // bug.0384 observability: this race went undetected for 24h because
+      // we had no signal for "sweep wall-clock > tick interval." Emit on
+      // every completion so the next race-class bug shows up in Loki the
+      // same hour it ships. Alert: `duration_ms > tick_interval_ms` =
+      // ticks are guaranteed to overlap (mutex saves us, but it's a smell).
+      deps.logger.info(
+        {
+          event: "poly.ctf.redeem.sweep_completed",
+          billing_account_id: billingAccountId,
+          funder: funderAddress,
+          duration_ms: Date.now() - startedAt,
+          redeems: out.length,
+        },
+        "poly-trade-executor: redeem sweep completed"
+      );
+      return out;
+    } finally {
+      sweepInFlight = false;
+    }
+  }
+
+  async function runRedeemSweep(): Promise<
+    Array<{ condition_id: string; tx_hash: `0x${string}` }>
+  > {
     // Predicate is on-chain (`balanceOf` + `payoutNumerators`), NOT Data-API
     // `redeemable`. The Data-API flag is the bug.0376 source (stays true for
     // already-redeemed positions); the chain is the truth source. bug.0383
     // adds the `payoutNumerators` gate so we don't fire on losing outcomes.
+    // bug.0384 adds a per-condition cooldown so pending-tx don't re-fire.
     // Positions list is the *enumeration source* only.
     const positions = await dataApiClient.listUserPositions(funderAddress);
     const candidates: Array<{
@@ -868,6 +1016,24 @@ async function buildExecutor(
             );
             break;
         }
+        continue;
+      }
+
+      // bug.0384 cooldown gate (post-predicate): if we just submitted a
+      // redeem for this condition, skip — its tx may not have mined yet
+      // and the multicall above is reading pre-burn balance.
+      const pendingMs = pendingRedeemMsRemaining(c.conditionIdHex);
+      if (pendingMs > 0) {
+        deps.logger.info(
+          {
+            event: "poly.ctf.redeem.skip_pending_redeem",
+            billing_account_id: billingAccountId,
+            condition_id: c.condition_id,
+            funder: funderAddress,
+            expires_in_ms: pendingMs,
+          },
+          "poly-trade-executor: redeem sweep skipped — redeem already pending in cooldown"
+        );
         continue;
       }
 
