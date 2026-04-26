@@ -33,7 +33,7 @@ export type {
   MetricWindow,
   TemplateQueryParams,
 } from "./metrics";
-// Poly Data-API research capability (task.0368)
+// Poly Data-API research capability (task.0386)
 export type {
   PolyDataActivityOutput,
   PolyDataActivityType,

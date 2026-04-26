@@ -4,11 +4,11 @@
 /**
  * Module: `@cogni/poly-graphs/graphs/poly-research/graph`
  * Purpose: Peer graph to poly-brain — patient wallet-research agent that returns a
- *          structured `PolyResearchReport` via LangGraph `responseFormat` (task.0368).
+ *          structured `PolyResearchReport` via LangGraph `responseFormat` (task.0386).
  * Scope: Pure factory. Does not load env, does not perform IO, does not import adapters.
  * Invariants: TYPE_TRANSPARENT_RETURN, PACKAGES_NO_ENV, GRAPH_PEER_NOT_NESTED.
  * Side-effects: none
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

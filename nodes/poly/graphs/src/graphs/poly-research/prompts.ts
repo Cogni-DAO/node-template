@@ -3,11 +3,11 @@
 
 /**
  * Module: `@cogni/poly-graphs/graphs/poly-research/prompts`
- * Purpose: System prompt for the poly-research wallet-research agent (task.0368).
+ * Purpose: System prompt for the poly-research wallet-research agent (task.0386).
  * Scope: Prompt text only. Does not contain runtime logic or I/O.
  * Invariants: PACKAGES_NO_ENV.
  * Side-effects: none
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md, work/items/bug.0368.core-market-list-missing-condition-id.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md, work/items/bug.0385.core-market-list-missing-condition-id.md
  * @public
  */
 

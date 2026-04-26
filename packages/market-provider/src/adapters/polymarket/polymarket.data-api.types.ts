@@ -7,7 +7,7 @@
  * Scope: Pure type definitions for API response validation. Does not contain I/O or runtime logic.
  * Invariants: PACKAGES_NO_ENV.
  * Side-effects: none
- * Links: work/items/task.0315.poly-copy-trade-prototype.md, work/items/task.0368.poly-agent-wallet-research-v0.md, docs/research/poly-copy-trading-wallets.md
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md, work/items/task.0386.poly-agent-wallet-research-v0.md, docs/research/poly-copy-trading-wallets.md
  * @public
  */
 
@@ -128,7 +128,7 @@ export const PolymarketUserPositionsResponseSchema = z.array(
 );
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Additional Data API schemas (task.0368 — agent wallet research)
+// Additional Data API schemas (task.0386 — agent wallet research)
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**

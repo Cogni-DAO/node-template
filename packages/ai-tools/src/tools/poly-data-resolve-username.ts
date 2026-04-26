@@ -7,7 +7,7 @@
  * Scope: Read-only. Different host (gamma-api.polymarket.com) vs the Data API. Does not place trades, does not load env.
  * Invariants: TOOL_ID_NAMESPACED, EFFECT_READ_ONLY, NO_LANGCHAIN_IMPORT.
  * Side-effects: IO (capability)
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

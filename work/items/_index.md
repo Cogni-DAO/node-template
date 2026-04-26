@@ -129,7 +129,7 @@
 | 1 | 4 | 1 | needs_design | bug.0009 | Mock-LLM SSE streaming incompatible with OpenClaw pi-ai parser — gateway returns empty payloads | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 4 | 2 | needs_merge | bug.0197 | Scheduled runs accumulate messages in a single shared thread per schedule |  |  |
 | 1 | 4 | 5 | needs_design | task.0234 | Design: node repo creation + CI/CD onboarding pipeline | Node Formation & Launch | proj.node-formation-ui |
-| 1 | 4 | 3 | needs_merge | task.0368 | Poly agent wallet research v0 — Data-API tools + poly-research graph | Cogni Poly | proj.poly-prediction-bot |
+| 1 | 4 | 3 | needs_merge | task.0386 | Poly agent wallet research v0 — Data-API tools + poly-research graph | Cogni Poly | proj.poly-prediction-bot |
 | 1 | 5 | 2 | needs_triage | bug.0044 | Gateway billing reader finds 0 entries in stale audit log — kills execution after graph switch | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 5 | 2 | needs_triage | bug.0069 | Stack tests flaky — all 5 waitForReceipts tests time out when run as full suite |  |  |
 | 1 | 5 | 2 | needs_design | bug.0200 | setup-secrets has no validation that generated secrets are deploy-safe | Database Operations | proj.database-ops |
@@ -224,7 +224,7 @@
 | 2 | 10 | 2 | needs_design | bug.0198 | Single Privy app shared across preview and production — no env isolation | Reliability & Uptime | proj.reliability |
 | 2 | 10 | 1 | needs_implement | bug.0201 | Runbook gap: secret changes require container recreation, not just workflow re-runs | Reliability & Uptime | proj.reliability |
 | 2 | 10 | 2 | needs_design | bug.0295 | VM IPs committed to public repo via deploy branch env-endpoints.yaml | CI/CD Pipeline | proj.cicd-services-gitops |
-| 2 | 10 | 1 | needs_triage | bug.0368 | core__market_list drops Polymarket conditionId → /holders + /trades unreachable to the agent | Cogni Poly | proj.poly-prediction-bot |
+| 2 | 10 | 1 | needs_triage | bug.0385 | core__market_list drops Polymarket conditionId → /holders + /trades unreachable to the agent | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 11 | 3 | needs_triage | task.0048 | Sub-agent billing attribution — track which OpenClaw sub-agent made each LLM call | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 2 | 12 | 3 | needs_triage | task.0040 | Gateway memory curation worker — scan ephemeral state, persist valuable context, reset container | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 2 | 14 | 1 | needs_design | task.0079 | Create bot-generated Discord invite link for website |  |  |

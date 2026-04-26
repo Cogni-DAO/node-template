@@ -3,13 +3,13 @@
 
 /**
  * Module: `@cogni/node-contracts/poly.research-report.v1.contract`
- * Purpose: Output contract for the `poly-research` LangGraph peer graph (task.0368).
+ * Purpose: Output contract for the `poly-research` LangGraph peer graph (task.0386).
  * Scope: Zod report contract consumed as `responseFormat` + serialized in HTTP response. Does not execute graphs, does not load env.
  * Invariants:
  *   - PURE_LIBRARY: No env, no adapters
  *   - SINGLE_CONTRACT_SOURCE: Tool graph imports from here, never redefines
  * Side-effects: none
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

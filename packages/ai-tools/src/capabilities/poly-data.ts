@@ -3,14 +3,14 @@
 
 /**
  * Module: `@cogni/ai-tools/capabilities/poly-data`
- * Purpose: Shared capability interface for Polymarket Data-API research tools (task.0368).
+ * Purpose: Shared capability interface for Polymarket Data-API research tools (task.0386).
  * Scope: Contract + output types for `core__poly_data_*` tools. Does not implement transport, does not load env.
  * Invariants:
  *   - NO_NEW_PORT: Research is read-only HTTP; lives in ai-tools/capabilities, not nodes/poly/app/src/ports
  *   - PAGINATION_CONSISTENT: Paginated outputs expose `{ count, hasMore }`
  *   - USER_PARAM_IS_PROXY_WALLET: `user` is validated as 0x40-hex by the tool input schema
  * Side-effects: none (interface only)
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

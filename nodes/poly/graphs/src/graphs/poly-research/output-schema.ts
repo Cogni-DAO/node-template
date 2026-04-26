@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/poly-graphs/graphs/poly-research/output-schema`
- * Purpose: Re-export the canonical PolyResearchReport contract for graph-local use (task.0368).
+ * Purpose: Re-export the canonical PolyResearchReport contract for graph-local use (task.0386).
  * Scope: Pure re-exports. Tool code imports from here; contract body lives in node-contracts. Does not define new types, does not load env.
  * Invariants: SINGLE_CONTRACT_SOURCE.
  * Side-effects: none

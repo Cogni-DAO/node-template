@@ -3,11 +3,11 @@
 
 /**
  * Module: `@cogni/poly-graphs/graphs/poly-research/tools`
- * Purpose: Tool IDs for the poly-research graph (single source of truth — task.0368).
+ * Purpose: Tool IDs for the poly-research graph (single source of truth — task.0386).
  * Scope: Exports the ID array consumed by the inproc runner to bind contracts+impls. Does not enforce policy, does not execute tools.
  * Invariants: SINGLE_SOURCE_OF_TRUTH.
  * Side-effects: none
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

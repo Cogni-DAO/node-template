@@ -109,7 +109,7 @@ export interface ToolBindingDeps {
    */
   readonly polyTradeCapability?: PolyTradeCapability | undefined;
   /**
-   * PolyDataCapability — backs the 7 `core__poly_data_*` research tools (task.0368).
+   * PolyDataCapability — backs the 7 `core__poly_data_*` research tools (task.0386).
    * Always required on poly (Data API is public).
    */
   readonly polyDataCapability: PolyDataCapability;
@@ -195,7 +195,7 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
         })
       : polyCancelOrderStubImplementation) as AnyToolImplementation,
 
-    // Poly Data-API research tools (task.0368) — poly brains can call these
+    // Poly Data-API research tools (task.0386) — poly brains can call these
     // to research arbitrary proxy-wallets. Backed by public Data API (no auth).
     [POLY_DATA_POSITIONS_NAME]: createPolyDataPositionsImplementation({
       polyDataCapability: deps.polyDataCapability,

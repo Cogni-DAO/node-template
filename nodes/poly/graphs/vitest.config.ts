@@ -3,7 +3,7 @@
 
 /**
  * Module: `@cogni/poly-graphs/vitest.config`
- * Purpose: Vitest configuration for poly-graphs package tests (task.0368).
+ * Purpose: Vitest configuration for poly-graphs package tests (task.0386).
  * Scope: Package-local tests only; does not import app src/.
  * Invariants:
  *   - No LLM invocation in unit tests

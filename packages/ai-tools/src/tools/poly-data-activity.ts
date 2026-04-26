@@ -7,7 +7,7 @@
  * Scope: Read-only Data-API wrapper via PolyDataCapability. Distinct from `/trades`. Does not place trades, does not load env.
  * Invariants: TOOL_ID_NAMESPACED, EFFECT_READ_ONLY, USER_PARAM_IS_PROXY_WALLET, PAGINATION_CONSISTENT, NO_LANGCHAIN_IMPORT.
  * Side-effects: IO (capability)
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

@@ -6,7 +6,7 @@ status: needs_implement
 priority: 1
 rank: 6
 estimate: 1
-summary: "task.0368's `core__poly_data_resolve_username` wraps `https://gamma-api.polymarket.com/public-search?q=<x>&profile=true`, but that endpoint actually returns `{ events: [...], pagination: {...} }` for ALL queries — there is no `profiles` key, and the `profile=true` flag does nothing. Verified live 2026-04-25 against `trump`, `elon`, `polymarket`, `polytrader` → all returned 0 profile hits. Tool's `GammaPublicSearchResponseSchema` accepts the response because `profiles` is `.optional().default([])`, so the tool silently returns `{ profiles: [], count: 0 }` for every query. The agent thinks it called a working tool; the tool has never resolved a single username. Polymarket's Gamma `openapi.json` only documents follows/spotlights — no public profile-search endpoint exists. Same gist-sourced-not-live-curled pattern as `/traded-events` (purged) and `/holders` (bug.0379)."
+summary: "task.0386's `core__poly_data_resolve_username` wraps `https://gamma-api.polymarket.com/public-search?q=<x>&profile=true`, but that endpoint actually returns `{ events: [...], pagination: {...} }` for ALL queries — there is no `profiles` key, and the `profile=true` flag does nothing. Verified live 2026-04-25 against `trump`, `elon`, `polymarket`, `polytrader` → all returned 0 profile hits. Tool's `GammaPublicSearchResponseSchema` accepts the response because `profiles` is `.optional().default([])`, so the tool silently returns `{ profiles: [], count: 0 }` for every query. The agent thinks it called a working tool; the tool has never resolved a single username. Polymarket's Gamma `openapi.json` only documents follows/spotlights — no public profile-search endpoint exists. Same gist-sourced-not-live-curled pattern as `/traded-events` (purged) and `/holders` (bug.0379)."
 outcome: "Either (a) `core__poly_data_resolve_username` is purged end-to-end like `core__poly_data_traded_events` was, OR (b) replaced with a real handle→wallet resolver (likely a Gamma endpoint we have not yet found, or an off-Polymarket source). Decision documented inline. If purged: tool file, capability method, types schema, index exports, tests, graph tool bundle, prompt mention, and stub bindings in all 4 apps removed. If replaced: live-curl evidence of the new endpoint pasted into the work item, response schema rewritten from a real captured response, and a follow-up live probe at flighted buildSha returns ≥1 real profile for a known-handle query."
 spec_refs: []
 assignees: []
@@ -63,7 +63,7 @@ Gamma `openapi.json` (`https://gamma-api.polymarket.com/openapi.json`) only docu
 - `/spotlights*` (curated content)
 - `/v1/account/*` and `/v1/data/*` follow endpoints
 
-There is **no public profile-search endpoint documented**. The endpoint we wrap exists (HTTP 200) but serves a different shape. Closest comparable: shaunlebron's gist (which the original task.0368 design referenced) appears to have invented this, identical to the `/traded-events` mistake.
+There is **no public profile-search endpoint documented**. The endpoint we wrap exists (HTTP 200) but serves a different shape. Closest comparable: shaunlebron's gist (which the original task.0386 design referenced) appears to have invented this, identical to the `/traded-events` mistake.
 
 ## Live evidence (PR #1033 candidate-a probe, sha `f7ff381a`)
 
@@ -79,7 +79,7 @@ No Loki error. Tool reported success. Behavior is silent-fail.
 
 ## Decision matrix
 
-**Option A — purge.** Same surgery as `core__poly_data_traded_events` (task.0368 commit `f7ff381a9`):
+**Option A — purge.** Same surgery as `core__poly_data_traded_events` (task.0386 commit `f7ff381a9`):
 
 - Delete `packages/ai-tools/src/tools/poly-data-resolve-username.ts`
 - Remove from capability interface, types schemas, index exports, catalog, tests, graph tool bundle, prompts, and the 4 stub bindings (poly/operator/resy/node-template).
@@ -122,7 +122,7 @@ If A:
 
 - Surfaced in PR #1033 sub-matrix: https://github.com/Cogni-DAO/node-template/pull/1033#issuecomment-4320409131
 - Sibling: bug.0379 (`/holders` schema mismatch).
-- Lineage: `core__poly_data_traded_events` purge (task.0368 commit `f7ff381a9`).
+- Lineage: `core__poly_data_traded_events` purge (task.0386 commit `f7ff381a9`).
 - Skill update capturing the post-mortem pattern: `docs/skill-validate-candidate-thoroughness` branch (sub-matrix sweep section).
 
 ## PR / Links

@@ -1,5 +1,5 @@
 ---
-id: task.0368
+id: task.0386
 type: task
 title: "Poly agent wallet research v0 — Data-API tools + poly-research graph"
 status: needs_merge
@@ -25,7 +25,7 @@ labels:
 external_refs:
 ---
 
-# task.0368 — Poly agent wallet research v0
+# task.0386 — Poly agent wallet research v0
 
 ## Why hand-roll (not MCP, not autogen)
 
@@ -459,7 +459,7 @@ Each probe is one turn. Tight, imperative, no-chain-of-thought — 4o-mini follo
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0368` linked in PR body
+- [ ] **Work Item:** `task.0386` linked in PR body
 - [ ] **Spec:** N/A (no new spec invariants; extension of existing client + capability patterns)
 - [ ] **Tests:** unit per tool + one component-level graph test with fixtured Data-API responses
 - [ ] **Reviewer:** assigned and approved

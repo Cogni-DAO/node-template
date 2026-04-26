@@ -663,7 +663,7 @@ function createContainer(): Container {
   // WalletCapability for AI tools (Polymarket wallet scoreboard — public Data API)
   const walletCapability = createWalletCapability();
 
-  // PolyDataCapability for the 7 `core__poly_data_*` research tools (task.0368).
+  // PolyDataCapability for the 7 `core__poly_data_*` research tools (task.0386).
   // Public Data API (no auth). Client is dedicated to this capability; the
   // mirror poll below still constructs its own client lazily inside the lazy
   // import block so pods without Polymarket creds avoid loading that code path.

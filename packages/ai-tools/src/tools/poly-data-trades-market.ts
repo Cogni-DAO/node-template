@@ -7,7 +7,7 @@
  * Scope: Read-only. Used for counterparty harvesting (NOT per-user history). Does not place trades, does not load env.
  * Invariants: TOOL_ID_NAMESPACED, EFFECT_READ_ONLY, PAGINATION_CONSISTENT, NO_LANGCHAIN_IMPORT.
  * Side-effects: IO (capability)
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

@@ -7,7 +7,7 @@
  * Scope: HTTP fetch + Zod validation. Does not load env, does not manage credentials, does not place orders, does not implement `MarketProviderPort`.
  * Invariants: PACKAGES_NO_ENV, READ_ONLY, CONTRACT_IS_SOT.
  * Side-effects: IO (HTTP fetch to https://data-api.polymarket.com and https://gamma-api.polymarket.com)
- * Links: work/items/task.0315.poly-copy-trade-prototype.md, work/items/task.0368.poly-agent-wallet-research-v0.md, docs/research/poly-copy-trading-wallets.md
+ * Links: work/items/task.0315.poly-copy-trade-prototype.md, work/items/task.0386.poly-agent-wallet-research-v0.md, docs/research/poly-copy-trading-wallets.md
  * @public
  */
 

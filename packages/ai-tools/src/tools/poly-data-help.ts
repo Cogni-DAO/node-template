@@ -7,7 +7,7 @@
  * Scope: Pure static meta-tool. Returns endpoint catalog + discovery strategy + gotchas. Does not perform IO, does not load env.
  * Invariants: TOOL_ID_NAMESPACED, EFFECT_READ_ONLY, NO_IO, NO_LANGCHAIN_IMPORT.
  * Side-effects: none
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @public
  */
 

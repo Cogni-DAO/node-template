@@ -167,7 +167,7 @@ export function createToolBindings(deps: ToolBindingDeps): ToolBindings {
     [POLY_CANCEL_ORDER_NAME]:
       polyCancelOrderStubImplementation as AnyToolImplementation,
 
-    // Poly Data-API research tools (task.0368): poly-only. Stubs here so
+    // Poly Data-API research tools (task.0386): poly-only. Stubs here so
     // the shared TOOL_CATALOG iteration in createBoundToolSource does not
     // throw. The help tool is static (no IO) and can use the real impl.
     [POLY_DATA_POSITIONS_NAME]:

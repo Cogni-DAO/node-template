@@ -3,11 +3,11 @@
 
 /**
  * Module: `@cogni/poly-graphs/tests/poly-research`
- * Purpose: Unit tests for the poly-research graph factory — tool bundle + output schema + factory (task.0368).
+ * Purpose: Unit tests for the poly-research graph factory — tool bundle + output schema + factory (task.0386).
  * Scope: Pure — does not invoke the LLM, does not hit the network. Full agent→tool→report flow is validated at deploy via the Validation block.
  * Invariants: SINGLE_CONTRACT_SOURCE, GRAPH_PEER_NOT_NESTED.
  * Side-effects: none
- * Links: work/items/task.0368.poly-agent-wallet-research-v0.md
+ * Links: work/items/task.0386.poly-agent-wallet-research-v0.md
  * @internal
  */
 

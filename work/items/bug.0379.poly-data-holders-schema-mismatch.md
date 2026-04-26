@@ -6,7 +6,7 @@ status: needs_implement
 priority: 1
 rank: 5
 estimate: 1
-summary: "task.0368's `core__poly_data_holders` tool wraps `https://data-api.polymarket.com/holders?market=<conditionId>` but `MarketHoldersResponseSchema` expects a flat array of holders. The real response is `[{ token: string, holders: [{ proxyWallet, asset, name, pseudonym, amount, outcomeIndex, profileImage, displayUsernamePublic, verified, ... }] }]` — grouped per outcome token. safeParse correctly catches it and emits `PolyDataApiValidationError(VALIDATION_FAILED, /holders)`. Caller-visible: 500 Internal Server Error from poly-research graph. Surfaced live on candidate-a 2026-04-25 (PR #1033 sub-matrix probe, runId 1c7bd3dc). Same root cause as the `/traded-events` regression already purged — schema sourced from a gist, not live-curled."
+summary: "task.0386's `core__poly_data_holders` tool wraps `https://data-api.polymarket.com/holders?market=<conditionId>` but `MarketHoldersResponseSchema` expects a flat array of holders. The real response is `[{ token: string, holders: [{ proxyWallet, asset, name, pseudonym, amount, outcomeIndex, profileImage, displayUsernamePublic, verified, ... }] }]` — grouped per outcome token. safeParse correctly catches it and emits `PolyDataApiValidationError(VALIDATION_FAILED, /holders)`. Caller-visible: 500 Internal Server Error from poly-research graph. Surfaced live on candidate-a 2026-04-25 (PR #1033 sub-matrix probe, runId 1c7bd3dc). Same root cause as the `/traded-events` regression already purged — schema sourced from a gist, not live-curled."
 outcome: "`MarketHoldersResponseSchema` (and `MarketHolderSchema`) match the live Polymarket `/holders` shape. `getHolders` capability either returns the per-outcome grouping (`{ market, outcomes: [{ token, holders: [...] }], count }`) OR flattens with `outcomeIndex` preserved on each holder. Tool description + agent prompt updated to match. Live probe on candidate-a returns 200 with real holder data; zero `ai.tool_call.error` events for `core__poly_data_holders`."
 spec_refs: []
 assignees: []
@@ -70,7 +70,7 @@ event=ai.tool_call.error
   → 500 to caller
 ```
 
-The new typed `PolyDataApiValidationError` boundary (also from task.0368) is the only reason this surfaced as a clean `VALIDATION_FAILED` instead of an opaque ZodError dumped to the user — exactly the boundary it was designed for.
+The new typed `PolyDataApiValidationError` boundary (also from task.0386) is the only reason this surfaced as a clean `VALIDATION_FAILED` instead of an opaque ZodError dumped to the user — exactly the boundary it was designed for.
 
 ## Allowed Changes
 
@@ -95,7 +95,7 @@ The new typed `PolyDataApiValidationError` boundary (also from task.0368) is the
 
 - Surfaced in PR #1033 sub-matrix: https://github.com/Cogni-DAO/node-template/pull/1033#issuecomment-4320409131
 - Sibling: bug.0380 (`core__poly_data_resolve_username` wrong endpoint).
-- Lineage: `core__poly_data_traded_events` purge (task.0368 commit `f7ff381a9`) — same gist-sourced-without-live-curl root cause.
+- Lineage: `core__poly_data_traded_events` purge (task.0386 commit `f7ff381a9`) — same gist-sourced-without-live-curl root cause.
 
 ## PR / Links
 
