@@ -95,3 +95,7 @@ See PR #1062 comment for the 5-stage validation plan: (1) PR-branch dispatch sin
 - (f) Concurrent flights on the same node → second waits on `concurrency: flight-${{ matrix.env }}-${{ matrix.node }}` group, eventually succeeds or fails cleanly.
 - Lease semantics confirmed: `aggregate-preview` is the SOLE writer of `lock-preview-on-success` / `unlock-preview-on-failure`; per-cell jobs cannot push `.promote-state/lease.json` (AGGREGATOR_OWNS_LEASE).
 - `release.yml` byte-unchanged; `create-release.sh:22` still reads `current-sha` from `deploy/preview/.promote-state/`.
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0376.handoff.md)
