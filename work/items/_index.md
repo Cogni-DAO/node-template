@@ -241,6 +241,7 @@
 | 2 | 50 | 3 | needs_triage | bug.0330 | poly /api/v1/chat/completions intermittently returns empty body on candidate-a | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 50 | 2 | needs_triage | bug.0337 | Per-node testcontainers setup uses operator's migrations — drift once any node diverges | Database Operations | proj.database-ops |
 | 2 | 50 | 3 | needs_triage | task.0377 | poly CTF redeem sweep — reactive architecture (replace per-tick RPC fan-out) | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
+| 2 | 60 | 1 | needs_implement | bug.0378 | reconcile-appset has no concurrency group — two concurrent flights race a shared kubectl apply | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 60 | 3 | needs_triage | task.0378 | poly anvil-fork test harness — verify CTF semantics against real Polygon chain state | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
 | 2 | 99 | 1 | needs_design | bug.0093 | Ownership facade N+1 — sequential DB queries per epoch | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 99 | 2 | needs_design | task.0104 | Ledger production hardening — upsert batching, connection pooling, activity tests | Transparent Credit Payouts | proj.transparent-credit-payouts |
@@ -255,6 +256,7 @@
 | 2 | 99 | 3 | needs_review | task.0323 | Poly copy-trade v1 hardening — close the v0 gaps uncovered during candidate-a validation | Cogni Poly | proj.poly-copy-trading |
 | 3 | 3 | 2 | needs_design | task.0362 | Node-owned hostname declaration for verify + ingress | CI/CD Pipeline | proj.cicd-services-gitops |
 | 3 | 5 | 5 | needs_design | story.0248 | Dolt Branching CI/CD — experiment branches, A/B evaluation, confidence-gated promotion to main | Cogni Poly | proj.poly-prediction-bot |
+| 3 | 5 | 2 | needs_design | task.0383 | First-class shared `readyz`/env-invariants into operator territory so cross-cutting infra fixes can land as a single PR | CI/CD Pipeline | proj.cicd-services-gitops |
 | 3 | 6 | 2 | needs_design | task.0326 | Ledger/attribution worker: rename DATABASE_URL and enforce no-DB-creds invariant on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |
 | 3 | 7 | 2 | needs_triage | bug.0034 | Secrets redaction uses regex on serialized JSON — adopt fast-redact for structured fields |  |  |
 | 3 | 7 | 2 | needs_design | task.0327 | Drain legacy Temporal queue + add HTTP circuit breaker on scheduler-worker | Unified Graph Launch | proj.unified-graph-launch |
