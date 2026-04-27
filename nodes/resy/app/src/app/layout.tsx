@@ -3,12 +3,15 @@
 
 /**
  * Module: `@app/layout`
- * Purpose: Root layout component for Next.js App Router with font configuration and global styles.
- * Scope: Provides HTML structure and font loading for entire application. Does not handle routing or content.
- * Invariants: Renders valid HTML5 structure; applies consistent font variables; includes global CSS.
- * Side-effects: none
- * Notes: Manrope font loaded with CSS variables for theme consistency.
- * Links: Next.js App Router layout specification
+ * Purpose: Root layout for the Resy node with font configuration and global styles.
+ * Scope: Async server component. Reads request cookies, computes wagmi `initialState`,
+ *   passes it to the client `Providers` so `<WagmiProvider>` hydrates without mismatch
+ *   (per https://wagmi.sh/react/guides/ssr).
+ * Invariants:
+ *   - Stays a server component so `headers()` is callable cheaply.
+ *   - `initialState` MUST be sourced from `cookieToInitialState(wagmiConfig, cookie)`.
+ * Side-effects: reads request headers (Next.js dynamic API).
+ * Links: ./providers.client, @/shared/web3/wagmi.config, docs/spec/architecture.md §SSR-unsafe libraries
  * @public
  */
 
@@ -17,11 +20,14 @@ import "@rainbow-me/rainbowkit/styles.css";
 
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
+import { cookieToInitialState } from "wagmi";
 
-import { Providers } from "./providers-loader.client";
+import { wagmiConfig } from "@/shared/web3/wagmi.config";
+import { Providers } from "./providers.client";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -33,11 +39,29 @@ export const metadata: Metadata = {
     "Stop losing reservations to scalper bots. We claim your table in seconds using official channels.",
 };
 
-export default function RootLayout({
+// See operator/app/src/app/layout.tsx for rationale — `headers()` in the
+// root layout requires dynamic rendering and the helper below tolerates the
+// `/_not-found` build-time call where headers() throws.
+export const dynamic = "force-dynamic";
+
+async function readCookieHeaderSafely(): Promise<string | null> {
+  try {
+    return (await headers()).get("cookie");
+  } catch {
+    return null;
+  }
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
-}>): ReactNode {
+}>) {
+  const initialState = cookieToInitialState(
+    wagmiConfig,
+    await readCookieHeaderSafely()
+  );
+
   return (
     <html lang="en" className={manrope.className} suppressHydrationWarning>
       <head>
@@ -50,7 +74,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Providers>
+          <Providers initialState={initialState}>
             <div id="main">{children}</div>
           </Providers>
         </ThemeProvider>

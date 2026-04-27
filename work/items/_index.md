@@ -36,6 +36,7 @@
 | 0 | 1 | 1 | needs_design | task.0382 | `extractOwningNode(spec, paths)` — TS resolver for files-changed → owning nodeId in operator runtime | VCS Integration | proj.vcs-integration |
 | 0 | 1 | 1 | needs_merge | bug.0384 | poly CTF redeem sweep — read-then-write race burns gas on duplicate redeems | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
 | 0 | 1 | 3 | needs_closeout | task.0387 | Capability A — pure redeem policy + fixture audit (stops the bleed) | Cogni Poly | proj.poly-copy-trading |
+| 0 | 1 | 2 | needs_implement | task.0402 | Restore SSR — adopt wagmi's canonical Next.js App Router SSR pattern |  |  |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -421,6 +422,7 @@
 | 1 | bug.0381 | wait-for-in-cluster-services.sh ignores PROMOTED_APPS — every matrix cell waits for every Deployment | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | task.0384 | POST /api/v1/vcs/flight — CI-gated candidate-a flight endpoint + vcs/pr cleanup | Agentic Interoperability | proj.agentic-interop |
 | 1 | task.0389 | Poly wallet research — single-source PnL via Polymarket user-pnl-api | Cogni Poly | proj.poly-copy-trading |
+| 1 | spike.0401 | Next.js frontend perf — operator + poly SSR / transitions / bundle audit |  |  |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |
