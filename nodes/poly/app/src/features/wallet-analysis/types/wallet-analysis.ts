@@ -42,6 +42,19 @@ export type WalletPnlHistoryPoint = {
 
 export type WalletPositionStatus = "open" | "closed" | "redeemable";
 
+export type WalletPositionLifecycleState =
+  | "unresolved"
+  | "open"
+  | "closing"
+  | "closed"
+  | "resolving"
+  | "winner"
+  | "redeem_pending"
+  | "redeemed"
+  | "loser"
+  | "dust"
+  | "abandoned";
+
 export type WalletPositionTimelinePoint = {
   ts: string;
   price: number;
@@ -72,6 +85,7 @@ export type WalletPosition = {
   marketUrl?: string | null;
   outcome: string;
   status: WalletPositionStatus;
+  lifecycleState?: WalletPositionLifecycleState | null | undefined;
   openedAt: string;
   closedAt?: string | null;
   heldMinutes: number;

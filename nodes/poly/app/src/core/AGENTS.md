@@ -46,6 +46,7 @@ Pure domain logic with entities, rules, and business invariants. No I/O, time, o
   - Utilities (USDC conversion, message builders, payment state checkers)
   - AI utilities (system prompt application, token estimation)
   - Ledger domain (re-exported from `@cogni/attribution-ledger`): model types, `computeStatementItems()`, `buildReceiptMessage()`, error classes
+  - Redeem domain (task.0388): `RedeemJob`, `RedeemJobStatus` (`pending | claimed | submitted | confirmed | failed_transient | abandoned | skipped`), `RedeemLifecycleState`, `REDEEM_TERMINAL_LIFECYCLE_STATES`, `RedeemFlavor`, `RedeemFailureClass`, `transition(job, event)` pure state machine, `REDEEM_MAX_TRANSIENT_ATTEMPTS`, `deriveNegRiskAmounts(outcomeIndex, balance)` boundary helper, `InvalidNegRiskOutcomeIndexError`
 - **Files considered API:** public.ts, payments/public.ts, billing/public.ts, chat/public.ts, accounts/public.ts, attribution/public.ts
 
 ## Responsibilities

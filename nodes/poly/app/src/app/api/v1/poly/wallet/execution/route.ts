@@ -7,8 +7,10 @@
  *          counts) for the caller's own Polymarket trading wallet. Powers the dashboard's
  *          `OperatorWalletChartsRow` + `ExecutionActivityCard`.
  * Scope: Session-auth, tenant-scoped. Resolves the caller's billing account,
- *   asks `PolyTraderWalletPort` for its `funder_address`, then delegates to
- *   `getExecutionSlice(funderAddress)` in the shared wallet-analysis service
+ *   asks `PolyTraderWalletPort` for its `funder_address`, queries the redeem
+ *   pipeline's `RedeemJobsPort.listForFunder` for a `(conditionId →
+ *   lifecycle_state)` map, then delegates to `getExecutionSlice(addr,
+ *   { lifecycleByConditionId })` in the shared wallet-analysis service
  *   (Polymarket Data API for trades + positions, public CLOB for price
  *   history). No writes, no operator capability.
  * Invariants:
@@ -33,6 +35,7 @@ import { toUserId } from "@cogni/ids";
 import {
   PolyWalletExecutionOutputSchema,
   polyWalletExecutionOperation,
+  type WalletExecutionLifecycleState,
 } from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -107,8 +110,37 @@ export const GET = wrapRouteHandlerWithLogging(
       "poly.wallet.execution"
     );
 
+    const lifecycleByConditionId = new Map<
+      string,
+      WalletExecutionLifecycleState
+    >();
+    if (
+      container.redeemPipeline &&
+      container.redeemPipeline.funderAddress.toLowerCase() ===
+        address.toLowerCase()
+    ) {
+      try {
+        const jobs = await container.redeemPipeline.redeemJobs.listForFunder(
+          container.redeemPipeline.funderAddress
+        );
+        for (const job of jobs) {
+          lifecycleByConditionId.set(
+            job.conditionId,
+            job.lifecycleState as WalletExecutionLifecycleState
+          );
+        }
+      } catch (err) {
+        ctx.log.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          "poly.wallet.execution.lifecycle_lookup_failed"
+        );
+      }
+    }
+
     return NextResponse.json(
-      PolyWalletExecutionOutputSchema.parse(await getExecutionSlice(address))
+      PolyWalletExecutionOutputSchema.parse(
+        await getExecutionSlice(address, { lifecycleByConditionId })
+      )
     );
   }
 );

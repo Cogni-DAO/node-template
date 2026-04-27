@@ -161,7 +161,7 @@ These are not optional; the design relies on them.
 - [x] **Finality depth N picked: v0 default N=5 (~12.5 s) post-Heimdall-v2.**
   - Heimdall-v2 went live on Polygon PoS mainnet on **2025-09-16** (block 28913694, ~14:00 UTC) per [forum.polygon.technology v0.3.0 release announcement](https://forum.polygon.technology/t/heimdall-v2-v0-3-0-release-for-mainnet/21270). Block finality reduced from ~1 minute (probabilistic) to **2–5 seconds (milestone-based, deterministic)** via vote extensions.
   - **N=5 (~12.5 s)** is a 2.5× margin over the upper end of the milestone window. Comfortably under the 30 s ingress timeout (so the manual redeem still holds HTTP per § Resolved during review #4). Conservative ceiling from the Polygon docs is N=10; but post-Heimdall-v2 that is overkill — milestones provide deterministic finality, not probabilistic.
-  - **Optional optimization:** if the chosen RPC provider (Alchemy / QuickNode) exposes Polygon's `finalized` block tag with milestone-derived finality, prefer `eth_getBlockByNumber("finalized")` over fixed-N depth counting. Cleanest semantics; falls back to N=5 if not available. Decision lives next to RPC config in `nodes/poly/app/src/shared/env`, not hardcoded in two places.
+  - **Hard-pinned: N=5 only, no `finalized` block-tag opt-in.** Earlier draft listed an `eth_getBlockByNumber("finalized")` optimization as optional; demoted to a separate follow-up task. Two code paths for finality in a money-movement state machine = two failure modes to reason about. Tag-based finality lands later under its own validation, after 30 d of N=5 production telemetry confirms reorg behaviour. (Invariant `FINALITY_IS_FIXED_N` on task.0388.)
   - **Revisit after the first 30 days of `PayoutRedemption` observation:** if zero `confirmed → submitted` reverts occur, ratchet down to N=3 (~7.5 s). If even one reverts, hold or raise N and log the reorg.
 
 ### Capability A — Pure redeem policy
@@ -197,7 +197,7 @@ A persistent, idempotent state machine for the `winner → redeem_pending → re
 Subscribe to **both** the CTF contract and the neg-risk adapter contract. Filtering only the CTF address would silently drop neg-risk redemption confirmations and the worker would retry forever — bug.0384 in a new dress.
 
 - CTF `ConditionResolution(conditionId, oracle, questionId, outcomeSlotCount, payoutNumerators[])` → for each of our funder's positions in that condition, evaluate Capability A. If `redeem`, INSERT into the job table.
-- CTF `PayoutRedemption(redeemer, collateralToken, parentCollectionId, conditionId, indexSets[], payout)` → if `redeemer == funder` AND a job exists for `(funder, conditionId)`, mark `confirmed` after **N-block finality** (Polygon post-Heimdall-v2: N=5 default; tunable, lives next to RPC config; prefer `finalized` block tag if RPC exposes it).
+- CTF `PayoutRedemption(redeemer, collateralToken, parentCollectionId, conditionId, indexSets[], payout)` → if `redeemer == funder` AND a job exists for `(funder, conditionId)`, mark `confirmed` after **N-block finality** (Polygon post-Heimdall-v2: N=5, hard-pinned for v0.2; lives next to RPC config in `nodes/poly/app/src/shared/env`).
 - NegRiskAdapter `PayoutRedemption(address indexed redeemer, bytes32 indexed conditionId, uint256[] amounts, uint256 payout)` at `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296` → same `redeemer == funder` matching rule, marks neg-risk jobs `confirmed`. Different topic hash than CTF's `PayoutRedemption` because of the parameter shape difference; both must be subscribed.
 
 A reorg observed within N blocks reverts `confirmed → submitted`; the worker re-checks at next finality. This is what `REDEEM_COMPLETION_IS_EVENT_OBSERVED` means in practice.
@@ -271,6 +271,27 @@ Three transient retries (RPC timeout, gas underpriced, reorg-during-submit) fail
 4. **Re-enqueue the abandoned position** via the same UPSERT as Class A step 7.
 
 Both classes funnel through the same UPSERT to retire abandoned rows. Without Class A steps 4–6 the same shape recurs; without Class B step 3 the infra problem recurs. Logs and runbook live next to each other so the on-call doesn't reach for the wrong recipe.
+
+## Dust-state UI semantics (added 2026-04-27 from prod-validation)
+
+The lifecycle diagram already names the terminal state for resolved-loser positions: `loser → dust: balance > 0 but worthless` and `dust → [*]: ignore forever`. The dashboard does not currently honour that — `dust` positions still render in the **Open** tab with a `Redeem` button (a no-op that would just spend gas), and the **Position History** tab shows `No closed positions yet` because `closed_positions` is computed from trade-exited records only, not from `loser → dust` chain-resolution events.
+
+Two coupled fixes (scope: dashboard + execution endpoint, lands with task.0388):
+
+1. **Tab membership = lifecycle state, not just `balance > 0`.**
+   - `live_positions` (Open tab) ⊇ `{intent, open, closing, resolving, winner, redeem_pending}` — anything with a write decision still pending or a payout still recoverable.
+   - `closed_positions` (History tab) ⊇ `{closed (trade-exit), redeemed (payout claimed), loser/dust (resolved-zero, no payout possible), abandoned}` — anything terminal. `dust` positions belong here even though their on-chain `balanceOf > 0`; the chain balance is dead value, the position is over.
+
+2. **Action affordance = decision class, not always `Redeem`.**
+   - `kind=redeem` (positive policy decision) → `[Redeem]` button, fires the worker.
+   - `kind=skip, reason=losing_outcome` → no `Redeem` button. Show a one-line summary (`Lost · -$1.00`) and (optionally) a `[Mark closed]` action that records the user's acknowledgement so it can be filtered out of the default History view in the future.
+   - `kind=skip, reason=market_not_resolved` → keep in Open with a `[Pending resolution]` chip, no Redeem button.
+   - `kind=skip, reason=zero_balance` → already redeemed; render in History as `Redeemed · +$X` if a prior `PayoutRedemption` is on file, otherwise hide.
+   - `kind=malformed` → admin-only surface; users see a generic `Cannot auto-resolve — contact support` chip and a Class-A page is filed (see runbook).
+
+The contract endpoint (`GET /api/v1/poly/wallet/execution`) needs a new `lifecycle_state` field per row, derived from the policy decision the worker last computed (or `unresolved` if the worker has not classified the position yet). Dashboard switches Open vs History on `lifecycle_state ∈ {terminal-set}`. Capability B already records the policy decision per job row, so this is a projection over `poly_redeem_jobs` joined with the live positions snapshot — no new chain reads.
+
+**v0.1 evidence (2026-04-27 prod):** the user's wallet shows ~14 dust losers in the Open tab (all `-$1` to `-$4` cost basis, $0 current value, `-99.99% / -100%` PnL), and Position History is empty. After v0.2 lands the dust losers move to History and the Redeem button on them disappears.
 
 ## What this doc is not
 

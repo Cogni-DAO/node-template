@@ -10,7 +10,7 @@ read_when: Designing or reviewing `POST /api/v1/poly/wallet/positions/close`, `.
 implements: proj.poly-copy-trading
 owner: derekg1729
 created: 2026-04-23
-verified: 2026-04-23
+verified: 2026-04-27
 tags: [poly, exit, wallet, polymarket, clob, integration]
 ---
 
@@ -161,13 +161,29 @@ interface CloseReceipt {
 }
 ```
 
-`POST /api/v1/poly/wallet/positions/redeem` currently returns:
+`POST /api/v1/poly/wallet/positions/redeem` is event-driven (task.0388): the route enqueues a job through `RedeemJobsPort` and polls `findByKey` every 500 ms until the worker confirms or 30 s elapse. Three response shapes:
 
 ```ts
+// 200 — confirmed within budget
 interface RedeemReceipt {
   tx_hash: string;
 }
+
+// 202 — exceeded the 30 s HTTP-hold ceiling; worker is still processing
+interface RedeemPending {
+  status: "pending";
+  job_id: string;
+}
+
+// 502 — abandoned (no funder burn at N=5, or three transient retries exhausted)
+interface RedeemFailed {
+  error: "redeem_failed";
+  reason: "transient_exhausted" | "malformed";
+  message: string | null;
+}
 ```
+
+The legacy synchronous `redeemResolvedPosition` executor method, the polling `runRedeemSweep`, and the in-process cooldown Map / sweep mutex have been deleted. CTF redemption is a chain-event-driven pipeline with N=5 finality + per-receipt funder-burn verification (`REDEEM_REQUIRES_BURN_OBSERVATION`). See `docs/design/poly-positions.md` for the lifecycle diagram and Class-A / Class-B abandoned-position runbook.
 
 The important Phase 1 contract is behavioral:
 
