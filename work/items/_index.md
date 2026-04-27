@@ -272,6 +272,7 @@
 | 3 | 18 | 2 | needs_design | task.0348 | Poly wallet — orphan sweep for user-wallets Privy app | Cogni Poly | proj.poly-copy-trading |
 | 3 | 20 | 2 | needs_design | task.0274 | Wire NodeAppConfig into sidebar + layout components | Operator Plane | proj.operator-plane |
 | 3 | 30 | 3 | needs_merge | task.0207 | Run: BYO-AI hosted OSS provider — user connects their OpenAI-compatible endpoint | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
+| 3 | 50 | 2 | needs_design | task.0390 | flatten `nodes/node-template/` migration baseline to a single 0000 fresh-start | Database Operations | proj.database-ops |
 | 3 | 80 | 3 | needs_design | task.0146 | Extract payments application orchestration + billing ports into packages | AI Operator Wallet | proj.ai-operator-wallet |
 | 3 | 80 | 5 | needs_design | task.0325 | Atlas + GitOps migrations (future upgrade, deferred) | Database Operations | proj.database-ops |
 | 3 | 99 | 1 | needs_triage | task.0098 | Temporal retry workflow for failed identity bindings + scheduled backstop | User Identity Bindings + DID Readiness | proj.decentralized-identity |
