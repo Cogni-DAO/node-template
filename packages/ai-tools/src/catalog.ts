@@ -18,18 +18,7 @@ import { getCurrentTimeBoundTool } from "./tools/get-current-time";
 import { knowledgeReadBoundTool } from "./tools/knowledge-read";
 import { knowledgeSearchBoundTool } from "./tools/knowledge-search";
 import { knowledgeWriteBoundTool } from "./tools/knowledge-write";
-import { marketListBoundTool } from "./tools/market-list";
 import { metricsQueryBoundTool } from "./tools/metrics-query";
-import { polyCancelOrderBoundTool } from "./tools/poly-cancel-order";
-import { polyDataActivityBoundTool } from "./tools/poly-data-activity";
-import { polyDataHelpBoundTool } from "./tools/poly-data-help";
-import { polyDataHoldersBoundTool } from "./tools/poly-data-holders";
-import { polyDataPositionsBoundTool } from "./tools/poly-data-positions";
-import { polyDataResolveUsernameBoundTool } from "./tools/poly-data-resolve-username";
-import { polyDataTradesMarketBoundTool } from "./tools/poly-data-trades-market";
-import { polyDataValueBoundTool } from "./tools/poly-data-value";
-import { polyListOrdersBoundTool } from "./tools/poly-list-orders";
-import { polyPlaceTradeBoundTool } from "./tools/poly-place-trade";
 import { repoListBoundTool } from "./tools/repo-list";
 import { repoOpenBoundTool } from "./tools/repo-open";
 import { repoSearchBoundTool } from "./tools/repo-search";
@@ -40,7 +29,6 @@ import { vcsFlightCandidateBoundTool } from "./tools/vcs-flight-candidate";
 import { vcsGetCiStatusBoundTool } from "./tools/vcs-get-ci-status";
 import { vcsListPrsBoundTool } from "./tools/vcs-list-prs";
 import { vcsMergePrBoundTool } from "./tools/vcs-merge-pr";
-import { walletTopTradersBoundTool } from "./tools/wallet-top-traders";
 import { webSearchBoundTool } from "./tools/web-search";
 import { workItemQueryBoundTool } from "./tools/work-item-query";
 import { workItemTransitionBoundTool } from "./tools/work-item-transition";
@@ -102,36 +90,28 @@ export function createToolCatalog(
 }
 
 /**
- * TOOL_CATALOG: Canonical registry of all tool definitions.
+ * TOOL_CATALOG: Canonical registry of core tool definitions.
  *
- * This is the single source of truth for tools in the system.
+ * This is the single source of truth for core__ tools shared by ALL nodes.
+ * Poly-only tools live in @cogni/poly-ai-tools (nodes/poly/packages/ai-tools/).
  * langgraph-graphs wraps tools from this catalog; it does not define contracts.
  *
- * To add a new tool:
+ * To add a new core tool (shared by all nodes):
  * 1. Create contract + implementation in tools/<name>.ts
- * 2. Add BoundTool to this catalog
- * 3. langgraph-graphs will pick it up automatically
+ * 2. Add BoundTool to this catalog and CORE_TOOL_BUNDLE
+ *
+ * To add a node-only tool (e.g. poly-only):
+ * 1. Add to nodes/<node>/packages/ai-tools/ instead
  *
  * Per TOOL_ID_STABILITY: Duplicate IDs throw at construction time.
  */
 export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
-  // Core tools (core__ prefix)
+  // Core tools (core__ prefix) — shared by all nodes
   getCurrentTimeBoundTool as CatalogBoundTool,
   knowledgeReadBoundTool as CatalogBoundTool,
   knowledgeSearchBoundTool as CatalogBoundTool,
   knowledgeWriteBoundTool as CatalogBoundTool,
-  marketListBoundTool as CatalogBoundTool,
   metricsQueryBoundTool as CatalogBoundTool,
-  polyCancelOrderBoundTool as CatalogBoundTool,
-  polyDataActivityBoundTool as CatalogBoundTool,
-  polyDataHelpBoundTool as CatalogBoundTool,
-  polyDataHoldersBoundTool as CatalogBoundTool,
-  polyDataPositionsBoundTool as CatalogBoundTool,
-  polyDataResolveUsernameBoundTool as CatalogBoundTool,
-  polyDataTradesMarketBoundTool as CatalogBoundTool,
-  polyDataValueBoundTool as CatalogBoundTool,
-  polyListOrdersBoundTool as CatalogBoundTool,
-  polyPlaceTradeBoundTool as CatalogBoundTool,
   repoListBoundTool as CatalogBoundTool,
   repoOpenBoundTool as CatalogBoundTool,
   repoSearchBoundTool as CatalogBoundTool,
@@ -142,7 +122,6 @@ export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
   vcsGetCiStatusBoundTool as CatalogBoundTool,
   vcsListPrsBoundTool as CatalogBoundTool,
   vcsMergePrBoundTool as CatalogBoundTool,
-  walletTopTradersBoundTool as CatalogBoundTool,
   webSearchBoundTool as CatalogBoundTool,
   workItemQueryBoundTool as CatalogBoundTool,
   workItemTransitionBoundTool as CatalogBoundTool,
@@ -151,11 +130,11 @@ export const TOOL_CATALOG: ToolCatalog = createToolCatalog([
 /**
  * Cross-node core tool bundle. Every node imports this.
  *
- * Contains all non-Polymarket tools that every node exposes.
- * Phase 2 (per-node-tools): each non-poly node passes only this list to
- * createBoundToolSource; poly passes [...CORE_TOOL_BUNDLE, ...POLY_TOOL_BUNDLE].
+ * Contains all core__ tools shared by every node. Identical to TOOL_CATALOG entries.
+ * Non-poly nodes pass only this list to createBoundToolSource.
+ * Poly node passes [...CORE_TOOL_BUNDLE, ...POLY_TOOL_BUNDLE] where POLY_TOOL_BUNDLE
+ * is imported from @cogni/poly-ai-tools (nodes/poly/packages/ai-tools/).
  *
- * Invariant: CORE_TOOL_BUNDLE ∪ POLY_TOOL_BUNDLE === TOOL_CATALOG (verified by catalog.test.ts).
  * Each entry is cast to CatalogBoundTool (same pattern as TOOL_CATALOG entries above).
  */
 export const CORE_TOOL_BUNDLE: readonly CatalogBoundTool[] = [
@@ -177,30 +156,6 @@ export const CORE_TOOL_BUNDLE: readonly CatalogBoundTool[] = [
   webSearchBoundTool as CatalogBoundTool,
   workItemQueryBoundTool as CatalogBoundTool,
   workItemTransitionBoundTool as CatalogBoundTool,
-];
-
-/**
- * Poly-only tool bundle. Only nodes/poly imports this (after Phase 2).
- *
- * Contains all Polymarket-specific tools. Non-poly nodes do not need to
- * register stubs for these; they simply omit this bundle.
- *
- * Invariant: CORE_TOOL_BUNDLE ∪ POLY_TOOL_BUNDLE === TOOL_CATALOG (verified by catalog.test.ts).
- * Each entry is cast to CatalogBoundTool (same pattern as TOOL_CATALOG entries above).
- */
-export const POLY_TOOL_BUNDLE: readonly CatalogBoundTool[] = [
-  marketListBoundTool as CatalogBoundTool,
-  polyCancelOrderBoundTool as CatalogBoundTool,
-  polyDataActivityBoundTool as CatalogBoundTool,
-  polyDataHelpBoundTool as CatalogBoundTool,
-  polyDataHoldersBoundTool as CatalogBoundTool,
-  polyDataPositionsBoundTool as CatalogBoundTool,
-  polyDataResolveUsernameBoundTool as CatalogBoundTool,
-  polyDataTradesMarketBoundTool as CatalogBoundTool,
-  polyDataValueBoundTool as CatalogBoundTool,
-  polyListOrdersBoundTool as CatalogBoundTool,
-  polyPlaceTradeBoundTool as CatalogBoundTool,
-  walletTopTradersBoundTool as CatalogBoundTool,
 ];
 
 /**

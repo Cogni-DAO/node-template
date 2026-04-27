@@ -19,7 +19,7 @@ import type {
   RepoCapability,
   WebSearchCapability,
 } from "@cogni/ai-tools";
-import { CORE_TOOL_BUNDLE, POLY_TOOL_BUNDLE } from "@cogni/ai-tools";
+import { CORE_TOOL_BUNDLE } from "@cogni/ai-tools";
 import type { AttributionStore } from "@cogni/attribution-ledger";
 import { DrizzleAttributionAdapter } from "@cogni/db-client";
 import type { FinancialLedgerPort } from "@cogni/financial-ledger";
@@ -46,6 +46,7 @@ import {
 } from "@cogni/node-streams";
 import { numberToPpm } from "@cogni/operator-wallet";
 import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
+import { POLY_TOOL_BUNDLE } from "@cogni/poly-ai-tools";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { WorkItemQueryPort } from "@cogni/work-items";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";

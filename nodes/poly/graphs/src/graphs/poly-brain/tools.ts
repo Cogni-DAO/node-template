@@ -11,14 +11,14 @@
  * @public
  */
 
+import { WEB_SEARCH_NAME } from "@cogni/ai-tools";
 import {
   MARKET_LIST_NAME,
   POLY_CANCEL_ORDER_NAME,
   POLY_LIST_ORDERS_NAME,
   POLY_PLACE_TRADE_NAME,
   WALLET_TOP_TRADERS_NAME,
-  WEB_SEARCH_NAME,
-} from "@cogni/ai-tools";
+} from "@cogni/poly-ai-tools";
 
 /**
  * Tool IDs for poly-brain graph.
