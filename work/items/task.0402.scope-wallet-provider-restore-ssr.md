@@ -13,7 +13,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project:
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1081
 reviewer:
 revision: 0
 blocked_by: []
