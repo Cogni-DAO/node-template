@@ -138,6 +138,28 @@ Even with Capability A's predicate correct (task.0387), the polling sweep is the
 - After this task lands, close task.0379 ("Poly redemption sweep — top-0.1% production-grade hardening") as `done` — its scope is fully covered by 0387 + 0388.
 - The reorg-handling story (confirmed → submitted on reorg-within-N) needs explicit test coverage in `tests/transitions.test.ts` and an integration test using viem's reorg simulation. Do not skip it — it is `REDEEM_COMPLETION_IS_EVENT_OBSERVED`'s teeth.
 
+## v0.1 prod observations (2026-04-27, post-merge of task.0387)
+
+Two issues confirmed in production after task.0387 deployed (commit `20a42237f`):
+
+1. **Bleed still active.** The other dev validated that `redeemPositions` is still firing no-op txs against neg-risk markets in prod. v0.1's `neg-risk-parent` flavor routes through CTF (not the adapter) — so the structural fix (correct `indexSet`) doesn't help when the contract address itself is wrong. The cooldown rate-limits but does not eliminate. **This task is the real fix:** dispatch split (CTF vs `NegRiskAdapter.redeemPositions(conditionId, amounts)`) per `decision.flavor`. CP1 of this task closes the bleed for real.
+
+2. **Dust losers misclassified in dashboard UI.** Resolved-loser positions (lifecycle state: `dust`) currently render in the **Open** tab with a no-op `Redeem` button, and the **Position History** tab is empty. The user's wallet shows ~14 such rows on candidate-a (all `-$1` to `-$4` cost basis, $0 current value, all `-99.99% / -100%`). The lifecycle design already names this state and its terminal edge; the dashboard does not yet honour it. Fix is a projection, not a chain-read change — see `docs/design/poly-positions.md` § Dust-state UI semantics.
+
+### Adds to this task's scope (v0.2 CP4 — dashboard projection)
+
+- New column on `poly_redeem_jobs`: `lifecycle_state` enum mirroring the design-doc state set (`unresolved | open | closing | closed | resolving | winner | redeem_pending | redeemed | loser | dust | abandoned`). Defaults to `unresolved` until the worker classifies.
+- Worker writes `lifecycle_state` on every `decideRedeem` evaluation:
+  - `redeem` decision → `winner` (becomes `redeem_pending` on tx submit, `redeemed` on confirmation).
+  - `skip:losing_outcome` → `loser` (terminal; UI moves to History).
+  - `skip:market_not_resolved` → `resolving` (stays in Open with a "Pending resolution" chip).
+  - `skip:zero_balance` → `redeemed` if a prior `PayoutRedemption` is on file for `(funder, conditionId)`, else `closed`.
+  - `malformed` → `abandoned` (Class-A runbook).
+- `GET /api/v1/poly/wallet/execution` contract gains `lifecycle_state` per row; dashboard splits Open vs History on `lifecycle_state ∈ terminal-set`. The Redeem button on rows that resolve to a non-`redeem` decision class is removed entirely (no more "Redeem this losing position" UX trap).
+- Backfill: on first deploy, run a one-shot reconciliation that classifies every existing live position via `decideRedeem` and writes `lifecycle_state` rows. Idempotent on re-run.
+
+This adds CP4 to this task's plan (after CP3 rips the legacy sweep). Could split into a sibling task if scope creeps; for now folded here because the lifecycle state machine + UI presentation are two views of the same data and shouldn't drift.
+
 ## Pre-implement investigations (already complete — values pinned 2026-04-27)
 
 These were run during PR #1077 close-out so CP1 lands without re-research:

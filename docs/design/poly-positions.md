@@ -272,6 +272,27 @@ Three transient retries (RPC timeout, gas underpriced, reorg-during-submit) fail
 
 Both classes funnel through the same UPSERT to retire abandoned rows. Without Class A steps 4–6 the same shape recurs; without Class B step 3 the infra problem recurs. Logs and runbook live next to each other so the on-call doesn't reach for the wrong recipe.
 
+## Dust-state UI semantics (added 2026-04-27 from prod-validation)
+
+The lifecycle diagram already names the terminal state for resolved-loser positions: `loser → dust: balance > 0 but worthless` and `dust → [*]: ignore forever`. The dashboard does not currently honour that — `dust` positions still render in the **Open** tab with a `Redeem` button (a no-op that would just spend gas), and the **Position History** tab shows `No closed positions yet` because `closed_positions` is computed from trade-exited records only, not from `loser → dust` chain-resolution events.
+
+Two coupled fixes (scope: dashboard + execution endpoint, lands with task.0388):
+
+1. **Tab membership = lifecycle state, not just `balance > 0`.**
+   - `live_positions` (Open tab) ⊇ `{intent, open, closing, resolving, winner, redeem_pending}` — anything with a write decision still pending or a payout still recoverable.
+   - `closed_positions` (History tab) ⊇ `{closed (trade-exit), redeemed (payout claimed), loser/dust (resolved-zero, no payout possible), abandoned}` — anything terminal. `dust` positions belong here even though their on-chain `balanceOf > 0`; the chain balance is dead value, the position is over.
+
+2. **Action affordance = decision class, not always `Redeem`.**
+   - `kind=redeem` (positive policy decision) → `[Redeem]` button, fires the worker.
+   - `kind=skip, reason=losing_outcome` → no `Redeem` button. Show a one-line summary (`Lost · -$1.00`) and (optionally) a `[Mark closed]` action that records the user's acknowledgement so it can be filtered out of the default History view in the future.
+   - `kind=skip, reason=market_not_resolved` → keep in Open with a `[Pending resolution]` chip, no Redeem button.
+   - `kind=skip, reason=zero_balance` → already redeemed; render in History as `Redeemed · +$X` if a prior `PayoutRedemption` is on file, otherwise hide.
+   - `kind=malformed` → admin-only surface; users see a generic `Cannot auto-resolve — contact support` chip and a Class-A page is filed (see runbook).
+
+The contract endpoint (`GET /api/v1/poly/wallet/execution`) needs a new `lifecycle_state` field per row, derived from the policy decision the worker last computed (or `unresolved` if the worker has not classified the position yet). Dashboard switches Open vs History on `lifecycle_state ∈ {terminal-set}`. Capability B already records the policy decision per job row, so this is a projection over `poly_redeem_jobs` joined with the live positions snapshot — no new chain reads.
+
+**v0.1 evidence (2026-04-27 prod):** the user's wallet shows ~14 dust losers in the Open tab (all `-$1` to `-$4` cost basis, $0 current value, `-99.99% / -100%` PnL), and Position History is empty. After v0.2 lands the dust losers move to History and the Redeem button on them disappears.
+
 ## What this doc is not
 
 - It is not a task. No status flips, no `/implement` until we agree on the picture.
