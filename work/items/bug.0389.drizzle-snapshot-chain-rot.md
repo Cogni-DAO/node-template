@@ -14,7 +14,7 @@ spec_refs:
 assignees: []
 credit:
 project: proj.database-ops
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1084
 reviewer:
 revision: 1
 blocked_by: []
