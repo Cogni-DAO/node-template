@@ -2,11 +2,11 @@
 id: task.0403
 type: task
 title: "Operator — add `loading.tsx` + `error.tsx` route-group boundaries"
-status: needs_implement
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 2
-branch: worktree-research-nextjs-perf
+branch: feat/task-0403-operator-loading-boundaries
 summary: "Add the missing Next 15 App Router instant-feedback contract to operator: a `loading.tsx` and `error.tsx` per route group ((app), (public)) so client-side navigation shows a skeleton immediately instead of blocking on the full RSC payload. With `force-dynamic` on the root layout (required for `cookieToInitialState`), every nav is a server round-trip; without `loading.tsx` the user sees a frozen UI for the entire round-trip."
 outcome: 'Clicking between sidebar nav items in operator paints a skeleton in <100 ms while the RSC payload streams in behind it. Sidebar + top bar remain visible across nav (the route-group layout is preserved). Build stays green; bundle size unchanged. After this PR, perceived nav latency drops from "stop-the-world" to "instant skeleton". Pattern is then mechanical to port to poly + resy + node-template in a follow-up.'
 spec_refs:
