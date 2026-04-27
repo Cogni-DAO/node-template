@@ -6,7 +6,7 @@ status: needs_implement
 priority: 0
 rank: 2
 estimate: 5
-summary: "Replace the polling sweep + in-process mutex + in-memory cooldown Map with a Postgres-backed redeem job table driven by viem `watchContractEvent` subscriptions on CTF + neg-risk adapter. One worker drains `pending` rows via `FOR UPDATE SKIP LOCKED`. Completion is observed `PayoutRedemption` from our funder at N=10 finality, not tx-receipt success. Removes `SINGLE_POD_ASSUMPTION` so poly can scale replicas. Depends on task.0387 (Capability A) for the decision policy."
+summary: "Replace the polling sweep + in-process mutex + in-memory cooldown Map with a Postgres-backed redeem job table driven by viem `watchContractEvent` subscriptions on CTF + neg-risk adapter. One worker drains `pending` rows via `FOR UPDATE SKIP LOCKED`. Completion is observed `PayoutRedemption` from our funder at N=5 finality (Polygon post-Heimdall-v2 milestones, ~12.5 s; prefer RPC `finalized` tag if exposed). Routes neg-risk redemptions through the NegRiskAdapter contract (`0xd91E80...`) instead of CTF — fixes the residual neg-risk bleed v0.1 only rate-limited. Removes `SINGLE_POD_ASSUMPTION` so poly can scale replicas. Depends on task.0387 (Capability A) for the decision policy."
 outcome: "After this PR, the periodic sweep loop in `poly-trade-executor.ts` is deleted (`runRedeemSweep`, `redeemAllRedeemableResolvedPositions`, `sweepInFlight`, `redeemCooldownByConditionId`, `REDEEM_COOLDOWN_MS`). Resolution events from CTF + neg-risk adapter on Polygon enqueue jobs. One worker per pod drains them. `PayoutRedemption` from our funder is the only signal that flips a job to `confirmed`. Steady-state RPC load between resolutions drops to ~zero. The poly Deployment may run with `replicas > 1`. Three failed redeem attempts (or any malformed-class failure) escalate to `abandoned` with a Loki page following the runbook in `docs/design/poly-positions.md`."
 spec_refs: [poly-positions, poly-position-exit, poly-multi-tenant-auth]
 assignees: [derekg1729]
@@ -43,13 +43,18 @@ Even with Capability A's predicate correct (task.0387), the polling sweep is the
 
 ## Outcome
 
-- One Postgres table `poly_redeem_jobs` in poly's local DB. Status enum mirrors `docs/design/poly-positions.md` lifecycle: `pending | submitted | confirmed | failed_transient | abandoned`. Unique key `(funder_address, condition_id)`.
-- Two viem `watchContractEvent` subscriptions, one pod, persisted `last_processed_block`:
-  - CTF `ConditionResolution` → enumerate funder's positions for that condition → Capability A → INSERT pending rows.
-  - CTF `PayoutRedemption` + neg-risk adapter equivalent → match `redeemer == funder` + existing job row → flip `submitted → confirmed` after N=10-block finality (re-checkable on reorg).
-- One worker draining `WHERE status = 'pending' FOR UPDATE SKIP LOCKED`. Submits tx, writes hash, transitions to `submitted`. On receipt: `failed_transient` (RPC/gas/reorg) goes back to `pending` with backoff if `attempt_count < 3`; `success-but-no-PayoutRedemption-from-funder within N blocks` goes straight to `abandoned` with a Loki alert (malformed class — never retry the same decision).
+- One Postgres table `poly_redeem_jobs` in poly's local DB. Status enum mirrors `docs/design/poly-positions.md` lifecycle: `pending | submitted | confirmed | failed_transient | abandoned`. Unique key `(funder_address, condition_id)`. Audit-trail column `tx_hashes uuid[]` (or text array) per design Class-A runbook UPSERT.
+- **Three viem `watchContractEvent` subscriptions** (one pod, persisted `last_processed_block`):
+  - CTF `ConditionResolution(conditionId, oracle, questionId, outcomeSlotCount, payoutNumerators[])` at `0x4D97DCd97eC945f40cF65F87097ACe5EA0476045` → enumerate funder's positions for that condition → Capability A → INSERT pending rows.
+  - CTF `PayoutRedemption(address indexed redeemer, address indexed collateralToken, bytes32 indexed parentCollectionId, bytes32 conditionId, uint256[] indexSets, uint256 payout)` → match `redeemer == funder` + existing job row → flip `submitted → confirmed` after N=5 finality.
+  - **NegRiskAdapter `PayoutRedemption(address indexed redeemer, bytes32 indexed conditionId, uint256[] amounts, uint256 payout)`** at `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296` → same `redeemer == funder` matching rule, same N=5 finality flip. **Different parameter shape from CTF event** (no `parentCollectionId`, `amounts` not `indexSets`) → different keccak256 topic hash; both must be subscribed independently.
+- **Dispatch split** (the residual v0.1 bleed-stopper): the worker selects the redeem contract by `decision.flavor`:
+  - `binary` / `multi-outcome` → `CTF.redeemPositions(USDC.e, parentCollectionId, conditionId, indexSets[])` (existing 4-arg path).
+  - `neg-risk-parent` / `neg-risk-adapter` → **`NegRiskAdapter.redeemPositions(conditionId, amounts[2])`** (new 2-arg path; `amounts = [yes_amount, no_amount]`). Capability A's existing `flavor` field already carries the discriminator; this task makes it executable.
+- One worker draining `WHERE status = 'pending' FOR UPDATE SKIP LOCKED`. Submits tx (CTF or adapter per flavor), writes hash, transitions to `submitted`. On receipt: `failed_transient` (RPC/gas/reorg) goes back to `pending` with backoff if `attempt_count < 3`; `success-but-no-PayoutRedemption-from-funder within N=5 blocks` goes straight to `abandoned` with a Loki alert (malformed class — never retry the same decision).
+- **Finality target N=5 (~12.5 s)** post-Heimdall-v2 (Polygon mainnet 2025-09-16). Optional: prefer `eth_getBlockByNumber("finalized")` if RPC provider exposes milestone-derived finality (Alchemy/QuickNode); fall back to depth-N otherwise. Value lives next to RPC config in `nodes/poly/app/src/shared/env`.
 - Startup + daily-cron catch-up: replay historical events from `last_processed_block` to chain head through Capability A. The **only** legitimate sweep in the system, bounded by chain history.
-- Manual redeem button (existing `POST /api/v1/poly/wallet/positions/redeem`): inserts a job row, then `await`s the worker outcome with a 45 s HTTP timeout (v0 single-user; promote to 202 + poll per design § Resolved during review #4 when triggers fire).
+- Manual redeem button (existing `POST /api/v1/poly/wallet/positions/redeem`): inserts a job row, then `await`s the worker outcome with a **30 s** HTTP timeout (matches design § Resolved during review #4; falls back to `202 + job_id` if the worker has not confirmed within the window).
 - Deletes from `nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts`: `sweepInFlight`, `redeemCooldownByConditionId`, `REDEEM_COOLDOWN_MS`, `pendingRedeemMsRemaining`, `markRedeemPending`, `_resetRedeemCooldownForTests`, `_resetSweepMutexForTests`, `redeemAllRedeemableResolvedPositions`, `runRedeemSweep`, `BINARY_REDEEM_INDEX_SETS` import + usages, all `SINGLE_POD_ASSUMPTION` doc-strings.
 - Removes the `replicas: 1` constraint from the poly Deployment manifest with a comment pointing at this task.
 
@@ -113,3 +118,34 @@ Even with Capability A's predicate correct (task.0387), the polling sweep is the
 - Blocked by task.0387 — Capability A must land first because this task imports `decideRedeem`. Both can be drafted in parallel; merge order is 0387 → 0388.
 - After this task lands, close task.0379 ("Poly redemption sweep — top-0.1% production-grade hardening") as `done` — its scope is fully covered by 0387 + 0388.
 - The reorg-handling story (confirmed → submitted on reorg-within-N) needs explicit test coverage in `tests/transitions.test.ts` and an integration test using viem's reorg simulation. Do not skip it — it is `REDEEM_COMPLETION_IS_EVENT_OBSERVED`'s teeth.
+
+## Pre-implement investigations (already complete — values pinned 2026-04-27)
+
+These were run during PR #1077 close-out so CP1 lands without re-research:
+
+**Neg-risk adapter ABI** (verified Polygonscan, 2026-04-27):
+
+```solidity
+// Address: 0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296 (Polygon mainnet, Solidity 0.8.19, verified)
+// Description: "Adapter for the CTF enabling the linking of a set binary markets where only one can resolve true"
+
+function redeemPositions(bytes32 _conditionId, uint256[] calldata _amounts) external;
+//   _amounts is length-2: [yes_amount, no_amount]
+
+event PayoutRedemption(
+    address indexed redeemer,
+    bytes32 indexed conditionId,
+    uint256[] amounts,
+    uint256 payout
+);
+```
+
+Source: <https://polygonscan.com/address/0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296#code>. Different signature from CTF's 4-arg `redeemPositions(collateral, parentCollectionId, conditionId, indexSets[])` and CTF's `PayoutRedemption(redeemer, collateralToken, parentCollectionId, conditionId, indexSets[], payout)` → different keccak256 topic hash → must subscribe to both independently.
+
+**Polygon finality post-Heimdall-v2** (mainnet activation 2025-09-16, block 28913694):
+
+- Milestone-based deterministic finality: 2–5 seconds (vote extensions). Pre-Heimdall-v2 was ~1 minute probabilistic.
+- **N=5 (~12.5 s)** picked: 2.5× margin over the 5 s upper bound, well under the 30 s HTTP timeout ceiling.
+- Optional optimization: `eth_getBlockByNumber("finalized")` from RPC providers exposes milestone-derived finality cleanly. If Alchemy/QuickNode supports it for our endpoint, use it instead of depth-counting; fall back to N=5 if not.
+- Sources: [forum.polygon.technology v0.3.0 release announcement](https://forum.polygon.technology/t/heimdall-v2-v0-3-0-release-for-mainnet/21270), [Polygon Heimdall-v2 docs](https://docs.polygon.technology/pos/architecture/heimdall/checkpoint/) (vote-extensions section).
+- Revisit cadence: after first 30 days of `PayoutRedemption` observation, ratchet down to N=3 (~7.5 s) if zero `confirmed → submitted` reverts; hold at N=5 if any reverts occur.
