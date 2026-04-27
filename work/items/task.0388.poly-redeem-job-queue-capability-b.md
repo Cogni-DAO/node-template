@@ -6,7 +6,7 @@ status: needs_implement
 priority: 0
 rank: 2
 estimate: 5
-summary: "Replace the polling sweep + in-process mutex + in-memory cooldown Map with a Postgres-backed redeem job table driven by viem `watchContractEvent` subscriptions on CTF + neg-risk adapter. One worker drains `pending` rows via `FOR UPDATE SKIP LOCKED`. Completion is observed `PayoutRedemption` from our funder at N=5 finality (Polygon post-Heimdall-v2 milestones, ~12.5 s; prefer RPC `finalized` tag if exposed). Routes neg-risk redemptions through the NegRiskAdapter contract (`0xd91E80...`) instead of CTF — fixes the residual neg-risk bleed v0.1 only rate-limited. Removes `SINGLE_POD_ASSUMPTION` so poly can scale replicas. Depends on task.0387 (Capability A) for the decision policy."
+summary: "Replace the polling sweep + in-process mutex + in-memory cooldown Map with a Postgres-backed redeem job table driven by viem `watchContractEvent` subscriptions on CTF + neg-risk adapter. One worker drains `pending` rows via `FOR UPDATE SKIP LOCKED`. Completion is observed `PayoutRedemption` from our funder at hard-pinned N=5 finality (Polygon post-Heimdall-v2 milestones, ~12.5 s). Routes neg-risk redemptions through the NegRiskAdapter contract (`0xd91E80...`) instead of CTF — fixes the residual neg-risk bleed v0.1 only rate-limited. Adds REDEEM_REQUIRES_BURN_OBSERVATION as a structural invariant: every receipt is decoded and asserted to contain a burn from funder; absence → abandoned at level=50 — bounds per-user blast radius to one tx of POL on any future routing mistake. Removes `SINGLE_POD_ASSUMPTION` so poly can scale replicas."
 outcome: "After this PR, the periodic sweep loop in `poly-trade-executor.ts` is deleted (`runRedeemSweep`, `redeemAllRedeemableResolvedPositions`, `sweepInFlight`, `redeemCooldownByConditionId`, `REDEEM_COOLDOWN_MS`). Resolution events from CTF + neg-risk adapter on Polygon enqueue jobs. One worker per pod drains them. `PayoutRedemption` from our funder is the only signal that flips a job to `confirmed`. Steady-state RPC load between resolutions drops to ~zero. The poly Deployment may run with `replicas > 1`. Three failed redeem attempts (or any malformed-class failure) escalate to `abandoned` with a Loki page following the runbook in `docs/design/poly-positions.md`."
 spec_refs: [poly-positions, poly-position-exit, poly-multi-tenant-auth]
 assignees: [derekg1729]
@@ -54,11 +54,13 @@ As of 2026-04-27 ~05:00Z, 5 neg-risk conditions on funder `0x95e407fE03996602Ed1
 
 **This task IS the fix.** The NegRiskAdapter contract address + ABI + `[yes, no]` 2-arg `redeemPositions` shape pinned in the frontmatter `summary` are the load-bearing pieces. CP1's worker MUST route any neg-risk position through the NegRiskAdapter (`0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296`), not standard CTF. Without that routing change, this task ships another rate-limited bleed instead of a fix.
 
-**Defense in depth — sequenced against the CP1 → CP2 → CP3 plan.**
+**Defense in depth — sequenced against the merged CP1 → CP2 → CP3 plan.**
 
-The active v0.1 bleed produces only level-30 (info) events; `level≥warn` alerts see nothing. CP3 deletes the legacy sweep AND the legacy `poly.ctf.redeem.ok` event. So bleed-class observability has to migrate from "alert on the legacy event" to "structural gate in the new worker" — and the migration must complete **no later than CP2**, before CP3 rips the legacy path. If CP3 ships first, we lose all bleed visibility.
+The active v0.1 bleed produces only level-30 (info) events; `level≥warn` alerts see nothing. **CP2** of the merged plan deletes the legacy sweep AND the legacy `poly.ctf.redeem.ok` event. So bleed-class observability has to migrate from "alert on the legacy event" to "structural gate in the new worker" — and the migration must complete **no later than CP1**, before CP2 rips the legacy path. If CP2 ships first, we lose all bleed visibility.
 
-1. **Interim Loki alert — ship NOW, before task.0388 work begins.** Temporary belt-and-suspenders against the v0.1 bleed already in prod. Auto-retires when CP3 deletes the legacy event (no signal → no alerts → dies quietly).
+(This is the load-bearing reason CP1 in the plan above bundles "job table + dispatch split + burn-verify gate" together — splitting any of those into a later CP would leave a window where neither the legacy alert nor the new gate covers the bleed class.)
+
+1. **Interim Loki alert — ship NOW, before task.0388 work begins.** Temporary belt-and-suspenders against the v0.1 bleed already in prod. Auto-retires when CP2 deletes the legacy event (no signal → no alerts → dies quietly).
 
    ```logql
    sum by (condition_id) (
@@ -68,11 +70,11 @@ The active v0.1 bleed produces only level-30 (info) events; `level≥warn` alert
 
    `condition_id` firing ≥2 `.ok` events in 10 min = bleed signature (first redeem didn't burn). Page on-call.
 
-2. **Post-tx burn-verification gate — MUST land in CP2 (gate condition for CP3).** When CP2 wires the worker to fire txs against CTF + NegRiskAdapter, the worker decodes its own receipt and asserts: **at least one** `TransferSingle(from=funder, value>0)` (CTF path) OR `NegRiskAdapter.PayoutRedemption(redeemer=funder)` (adapter path). If absent: emit `poly.ctf.redeem.bleed_detected` at **level=50** AND transition the job to `abandoned/class: "malformed"`. This is the **structural successor** to #1 — once it's live, a generic `level≥warn` alert covers the bleed class regardless of which contract is wrong, and CP3 can safely rip the legacy event because new coverage is already in place. **CP3 must not merge until #2 is observed firing correctly on candidate-a (or proven inert against a synthetic `success-with-no-burn` test fixture in CP2's test suite).**
+2. **Post-tx burn-verification gate — MUST land in CP1 (gate condition for CP2).** CP1's worker fires txs against CTF + NegRiskAdapter via the dispatch split. After each receipt, the worker decodes its own logs and asserts: **at least one** `TransferSingle(from=funder, value>0)` (CTF path) OR `NegRiskAdapter.PayoutRedemption(redeemer=funder)` (adapter path). If absent: emit `poly.ctf.redeem.bleed_detected` at **level=50** AND transition the job to `abandoned/class: "malformed"`. This is the **structural successor** to #1 — once it's live, a generic `level≥warn` alert covers the bleed class regardless of which contract is wrong, and CP2 can safely rip the legacy event because new coverage is already in place. **CP2 must not merge until #2 is observed firing correctly on candidate-a (or proven inert against a synthetic `success-with-no-burn` test fixture in CP1's test suite).**
 
-3. **NegRiskAdapter routing — lands in CP1 (workers's first writeContract path) or CP2 (subscription wiring).** The structural fix from the root-cause section above. Closes v0.1's specific hole. #2 catches the next routing mistake; #3 fixes the known one.
+3. **NegRiskAdapter routing — lands in CP1 (worker's first writeContract path).** The structural fix from the root-cause section above. Closes v0.1's specific hole. #2 catches the next routing mistake; #3 fixes the known one. Both ride together in the bleed-stop CP1 because either alone is a partial fix.
 
-Skip none. Order matters: #1 lights up the radar today, #2 transfers coverage onto the new architecture before CP3 demolishes the old one, #3 fixes the immediate defect that necessitated this task in the first place.
+Skip none. Order matters: #1 lights up the radar today, #2 transfers coverage onto the new architecture before CP2 demolishes the old one, #3 fixes the immediate defect that necessitated this task in the first place.
 
 ## Why
 
@@ -89,7 +91,7 @@ Even with Capability A's predicate correct (task.0387), the polling sweep is the
   - `binary` / `multi-outcome` → `CTF.redeemPositions(USDC.e, parentCollectionId, conditionId, indexSets[])` (existing 4-arg path).
   - `neg-risk-parent` / `neg-risk-adapter` → **`NegRiskAdapter.redeemPositions(conditionId, amounts[2])`** (new 2-arg path; `amounts = [yes_amount, no_amount]`). Capability A's existing `flavor` field already carries the discriminator; this task makes it executable.
 - One worker draining `WHERE status = 'pending' FOR UPDATE SKIP LOCKED`. Submits tx (CTF or adapter per flavor), writes hash, transitions to `submitted`. On receipt: `failed_transient` (RPC/gas/reorg) goes back to `pending` with backoff if `attempt_count < 3`; `success-but-no-PayoutRedemption-from-funder within N=5 blocks` goes straight to `abandoned` with a Loki alert (malformed class — never retry the same decision).
-- **Finality target N=5 (~12.5 s)** post-Heimdall-v2 (Polygon mainnet 2025-09-16). Optional: prefer `eth_getBlockByNumber("finalized")` if RPC provider exposes milestone-derived finality (Alchemy/QuickNode); fall back to depth-N otherwise. Value lives next to RPC config in `nodes/poly/app/src/shared/env`.
+- **Finality target N=5 (~12.5 s)** post-Heimdall-v2 (Polygon mainnet 2025-09-16). **Hard-pinned for v0.2; no `finalized` block-tag opt-in.** Two code paths for finality in a state machine that decides money movement is two failure modes to reason about. Tag-based finality is a separate follow-up task with its own 30-day-reorg-telemetry validation. Value lives next to RPC config in `nodes/poly/app/src/shared/env`. (Invariant `FINALITY_IS_FIXED_N`.)
 - Startup + daily-cron catch-up: replay historical events from `last_processed_block` to chain head through Capability A. The **only** legitimate sweep in the system, bounded by chain history.
 - Manual redeem button (existing `POST /api/v1/poly/wallet/positions/redeem`): inserts a job row, then `await`s the worker outcome with a **30 s** HTTP timeout (matches design § Resolved during review #4; falls back to `202 + job_id` if the worker has not confirmed within the window).
 - Deletes from `nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts`: `sweepInFlight`, `redeemCooldownByConditionId`, `REDEEM_COOLDOWN_MS`, `pendingRedeemMsRemaining`, `markRedeemPending`, `_resetRedeemCooldownForTests`, `_resetSweepMutexForTests`, `redeemAllRedeemableResolvedPositions`, `runRedeemSweep`, `BINARY_REDEEM_INDEX_SETS` import + usages, all `SINGLE_POD_ASSUMPTION` doc-strings.
@@ -167,14 +169,22 @@ Three checkpoints, each PR-sized. **CP2 fuses event subscriptions + catch-up rep
 
 <!-- CODE REVIEW CRITERIA -->
 
+- [ ] REDEEM_REQUIRES_BURN_OBSERVATION — every `writeContract` receipt is decoded and asserted to contain ≥1 burn event from funder (`TransferSingle(from=funder, value>0)` for CTF; `NegRiskAdapter.PayoutRedemption(redeemer=funder)` for adapter). Absence emits `poly.ctf.redeem.bleed_detected` at level=50 AND transitions the job to `abandoned/class:"malformed"` immediately. **No retries.** This is the structural answer to the bug.0383 / bug.0384 / v0.1-neg-risk pattern: every routing mistake (current OR future) self-limits to one tx of damage. Without this invariant the next adjacent bug class silently bleeds again until Loki catches it externally — see § "🔴 v0.1 bleed is LIVE" for why this matters and § "Per-user wallet exposure" below for why it is non-negotiable. (spec: poly-positions)
 - [ ] REDEEM_COMPLETION_IS_EVENT_OBSERVED — `confirmed` status only after observed `PayoutRedemption` from funder at N-block finality (spec: poly-positions)
 - [ ] REDEEM_DEDUP_IS_PERSISTED — duplicate-redeem prevention is the unique index `(funder_address, condition_id)` on `poly_redeem_jobs`; no in-memory Maps anywhere (spec: poly-positions)
 - [ ] REDEEM_HAS_CIRCUIT_BREAKER — `attempt_count >= 3` OR any malformed-class failure transitions to `abandoned` and emits `poly.ctf.redeem.abandoned` Loki page (spec: poly-positions)
 - [ ] REDEEM_RETRY_IS_TRANSIENT_ONLY — only `transient` failures (RPC timeout, gas underpriced, reorg) re-enter `pending`; `malformed` skips the retry loop (spec: poly-positions)
+- [ ] FINALITY_IS_FIXED_N — finality depth is hard-pinned to **N=5** for v0.2; no per-deploy `finalized` block-tag opt-in. Two code paths in a state machine that decides money movement is two failure modes to test. Tag-based finality is filed as a follow-up task with its own validation (post-30-day reorg-telemetry observation per § Pre-implement investigations). (spec: poly-positions)
 - [ ] SWEEP_IS_NOT_AN_ARCHITECTURE — no periodic Data-API enumerate-and-fire; the only allowed sweep is event-replay catch-up bounded by chain history (spec: poly-positions)
 - [ ] SINGLE_POD_REMOVED — poly Deployment manifest has no `replicas: 1` constraint and no `SINGLE_POD_ASSUMPTION` doc-strings remain (spec: poly-positions)
 - [ ] BOUNDARY_PLACEMENT — port + domain types + transitions live in `packages/poly-redeem/`; subscription/worker/lifecycle wiring lives in `nodes/poly/app/src/bootstrap/` (spec: packages-architecture)
 - [ ] SIMPLE_SOLUTION — uses Postgres-as-queue (chosen library or ~30 LOC `FOR UPDATE SKIP LOCKED`); does not introduce Redis, Temporal, or a new infrastructure dep (spec: architecture)
+
+## Per-user wallet exposure (the safety-net argument)
+
+`task.0318` Phase B shipped per-tenant Privy trading wallets. Every redeem the worker fires through a tenant's wallet spends that tenant's POL — not operator funds. Today's v0.1 bleed (§ "🔴 v0.1 bleed is LIVE") is on the operator's funder; the moment a per-tenant funder hits the same neg-risk routing path, the same bleed pattern drains their wallet at ~$0.40/hour until manual intervention. **Without `REDEEM_REQUIRES_BURN_OBSERVATION` we cannot ethically expose redemption to user-funded wallets.** With it, per-user blast radius is bounded at one tx of POL before the job transitions to `abandoned` and Loki pages on-call. The invariant is therefore a **precondition for any per-user redeem traffic**, not a CP3 nice-to-have.
+
+This is also why CP1 of the plan above bundles the burn-verify gate with the dispatch split — they both ride in the bleed-stop PR, and the gate is what makes "we shipped a routing change" trustworthy without manual on-chain audit.
 
 ## Notes
 
@@ -230,7 +240,6 @@ Source: <https://polygonscan.com/address/0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35
 **Polygon finality post-Heimdall-v2** (mainnet activation 2025-09-16, block 28913694):
 
 - Milestone-based deterministic finality: 2–5 seconds (vote extensions). Pre-Heimdall-v2 was ~1 minute probabilistic.
-- **N=5 (~12.5 s)** picked: 2.5× margin over the 5 s upper bound, well under the 30 s HTTP timeout ceiling.
-- Optional optimization: `eth_getBlockByNumber("finalized")` from RPC providers exposes milestone-derived finality cleanly. If Alchemy/QuickNode supports it for our endpoint, use it instead of depth-counting; fall back to N=5 if not.
+- **N=5 (~12.5 s) hard-pinned for v0.2** — see invariant `FINALITY_IS_FIXED_N`. 2.5× margin over the 5 s upper bound, well under the 30 s HTTP timeout ceiling. **No `finalized` block-tag opt-in** in v0.2 — was previously listed as optional; demoted to a separate follow-up task to keep v0.2 single-code-path. Two code paths for finality in a money-movement state machine = two failure modes to reason about.
 - Sources: [forum.polygon.technology v0.3.0 release announcement](https://forum.polygon.technology/t/heimdall-v2-v0-3-0-release-for-mainnet/21270), [Polygon Heimdall-v2 docs](https://docs.polygon.technology/pos/architecture/heimdall/checkpoint/) (vote-extensions section).
-- Revisit cadence: after first 30 days of `PayoutRedemption` observation, ratchet down to N=3 (~7.5 s) if zero `confirmed → submitted` reverts; hold at N=5 if any reverts occur.
+- Revisit cadence: after first 30 days of `PayoutRedemption` observation, ratchet down to N=3 (~7.5 s) if zero `confirmed → submitted` reverts; hold at N=5 if any reverts occur. The eventual `finalized` block-tag follow-up task piggybacks on this telemetry.
