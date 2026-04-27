@@ -10,7 +10,7 @@ read_when: Adding tools, modifying tool execution pipeline, implementing wire ad
 implements: []
 owner: cogni-dev
 created: 2026-02-02
-verified: null
+verified: 2026-04-27
 tags:
   - ai-graphs
   - tooling

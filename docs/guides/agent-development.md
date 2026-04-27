@@ -5,10 +5,10 @@ title: Agent Development Guide
 status: draft
 trust: draft
 summary: Step-by-step checklist for adding new agent graphs (single-node and composed) to the LangGraph package.
-read_when: Adding a new AI agent graph to packages/langgraph-graphs.
+read_when: Adding a new AI agent graph — cross-node (packages/langgraph-graphs/) or node-only (nodes/<node>/graphs/).
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-02-06
+verified: 2026-04-27
 tags: [ai, agents, dev]
 ---
 
@@ -92,26 +92,25 @@ From `packages/langgraph-graphs/src/graphs/types.ts`:
 
 ### Tier 1b: Node-Only Agent (per-node `<NODE>_LANGGRAPH_CATALOG`)
 
-**File Structure:**
+**File Structure (no `server.ts` / `cogni-exec.ts` — node-only graphs run via the host node's merged catalog, not via standalone langgraph-dev entrypoints):**
 
 ```
 nodes/<node>/graphs/src/graphs/<name>/
-├── graph.ts        # Pure factory: createXGraph({ llm, tools })
-├── prompts.ts      # System prompt constant(s)
-├── tools.ts        # Tool IDs constant; may import from @cogni/ai-tools (core) AND @cogni/<node>-ai-tools (node-scoped)
-├── server.ts       # LangGraph dev entrypoint
-└── cogni-exec.ts   # Cogni executor entrypoint
+├── graph.ts          # Pure factory: createXGraph({ llm, tools })
+├── prompts.ts        # System prompt constant(s)
+├── tools.ts          # Tool IDs constant; may import from @cogni/ai-tools (core) AND @cogni/<node>-ai-tools (node-scoped)
+└── output-schema.ts  # Optional Zod schema for structured outputs (see poly-research)
 ```
 
-**Steps:** (Same shape as Tier 1a, with these differences)
+**Steps:**
 
-1. Create graph files under `nodes/<node>/graphs/src/graphs/<name>/` (NOT `packages/langgraph-graphs`).
-2. `tools.ts` imports tool IDs from BOTH `@cogni/ai-tools` (cross-node `core__` IDs like `WEB_SEARCH_NAME`) AND `@cogni/<node>-ai-tools` (e.g. `MARKET_LIST_NAME`, `POLY_DATA_*_NAME` from `@cogni/poly-ai-tools`).
+1. Create graph files under `nodes/<node>/graphs/src/graphs/<name>/` (NOT `packages/langgraph-graphs`). Skip the dual-entrypoint pattern from Tier 1a — node-only graphs are not exposed to standalone `langgraph dev`; they are wired into the host node's executor through the merged catalog.
+2. `tools.ts` imports tool IDs from `@cogni/ai-tools` (cross-node `core__` IDs like `WEB_SEARCH_NAME`) and/or `@cogni/<node>-ai-tools` (node-scoped IDs like `MARKET_LIST_NAME`, `POLY_DATA_*_NAME` from `@cogni/poly-ai-tools`).
 3. Add catalog entry to `nodes/<node>/graphs/src/index.ts` under `<NODE>_LANGGRAPH_CATALOG`. Don't touch `packages/langgraph-graphs/src/catalog.ts`.
 4. The node app's `inproc.provider.ts` already merges `LANGGRAPH_CATALOG + <NODE>_LANGGRAPH_CATALOG` (see `POLY_MERGED_CATALOG` in `nodes/poly/app/src/adapters/server/ai/langgraph/poly-catalog.ts`); no inproc-provider edit needed to expose the new agent.
-5. UI surfacing — verify against `nodes/<node>/app/src/features/ai/components/ChatComposerExtras.tsx` `AVAILABLE_GRAPHS`: if hardcoded, you must add it; if dynamic, it's automatic.
+5. UI surfacing — `AVAILABLE_GRAPHS` in `nodes/<node>/app/src/features/ai/components/ChatComposerExtras.tsx` is hardcoded today; add the new `graphId` (e.g. `langgraph:<name>`) so it appears in the chat picker.
 
-**Reference:** `nodes/poly/graphs/src/graphs/poly-research/` (full example with tools.ts importing from both `@cogni/ai-tools` + `@cogni/poly-ai-tools`).
+**Reference:** `nodes/poly/graphs/src/graphs/poly-research/` (full example with tools.ts importing from both `@cogni/ai-tools` + `@cogni/poly-ai-tools`, plus an `output-schema.ts` for the structured `PolyResearchReport`).
 
 ### Tier 2: Composed Graphs
 
