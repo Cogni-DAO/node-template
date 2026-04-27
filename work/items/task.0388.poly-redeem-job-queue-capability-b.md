@@ -12,11 +12,11 @@ spec_refs: [poly-positions, poly-position-exit, poly-multi-tenant-auth]
 assignees: [derekg1729]
 credit:
 project: proj.poly-copy-trading
-branch:
+branch: feat/task-0388-redeem-job-queue
 pr:
 reviewer:
 revision: 0
-blocked_by: [task.0387]
+blocked_by: []
 deploy_verified: false
 created: 2026-04-26
 updated: 2026-04-26
