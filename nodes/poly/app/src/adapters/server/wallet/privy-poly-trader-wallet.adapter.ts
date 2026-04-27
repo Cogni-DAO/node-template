@@ -168,10 +168,10 @@ const CTF_SET_APPROVAL_ABI = parseAbi([
 
 /**
  * Minimum POL balance required before we start submitting approval txs.
- * Empirically each tx is ~35k gas @ ~30 gwei ≈ 0.001 POL; 6 enable txs
- * cost ≈ 0.006 POL. We gate at 0.1 so the user lands post-enable with
- * ~90 txs of trading headroom instead of ~14 — a half-funded wallet that
- * runs out of gas mid-trade is the worst silent-failure mode.
+ * 0.02 was historically tried and is too low — Polygon gas-price spikes
+ * can fail the 6-tx enable sequence at 0.02, and even on a quiet block
+ * it leaves no real trading headroom. 0.1 covers the enable sequence
+ * plus meaningful post-enable trading runway.
  */
 const ENABLE_TRADING_MIN_POL = 0.1;
 
