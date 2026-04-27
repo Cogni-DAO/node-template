@@ -8,7 +8,7 @@ summary: Clean hex-inspired layering model with crypto-metered AI backend and DA
 read_when: Understanding codebase structure, dependency rules, or layer boundaries
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-05
+verified: 2026-04-27
 tags: [architecture]
 ---
 

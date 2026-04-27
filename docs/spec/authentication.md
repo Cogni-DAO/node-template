@@ -134,21 +134,22 @@ Providers register conditionally — only when both `CLIENT_ID` and `CLIENT_SECR
 
 ### File Pointers
 
-| File                                                | Purpose                                                                    |
-| --------------------------------------------------- | -------------------------------------------------------------------------- |
-| `src/auth.ts`                                       | NextAuth config: providers, signIn/jwt/session callbacks, link tx helpers  |
-| `src/proxy.ts`                                      | Server-side auth routing (single authority for redirects)                  |
-| `src/app/api/auth/[...nextauth]/route.ts`           | Route handler: JWT decode → pending/failed intent via AsyncLocalStorage    |
-| `src/app/api/auth/link/[provider]/route.ts`         | Link initiation: DB insert + signed JWT cookie + redirect                  |
-| `src/shared/auth/link-intent-store.ts`              | Discriminated union types + AsyncLocalStorage for link intent propagation  |
-| `src/shared/auth/session.ts`                        | SessionUser type (id, walletAddress, displayName, avatarColor)             |
-| `packages/db-schema/src/identity.ts`                | `linkTransactions` table schema (alongside user_bindings, identity_events) |
-| `src/components/kit/auth/SignInDialog.tsx`          | Modal dialog: wallet + OAuth sign-in options                               |
-| `src/components/kit/auth/WalletConnectButton.tsx`   | Opens SignInDialog; SIWE fallback state                                    |
-| `src/components/kit/data-display/ProviderIcons.tsx` | Shared SVG icons (Ethereum, GitHub, Discord, Google)                       |
-| `src/lib/auth/server.ts`                            | `getServerSessionUser()` — requires only `id`                              |
-| `src/app/providers/wallet.client.tsx`               | RainbowKit + SIWE provider wiring                                          |
-| `src/features/payments/errors.ts`                   | `WalletRequiredError` for null-wallet payment guard                        |
+| File                                                | Purpose                                                                                         |
+| --------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| `src/auth.ts`                                       | NextAuth config: providers, signIn/jwt/session callbacks, link tx helpers                       |
+| `src/proxy.ts`                                      | Server-side auth routing (single authority for redirects)                                       |
+| `src/app/api/auth/[...nextauth]/route.ts`           | Route handler: JWT decode → pending/failed intent via AsyncLocalStorage                         |
+| `src/app/api/auth/link/[provider]/route.ts`         | Link initiation: DB insert + signed JWT cookie + redirect                                       |
+| `src/shared/auth/link-intent-store.ts`              | Discriminated union types + AsyncLocalStorage for link intent propagation                       |
+| `src/shared/auth/session.ts`                        | SessionUser type (id, walletAddress, displayName, avatarColor)                                  |
+| `packages/db-schema/src/identity.ts`                | `linkTransactions` table schema (alongside user_bindings, identity_events)                      |
+| `src/components/kit/auth/SignInDialog.tsx`          | Modal dialog: wallet + OAuth sign-in options                                                    |
+| `src/components/kit/auth/WalletConnectButton.tsx`   | Opens SignInDialog; SIWE fallback state                                                         |
+| `src/components/kit/data-display/ProviderIcons.tsx` | Shared SVG icons (Ethereum, GitHub, Discord, Google)                                            |
+| `src/lib/auth/server.ts`                            | `getServerSessionUser()` — requires only `id`                                                   |
+| `nodes/<node>/app/src/app/providers.client.tsx`     | RainbowKit + SIWE provider wiring (WagmiProvider outermost, hydrated via `initialState`)        |
+| `nodes/<node>/app/src/app/layout.tsx`               | Server-component root: `cookieToInitialState(wagmiConfig, cookie)` → `<Providers initialState>` |
+| `src/features/payments/errors.ts`                   | `WalletRequiredError` for null-wallet payment guard                                             |
 
 ## Acceptance Checks
 

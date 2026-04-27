@@ -3,12 +3,15 @@
 
 /**
  * Module: `@app/layout`
- * Purpose: Root layout component for Next.js App Router with font configuration and global styles.
- * Scope: Provides HTML structure and font loading for entire application. Does not handle routing or content.
- * Invariants: Renders valid HTML5 structure; applies consistent font variables; includes global CSS.
- * Side-effects: none
- * Notes: Manrope font loaded with CSS variables for theme consistency.
- * Links: Next.js App Router layout specification
+ * Purpose: Root layout for the Resy node with font configuration and global styles.
+ * Scope: Async server component. Reads request cookies, computes wagmi `initialState`,
+ *   passes it to the client `Providers` so `<WagmiProvider>` hydrates without mismatch
+ *   (per https://wagmi.sh/react/guides/ssr).
+ * Invariants:
+ *   - Stays a server component so `headers()` is callable cheaply.
+ *   - `initialState` MUST be sourced from `cookieToInitialState(wagmiConfig, cookie)`.
+ * Side-effects: reads request headers (Next.js dynamic API).
+ * Links: ./providers.client, @/shared/web3/wagmi.config, docs/spec/architecture.md §SSR-unsafe libraries
  * @public
  */
 
