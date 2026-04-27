@@ -8,7 +8,7 @@ rank: 1
 estimate: 1
 branch: bug/0389-drizzle-chain-lint
 summary: "On `main` today, `pnpm db:generate:poly` fails with `meta/0027_snapshot.json` self-referential `prevId` colliding with `0028_snapshot.json`. Root cause: PR #930 hand-stitched 0027 with `id == prevId` after the chain had already lost intermediate snapshots. Hand-authored RLS/trigger migrations across all three nodes have been committing `.sql` without matching snapshots. `drizzle-kit check` (upstream) detects this exact failure mode but is not wired into CI — so PR #930 merged without complaint."
-outcome: "After this bug closes: (1) `pnpm db:check` runs `drizzle-kit check` against every node's drizzle config (operator + resy + poly Postgres + poly Doltgres) and is wired into the same CI rung that runs `check:docs`; (2) on `main` today, `db:check` fails on poly Postgres exactly as `db:generate:poly` does — making the rot a CI gate, not a silent-merge waiting to happen; (3) `docs/spec/databases.md` documents the hand-authored-migration recipe so the next RLS/trigger migration doesn't widen the gap. Restoring the broken poly chain itself is out of scope and tracked separately — this PR adds the gate that surfaces it."
+outcome: "After this bug closes: (1) the poly Postgres collision is fixed in place — `meta/0027_snapshot.json` gets a fresh `id`, `meta/0028_snapshot.json.prevId` rechains to it, and `pnpm db:check:poly` passes; (2) `pnpm db:check` runs `drizzle-kit check` against every node's drizzle config (operator + resy + poly Postgres + poly Doltgres) and is wired into both `check-fast` (pre-push) and `check-all` (pre-commit); (3) `docs/spec/databases.md` documents the hand-authored-migration recipe so the next RLS/trigger migration doesn't widen the gap. **Still rotten after this PR:** `pnpm db:generate:poly` produces a malformed diff because snapshots 0029–0032 are missing — chain head (0028) doesn't reflect current schema.ts. Restoring those snapshots so `generate` works is the separate followup."
 spec_refs:
   - databases-spec
 assignees: []
@@ -62,11 +62,16 @@ Introduced by `1a27f7564` — _feat(poly): sync-truth ledger cache + release-sur
 
 ## Scope (this PR)
 
-### Phase 1 — MVP required cleanup
+### Phase 1 — Fix the collision + wire the gate
 
-Goal: stop the bleed. Land a CI gate that fails on chain rot. Wire the upstream tool, don't reinvent it.
+Goal: turn `pnpm db:check` green across all four chains and gate every future PR on it.
 
-1. **`package.json` scripts** — mirror the existing `db:generate:*` shape:
+1. **Fix `meta/0027_snapshot.json` collision.** Root cause was a duplicate `id`: PR #930 copied 0023's snapshot and kept its `id` (`16cb3cc3-…`), then set `prevId` to the same value. So 0023 and 0027 shared an `id`, and 0028's `prevId` (`16cb3cc3-…`) was ambiguous between them. Fix:
+   - `0027_snapshot.json.id` → fresh UUID (`6dae8ba3-e339-427f-a4fa-0711d1a37f8d`).
+   - `0027_snapshot.json.prevId` → unchanged at `16cb3cc3-…` (= 0023.id, the legitimate prior present snapshot; intermediate 0024–0026 snapshots remain absent — `drizzle-kit check` tolerates missing intermediate snapshots).
+   - `0028_snapshot.json.prevId` → updated to the new 0027.id so the chain `0023 → 0027 → 0028` is unambiguous.
+   - Two-file edit, no DDL change, runtime impact zero.
+2. **`package.json` scripts** — mirror the existing `db:generate:*` shape:
    ```jsonc
    "db:check:operator":     "dotenv -e .env.local -- tsx node_modules/drizzle-kit/bin.cjs check --config=nodes/operator/drizzle.config.ts",
    "db:check:resy":         "dotenv -e .env.local -- bash -c 'DATABASE_URL=$DATABASE_URL_RESY tsx node_modules/drizzle-kit/bin.cjs check --config=nodes/resy/drizzle.config.ts'",
@@ -75,8 +80,8 @@ Goal: stop the bleed. Land a CI gate that fails on chain rot. Wire the upstream 
    "db:check": "pnpm db:check:operator && pnpm db:check:resy && pnpm db:check:poly && pnpm db:check:poly:doltgres",
    ```
    `drizzle-kit check` does not connect to the DB — `DATABASE_URL` only has to satisfy the config's required-env assertion. The dotenv prefix matches the equivalent `db:generate:*` scripts so a fresh `.env.local` is enough.
-2. **CI wiring (partial)** — add a peer of `check:docs` in `scripts/check-all.sh` and `scripts/check-fast.sh` that invokes `db:check:operator && db:check:resy && db:check:poly:doltgres`. **`db:check:poly` is intentionally excluded** until the chain-restoration follow-up lands (otherwise `pnpm check` and the pre-push hook go red on every fresh checkout, violating the "main is holy clean" invariant for everyone working on poly-unrelated branches). The exclusion is single-line, explicitly comment-flagged, and the follow-up's diff is "remove the exclusion comment + extend the run_check command".
-3. **Local proof** — `pnpm db:check:operator` + `pnpm db:check:resy` + `pnpm db:check:poly:doltgres` pass; `pnpm db:check:poly` fails with the documented collision (this is the _correct_ state of `main` today).
+3. **CI wiring** — `scripts/check-all.sh` and `scripts/check-fast.sh` get a peer of `check:docs` that invokes the umbrella `pnpm db:check`. All four chains gated; no exclusions.
+4. **Local proof** — `pnpm db:check` exits 0 across all four chains.
 
 ### Phase 2 — Spec guidance
 
@@ -90,9 +95,9 @@ Goal: make the right thing the easy thing for the next RLS/trigger migration.
 
 ## Out of scope (separate followup)
 
-Restoring poly's broken chain (regenerating snapshots for journal entries 0011, 0015, 0024–0026, 0027 (fix self-reference), 0029–0032). This bug intentionally lands the gate _while_ poly is red — the red state is documented, expected, and bounds the follow-up's blast radius.
+`pnpm db:generate:poly` still produces a malformed diff after this PR because snapshots **0029–0032 are missing** — the chain head (0028) doesn't reflect current schema.ts, so a fresh generate would emit a single SQL combining all four hand-authored migrations' deltas, conflicting with the existing `0029-0032_*.sql` files.
 
-Track as a separate `task — restore poly drizzle snapshot chain` (est 3) under `proj.database-ops` once the in-flight cluster (task.0387/0388) lands.
+Restoring those four snapshots requires either stepwise introspection from a clean DB or hand-derivation from each migration's DDL. Track as a separate `task — restore poly drizzle snapshot 0029-0032` (est 3) under `proj.database-ops` once the in-flight cluster (task.0387/0388) lands. The 0011, 0015, 0024–0026 gaps are tolerated by `drizzle-kit check`; address them only if a future generate diff misbehaves.
 
 ## Validation
 
@@ -100,14 +105,17 @@ Track as a separate `task — restore poly drizzle snapshot chain` (est 3) under
 exercise: |
   cd <fresh worktree off this branch>
   pnpm install --frozen-lockfile
-  pnpm db:check:operator           # passes
-  pnpm db:check:resy               # passes
-  pnpm db:check:poly:doltgres      # passes
-  pnpm db:check:poly               # fails with "0027/0028 collision" — documents main's current rot
+  pnpm db:check                    # all four chains pass (was: poly Postgres collision on main)
+  # negative test:
+  jq '.id = "00000000-0000-0000-0000-000000000000"' \
+    nodes/poly/app/src/adapters/server/db/migrations/meta/0028_snapshot.json \
+    | sponge nodes/poly/app/src/adapters/server/db/migrations/meta/0028_snapshot.json
+  pnpm db:check                    # exits non-zero, names the broken chain
 observability: none — pure CI/static check, no runtime emission
 ```
 
 ## Notes for the next agent
 
-- This PR is intentionally tiny: ~6 lines in `package.json`, one CI hook line, one docs section. It is _not_ the chain-restoration PR.
-- After merge, `pnpm db:check:poly` is RED on main. That is the point. The next PR up that branch is the chain-restoration task that turns it green.
+- After merge, `pnpm db:check` is GREEN across all four chains. The pre-push hook gates new chain rot before it can land.
+- `pnpm db:generate:poly` is still broken (different failure mode — missing 0029-0032 snapshots, not a collision). That's the explicit follow-up scope.
+- The 0027 fix only renumbers the snapshot's `id` and rewires 0028's `prevId`; the `tables` block is unchanged, so the snapshot still represents whatever state PR #930 captured. If the chain-restoration follow-up rebuilds 0029-0032 from a clean introspect, it should validate that 0028's `tables` matches the schema after `0028_small_doomsday.sql` applies — or rebuild 0027/0028 too.

@@ -108,8 +108,7 @@ run_check "ui-tokens" "bash scripts/check-ui-tokens.sh"
 
 run_check "workspace:test" "bash scripts/run-turbo-checks.sh test --concurrency=1"
 run_check "check:docs" "pnpm check:docs"
-# db:check:poly intentionally excluded until poly snapshot chain is restored (bug.0389 follow-up).
-run_check "db:check" "pnpm db:check:operator && pnpm db:check:resy && pnpm db:check:poly:doltgres"
+run_check "db:check" "pnpm db:check"
 run_check "check:root-layout" "pnpm check:root-layout"
 run_check "arch:check" "pnpm arch:check"
 
