@@ -1,5 +1,5 @@
 {
-  "name": "@cogni/poly-graphs",
+  "name": "@cogni/poly-ai-tools",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,11 +9,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    },
-    "./graphs": {
-      "types": "./dist/graphs/index.d.ts",
-      "import": "./dist/graphs/index.js",
-      "default": "./dist/graphs/index.js"
     }
   },
   "types": "./dist/index.d.ts",
@@ -23,15 +18,12 @@
   "scripts": {
     "build": "tsup",
     "postbuild": "node -e \"const fs=require('fs'); if(!fs.existsSync('dist/index.js')){console.error('ERROR: dist/index.js missing'); process.exit(1)}\"",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
+    "@cogni/ai-core": "workspace:*",
     "@cogni/ai-tools": "workspace:*",
-    "@cogni/langgraph-graphs": "workspace:*",
-    "@cogni/poly-ai-tools": "workspace:*",
-    "@cogni/node-contracts": "workspace:*",
-    "@langchain/langgraph": "^1.0.7",
     "zod": "^3.24.0"
   },
   "devDependencies": {
