@@ -18,7 +18,18 @@ tags: [ai, agents, dev]
 
 ## When to Use This
 
-You are adding a new AI agent graph to `packages/langgraph-graphs`. This covers both single-node (Tier 1) and composed multi-node (Tier 2) graphs.
+You are adding a new AI agent graph. This covers cross-node agents (Tier 1a, `packages/langgraph-graphs`), node-only agents (Tier 1b, `nodes/<node>/graphs/`), and composed multi-node graphs (Tier 2).
+
+## Decide first: cross-node or node-only?
+
+Per `SINGLE_DOMAIN_HARD_FAIL` (see [`node-ci-cd-contract.md`](../spec/node-ci-cd-contract.md#single-domain-scope)) and the bug.0319 substrate move, decide where the agent lives before scaffolding files:
+
+| Question                                                                            | Place in                                       | Catalog                    | Reference graph                               |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------- | -------------------------- | --------------------------------------------- |
+| Will every node expose this agent? (e.g. `brain`, `poet`, `research`, `pr-manager`) | `packages/langgraph-graphs/src/graphs/<name>/` | `LANGGRAPH_CATALOG`        | `ponderer/`                                   |
+| Only one node consumes it? (e.g. `poly-brain`, `poly-research` for poly)            | `nodes/<node>/graphs/src/graphs/<name>/`       | `<NODE>_LANGGRAPH_CATALOG` | `nodes/poly/graphs/src/graphs/poly-research/` |
+
+Default to node-scoped — promoting node→core later is a deliberate hoist. Adding to `LANGGRAPH_CATALOG` when only one node uses it forces every other node to potentially ship dead-graph metadata.
 
 ## Preconditions
 
@@ -28,7 +39,7 @@ You are adding a new AI agent graph to `packages/langgraph-graphs`. This covers 
 
 ## Steps
 
-### Tier 1: Single-Node Agent
+### Tier 1a: Cross-Node Agent (cross-node `LANGGRAPH_CATALOG`)
 
 **File Structure:**
 
@@ -51,9 +62,9 @@ packages/langgraph-graphs/src/graphs/<name>/
 6. Add entry to `catalog.ts` — `toolIds`, `graphFactory`
 7. Add to `langgraph.json` — `"name": "./src/graphs/<name>/server.ts:x"`
 8. Export from `graphs/index.ts`
-9. **P0 workaround:** Add to `AVAILABLE_GRAPHS` in `src/features/ai/components/ChatComposerExtras.tsx`
+9. **P0 workaround:** Add to `AVAILABLE_GRAPHS` in `nodes/<node>/app/src/features/ai/components/ChatComposerExtras.tsx`
 
-> **Note:** Step 9 is a temporary workaround. The chat UI uses a hardcoded graph list instead of fetching from `/api/v1/ai/agents`. See [Graph Execution](../GRAPH_EXECUTION.md) P1 checklist for the fix.
+> **Note:** Step 9 is a temporary workaround. The chat UI uses a hardcoded graph list instead of fetching from `/api/v1/ai/agents`. See [Graph Execution](../spec/graph-execution.md) P1 checklist for the fix.
 
 **Template:** Copy from `ponderer/`
 
@@ -79,9 +90,32 @@ From `packages/langgraph-graphs/src/graphs/types.ts`:
 | `CreateReactAgentGraphOptions` | Base options: `{ llm, tools }`                     |
 | `MessageGraphInput/Output`     | Mutable message arrays (LangGraph-aligned)         |
 
+### Tier 1b: Node-Only Agent (per-node `<NODE>_LANGGRAPH_CATALOG`)
+
+**File Structure:**
+
+```
+nodes/<node>/graphs/src/graphs/<name>/
+├── graph.ts        # Pure factory: createXGraph({ llm, tools })
+├── prompts.ts      # System prompt constant(s)
+├── tools.ts        # Tool IDs constant; may import from @cogni/ai-tools (core) AND @cogni/<node>-ai-tools (node-scoped)
+├── server.ts       # LangGraph dev entrypoint
+└── cogni-exec.ts   # Cogni executor entrypoint
+```
+
+**Steps:** (Same shape as Tier 1a, with these differences)
+
+1. Create graph files under `nodes/<node>/graphs/src/graphs/<name>/` (NOT `packages/langgraph-graphs`).
+2. `tools.ts` imports tool IDs from BOTH `@cogni/ai-tools` (cross-node `core__` IDs like `WEB_SEARCH_NAME`) AND `@cogni/<node>-ai-tools` (e.g. `MARKET_LIST_NAME`, `POLY_DATA_*_NAME` from `@cogni/poly-ai-tools`).
+3. Add catalog entry to `nodes/<node>/graphs/src/index.ts` under `<NODE>_LANGGRAPH_CATALOG`. Don't touch `packages/langgraph-graphs/src/catalog.ts`.
+4. The node app's `inproc.provider.ts` already merges `LANGGRAPH_CATALOG + <NODE>_LANGGRAPH_CATALOG` (see `POLY_MERGED_CATALOG` in `nodes/poly/app/src/adapters/server/ai/langgraph/poly-catalog.ts`); no inproc-provider edit needed to expose the new agent.
+5. UI surfacing — verify against `nodes/<node>/app/src/features/ai/components/ChatComposerExtras.tsx` `AVAILABLE_GRAPHS`: if hardcoded, you must add it; if dynamic, it's automatic.
+
+**Reference:** `nodes/poly/graphs/src/graphs/poly-research/` (full example with tools.ts importing from both `@cogni/ai-tools` + `@cogni/poly-ai-tools`).
+
 ### Tier 2: Composed Graphs
 
-For multi-node graphs with node-keyed configuration, see [Graph Execution](../GRAPH_EXECUTION.md) § Node-Keyed Model & Tool Configuration.
+For multi-node graphs with node-keyed configuration, see [Graph Execution](../spec/graph-execution.md) § Node-Keyed Model & Tool Configuration.
 
 ## Verification
 
@@ -105,4 +139,4 @@ Verify your graph appears in the LangGraph Studio UI and responds to test messag
 
 - [Tools Authoring Guide](./tools-authoring.md) — Adding new tools for agents
 - [LangGraph Patterns Spec](../spec/langgraph-patterns.md) — Architecture patterns
-- [Graph Execution](../GRAPH_EXECUTION.md) — Execution invariants
+- [Graph Execution](../spec/graph-execution.md) — Execution invariants
