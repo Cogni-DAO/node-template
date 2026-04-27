@@ -13,7 +13,7 @@ spec_refs:
   - poly-copy-trade-phase1
 assignees: []
 project: proj.poly-copy-trading
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1079
 created: 2026-04-26
 updated: 2026-04-27
 labels: [poly, polymarket, wallet-research, pnl, simplification, performance]
