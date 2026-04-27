@@ -481,3 +481,41 @@ Surgical change: rewrite each node's `wagmi.config.ts` to call
 this PR already has. Keep the `force-dynamic` export and safe-headers
 wrapper — they're documentation of intent and harmless once the
 import-graph issue is fixed.
+
+### Connector roster follow-up
+
+`getDefaultConfig` previously registered a curated wallet roster
+(MetaMask, Coinbase Wallet, WalletConnect, Safe, Rainbow). Post-fix
+this PR registers `injected()` + optional `walletConnect()` only:
+
+- ✅ Every browser-extension wallet (MetaMask, Rabby, Brave, Coinbase
+  extension, etc.) connects via `injected` — no UX loss for the common
+  path.
+- ✅ Mobile wallets via WC QR — unchanged.
+- ❌ **Coinbase Smart Wallet** (extension-less, passkey-based) loses its
+  dedicated entry. Acceptable for v0 — we don't have a Coinbase
+  developer-platform project yet.
+- ❌ **Safe** (gnosis-safe app embedding) loses its dedicated entry.
+  Acceptable for v0 — we don't have a Safe project / installation yet.
+
+Both can be re-added with zero risk to the server module graph by
+importing from `wagmi/connectors` (NOT `@rainbow-me/rainbowkit`):
+
+```ts
+import {
+  coinbaseWallet,
+  safe,
+  injected,
+  walletConnect,
+} from "wagmi/connectors";
+const connectors = [
+  injected(),
+  coinbaseWallet({ appName: "Cogni" }),
+  safe(),
+  ...(projectId ? [walletConnect({ projectId, showQrModal: true })] : []),
+];
+```
+
+Captured as a follow-up; not in scope for task.0402 (which is purely
+SSR-restore). File a new task when Coinbase/Safe project credentials are
+available, or when a user reports needing one of those wallets.

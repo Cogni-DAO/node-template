@@ -20,6 +20,10 @@
  *   Pattern follows the canonical wagmi App Router SSR guide:
  *   https://wagmi.sh/react/guides/ssr and
  *   https://github.com/rainbow-me/rainbowkit/tree/main/examples/with-next-app
+ * Follow-up: connectors registered here are `injected` + optional
+ *   `walletConnect`. Coinbase Smart Wallet (`coinbaseWallet`) and Safe
+ *   (`safe`) connectors from `wagmi/connectors` can be added when we have
+ *   project credentials — see task.0402 §"Connector roster follow-up".
  * @public
  */
 
