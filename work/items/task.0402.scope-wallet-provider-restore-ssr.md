@@ -191,10 +191,13 @@ otherwise the server renders "no account" and the client hydrates
 "connected", triggering hydration mismatch on every load with a wallet
 cookie. The fix above is the wagmi-documented complete pattern.
 
-**Reuses**:
+**Reuses** _(superseded — see "Decision Log — Path B" below; `wagmi.config.ts`
+was rewritten to call `wagmi.createConfig` directly because RainbowKit's
+package barrel is `"use client"` and cannot be imported by the server
+layout chain)_:
 
 - `getDefaultConfig({ ssr: true, storage: cookieStorage })` in
-  `wagmi.config.ts` (no change).
+  `wagmi.config.ts` (no change). _[Stale: see Decision Log.]_
 - Existing `AuthProvider`, `QueryProvider`, `RainbowKitThemeProvider`
   composition (only the order changes).
 - Existing `thread-stream-noop.ts` Turbopack alias (kept; it solves a

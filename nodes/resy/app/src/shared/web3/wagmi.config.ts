@@ -24,6 +24,10 @@
  *   `walletConnect`. Coinbase Smart Wallet (`coinbaseWallet`) and Safe
  *   (`safe`) connectors from `wagmi/connectors` can be added when we have
  *   project credentials — see task.0402 §"Connector roster follow-up".
+ *   `walletConnect({ showQrModal: true })` is intentional in this
+ *   non-`getDefaultConfig` path: RainbowKit's modal only renders the QR
+ *   when `rkDetails` flags are set (which only `getDefaultConfig` sets),
+ *   so we let WC's own Web3Modal handle QR display.
  * @public
  */
 
