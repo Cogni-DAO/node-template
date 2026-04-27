@@ -2,7 +2,7 @@
 id: task.0387
 type: task
 title: "Capability A — pure redeem policy + fixture audit (stops the bleed)"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 3
@@ -84,7 +84,7 @@ A pure module `packages/market-provider/policy/redeem` exporting `decideRedeem(i
 
 ## Plan — checkpoints
 
-- [ ] **Checkpoint 1 — Pure policy module + synthetic fixture corpus (offline-only)**
+- [x] **Checkpoint 1 — Pure policy module + synthetic fixture corpus (offline-only)** — landed in commit 2d7fcabe4. 26 unit tests in `packages/market-provider/tests/redeem-policy.test.ts` covering all 7 classes + skip + malformed edges + purity invariant. Subpath export `@cogni/market-provider/policy` wired through tsup + package.json.
   - Milestone: `decideRedeem` exists at `packages/market-provider/policy/redeem.ts`, fully unit-tested against synthetic fixtures covering all 7 classes derived from CTF + neg-risk adapter ABIs. No I/O, no network calls. Bleed not yet stopped — predicate is built but not wired.
   - Invariants: `PURE_POLICY_NO_IO`, `NEG_RISK_REDEEM_IS_DISTINCT`, `POSITION_IDENTITY_IS_CHAIN_KEYED`
   - Todos:
@@ -98,7 +98,7 @@ A pure module `packages/market-provider/policy/redeem` exporting `decideRedeem(i
     - Test levels:
       - [ ] unit: `pnpm -F @cogni/market-provider test -- redeem-policy`
 
-- [ ] **Checkpoint 2 — Loki audit script + real-tx fixture backfill**
+- [ ] **Checkpoint 2 — Loki audit script + real-tx fixture backfill** — DEFERRED to follow-up PR. CP1 + CP3 stop the bleed on synthetic + existing real-Polygon-mainnet fixture (snapshot 2026-04-25, 16 rows, 2 neg-risk winners). CP2 builds the 30-day Loki audit script + cross-checks against testnet traces to PROVE `FIXTURE_COVERAGE_COMPLETE` from real data. Not ship-blocker for the bleed-stop; observability of the new `policy_decision` log on candidate-a substitutes pending the audit script. Tracked as task.0387-followup.
   - Milestone: `scripts/experiments/audit-redeem-fixtures.ts` runs against production Loki (last 30d of `poly.ctf.redeem.ok`) + Polygon RPC, classifies each `tx_hash` by burn-observed, emits coverage report. Any fixtures derived from real tx hashes added to corpus alongside synthetic ones. **FIXTURE_COVERAGE_COMPLETE** is now provable from real data.
   - Invariants: `FIXTURE_COVERAGE_COMPLETE`, `WRITE_AUTHORITY_IS_CHAIN_OR_CLOB` (script reads from chain, not Data API)
   - Todos:
@@ -111,7 +111,7 @@ A pure module `packages/market-provider/policy/redeem` exporting `decideRedeem(i
     - Test levels:
       - [ ] unit: same as Checkpoint 1, now with real-tx fixtures added
 
-- [ ] **Checkpoint 3 — Wire into existing executor (BLEED STOPS)**
+- [x] **Checkpoint 3 — Wire into existing executor (BLEED STOPS)** — landed in commit 2d7fcabe4. Manual + sweep multicall extended to 4N reads. `decision.indexSet` + `decision.parentCollectionId` replace hardcoded constants. `BINARY_REDEEM_INDEX_SETS` import removed from the call site (constant stays in market-provider for now per task scope). New `poly.ctf.redeem.policy_decision` structured log + `poly.ctf.redeem.malformed` for design-defect class. Mutex + cooldown Map preserved per task scope (task.0388 rips them). 18/18 executor tests green; race-regression tests for bug.0384 still pass against the 4N layout.
   - Milestone: `nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts` `decideRedeem` (lines 189–205) replaced by import from `@cogni/market-provider/policy/redeem`. Sweep call site (line ~814) uses `decision.indexSet` and `decision.parentCollectionId` instead of hardcoded `BINARY_REDEEM_INDEX_SETS`. **Mutex + cooldown Map stay in this PR** (per task scope; 0388 rips them). Existing executor tests adjusted to assert against new discriminated-union shape.
   - Invariants: `WRITE_AUTHORITY_IS_CHAIN_OR_CLOB`, `NEG_RISK_REDEEM_IS_DISTINCT`, `SIMPLE_SOLUTION`
   - Todos:

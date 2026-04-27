@@ -3,27 +3,15 @@
 
 /**
  * Module: `@cogni/market-provider/policy/redeem`
- * Purpose: Pure decision policy for `redeemPositions` on Polymarket / Polygon
- *   CTF. Given a snapshot of chain reads, returns a discriminated decision
- *   covering binary, neg-risk, and multi-outcome markets. Single source of
- *   truth for "should we redeem and how" — consumed by the legacy sweep
- *   (task.0387) and the future event-driven worker (task.0388 / task.0377).
- * Scope: Pure function. No I/O, no SDK imports, no env reads. The 7-class
- *   discriminated output is what the call site routes on.
+ * Purpose: Pure decision policy for `redeemPositions` on Polymarket / Polygon CTF — given a snapshot of chain reads, returns a discriminated decision covering binary, neg-risk, and multi-outcome markets. Single source of truth for redeem decisions, consumed by the legacy sweep (task.0387) and the future event-driven worker (task.0388 / task.0377).
+ * Scope: Pure function. Does not perform I/O, does not import SDK clients, does not read env.
  * Invariants:
- *   - PURE_POLICY_NO_IO — does not import viem, @polymarket/clob-client, or
- *     anything from app/bootstrap. Verified by dep-cruiser rule.
- *   - WRITE_AUTHORITY_IS_CHAIN_OR_CLOB — every input is chain-derived;
- *     `redeemable` from the Data-API never enters this function.
- *   - NEG_RISK_REDEEM_IS_DISTINCT — `negativeRisk: true` routes to a
- *     `neg-risk-parent` (or future `neg-risk-adapter`) flavor; never to
- *     `binary`. The `[1n, 2n]` index-set bug from bug.0384 cannot recur.
- *   - POSITION_IDENTITY_IS_CHAIN_KEYED — caller passes inputs derived from
- *     `(funder, positionId)` chain reads; this function does not look up
- *     identity.
- * Side-effects: none.
- * Links: docs/design/poly-positions.md (§ Capability A), work/items/task.0387,
- *   work/items/bug.0384.
+ *   - PURE_POLICY_NO_IO — does not import viem, clob-client, or app/bootstrap.
+ *   - WRITE_AUTHORITY_IS_CHAIN_OR_CLOB — inputs are chain-derived only.
+ *   - NEG_RISK_REDEEM_IS_DISTINCT — `negativeRisk:true` never routes to `binary`.
+ *   - POSITION_IDENTITY_IS_CHAIN_KEYED — caller passes `(funder, positionId)` reads.
+ * Side-effects: none
+ * Links: docs/design/poly-positions.md, work/items/task.0387, work/items/bug.0384
  * @public
  */
 
