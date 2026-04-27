@@ -10,7 +10,7 @@ summary: "Autonomous mirror of selected Polymarket wallets from a Cogni-controll
 outcome: "A Cogni node autonomously mirrors N Polymarket target wallets onto M per-user operator wallets with sub-30s latency, RLS-enforced tenancy, at-most-once idempotency, and real-money caps enforced in code. DAO treasury earns measurable realized PnL tracked against a counterfactual baseline."
 assignees: derekg1729
 created: 2026-04-19
-updated: 2026-04-23
+updated: 2026-04-26
 labels: [poly, polymarket, copy-trading, mirror, privy, rls, multi-tenant]
 ---
 
@@ -63,7 +63,9 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 | Position exit correctness — live approval revalidation + provider cache refresh + authoritative close/redeem semantics            | In Review      | 3   | [task.0357](../items/task.0357.poly-position-exit-authoritative-close-redeem.md)  |
 | Dashboard position-state split — Open Positions + Position History tabs; live/closed contract split; `recentlyClosedIds` eviction | In Review      | 3   | [task.0358](../items/task.0358.poly-dashboard-position-history-open-vs-closed.md) |
 | E2E test suite — wallet onboarding (`connect`, grants, enable-trading) + trading path to `placeOrder` (deferred from #992 review) | Needs Triage   | 5   | [task.0356](../items/task.0356.poly-wallet-onboarding-trading-e2e-test-suite.md)  |
-| Trading hardening — executor cache, cap-source column, prototype residue, agent tool re-enable                                    | Needs Triage   | 3   | [task.0354](../items/task.0354.poly-trading-hardening-followups.md)               |
+| Trading hardening — executor cache, cap-source column, prototype residue, agent tool re-enable                                    | Needs Triage    | 3   | [task.0354](../items/task.0354.poly-trading-hardening-followups.md)               |
+| Capability A — pure redeem policy + fixture audit (stops bug.0384 bleed; supersedes task.0379)                                    | Needs Implement | 3   | [task.0387](../items/task.0387.poly-redeem-policy-capability-a.md)                |
+| Capability B — event-driven redeem job queue (rips sweep + cooldown + mutex; removes SINGLE_POD_ASSUMPTION)                       | Needs Implement | 5   | [task.0388](../items/task.0388.poly-redeem-job-queue-capability-b.md)             |
 
 ### Phase 4 (P4) — Streaming + adversarial-robust ranking
 
@@ -107,6 +109,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 - [Poly Multi-Tenant Auth](../../docs/spec/poly-multi-tenant-auth.md) — tenant-scoped copy-trade tables, `CopyTradeTargetSource` port (Phase A); `PolyTraderWalletPort` + `poly_wallet_{connections,grants}` + `PolyTradeExecutorFactory` (Phase B3, as-built)
 - [Poly Trader Wallet Port](../../docs/spec/poly-trader-wallet-port.md) — port contract, `authorizeIntent` + branded `AuthorizedSigningContext`, read-only `getBalances` + HTTP `poly.wallet.balances.v1` (Money page surface), Privy-app isolation, adapter lifecycle (Phase B3, as-built)
 - [Poly Position Exit](../../docs/spec/poly-position-exit.md) — authority split for close/redeem plus the readonly-first position-state model (`live_positions`, `closed_positions`, `pending_actions`)
+- [Poly Positions — object model + lifecycle (visual)](../../docs/design/poly-positions.md) — 7-state lifecycle diagram, four-authority contract, and the redeem-rewrite design that task.0387 + task.0388 implement
 - [Polymarket Account Setup](../../docs/guides/polymarket-account-setup.md) — Privy operator onboarding runbook (guide, not spec)
 
 ## Design Notes
