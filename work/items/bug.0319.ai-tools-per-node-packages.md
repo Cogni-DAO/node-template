@@ -2,8 +2,9 @@
 id: bug.0319
 type: bug
 title: "Move node-only ai-tools into nodes/<X>/packages/ai-tools to satisfy SINGLE_DOMAIN_HARD_FAIL; kill the global TOOL_CATALOG closed-world iteration"
-status: needs_review
+status: needs_merge
 branch: fix/per-node-ai-tools-design
+pr: https://github.com/Cogni-DAO/node-template/pull/1080
 priority: 1
 rank: 50
 estimate: 5
