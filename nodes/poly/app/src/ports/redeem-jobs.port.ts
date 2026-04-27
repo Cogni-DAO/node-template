@@ -36,6 +36,8 @@ export type RedeemSubscriptionId =
 export interface EnqueueRedeemJobInput {
   funderAddress: `0x${string}`;
   conditionId: `0x${string}`;
+  positionId: string;
+  outcomeIndex: number;
   flavor: RedeemFlavor;
   /** bigint[] from `decideRedeem`; stringified to preserve precision. */
   indexSet: readonly string[];

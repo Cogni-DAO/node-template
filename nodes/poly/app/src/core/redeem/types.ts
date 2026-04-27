@@ -24,15 +24,19 @@ export type { RedeemFlavor } from "@cogni/market-provider/policy";
  * Job lifecycle status — drives the worker state machine.
  *
  * Authority for each transition:
- *  - `pending` → `submitted`        : worker (post-receipt + burn-decode)
- *  - `submitted` → `confirmed`      : subscriber (observed `PayoutRedemption` from funder at N=5)
+ *  - `pending` → `claimed`           : adapter (atomic UPDATE … FOR UPDATE SKIP LOCKED)
+ *  - `claimed` → `submitted`         : worker (post-receipt + burn-decode)
+ *  - `claimed` → `failed_transient`  : worker (tx-submit threw; transient)
+ *  - `claimed` → `abandoned`         : worker on `attempt_count >= 3` (transient_exhausted)
+ *  - `failed_transient` → `claimed`  : adapter (next tick re-claims for retry)
+ *  - `submitted` → `confirmed`       : subscriber (observed `PayoutRedemption` from funder at N=5)
  *  - `submitted` → `failed_transient`: reaper at N=5 when burn was real but reorged out
- *  - `submitted` → `abandoned`      : reaper at N=5 when no burn observed (malformed routing)
- *  - `pending`/`failed_transient` → `abandoned`: worker when `attempt_count >= 3`
- *  - `confirmed` → `submitted`      : subscriber on reorg (removed log) — re-evaluated by reaper
+ *  - `submitted` → `abandoned`       : reaper at N=5 when no burn observed (malformed routing)
+ *  - `confirmed` → `submitted`       : subscriber on reorg (removed log) — re-evaluated by reaper
  */
 export type RedeemJobStatus =
   | "pending"
+  | "claimed"
   | "submitted"
   | "confirmed"
   | "failed_transient"
@@ -79,6 +83,8 @@ export interface RedeemJob {
   id: string;
   funderAddress: `0x${string}`;
   conditionId: `0x${string}`;
+  positionId: string;
+  outcomeIndex: number;
   status: RedeemJobStatus;
   flavor: RedeemFlavor;
   /** Stringified bigint[] (jsonb in DB; precision-preserved). */

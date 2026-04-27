@@ -3,10 +3,8 @@
 
 /**
  * Module: `@cogni/market-provider/adapters/polymarket/neg-risk-adapter`
- * Purpose: Polygon NegRiskAdapter contract surface — `redeemPositions(bytes32,uint256[])`
- *   and `PayoutRedemption(redeemer, conditionId, amounts, payout)` event for
- *   the event-driven redeem pipeline (task.0388).
- * Scope: Address + ABI fragments only. No transactions, no signers.
+ * Purpose: Polygon NegRiskAdapter contract surface for the event-driven redeem pipeline — exports the pinned mainnet address, the 2-arg `redeemPositions(bytes32,uint256[])` ABI fragment, and the `PayoutRedemption(redeemer, conditionId, amounts, payout)` event ABI consumed by the subscriber + catch-up replay (task.0388).
+ * Scope: Address + ABI fragments only. Does not submit transactions, hold signers, or implement the dispatch decision (which lives in the worker).
  * Invariants:
  *   - POLYGON_MAINNET_ONLY — address `0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296`
  *     (verified Polygonscan, Solidity 0.8.19, "Adapter for the CTF enabling

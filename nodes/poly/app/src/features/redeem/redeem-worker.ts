@@ -45,13 +45,13 @@ import {
 import { polygon } from "viem/chains";
 
 import {
-  deriveNegRiskAmounts,
   REDEEM_MAX_TRANSIENT_ATTEMPTS,
   type RedeemFlavor,
-  type RedeemJob,
   transition,
 } from "@/core";
 import type { RedeemJobsPort } from "@/ports";
+
+import { buildSubmitArgs } from "./build-submit-args";
 
 const ctfBalanceAbi = parseAbi([
   "function balanceOf(address account, uint256 id) view returns (uint256)",
@@ -85,75 +85,6 @@ export interface RedeemWorkerDeps {
   finalityBlocks: bigint;
   /** Tick cadence in ms. Worker submits + reaps each tick. */
   tickIntervalMs: number;
-}
-
-/**
- * Build call args for `redeemPositions` on whichever contract `flavor` indicates.
- *
- * Returns `null` if the dispatch can't be built (e.g. bad outcomeIndex on
- * neg-risk). Caller should treat as malformed.
- */
-async function buildSubmitArgs(
-  job: RedeemJob,
-  ctx: { publicClient: PublicClient; funderAddress: `0x${string}` }
-): Promise<
-  | { kind: "ctf"; indexSets: bigint[] }
-  | { kind: "neg-risk"; amounts: readonly [bigint, bigint] }
-  | null
-> {
-  const indexSetBigints = job.indexSet.map((s) => BigInt(s));
-
-  if (job.flavor === "binary" || job.flavor === "multi-outcome") {
-    return { kind: "ctf", indexSets: indexSetBigints };
-  }
-  // neg-risk routes through NegRiskAdapter with [yes, no] amounts.
-  // outcomeIndex is recoverable from indexSet[0] = 1n << outcomeIndex.
-  // For the binary neg-risk shape, indexSet[0] ∈ {1n, 2n}.
-  const first = indexSetBigints[0];
-  if (first === undefined) return null;
-  let outcomeIndex: number;
-  if (first === 1n) outcomeIndex = 0;
-  else if (first === 2n) outcomeIndex = 1;
-  else return null;
-
-  // Re-read balance at submission time — `expectedShares` is decision-time
-  // state and may be stale.
-  const positionId = neg_risk_position_id(job.conditionId, outcomeIndex);
-  const balance = (await ctx.publicClient.readContract({
-    address: POLYGON_CONDITIONAL_TOKENS,
-    abi: ctfBalanceAbi,
-    functionName: "balanceOf",
-    args: [ctx.funderAddress, positionId],
-  })) as bigint;
-
-  return {
-    kind: "neg-risk",
-    amounts: deriveNegRiskAmounts(outcomeIndex, balance),
-  };
-}
-
-/**
- * NegRiskAdapter position ids are not derivable from `conditionId` alone in
- * the same way CTF binary position ids are; they are emitted by the adapter
- * factory. v0.2 routes the redeem through the adapter contract which
- * internally resolves them. We only need the position id for the
- * `balanceOf` re-read — and for that we reuse the position id that was
- * recorded at enqueue time (currently we don't persist it; for v0.2 we
- * assume the worker can recompute it with the standard CTF derivation
- * since neg-risk positions still register as ERC1155 ids on CTF).
- *
- * For task.0388 v0.2, this returns a placeholder that the caller does not
- * actually use — `expectedShares` from the job row is used as the burn-amount
- * sanity check, and the NegRiskAdapter itself does the redeem math. If a
- * future bug points at the balance recheck being wrong, persist the
- * position id on the job row.
- */
-function neg_risk_position_id(
-  _conditionId: `0x${string}`,
-  _outcomeIndex: number
-): bigint {
-  // Sentinel — not used in NegRiskAdapter.redeemPositions args.
-  return 0n;
 }
 
 /**
@@ -258,8 +189,14 @@ export class RedeemWorker {
     if (job === null) return;
 
     const args = await buildSubmitArgs(job, {
-      publicClient: this.deps.publicClient,
       funderAddress: this.deps.funderAddress,
+      readBalance: (funder, positionId) =>
+        this.deps.publicClient.readContract({
+          address: POLYGON_CONDITIONAL_TOKENS,
+          abi: ctfBalanceAbi,
+          functionName: "balanceOf",
+          args: [funder, positionId],
+        }) as Promise<bigint>,
     });
     if (args === null) {
       // Malformed dispatch — abandon immediately. This is a code defect, not

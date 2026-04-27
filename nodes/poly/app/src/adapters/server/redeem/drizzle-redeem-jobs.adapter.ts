@@ -45,6 +45,8 @@ function mapRow(row: Row): RedeemJob {
     id: row.id,
     funderAddress: row.funderAddress as `0x${string}`,
     conditionId: row.conditionId as `0x${string}`,
+    positionId: row.positionId,
+    outcomeIndex: row.outcomeIndex,
     status: row.status as RedeemJobStatus,
     flavor: row.flavor as RedeemFlavor,
     indexSet: (row.indexSet as string[]) ?? [],
@@ -83,6 +85,8 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
       .values({
         funderAddress: input.funderAddress,
         conditionId: input.conditionId,
+        positionId: input.positionId,
+        outcomeIndex: input.outcomeIndex,
         flavor: input.flavor,
         indexSet: input.indexSet,
         expectedShares: input.expectedShares,
@@ -119,29 +123,31 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
   }
 
   async claimNextPending(): Promise<RedeemJob | null> {
-    // Raw SQL: drizzle's query builder doesn't expose `FOR UPDATE SKIP LOCKED`
-    // fluently. The CTE pattern atomically claims + flips the row's status to
-    // a sentinel (`'pending'` stays — caller decides the next state via the
-    // transitions module). We return the full row.
-    //
-    // Note: we don't UPDATE here. The contract is "give me a row I'm allowed
-    // to work on"; the worker will UPDATE via markSubmitted/markTransientFailure
-    // after submitting the tx. Two workers can't claim the same row inside
-    // a single tx because of the row lock; once the worker commits its
-    // markSubmitted transition, status is no longer `pending`.
+    // Atomic claim: a single UPDATE statement is the only contention-safe
+    // surface. The naive two-step (SELECT FOR UPDATE SKIP LOCKED + later
+    // UPDATE in a separate autocommit tx) releases the row lock between
+    // statements — multi-pod workers would both claim the same row and
+    // each fire a redeem tx. The CTE here selects with SKIP LOCKED inside
+    // the same statement that flips status to 'claimed', so two pods get
+    // distinct rows or nothing.
     const result = await this.db.execute(sql`
-      SELECT * FROM ${polyRedeemJobs}
-      WHERE status = 'pending'
-      ORDER BY enqueued_at ASC
-      FOR UPDATE SKIP LOCKED
-      LIMIT 1
+      WITH next_job AS (
+        SELECT id FROM ${polyRedeemJobs}
+        WHERE status IN ('pending', 'failed_transient')
+        ORDER BY enqueued_at ASC
+        FOR UPDATE SKIP LOCKED
+        LIMIT 1
+      )
+      UPDATE ${polyRedeemJobs} AS j
+      SET status = 'claimed', updated_at = now()
+      FROM next_job
+      WHERE j.id = next_job.id
+      RETURNING j.*
     `);
 
     const rows = result as unknown as Row[];
     const row = rows[0];
-    if (row === undefined) {
-      return null;
-    }
+    if (row === undefined) return null;
     return mapRow(row);
   }
 
@@ -149,15 +155,20 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
     headBlock: bigint,
     finalityBlocks: bigint
   ): Promise<RedeemJob[]> {
+    // No status flip — caller (worker.reapStale) issues a markX per row,
+    // each of which is its own UPDATE that's idempotent under double-evaluation
+    // (markAbandoned/markTransientFailure both transition `submitted` to
+    // distinct terminal/intermediate states; a second pod's call lands as
+    // a no-op overwrite or wrong_status_for_event in the transitions guard).
     const cutoff = headBlock - finalityBlocks;
-    const result = await this.db.execute(sql`
-      SELECT * FROM ${polyRedeemJobs}
-      WHERE status = 'submitted'
-        AND submitted_at_block IS NOT NULL
-        AND submitted_at_block <= ${cutoff}
-      FOR UPDATE SKIP LOCKED
-    `);
-    const rows = result as unknown as Row[];
+    const rows = await this.db
+      .select()
+      .from(polyRedeemJobs)
+      .where(
+        sql`${polyRedeemJobs.status} = 'submitted'
+          AND ${polyRedeemJobs.submittedAtBlock} IS NOT NULL
+          AND ${polyRedeemJobs.submittedAtBlock} <= ${cutoff}`
+      );
     return rows.map(mapRow);
   }
 

@@ -25,8 +25,8 @@ import {
   polymarketCtfEventsAbi,
   polymarketNegRiskAdapterAbi,
 } from "@cogni/market-provider/adapters/polymarket";
-import type { PublicClient } from "viem";
-import { getAbiItem } from "viem";
+import type { Abi, PublicClient } from "viem";
+import { decodeEventLog, getAbiItem } from "viem";
 
 import type { RedeemJobsPort } from "@/ports";
 
@@ -77,14 +77,18 @@ export async function runRedeemCatchup(deps: RedeemCatchupDeps): Promise<void> {
 
   // CTF ConditionResolution → enqueue
   await replayConditionResolutions(deps, head);
-  // CTF + NegRiskAdapter PayoutRedemption → mark confirmed
+  // CTF + NegRiskAdapter PayoutRedemption → mark confirmed.
+  // Each replay receives the event's full ABI so log decoding goes through
+  // viem (no raw-topic indexing — the parameter shape differs between the
+  // two contracts: CTF has 3 indexed args incl. parentCollectionId, neg-risk
+  // has 2 incl. conditionId).
   await replayPayoutRedemptions(
     deps,
     head,
     "ctf_payout",
     POLYGON_CONDITIONAL_TOKENS,
     ctfPayoutEvent,
-    /* conditionTopicIndex */ 4
+    polymarketCtfEventsAbi
   );
   await replayPayoutRedemptions(
     deps,
@@ -92,7 +96,7 @@ export async function runRedeemCatchup(deps: RedeemCatchupDeps): Promise<void> {
     "negrisk_payout",
     POLYGON_NEG_RISK_ADAPTER,
     negriskPayoutEvent,
-    /* conditionTopicIndex */ 2
+    polymarketNegRiskAdapterAbi
   );
 }
 
@@ -147,7 +151,7 @@ async function replayPayoutRedemptions(
   contractAddress: `0x${string}`,
   // biome-ignore lint/suspicious/noExplicitAny: viem AbiEvent type is intentionally generic
   event: any,
-  conditionTopicIndex: number
+  decodeAbi: Abi
 ): Promise<void> {
   const fromBlock =
     (await deps.redeemJobs.getLastProcessedBlock(cursorId)) ??
@@ -171,13 +175,26 @@ async function replayPayoutRedemptions(
   );
   for (const log of logs) {
     if (log.removed) continue;
-    const redeemerTopic = log.topics[1];
-    const conditionTopic = log.topics[conditionTopicIndex];
-    if (!redeemerTopic || !conditionTopic) continue;
-    const redeemer = `0x${redeemerTopic.slice(26)}` as `0x${string}`;
+    let redeemer: `0x${string}`;
+    let conditionId: `0x${string}`;
+    try {
+      const decoded = decodeEventLog({
+        abi: decodeAbi,
+        eventName: "PayoutRedemption",
+        data: log.data,
+        topics: log.topics,
+      });
+      const args = decoded.args as unknown as {
+        redeemer: `0x${string}`;
+        conditionId: `0x${string}`;
+      };
+      redeemer = args.redeemer;
+      conditionId = args.conditionId;
+    } catch {
+      continue;
+    }
     if (redeemer.toLowerCase() !== deps.funderAddress.toLowerCase()) continue;
 
-    const conditionId = conditionTopic as `0x${string}`;
     const job = await deps.redeemJobs.findByKey(
       deps.funderAddress,
       conditionId

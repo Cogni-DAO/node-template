@@ -22,6 +22,11 @@
  *   - REDEEM_REQUIRES_BURN_OBSERVATION: `receipt_burn_observed` is the
  *     load-bearing flag the reaper reads at N=5 to branch malformed (no burn)
  *     vs transient (burn was reorged out).
+ *   - POSITION_ID_IS_PERSISTED: `position_id` (ERC-1155 token id) and
+ *     `outcome_index` are captured at enqueue so the worker can re-read
+ *     `balanceOf(funder, positionId)` at submit time for the neg-risk
+ *     dispatch path. v0.1 derived a sentinel from `condition_id` alone,
+ *     producing zero-amount no-op redemption txs against the NegRiskAdapter.
  *   - SWEEP_IS_NOT_AN_ARCHITECTURE: only legitimate sweep is the catch-up
  *     replay bounded by `poly_subscription_cursors.last_processed_block`.
  * Side-effects: none (schema only).
@@ -50,6 +55,8 @@ export const polyRedeemJobs = pgTable(
     id: uuid("id").defaultRandom().primaryKey(),
     funderAddress: text("funder_address").notNull(),
     conditionId: text("condition_id").notNull(),
+    positionId: text("position_id").notNull(),
+    outcomeIndex: integer("outcome_index").notNull(),
     status: text("status").notNull().default("pending"),
     flavor: text("flavor").notNull(),
     indexSet: jsonb("index_set").notNull(),
@@ -86,7 +93,7 @@ export const polyRedeemJobs = pgTable(
     ),
     statusShape: check(
       "poly_redeem_jobs_status_shape",
-      sql`${table.status} IN ('pending', 'submitted', 'confirmed', 'failed_transient', 'abandoned')`,
+      sql`${table.status} IN ('pending', 'claimed', 'submitted', 'confirmed', 'failed_transient', 'abandoned')`,
     ),
     flavorShape: check(
       "poly_redeem_jobs_flavor_shape",

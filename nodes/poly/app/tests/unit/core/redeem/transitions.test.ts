@@ -20,11 +20,13 @@ type JobInput = Pick<
 >;
 
 const baseJob: JobInput = {
-  status: "pending",
+  status: "claimed",
   attemptCount: 0,
   receiptBurnObserved: null,
   txHashes: [],
 };
+
+const pendingJob: JobInput = { ...baseJob, status: "pending" };
 
 const TX_A =
   "0xaaaa000000000000000000000000000000000000000000000000000000000001" as const;
@@ -32,7 +34,7 @@ const TX_B =
   "0xbbbb000000000000000000000000000000000000000000000000000000000002" as const;
 
 describe("transition: submission_recorded", () => {
-  it("flips pending → submitted, records block + burn flag, increments attempts", () => {
+  it("flips claimed → submitted, records block + burn flag, increments attempts", () => {
     const result = transition(baseJob, {
       kind: "submission_recorded",
       txHash: TX_A,
@@ -51,7 +53,19 @@ describe("transition: submission_recorded", () => {
     });
   });
 
-  it("allows resubmission from failed_transient (the retry path)", () => {
+  it("rejects submission from pending (must be claimed first via atomic adapter UPDATE)", () => {
+    const result = transition(pendingJob, {
+      kind: "submission_recorded",
+      txHash: TX_B,
+      submittedAtBlock: 999n,
+      receiptBurnObserved: false,
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.rejection).toBe("wrong_status_for_event");
+  });
+
+  it("rejects submission from failed_transient (must be re-claimed first)", () => {
     const result = transition(
       { ...baseJob, status: "failed_transient", attemptCount: 1 },
       {
@@ -61,10 +75,7 @@ describe("transition: submission_recorded", () => {
         receiptBurnObserved: false,
       }
     );
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.transition.nextStatus).toBe("submitted");
-    expect(result.transition.receiptBurnObserved).toBe(false);
+    expect(result.ok).toBe(false);
   });
 
   it("rejects submission from submitted (already in flight)", () => {
@@ -105,7 +116,7 @@ describe("transition: payout_redemption_observed", () => {
   });
 
   it("rejects payout from pending (can't confirm what was never submitted)", () => {
-    const result = transition(baseJob, {
+    const result = transition(pendingJob, {
       kind: "payout_redemption_observed",
       txHash: TX_A,
     });
@@ -134,7 +145,7 @@ describe("transition: payout_redemption_reorged (REDEEM_COMPLETION_IS_EVENT_OBSE
 });
 
 describe("transition: transient_failure (REDEEM_HAS_CIRCUIT_BREAKER)", () => {
-  it("first failure → failed_transient", () => {
+  it("first failure (claimed → failed_transient)", () => {
     const result = transition(baseJob, {
       kind: "transient_failure",
       error: "rpc timeout",
@@ -149,7 +160,7 @@ describe("transition: transient_failure (REDEEM_HAS_CIRCUIT_BREAKER)", () => {
     const result = transition(
       {
         ...baseJob,
-        status: "failed_transient",
+        status: "claimed",
         attemptCount: REDEEM_MAX_TRANSIENT_ATTEMPTS - 1,
       },
       { kind: "transient_failure", error: "gas underpriced" }
@@ -158,6 +169,14 @@ describe("transition: transient_failure (REDEEM_HAS_CIRCUIT_BREAKER)", () => {
     if (!result.ok) return;
     expect(result.transition.nextStatus).toBe("abandoned");
     expect(result.transition.errorClass).toBe("transient_exhausted");
+  });
+
+  it("rejects transient from pending (must be claimed first)", () => {
+    const result = transition(pendingJob, {
+      kind: "transient_failure",
+      error: "weird",
+    });
+    expect(result.ok).toBe(false);
   });
 
   it("rejects transient from submitted (worker shouldn't be running tx for in-flight job)", () => {
@@ -207,10 +226,9 @@ describe("transition: reaper_finality_elapsed (REDEEM_REQUIRES_BURN_OBSERVATION)
   });
 
   it("rejects reaper from non-submitted", () => {
-    const result = transition(
-      { ...baseJob, status: "pending" },
-      { kind: "reaper_finality_elapsed" }
-    );
+    const result = transition(pendingJob, {
+      kind: "reaper_finality_elapsed",
+    });
     expect(result.ok).toBe(false);
   });
 });

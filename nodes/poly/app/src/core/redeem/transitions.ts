@@ -124,7 +124,7 @@ export function transition(
 
   switch (event.kind) {
     case "submission_recorded": {
-      if (job.status !== "pending" && job.status !== "failed_transient") {
+      if (job.status !== "claimed") {
         return {
           ok: false,
           rejection: "wrong_status_for_event",
@@ -187,7 +187,7 @@ export function transition(
     }
 
     case "transient_failure": {
-      if (job.status !== "pending" && job.status !== "failed_transient") {
+      if (job.status !== "claimed") {
         return {
           ok: false,
           rejection: "wrong_status_for_event",

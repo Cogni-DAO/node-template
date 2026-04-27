@@ -30,7 +30,7 @@ import {
   polymarketCtfEventsAbi,
   polymarketNegRiskAdapterAbi,
 } from "@cogni/market-provider/adapters/polymarket";
-import type { Log, PublicClient } from "viem";
+import { decodeEventLog, type Log, type PublicClient } from "viem";
 
 import { transition } from "@/core";
 import type { RedeemJobsPort } from "@/ports";
@@ -175,6 +175,8 @@ export class RedeemSubscriber {
       const result = await this.deps.redeemJobs.enqueue({
         funderAddress: this.deps.funderAddress,
         conditionId: c.conditionId,
+        positionId: c.positionId.toString(),
+        outcomeIndex: c.outcomeIndex,
         flavor: c.decision.flavor,
         indexSet: c.decision.indexSet.map((b) => b.toString()),
         expectedShares: c.decision.expectedShares.toString(),
@@ -199,17 +201,39 @@ export class RedeemSubscriber {
     logs: ReadonlyArray<Log<bigint, number, false>>,
     cursorId: "ctf_payout" | "negrisk_payout"
   ): Promise<void> {
+    // CTF and NegRiskAdapter both emit `PayoutRedemption` but with different
+    // parameter shapes: CTF has 3 indexed args (redeemer, collateralToken,
+    // parentCollectionId) — `conditionId` lives in `data`, NOT in `topics`.
+    // NegRiskAdapter has 2 indexed args (redeemer, conditionId). Raw topic
+    // indexing here was the bug that silently dropped every CTF redemption.
+    // Defer decoding to viem's ABI-aware decoder so the parameter layout is
+    // never re-derived locally.
+    const abi =
+      cursorId === "negrisk_payout"
+        ? polymarketNegRiskAdapterAbi
+        : polymarketCtfEventsAbi;
     let highestBlock: bigint | null = null;
     for (const log of logs) {
-      const redeemerTopic = log.topics[1];
-      const conditionTopic =
-        cursorId === "negrisk_payout" ? log.topics[2] : log.topics[4];
-      if (!redeemerTopic || !conditionTopic) continue;
-      const redeemer = topicToAddress(redeemerTopic);
+      let redeemer: `0x${string}`;
+      let conditionId: `0x${string}`;
+      try {
+        const decoded = decodeEventLog({
+          abi,
+          eventName: "PayoutRedemption",
+          data: log.data,
+          topics: log.topics,
+        });
+        const args = decoded.args as {
+          redeemer: `0x${string}`;
+          conditionId: `0x${string}`;
+        };
+        redeemer = args.redeemer;
+        conditionId = args.conditionId;
+      } catch {
+        continue;
+      }
       if (redeemer.toLowerCase() !== this.deps.funderAddress.toLowerCase())
         continue;
-
-      const conditionId = conditionTopic as `0x${string}`;
       const job = await this.deps.redeemJobs.findByKey(
         this.deps.funderAddress,
         conditionId
@@ -286,9 +310,4 @@ export class RedeemSubscriber {
       await this.deps.redeemJobs.setLastProcessedBlock(cursorId, highestBlock);
     }
   }
-}
-
-function topicToAddress(topic: `0x${string}`): `0x${string}` {
-  // address topic is 0x<24 zero hex><40 hex>; strip the 24-zero prefix.
-  return `0x${topic.slice(26)}` as `0x${string}`;
 }
