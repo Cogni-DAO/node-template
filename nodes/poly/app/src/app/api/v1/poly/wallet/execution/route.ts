@@ -33,6 +33,7 @@ import { toUserId } from "@cogni/ids";
 import {
   PolyWalletExecutionOutputSchema,
   polyWalletExecutionOperation,
+  type WalletExecutionLifecycleState,
 } from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
@@ -107,8 +108,37 @@ export const GET = wrapRouteHandlerWithLogging(
       "poly.wallet.execution"
     );
 
+    const lifecycleByConditionId = new Map<
+      string,
+      WalletExecutionLifecycleState
+    >();
+    if (
+      container.redeemPipeline &&
+      container.redeemPipeline.funderAddress.toLowerCase() ===
+        address.toLowerCase()
+    ) {
+      try {
+        const jobs = await container.redeemPipeline.redeemJobs.listForFunder(
+          container.redeemPipeline.funderAddress
+        );
+        for (const job of jobs) {
+          lifecycleByConditionId.set(
+            job.conditionId,
+            job.lifecycleState as WalletExecutionLifecycleState
+          );
+        }
+      } catch (err) {
+        ctx.log.warn(
+          { err: err instanceof Error ? err.message : String(err) },
+          "poly.wallet.execution.lifecycle_lookup_failed"
+        );
+      }
+    }
+
     return NextResponse.json(
-      PolyWalletExecutionOutputSchema.parse(await getExecutionSlice(address))
+      PolyWalletExecutionOutputSchema.parse(
+        await getExecutionSlice(address, { lifecycleByConditionId })
+      )
     );
   }
 );

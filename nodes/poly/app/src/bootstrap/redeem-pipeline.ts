@@ -192,6 +192,23 @@ export async function startRedeemPipeline(
   subscriber.start();
   worker.start();
 
+  try {
+    await backfillLifecycleStates(
+      funderAddress,
+      dataApiClient,
+      subscriber,
+      log
+    );
+  } catch (err) {
+    log.warn(
+      {
+        event: "poly.ctf.redeem.backfill_failed",
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "redeem pipeline: lifecycle-state backfill threw; continuing"
+    );
+  }
+
   log.info(
     {
       event: "poly.ctf.redeem.pipeline_started",
@@ -209,4 +226,32 @@ export async function startRedeemPipeline(
       worker.stop();
     },
   };
+}
+
+async function backfillLifecycleStates(
+  funderAddress: `0x${string}`,
+  dataApiClient: PolymarketDataApiClient,
+  subscriber: RedeemSubscriber,
+  log: Logger
+): Promise<void> {
+  const positions = await dataApiClient.listUserPositions(funderAddress);
+  const conditionIds = new Set<`0x${string}`>();
+  for (const p of positions) {
+    if (!p.conditionId) continue;
+    const id = p.conditionId.startsWith("0x")
+      ? (p.conditionId as `0x${string}`)
+      : (`0x${p.conditionId}` as `0x${string}`);
+    conditionIds.add(id);
+  }
+  log.info(
+    {
+      event: "poly.ctf.redeem.backfill_started",
+      funder: funderAddress,
+      condition_count: conditionIds.size,
+    },
+    "redeem pipeline: classifying current positions"
+  );
+  for (const conditionId of conditionIds) {
+    await subscriber.enqueueForCondition(conditionId);
+  }
 }

@@ -218,17 +218,28 @@ function PositionActionButton({
   onPositionAction?: PositionsTableProps["onPositionAction"];
   pendingActionPositionId: string | null;
 }): ReactElement {
-  const label = actionLabel(position.status);
+  const lifecycle = position.lifecycleState ?? null;
+  const isLoser =
+    lifecycle === "loser" ||
+    lifecycle === "dust" ||
+    lifecycle === "redeemed" ||
+    lifecycle === "abandoned";
+  const isRedeemable =
+    position.status === "redeemable" && lifecycle !== "loser" && !isLoser;
+  const isCloseable = position.status === "open" && !isLoser;
+  const label = isRedeemable
+    ? "Redeem"
+    : isCloseable
+      ? "Close"
+      : actionLabel(position.status);
   const wired = typeof onPositionAction === "function";
-  const actionable =
-    wired && (position.status === "open" || position.status === "redeemable");
+  const actionable = wired && (isRedeemable || isCloseable);
   const busy = pendingActionPositionId === position.positionId;
-  const kind =
-    position.status === "redeemable"
-      ? ("redeem" as const)
-      : position.status === "open"
-        ? ("close" as const)
-        : null;
+  const kind = isRedeemable
+    ? ("redeem" as const)
+    : isCloseable
+      ? ("close" as const)
+      : null;
 
   return (
     <Button

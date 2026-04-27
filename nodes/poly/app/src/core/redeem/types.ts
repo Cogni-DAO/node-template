@@ -40,7 +40,8 @@ export type RedeemJobStatus =
   | "submitted"
   | "confirmed"
   | "failed_transient"
-  | "abandoned";
+  | "abandoned"
+  | "skipped";
 
 /** Why a job was abandoned. NULL while non-terminal or transient-retryable. */
 export type RedeemFailureClass = "transient_exhausted" | "malformed";

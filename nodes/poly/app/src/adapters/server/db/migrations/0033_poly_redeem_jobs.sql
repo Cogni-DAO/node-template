@@ -56,7 +56,7 @@ CREATE TABLE "poly_redeem_jobs" (
   CONSTRAINT "poly_redeem_jobs_condition_id_shape"
     CHECK ("condition_id" ~ '^0x[a-fA-F0-9]{64}$'),
   CONSTRAINT "poly_redeem_jobs_status_shape"
-    CHECK ("status" IN ('pending', 'claimed', 'submitted', 'confirmed', 'failed_transient', 'abandoned')),
+    CHECK ("status" IN ('pending', 'claimed', 'submitted', 'confirmed', 'failed_transient', 'abandoned', 'skipped')),
   CONSTRAINT "poly_redeem_jobs_flavor_shape"
     CHECK ("flavor" IN ('binary', 'multi-outcome', 'neg-risk-parent', 'neg-risk-adapter')),
   CONSTRAINT "poly_redeem_jobs_error_class_shape"

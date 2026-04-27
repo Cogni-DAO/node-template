@@ -27,6 +27,36 @@ export type WalletExecutionPositionStatus = z.infer<
   typeof WalletExecutionPositionStatusSchema
 >;
 
+/**
+ * Lifecycle state from the redeem pipeline (`poly_redeem_jobs`). Drives the
+ * dashboard's Open vs History tab membership and the Redeem-button gate.
+ * `null` when the pipeline has not classified the position yet.
+ */
+export const WalletExecutionLifecycleStateSchema = z.enum([
+  "unresolved",
+  "open",
+  "closing",
+  "closed",
+  "resolving",
+  "winner",
+  "redeem_pending",
+  "redeemed",
+  "loser",
+  "dust",
+  "abandoned",
+]);
+export type WalletExecutionLifecycleState = z.infer<
+  typeof WalletExecutionLifecycleStateSchema
+>;
+export const WALLET_EXECUTION_TERMINAL_LIFECYCLE_STATES: ReadonlySet<WalletExecutionLifecycleState> =
+  new Set<WalletExecutionLifecycleState>([
+    "closed",
+    "redeemed",
+    "loser",
+    "dust",
+    "abandoned",
+  ]);
+
 export const WalletExecutionTimelinePointSchema = z.object({
   ts: z.string(),
   price: z.number().min(0),
@@ -65,6 +95,7 @@ export const WalletExecutionPositionSchema = z.object({
   marketUrl: z.string().url().nullable(),
   outcome: z.string(),
   status: WalletExecutionPositionStatusSchema,
+  lifecycleState: WalletExecutionLifecycleStateSchema.nullable().optional(),
   openedAt: z.string(),
   closedAt: z.string().nullable(),
   heldMinutes: z.number().int().nonnegative(),

@@ -23,6 +23,7 @@ import type {
   RedeemFailureClass,
   RedeemFlavor,
   RedeemJob,
+  RedeemJobStatus,
   RedeemLifecycleState,
 } from "@/core";
 
@@ -46,6 +47,10 @@ export interface EnqueueRedeemJobInput {
   /** Stringified bigint (USDC.e raw, 6-dp). */
   expectedPayoutUsdc: string;
   lifecycleState: RedeemLifecycleState;
+  /** Defaults to `'pending'` (worker will pick up). Use `'skipped'` for
+   * non-redeem classifications (loser / dust / not-yet-resolved) so the
+   * dashboard projection has a row to read but the worker has nothing to do. */
+  status?: RedeemJobStatus;
 }
 
 export interface EnqueueRedeemJobResult {

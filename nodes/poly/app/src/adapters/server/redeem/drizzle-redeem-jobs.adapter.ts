@@ -92,6 +92,7 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
         expectedShares: input.expectedShares,
         expectedPayoutUsdc: input.expectedPayoutUsdc,
         lifecycleState: input.lifecycleState,
+        ...(input.status !== undefined ? { status: input.status } : {}),
       })
       .onConflictDoNothing({
         target: [polyRedeemJobs.funderAddress, polyRedeemJobs.conditionId],

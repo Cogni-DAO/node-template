@@ -93,7 +93,7 @@ export const polyRedeemJobs = pgTable(
     ),
     statusShape: check(
       "poly_redeem_jobs_status_shape",
-      sql`${table.status} IN ('pending', 'claimed', 'submitted', 'confirmed', 'failed_transient', 'abandoned')`,
+      sql`${table.status} IN ('pending', 'claimed', 'submitted', 'confirmed', 'failed_transient', 'abandoned', 'skipped')`,
     ),
     flavorShape: check(
       "poly_redeem_jobs_flavor_shape",

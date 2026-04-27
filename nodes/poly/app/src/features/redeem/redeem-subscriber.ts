@@ -35,6 +35,7 @@ import { decodeEventLog, type Log, type PublicClient } from "viem";
 import { transition } from "@/core";
 import type { RedeemJobsPort } from "@/ports";
 
+import { decisionToEnqueueInput } from "./decision-to-enqueue-input";
 import { resolveRedeemCandidatesForCondition } from "./resolve-redeem-decision";
 
 interface LoggerLike {
@@ -171,24 +172,17 @@ export class RedeemSubscriber {
         },
         "redeem-subscriber: policy decision"
       );
-      if (c.decision.kind !== "redeem") continue;
-      const result = await this.deps.redeemJobs.enqueue({
-        funderAddress: this.deps.funderAddress,
-        conditionId: c.conditionId,
-        positionId: c.positionId.toString(),
-        outcomeIndex: c.outcomeIndex,
-        flavor: c.decision.flavor,
-        indexSet: c.decision.indexSet.map((b) => b.toString()),
-        expectedShares: c.decision.expectedShares.toString(),
-        expectedPayoutUsdc: c.decision.expectedPayoutUsdc.toString(),
-        lifecycleState: "winner",
-      });
+      const enqueueInput = decisionToEnqueueInput(this.deps.funderAddress, c);
+      if (enqueueInput === null) continue;
+      const result = await this.deps.redeemJobs.enqueue(enqueueInput);
       this.deps.logger.info(
         {
           event: "poly.ctf.redeem.job_enqueued",
           job_id: result.jobId,
           condition_id: c.conditionId,
-          flavor: c.decision.flavor,
+          status: enqueueInput.status ?? "pending",
+          lifecycle_state: enqueueInput.lifecycleState,
+          flavor: enqueueInput.flavor,
           already_existed: result.alreadyExisted,
         },
         "redeem-subscriber: job enqueued"
