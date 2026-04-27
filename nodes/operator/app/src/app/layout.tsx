@@ -4,11 +4,15 @@
 /**
  * Module: `@app/layout`
  * Purpose: Root layout component for Next.js App Router with font configuration and global styles.
- * Scope: Provides HTML structure and font loading for entire application. Does not handle routing or content.
- * Invariants: Renders valid HTML5 structure; applies consistent font variables; includes global CSS.
- * Side-effects: none
- * Notes: Manrope font loaded with CSS variables for theme consistency.
- * Links: Next.js App Router layout specification
+ * Scope: Async server component. Reads request cookies, computes wagmi `initialState`,
+ *   passes it to the client `Providers` so `<WagmiProvider>` hydrates without mismatch
+ *   (per https://wagmi.sh/react/guides/ssr).
+ * Invariants:
+ *   - Stays a server component (no "use client") so `headers()` is callable cheaply.
+ *   - `initialState` MUST be sourced from `cookieToInitialState(wagmiConfig, cookie)` —
+ *     anything else triggers React hydration-mismatch warnings on authed loads.
+ * Side-effects: reads request headers (Next.js dynamic API).
+ * Links: ./providers.client, @/shared/web3/wagmi.config, docs/spec/architecture.md §SSR-unsafe libraries
  * @public
  */
 
@@ -17,11 +21,14 @@ import "@rainbow-me/rainbowkit/styles.css";
 
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
+import { cookieToInitialState } from "wagmi";
 
-import { Providers } from "./providers-loader.client";
+import { wagmiConfig } from "@/shared/web3/wagmi.config";
+import { Providers } from "./providers.client";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -32,11 +39,16 @@ export const metadata: Metadata = {
   description: "Web3 Gov + Web2 AI",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
-}>): ReactNode {
+}>) {
+  const initialState = cookieToInitialState(
+    wagmiConfig,
+    (await headers()).get("cookie")
+  );
+
   return (
     <html lang="en" className={manrope.className} suppressHydrationWarning>
       <head>
@@ -49,7 +61,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Providers>
+          <Providers initialState={initialState}>
             <div id="main">{children}</div>
           </Providers>
         </ThemeProvider>

@@ -17,11 +17,14 @@ import "@rainbow-me/rainbowkit/styles.css";
 
 import type { Metadata } from "next";
 import { Manrope } from "next/font/google";
+import { headers } from "next/headers";
 import Script from "next/script";
 import { ThemeProvider } from "next-themes";
 import type { ReactNode } from "react";
+import { cookieToInitialState } from "wagmi";
 
-import { Providers } from "./providers-loader.client";
+import { wagmiConfig } from "@/shared/web3/wagmi.config";
+import { Providers } from "./providers.client";
 
 const manrope = Manrope({
   subsets: ["latin"],
@@ -33,11 +36,16 @@ export const metadata: Metadata = {
     "Stop losing reservations to scalper bots. We claim your table in seconds using official channels.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: ReactNode;
-}>): ReactNode {
+}>) {
+  const initialState = cookieToInitialState(
+    wagmiConfig,
+    (await headers()).get("cookie")
+  );
+
   return (
     <html lang="en" className={manrope.className} suppressHydrationWarning>
       <head>
@@ -50,7 +58,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <Providers>
+          <Providers initialState={initialState}>
             <div id="main">{children}</div>
           </Providers>
         </ThemeProvider>

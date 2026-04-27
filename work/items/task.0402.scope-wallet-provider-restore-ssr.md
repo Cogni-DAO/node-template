@@ -2,17 +2,17 @@
 id: task.0402
 type: task
 title: "Restore SSR — adopt wagmi's canonical Next.js App Router SSR pattern"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 2
+branch: worktree-research-nextjs-perf
 summary: "Replace each node's whole-app `next/dynamic({ ssr: false })` wrapper with the wagmi-prescribed App Router SSR pattern: read `headers().get('cookie')` in the root layout (server component), call `cookieToInitialState(wagmiConfig, cookie)`, and pass the result as `initialState` into `<WagmiProvider>`. Delete `providers-loader.client.tsx`. Phase 1 = operator + flight; Phase 2 = mechanical port to poly + resy + node-template."
 outcome: "Every route returns SSR HTML containing chrome and page markup (curl returns >>shell-size bytes). No hydration-mismatch warnings in the browser console for either authed-with-wallet or anonymous users. Wallet connect / disconnect / signing flows continue to work. `providers-loader.client.tsx` deleted in all four nodes; root `layout.tsx` is `async`, reads cookies once, and passes `initialState` into `<Providers>`. `pnpm check:full` stays green from a clean `.next/` rebuild."
 spec_refs:
 assignees: derekg1729
 credit:
 project:
-branch:
 pr:
 reviewer:
 revision: 0

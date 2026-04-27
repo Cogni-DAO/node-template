@@ -65,7 +65,13 @@ Every dependency points inward.
 
 ### SSR-unsafe libraries
 
-Libraries accessing browser APIs (IndexedDB, localStorage) at module load cause `ReferenceError` during Next.js SSR/build. Solution: dynamic import inside client-side `useEffect`, cache config in React state. See `src/app/providers/wallet.client.tsx` for WalletConnect example.
+Libraries accessing browser APIs (IndexedDB, localStorage) at module load can cause `ReferenceError` during Next.js SSR/build. For wagmi + RainbowKit + SIWE specifically, the canonical pattern is to enable wagmi's built-in SSR support rather than bypassing SSR via `next/dynamic({ ssr: false })`:
+
+1. In the wagmi config (`nodes/<node>/app/src/shared/web3/wagmi.config.ts`), use `getDefaultConfig({ ssr: true, storage: createStorage({ storage: cookieStorage }) })`. This defers indexedDB-touching code to the client and persists wallet state to a cookie the server can read.
+2. In the root `layout.tsx` (a server component), read the cookie via `(await headers()).get("cookie")`, call `cookieToInitialState(wagmiConfig, cookie)`, and pass the result as `initialState` into the client `<Providers>` component.
+3. In `providers.client.tsx` (`"use client"`), forward `initialState` into `<WagmiProvider config={wagmiConfig} initialState={initialState}>`. WagmiProvider must be the outermost provider; `RainbowKitSiweNextAuthProvider` must remain a descendant of `SessionProvider`.
+
+This is the wagmi/RainbowKit prescribed App Router pattern; see [wagmi SSR guide](https://wagmi.sh/react/guides/ssr) and [RainbowKit installation](https://rainbowkit.com/docs/installation). For other SSR-unsafe libraries (no built-in SSR support), the fallback is dynamic import inside a client-side `useEffect` with config cached in React state.
 
 ---
 
