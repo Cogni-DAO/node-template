@@ -4,35 +4,53 @@
 /**
  * Module: `@shared/web3/wagmi.config`
  * Purpose: Static wagmi configuration for wallet connections with SSR support.
- * Scope: Client-side only. Exports single wagmi config instance. Does not handle server-side RPC or chain reads.
- * Invariants: SSR enabled with cookieStorage; single active chain (CHAIN); WalletConnect projectId from env.
+ * Scope: Server-importable. Built directly with `wagmi.createConfig` (no
+ *   RainbowKit imports) so the server `layout.tsx` can import this module
+ *   to compute `cookieToInitialState` without poisoning the RSC server
+ *   module graph.
+ * Invariants:
+ *   - MUST NOT import from `@rainbow-me/rainbowkit` — that package is
+ *     flagged `"use client"` and would break Next 15 static-page-data
+ *     collection of framework routes (e.g. `/_not-found`).
+ *   - SSR enabled with cookieStorage; single active chain (CHAIN);
+ *     WalletConnect projectId from env (optional).
  * Side-effects: none (config creation only)
- * Notes: Uses RainbowKit's getDefaultConfig for opinionated defaults + SIWE integration.
- *        Config is static (created at module load) to prevent re-renders and IndexedDB errors.
- *        WalletConnect projectId optional (gracefully degrades to injected wallet only).
- * Links: https://rainbowkit.com/docs/installation, https://wagmi.sh/react/guides/ssr
+ * Notes: RainbowKit consumes this config inside the client `Providers`
+ *   boundary via `<RainbowKitProvider>` — see `app/providers.client.tsx`.
+ *   Pattern follows the canonical wagmi App Router SSR guide:
+ *   https://wagmi.sh/react/guides/ssr and
+ *   https://github.com/rainbow-me/rainbowkit/tree/main/examples/with-next-app
  * @public
  */
 
-import { getDefaultConfig } from "@rainbow-me/rainbowkit";
-import { cookieStorage, createStorage } from "wagmi";
+import { cookieStorage, createConfig, createStorage, http } from "wagmi";
+import { injected, walletConnect } from "wagmi/connectors";
 
 import { clientEnv } from "@/shared/env/client";
 import { CHAIN } from "./evm-wagmi";
+
+const projectId = clientEnv().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+
+const connectors = [
+  injected(),
+  ...(projectId ? [walletConnect({ projectId, showQrModal: true })] : []),
+];
 
 /**
  * Static wagmi configuration for wallet connections.
  *
  * SSR-enabled with cookieStorage to prevent IndexedDB hydration errors.
- * WalletConnect projectId is optional - app degrades to injected wallet (MetaMask, etc.) if missing.
+ * WalletConnect projectId is optional — app degrades to injected wallet
+ * (MetaMask, etc.) if missing.
  */
-export const wagmiConfig = getDefaultConfig({
-  appName: "Cogni",
-  projectId:
-    clientEnv().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID ?? "YOUR_PROJECT_ID",
+export const wagmiConfig = createConfig({
   chains: [CHAIN],
+  connectors,
   ssr: true,
   storage: createStorage({
     storage: cookieStorage,
   }),
+  transports: {
+    [CHAIN.id]: http(),
+  },
 });

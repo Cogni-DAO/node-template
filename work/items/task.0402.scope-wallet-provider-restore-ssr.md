@@ -452,3 +452,32 @@ observability:
 - PR: https://github.com/Cogni-DAO/node-template/pull/1081 (red,
   candidate-flight blocked on PR Build failure — see handoff)
 - Handoff: [handoff](../handoffs/task.0402.handoff.md)
+
+## Decision Log — Path B (2026-04-27)
+
+After the handoff, decision is **Path B: drop RainbowKit
+`getDefaultConfig`, use wagmi `createConfig` directly**.
+
+Why: RainbowKit `dist/index.js` (v2.2.9) starts with `"use client";`,
+so importing `{ getDefaultConfig }` from `@rainbow-me/rainbowkit` in a
+module that the server `layout.tsx` ultimately imports poisons the
+server module graph. Next 15's static-page-data-collection pass for
+`/_not-found` then fails with "Attempted to call getDefaultConfig() from
+the server but getDefaultConfig is on the client". Force-dynamic and
+try/catch around `headers()` patch the runtime call but not the
+import-graph rejection — confirmed by the two failed CI iterations
+(`6d4dce07`, `9a63e9fc`).
+
+wagmi's own `createConfig` and `wagmi/connectors` (`injected`,
+`walletConnect`) carry no `'use client'` directive and are documented
+server-safe with `ssr: true` + cookieStorage — this is exactly the
+shape RainbowKit's canonical [`with-next-app`
+example](https://github.com/rainbow-me/rainbowkit/tree/main/examples/with-next-app)
+uses. RainbowKit's `<RainbowKitProvider>` still consumes the config
+inside the existing `'use client'` providers boundary unchanged.
+
+Surgical change: rewrite each node's `wagmi.config.ts` to call
+`createConfig` directly. No layout/provider changes needed beyond what
+this PR already has. Keep the `force-dynamic` export and safe-headers
+wrapper — they're documentation of intent and harmless once the
+import-graph issue is fixed.
