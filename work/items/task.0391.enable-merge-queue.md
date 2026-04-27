@@ -1,5 +1,5 @@
 ---
-id: task.0389
+id: task.0391
 type: task
 title: "Enable GitHub Merge Queue on main — fix stale-rebase merge-order bugs without manual rebase tax"
 status: needs_review
@@ -28,7 +28,7 @@ external_refs:
   - work/items/task.0384.vcs-flight-endpoint.md
 ---
 
-# task.0389 — Enable GitHub Merge Queue on main
+# task.0391 — Enable GitHub Merge Queue on main
 
 > Renumbered from `task.0383` (id collision with shared-readyz task that landed in 16433e3f7 ride-along PR #1074). Original draft + handoff lived on the `chore/cicd-followups-merge-queue` branch; rebased into this work item.
 

@@ -1,12 +1,12 @@
 name: PR Build
 
-# Four-stage pipeline (task.0321 + task.0389):
+# Four-stage pipeline (task.0321 + task.0391):
 #   resolve → detect → build (matrix, one leg per affected target) → manifest
 # Each matrix leg builds+pushes a single target in parallel; the manifest
 # job merges per-leg fragments into the canonical build-manifest.json
 # artifact so downstream candidate-flight consumers see no contract change.
 #
-# Triggers on both `pull_request` and `merge_group` (task.0389):
+# Triggers on both `pull_request` and `merge_group` (task.0391):
 # - pull_request: builds at PR head SHA, tagged pr-{N}-{X}. PR-time CI signal.
 # - merge_group: builds at the queue's rebased candidate SHA, OVERWRITES the
 #   pr-{N}-{X} tag with rebased-tree content. flight-preview.yml on push:main
@@ -32,7 +32,7 @@ env:
   IMAGE_NAME: ghcr.io/cogni-dao/cogni-template
 
 jobs:
-  # task.0389: single source of truth for event-derived metadata.
+  # task.0391: single source of truth for event-derived metadata.
   # `pull_request` and `merge_group` have different event payloads but downstream
   # jobs need the same logical values (PR number, original head SHA, base ref,
   # build SHA, checkout ref). Resolve once here; downstream jobs read outputs.
@@ -199,6 +199,9 @@ jobs:
       needs.detect.result == 'success' &&
       (needs.build.result == 'success' || needs.build.result == 'skipped')
     runs-on: ubuntu-latest
+    env:
+      # Required by scripts/ci/merge-build-fragments.sh.
+      IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:

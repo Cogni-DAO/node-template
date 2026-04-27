@@ -65,4 +65,4 @@ Revisit if drift becomes a recurring issue or if change frequency rises.
 ## Related
 
 - [Agentic Contribution Loop](../../docs/spec/agentic-contribution-loop.md) — where merge queue fits in the contributor flow
-- [task.0389](../../work/items/task.0389.enable-merge-queue.md) — original adoption rationale
+- [task.0391](../../work/items/task.0391.enable-merge-queue.md) — original adoption rationale

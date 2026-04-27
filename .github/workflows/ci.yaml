@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-  merge_group: # Required so GitHub Merge Queue re-runs gates on the rebased queue candidate (task.0389)
+  merge_group: # Required so GitHub Merge Queue re-runs gates on the rebased queue candidate (task.0391)
   push:
     branches: [canary, staging, main]
 
