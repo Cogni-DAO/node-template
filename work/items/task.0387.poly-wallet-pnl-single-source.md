@@ -2,7 +2,8 @@
 id: task.0387
 type: task
 title: "Poly wallet research — single-source PnL via Polymarket user-pnl-api"
-status: needs_merge
+status: needs_implement
+revision: 1
 priority: 1
 rank: 5
 estimate: 2
@@ -196,3 +197,19 @@ No references in `nodes/poly/graphs/`, no references in agent prompts, no refere
 - [x] `coalesce` cache helper in `wallet-analysis-service.ts` keys `pnl:${addr}:${interval}` at 30s TTL — no new cache layer needed
 - [x] `/api/v1/poly/wallets/:addr` route accepts `?include=pnl&interval=…` and the client already fires a parallel React Query fetch per slice
 - [x] No external consumers of removed fields (verified by repo-wide grep)
+
+## Review Feedback
+
+### Revision 1 — `/review-implementation` 2026-04-27
+
+**Blocking**
+
+- **`computeWindowedPnl` single-point semantics inconsistent across docstring, code, and test** — `WalletProfitLossCard.tsx:202–213`. Docstring claims it returns `null` for "fewer than two points"; code returns `0` for single-point; test asserts `.toBe(0)`. A wallet with one indexed point at `p = $50,000` will render "$0" headline (misleading "no change in window") instead of "—" (honest "delta not expressible"). The docstring is correct.
+  - Fix: replace `WalletProfitLossCard.tsx:209–213` body with `if (!history || history.length < 2) return null;` then `const first = history[0]?.pnl ?? 0;` / `const last = history[history.length - 1]?.pnl ?? 0;` / `return last - first;`.
+  - Update `wallet-profit-loss-card.test.tsx:67–71`: `.toBe(0)` → `.toBeNull()`; rename test to "returns null for a single point — delta not expressible".
+
+**Non-blocking suggestions**
+
+- `WalletProfitLossCard.tsx:11–13` — clarify `ZERO_BASELINE_WHEN_EMPTY` to read "flat zero-state **chart** panel" so it reads cleanly alongside `HEADLINE_IS_WINDOWED_DELTA` (chart vs headline are different invariants).
+- `WalletProfitLossCard.tsx:194` + `wallet-profit-loss-card.test.tsx:33` — empty-state copy `"No realized P/L yet."` is stale; this task removed the "realized" framing. Suggest `"No P/L history yet."`.
+- `wallet-profit-loss-card.test.tsx:42` — test comment uses "lifetime cumulative at start"; technically `series[first].p` is "cumulative as of the first indexed point in the window," not "lifetime at recorded-history start." Reword for accuracy.
