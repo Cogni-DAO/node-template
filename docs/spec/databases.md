@@ -183,6 +183,8 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 - `pnpm db:migrate:direct` — drizzle-kit using operator config + `DATABASE_URL` from current environment (used by testcontainers)
 - `pnpm db:migrate:{operator,poly,resy}:container` — container-only: invoked by each node's Dockerfile default CMD
 - `pnpm db:generate:{operator,poly,resy}` — generate new migrations for a node's schema (runs drizzle-kit diff)
+- `pnpm db:check:{operator,poly,resy,poly:doltgres}` — validate a node's snapshot chain via `drizzle-kit check` (no DB connection; static)
+- `pnpm db:check` — umbrella: runs `db:check` against every node config. Invoked by `pnpm check` (pre-commit) and `pnpm check:fast` (pre-push).
 
 **Execution Contexts:**
 

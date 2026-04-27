@@ -2,7 +2,7 @@
 id: bug.0389
 type: bug
 title: drizzle snapshot chain rot — `db:generate:poly` broken on main; wire `drizzle-kit check` per node
-status: needs_implement
+status: needs_merge
 priority: 1
 rank: 1
 estimate: 1
