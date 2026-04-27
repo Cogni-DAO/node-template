@@ -54,7 +54,23 @@ As of 2026-04-27 ~05:00Z, 5 neg-risk conditions on funder `0x95e407fE03996602Ed1
 
 **This task IS the fix.** The NegRiskAdapter contract address + ABI + `[yes, no]` 2-arg `redeemPositions` shape pinned in the frontmatter `summary` are the load-bearing pieces. CP1's worker MUST route any neg-risk position through the NegRiskAdapter (`0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296`), not standard CTF. Without that routing change, this task ships another rate-limited bleed instead of a fix.
 
-**Defense-in-depth ask** (small lift, big payoff): even after the routing fix lands, add an on-chain post-tx burn-verification gate. After `writeContract` returns + receipt confirms, decode logs and require **at least one** `TransferSingle(from=funder, value>0)` (CTF) OR the NegRiskAdapter `PayoutRedemption` from funder. If absent, transition the job to `abandoned` with `class: "malformed"` immediately. That single check catches this entire bug class — any future routing mistake reveals itself on the first tx, not after $N of bleed.
+**Defense in depth — three asks, increasing cost.**
+
+1. **Interim Loki alert (no code; ship before task.0388).** The active v0.1 bleed produces only level-30 (info) events; `level≥warn` alerts see nothing. File this as a Grafana recording rule + alert against the existing log stream so future regressions of this exact shape are visible the moment they recur:
+
+   ```logql
+   sum by (condition_id) (
+     count_over_time({env="production",service="app"} | json | event="poly.ctf.redeem.ok" [10m])
+   ) > 1
+   ```
+
+   Any `condition_id` firing ≥2 `.ok` events in 10 min is the bleed signature — same condition redeemed twice means the first redeem didn't actually burn shares. Route to whatever pages on-call.
+
+2. **Post-tx burn-verification gate (small lift in this task; the real fix).** After `writeContract` returns + receipt confirms, decode logs and require **at least one** `TransferSingle(from=funder, value>0)` (CTF path) OR `NegRiskAdapter.PayoutRedemption(redeemer=funder)` (adapter path). If absent: emit `poly.ctf.redeem.bleed_detected` at **level=50** AND transition the job to `abandoned/class: "malformed"` immediately. That single check catches this entire bug class on the first bad tx — any future routing mistake reveals itself before $N of bleed accumulates, AND it lights up at error-level so generic monitoring sees it without a bespoke recording rule.
+
+3. **NegRiskAdapter routing** (the structural fix described above) closes the specific v0.1 hole.
+
+In that order: #1 is the safety net that catches the bleed class regardless of which contract is wrong; #2 makes the safety net structural so it doesn't depend on someone remembering to add an alert; #3 fixes the immediate v0.1 defect. Skip none of them.
 
 ## Why
 
