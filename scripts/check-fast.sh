@@ -124,6 +124,7 @@ else
   run_check "format" "pnpm format:check"
 fi
 run_check "check:docs" "pnpm -s check:docs"
+run_check "db:check" "pnpm -s db:check"
 run_check "workspace:test" "bash scripts/run-turbo-checks.sh test --concurrency=1"
 
 # Drift check — flag any content-level mutation caused *by this script* (ignore pre-existing WIP).

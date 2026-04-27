@@ -157,6 +157,24 @@ Already tracked in DATABASE_RLS_SPEC.md P1:
 
 - Doltgres advisory-lock validation when poly scales beyond `replicas: 1` (multi-writer Doltgres safety).
 - task.0325 — Atlas / declarative schema / destructive-change linting — when contributor scale warrants it.
+- task.0390 — flatten `nodes/node-template/` migration baseline so future forks (canary `ai-only`, etc.) don't inherit 27 historical entries + the same intermediate-snapshot gap pattern bug.0389 fixed in poly.
+
+### Snapshot Chain Integrity (bug.0389)
+
+**Goal:** every node's drizzle migration chain is verifiable in CI; hand-authored migrations don't silently rot the chain head.
+
+| Deliverable                                                                                   | Status   | Est | Work Item |
+| --------------------------------------------------------------------------------------------- | -------- | --- | --------- |
+| Wire `pnpm db:check` (drizzle-kit upstream `check` per node) into pre-commit + pre-push       | **done** | 1   | bug.0389  |
+| Repair poly chain — fix 0027/0028 collision + restore chain HEAD so `db:generate:poly` works  | **done** | 1   | bug.0389  |
+| `databases.md §2.6` hand-authored migration recipe + hard rule against editing prior `prevId` | **done** | —   | bug.0389  |
+| Flatten `nodes/node-template/` migration baseline before next fork (canary `ai-only`)         | proposed | 2   | task.0390 |
+
+**As-shipped state after bug.0389:**
+
+- `pnpm db:check` runs `drizzle-kit check` against every drizzle config (operator + resy + poly Postgres + poly Doltgres). Wired into both `scripts/check-fast.sh` (pre-push) and `scripts/check-all.sh` (pre-commit). Catches the failure mode that let PR #930 silently land a self-referential snapshot.
+- Hand-authored RLS/trigger migrations remain a real pattern (drizzle-kit `generate` can't model them). The recipe in `databases.md §2.6` is now the maintained contract: copy prior snapshot, regenerate `id`, set `prevId`, edit `tables` block, commit both files together.
+- Poly chain head is `meta/0033_snapshot.json` (synthesized in bug.0389 from current schema.ts). Intermediate snapshots 0011, 0015, 0024–0026, 0029–0032 remain absent — `drizzle-kit check` tolerates the gap; only the head matters for `generate`.
 
 ### Migrator Image Layer Sharing (task.0370 — bug.0368)
 

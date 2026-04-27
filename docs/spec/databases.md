@@ -183,6 +183,8 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 - `pnpm db:migrate:direct` — drizzle-kit using operator config + `DATABASE_URL` from current environment (used by testcontainers)
 - `pnpm db:migrate:{operator,poly,resy}:container` — container-only: invoked by each node's Dockerfile default CMD
 - `pnpm db:generate:{operator,poly,resy}` — generate new migrations for a node's schema (runs drizzle-kit diff)
+- `pnpm db:check:{operator,poly,resy,poly:doltgres}` — validate a node's snapshot chain via `drizzle-kit check` (no DB connection; static)
+- `pnpm db:check` — umbrella: runs `db:check` against every node config. Invoked by `pnpm check` (pre-commit) and `pnpm check:fast` (pre-push).
 
 **Execution Contexts:**
 
@@ -192,6 +194,22 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 - **Production runtime** (Deployment initContainer): bundles the per-node `migrate.mjs` script + migration SQL into the runtime image. Pod start blocks on the initContainer until migrations apply (or no-op via journal). No separate Job, no PreSync hook.
 
 **Future: Atlas + GitOps migrations** — declarative schema, CRD-based Argo integration, destructive-change linting. Deferred to task.0325 with full spike intel preserved.
+
+### 2.6 Hand-Authored Migrations & Snapshot Chain Integrity
+
+`drizzle-kit generate` cannot model RLS policies, triggers, `ALTER POLICY`, ARRAY DEFAULTs, custom functions, or other Postgres-specific DDL. When you need any of these, hand-author the `.sql` file — but you **must** also hand-author the matching snapshot, or `db:generate:<node>` will silently rot for the next dev.
+
+**The recipe (every hand-authored migration):**
+
+1. Write `meta/NNNN_<tag>.sql` with your DDL.
+2. Append `{ "idx": NNNN, "tag": "NNNN_<tag>", ... }` to `meta/_journal.json` (mirror existing entry shape).
+3. Copy the prior snapshot: `cp meta/(N-1)_snapshot.json meta/NNNN_snapshot.json`.
+4. In the new snapshot file: regenerate `id` (any new UUID), set `prevId` to the prior snapshot's `id`, and edit the `tables` block to reflect the deltas your `.sql` applies (add/drop columns, indexes, FKs).
+5. Commit `.sql` + journal entry + snapshot together in a single commit.
+
+**The gate:** `pnpm db:check` runs `drizzle-kit check` against every node config (operator + resy + poly Postgres + poly Doltgres). It catches missing snapshots, broken `prevId` chains, and self-referential snapshots. It is invoked automatically by `pnpm check` and `pnpm check:fast`.
+
+**Hard rule — do not paper over chain breaks:** never edit a _previously committed_ snapshot's `prevId` to silence a `drizzle-kit check` failure. The symptom you'd be hiding is real and gets worse the longer it's unaddressed. If `db:check` goes red, fix the chain — don't rewrite history.
 
 ### 2.1 Local Development
 

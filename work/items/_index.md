@@ -100,6 +100,7 @@
 | 1 | 1 | 2 | needs_review | task.0371 | Kill PreSync migration hook + migrator image — step 1 hotfix | Database Operations | proj.database-ops |
 | 1 | 1 | 2 | needs_implement | task.0373 | candidate-flight self-heals deploy/candidate-a digests around PR rsync |  |  |
 | 1 | 1 | 1 | needs_merge | task.0380 | Node base-path resolver — `extractNodePath(spec, nodeId)` accessor + unit tests | VCS Integration | proj.vcs-integration |
+| 1 | 1 | 1 | needs_merge | bug.0389 | drizzle snapshot chain rot — `db:generate:poly` broken on main; wire `drizzle-kit check` per node | Database Operations | proj.database-ops |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -273,6 +274,7 @@
 | 3 | 18 | 2 | needs_design | task.0348 | Poly wallet — orphan sweep for user-wallets Privy app | Cogni Poly | proj.poly-copy-trading |
 | 3 | 20 | 2 | needs_design | task.0274 | Wire NodeAppConfig into sidebar + layout components | Operator Plane | proj.operator-plane |
 | 3 | 30 | 3 | needs_merge | task.0207 | Run: BYO-AI hosted OSS provider — user connects their OpenAI-compatible endpoint | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
+| 3 | 50 | 2 | needs_design | task.0390 | flatten `nodes/node-template/` migration baseline to a single 0000 fresh-start | Database Operations | proj.database-ops |
 | 3 | 80 | 3 | needs_design | task.0146 | Extract payments application orchestration + billing ports into packages | AI Operator Wallet | proj.ai-operator-wallet |
 | 3 | 80 | 5 | needs_design | task.0325 | Atlas + GitOps migrations (future upgrade, deferred) | Database Operations | proj.database-ops |
 | 3 | 99 | 1 | needs_triage | task.0098 | Temporal retry workflow for failed identity bindings + scheduled backstop | User Identity Bindings + DID Readiness | proj.decentralized-identity |
