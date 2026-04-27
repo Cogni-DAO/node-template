@@ -15,11 +15,11 @@ project: proj.poly-copy-trading
 branch: design/poly-positions
 pr:
 reviewer:
-revision: 0
+revision: 1
 blocked_by: []
 deploy_verified: false
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-04-27
 labels: [poly, ctf, redeem, policy, bleed-stopper, bug-0384, bug-0383, bug-0376]
 external_refs:
 ---
@@ -103,9 +103,9 @@ A pure module `packages/market-provider/policy/redeem` exporting `decideRedeem(i
   - Invariants: `FIXTURE_COVERAGE_COMPLETE`, `WRITE_AUTHORITY_IS_CHAIN_OR_CLOB` (script reads from chain, not Data API)
   - Todos:
     - [ ] Create `scripts/experiments/audit-redeem-fixtures.ts` — Loki query via `scripts/loki-query.sh` pattern + viem `getTransactionReceipt` + log-decode classifier
-    - [ ] Run the audit, save output to `packages/market-provider/policy/redeem.audit-report.md` (gitignored or tracked — TBD per repo convention)
+    - [ ] Run the audit, save output to `packages/market-provider/policy/redeem.audit-report.md` — **tracked**, not gitignored. Reviewers must be able to verify FIXTURE_COVERAGE_COMPLETE without re-running the audit (which is creds-gated).
     - [ ] For every class missing from real data, document the gap in the report and ensure synthetic backfill exists
-    - [ ] Per design-doc review criterion: every synthetic fixture cross-checks against a Polygon Mumbai testnet trace of the same shape (or document why no testnet sample exists)
+    - [ ] Per design-doc review criterion (§ Before /implement, Loki audit bullet): every synthetic fixture cross-checks against a Polygon **mainnet** historical trace of the same `(market_kind, outcome_index, payoutNumerators)` shape. If no comparable mainnet trace exists, fixture is accepted with explicit `// no comparable mainnet trace — reasoned from ABI` annotation. (Mumbai testnet was deprecated April 2024; Polymarket has no testnet deployment.)
   - Validation/Testing:
     - [ ] What can now function e2e? Nothing user-visible — fixture provenance is now documented + cross-checked.
     - Test levels:
@@ -119,7 +119,7 @@ A pure module `packages/market-provider/policy/redeem` exporting `decideRedeem(i
     - [ ] Update call site at line ~814 to consume `Decision`
     - [ ] Add structured Loki log `policy_decision={kind, flavor, reason}` at decision site for `## Validation observability`
     - [ ] Update `nodes/poly/app/tests/unit/bootstrap/poly-trade-executor.test.ts` to use new policy fixtures (do NOT delete the bug.0384 race regression tests)
-    - [ ] Confirm `BINARY_REDEEM_INDEX_SETS` import is removed from the call site (constant itself stays in market-provider for now, dies in 0388)
+    - [ ] Confirm `BINARY_REDEEM_INDEX_SETS` import is removed from the call site. The constant stays exported in `market-provider` for the 0388 transition window, but **must** be marked `@deprecated — use decideRedeem from @cogni/market-provider/policy/redeem` and a dep-cruiser (or no-restricted-imports) rule blocks any new import. Dies entirely in 0388.
   - Validation/Testing:
     - [ ] What can now function e2e? Sweep on candidate-a runs the new predicate. Already-redeemed and wrong-index-set positions are classified `malformed` instead of firing redundant txs. POL bleed stops.
     - Test levels:
@@ -133,9 +133,31 @@ A pure module `packages/market-provider/policy/redeem` exporting `decideRedeem(i
 
 `observability:` Loki query `{app="poly", env="candidate-a"} |= "poly.ctf.redeem"` at deploy SHA shows `policy_decision={kind:"redeem"|"skip"|"malformed", flavor, reason}` per call. Production `poly.ctf.redeem.ok` followed by zero-burn must drop to zero within one sweep tick (~30s) post-deploy. Grafana "POL spent vs USDC redeemed slope" panel shows convergence.
 
+## Review Feedback
+
+**Phase 0.1 docs review (revision 1, 2026-04-27).**
+
+Resolved in this revision:
+
+- Mumbai testnet cross-check criterion (impossible — Polymarket is mainnet-only) → reworded to mainnet historical traces with explicit ABI-reasoned annotation for missing classes. Updated in design doc § Before /implement and CP2 todos.
+- N=20 vs 30 s ingress timeout contradiction → reframed as a hard constraint `N × block_time ≤ 28 s` (Polygon ⇒ N≤14). Higher N is allowed but downgrades the manual-redeem UX to 202+poll. Doc no longer contradicts itself.
+- `BINARY_REDEEM_INDEX_SETS` deprecation pointer added to CP3 todos.
+- Audit-report tracked, not gitignored. Reviewers can verify FIXTURE_COVERAGE_COMPLETE without re-running creds-gated audit.
+- Branch sequencing note rewritten: docs-only Phase 0.1 PR off `design/poly-positions`, code on child branch.
+
+Open (needs human routing, not blocking docs PR):
+
+- **task.0387 ID collision** with `design/task-0387-pnl-single-source` branch on origin (titled "single-source poly wallet PnL via user-pnl-api"). Same task ID, different scope, different file. Whichever PR lands second fails `pnpm work:index` unique-id check. Pick one to rename — recommendation: rename the PnL branch's task to `task.0389` since it's not yet merged and has only 2 commits, vs the redeem-policy task which is now wired through the design doc + project roadmap.
+
+Deferred (non-blocking, follow-on work):
+
+- `closing → resolving` edge in lifecycle diagram doesn't specify what happens to the in-flight close _intent_ in our DB (cancelled / orphaned / completed-zero-fill). Tracked under `poly-position-exit.md` follow-on; not blocking.
+
 ## Notes
 
 - task.0379 ("Poly redemption sweep — top-0.1% production-grade hardening") is the project-management placeholder this work supersedes. After 0387 + 0388 land, close 0379 as `done`.
 - Capability A landing alone is sufficient to stop the bleed — the existing sweep + cooldown + mutex bandaid becomes correct (just inefficient) once the predicate stops returning false-positives. task.0388 rips the inefficiency.
 - Human-in-the-loop runbook for `redeem_failed → abandoned` lives in `docs/design/poly-positions.md` § Abandoned-position runbook. Capability A's fixture corpus is the artifact step 4 of that runbook updates.
-- **Branch sharing with design doc:** This task's branch is `design/poly-positions`, the same branch carrying the `docs/design/poly-positions.md` design doc. PR will bundle design + Capability A. Rationale: design is `trust: draft`, this PR's tests prove its claims; bundling avoids merge-order coupling.
+- **Branch + PR sequencing:** Phase 0.1 (this scaffolding) ships as a docs-only PR off `design/poly-positions` — design doc + task scaffolding for 0387 + 0388, no code. CP1/CP2/CP3 land on a child branch (`feat/task-0387-capability-a`) cut from the docs PR's merge commit. Rationale: design needs sign-off independently; 60-100+ tool-call implementation arc deserves its own review window; ID collision (see § Known issues) needs human routing first.
+- **Known issues (Phase 0.1 review, not blocking docs merge):**
+  - `task.0387` ID collision with `design/task-0387-pnl-single-source` branch (different scope: poly wallet PnL via user-pnl-api). Whichever lands second breaks `pnpm work:index` unique-id check. Needs human routing — rename one. Documented in `## Review Feedback` below.
