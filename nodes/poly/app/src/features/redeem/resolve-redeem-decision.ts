@@ -1,0 +1,146 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `features/redeem/resolve-redeem-decision`
+ * Purpose: Shared helper that takes a `(funder, conditionId)` pair and runs
+ *   the existing redeem-position resolution flow (Data-API position lookup +
+ *   multicall of CTF reads + Capability A `decideRedeem`). Used by the
+ *   subscriber (on `ConditionResolution`), the catch-up replay, and the
+ *   manual-redeem route. Extracts the logic previously inlined in
+ *   `poly-trade-executor.ts:redeemResolvedPosition` so deletion of the sweep
+ *   path doesn't lose the position-lookup logic.
+ * Scope: Composes existing chain reads + Capability A. Does not write to DB,
+ *   does not submit txs.
+ * Invariants:
+ *   - PURE_OF_PERSISTENCE — does not import port/adapter; returns a value the
+ *     caller decides what to do with.
+ *   - DECIDE_REDEEM_IS_AUTHORITY — never re-implements policy; always defers
+ *     to `@cogni/market-provider/policy:decideRedeem`.
+ * Side-effects: IO (Data-API HTTP, Polygon RPC).
+ * Links: docs/design/poly-positions.md, work/items/task.0388
+ * @public
+ */
+
+import {
+  normalizePolygonConditionId,
+  POLYGON_CONDITIONAL_TOKENS,
+  type PolymarketDataApiClient,
+} from "@cogni/market-provider/adapters/polymarket";
+import {
+  decideRedeem,
+  type RedeemDecision,
+} from "@cogni/market-provider/policy";
+import { type PublicClient, parseAbi } from "viem";
+
+const ctfReadAbi = parseAbi([
+  "function balanceOf(address account, uint256 id) view returns (uint256)",
+  "function payoutNumerators(bytes32 conditionId, uint256 outcomeIndex) view returns (uint256)",
+  "function payoutDenominator(bytes32 conditionId) view returns (uint256)",
+  "function getOutcomeSlotCount(bytes32 conditionId) view returns (uint256)",
+]);
+
+/** Result for a single (funder, conditionId, outcomeIndex) tuple. */
+export interface ResolvedRedeemCandidate {
+  conditionId: `0x${string}`;
+  outcomeIndex: number;
+  positionId: bigint;
+  negativeRisk: boolean;
+  decision: RedeemDecision;
+}
+
+/**
+ * Look up funder's positions matching `conditionId`, run chain reads, and
+ * compute a `decideRedeem` decision per matching position. Returns one
+ * candidate per held outcome side (binary markets typically yield 1).
+ *
+ * Returns empty array if funder has no Data-API positions matching this
+ * condition.
+ */
+export async function resolveRedeemCandidatesForCondition(deps: {
+  funderAddress: `0x${string}`;
+  conditionId: `0x${string}` | string;
+  publicClient: PublicClient;
+  dataApiClient: PolymarketDataApiClient;
+}): Promise<ResolvedRedeemCandidate[]> {
+  const conditionId = normalizePolygonConditionId(
+    typeof deps.conditionId === "string" ? deps.conditionId : deps.conditionId
+  );
+
+  const allPositions = await deps.dataApiClient.listUserPositions(
+    deps.funderAddress
+  );
+  const matches = allPositions.filter((p) => {
+    try {
+      return normalizePolygonConditionId(p.conditionId) === conditionId;
+    } catch {
+      return false;
+    }
+  });
+  if (matches.length === 0) return [];
+
+  const out: ResolvedRedeemCandidate[] = [];
+  for (const match of matches) {
+    if (match.outcomeIndex == null || !match.asset) continue;
+    let positionId: bigint;
+    try {
+      positionId = BigInt(match.asset);
+    } catch {
+      continue;
+    }
+
+    const reads = await deps.publicClient.multicall({
+      contracts: [
+        {
+          address: POLYGON_CONDITIONAL_TOKENS as `0x${string}`,
+          abi: ctfReadAbi,
+          functionName: "balanceOf" as const,
+          args: [deps.funderAddress, positionId] as const,
+        },
+        {
+          address: POLYGON_CONDITIONAL_TOKENS as `0x${string}`,
+          abi: ctfReadAbi,
+          functionName: "payoutNumerators" as const,
+          args: [conditionId, BigInt(match.outcomeIndex)] as const,
+        },
+        {
+          address: POLYGON_CONDITIONAL_TOKENS as `0x${string}`,
+          abi: ctfReadAbi,
+          functionName: "payoutDenominator" as const,
+          args: [conditionId] as const,
+        },
+        {
+          address: POLYGON_CONDITIONAL_TOKENS as `0x${string}`,
+          abi: ctfReadAbi,
+          functionName: "getOutcomeSlotCount" as const,
+          args: [conditionId] as const,
+        },
+      ],
+      allowFailure: true,
+    });
+
+    const decision = decideRedeem({
+      balance:
+        reads[0]?.status === "success" ? (reads[0].result as bigint) : null,
+      payoutNumerator:
+        reads[1]?.status === "success" ? (reads[1].result as bigint) : null,
+      payoutDenominator:
+        reads[2]?.status === "success" ? (reads[2].result as bigint) : null,
+      outcomeIndex: match.outcomeIndex,
+      outcomeSlotCount:
+        reads[3]?.status === "success"
+          ? Number(reads[3].result as bigint)
+          : null,
+      negativeRisk: match.negativeRisk ?? false,
+    });
+
+    out.push({
+      conditionId,
+      outcomeIndex: match.outcomeIndex,
+      positionId,
+      negativeRisk: match.negativeRisk ?? false,
+      decision,
+    });
+  }
+  return out;
+}
