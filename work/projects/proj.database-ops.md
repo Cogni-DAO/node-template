@@ -174,7 +174,7 @@ Already tracked in DATABASE_RLS_SPEC.md P1:
 
 - `pnpm db:check` runs `drizzle-kit check` against every drizzle config (operator + resy + poly Postgres + poly Doltgres). Wired into both `scripts/check-fast.sh` (pre-push) and `scripts/check-all.sh` (pre-commit). Catches the failure mode that let PR #930 silently land a self-referential snapshot.
 - Hand-authored RLS/trigger migrations remain a real pattern (drizzle-kit `generate` can't model them). The recipe in `databases.md §2.6` is now the maintained contract: copy prior snapshot, regenerate `id`, set `prevId`, edit `tables` block, commit both files together.
-- Poly chain head is `meta/0032_snapshot.json` (synthesized in bug.0389 from current schema.ts). Intermediate snapshots 0011, 0015, 0024–0026, 0029–0031 remain absent — `drizzle-kit check` tolerates the gap; only the head matters for `generate`.
+- Poly chain head is `meta/0033_snapshot.json` (synthesized in bug.0389 from current schema.ts). Intermediate snapshots 0011, 0015, 0024–0026, 0029–0032 remain absent — `drizzle-kit check` tolerates the gap; only the head matters for `generate`.
 
 ### Migrator Image Layer Sharing (task.0370 — bug.0368)
 

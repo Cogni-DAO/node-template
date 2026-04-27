@@ -1,5 +1,5 @@
 {
-  "id": "02ac83ea-1b72-4755-81b5-2cc9794d1c88",
+  "id": "4588f8b4-1a9d-4a40-8d3f-a2d951d5f369",
   "prevId": "ea474d13-72cf-47d1-81d7-a2e13c6db4e4",
   "version": "7",
   "dialect": "postgresql",
@@ -4534,6 +4534,269 @@
           "value": "\"poly_copy_trade_targets\".\"target_wallet\" ~ '^0x[a-fA-F0-9]{40}$'"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.poly_redeem_jobs": {
+      "name": "poly_redeem_jobs",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "funder_address": {
+          "name": "funder_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "condition_id": {
+          "name": "condition_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "position_id": {
+          "name": "position_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "outcome_index": {
+          "name": "outcome_index",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'pending'"
+        },
+        "flavor": {
+          "name": "flavor",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "index_set": {
+          "name": "index_set",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_shares": {
+          "name": "expected_shares",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "expected_payout_usdc": {
+          "name": "expected_payout_usdc",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "tx_hashes": {
+          "name": "tx_hashes",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "ARRAY[]::text[]"
+        },
+        "attempt_count": {
+          "name": "attempt_count",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "last_error": {
+          "name": "last_error",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "error_class": {
+          "name": "error_class",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lifecycle_state": {
+          "name": "lifecycle_state",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'unresolved'"
+        },
+        "receipt_burn_observed": {
+          "name": "receipt_burn_observed",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "submitted_at_block": {
+          "name": "submitted_at_block",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "enqueued_at": {
+          "name": "enqueued_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "submitted_at": {
+          "name": "submitted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "confirmed_at": {
+          "name": "confirmed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "abandoned_at": {
+          "name": "abandoned_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "poly_redeem_jobs_funder_condition_uq": {
+          "name": "poly_redeem_jobs_funder_condition_uq",
+          "columns": [
+            {
+              "expression": "funder_address",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "condition_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "poly_redeem_jobs_pending_idx": {
+          "name": "poly_redeem_jobs_pending_idx",
+          "columns": [
+            {
+              "expression": "enqueued_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "status = 'pending'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "poly_redeem_jobs_submitted_finality_idx": {
+          "name": "poly_redeem_jobs_submitted_finality_idx",
+          "columns": [
+            {
+              "expression": "submitted_at_block",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "status = 'submitted'",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "poly_redeem_jobs_funder_address_shape": {
+          "name": "poly_redeem_jobs_funder_address_shape",
+          "value": "\"poly_redeem_jobs\".\"funder_address\" ~ '^0x[a-fA-F0-9]{40}$'"
+        },
+        "poly_redeem_jobs_condition_id_shape": {
+          "name": "poly_redeem_jobs_condition_id_shape",
+          "value": "\"poly_redeem_jobs\".\"condition_id\" ~ '^0x[a-fA-F0-9]{64}$'"
+        },
+        "poly_redeem_jobs_status_shape": {
+          "name": "poly_redeem_jobs_status_shape",
+          "value": "\"poly_redeem_jobs\".\"status\" IN ('pending', 'claimed', 'submitted', 'confirmed', 'failed_transient', 'abandoned', 'skipped')"
+        },
+        "poly_redeem_jobs_flavor_shape": {
+          "name": "poly_redeem_jobs_flavor_shape",
+          "value": "\"poly_redeem_jobs\".\"flavor\" IN ('binary', 'multi-outcome', 'neg-risk-parent', 'neg-risk-adapter')"
+        },
+        "poly_redeem_jobs_error_class_shape": {
+          "name": "poly_redeem_jobs_error_class_shape",
+          "value": "\"poly_redeem_jobs\".\"error_class\" IS NULL OR \"poly_redeem_jobs\".\"error_class\" IN ('transient_exhausted', 'malformed')"
+        },
+        "poly_redeem_jobs_lifecycle_state_shape": {
+          "name": "poly_redeem_jobs_lifecycle_state_shape",
+          "value": "\"poly_redeem_jobs\".\"lifecycle_state\" IN (\n        'unresolved', 'open', 'closing', 'closed', 'resolving',\n        'winner', 'redeem_pending', 'redeemed', 'loser', 'dust', 'abandoned'\n      )"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.poly_subscription_cursors": {
+      "name": "poly_subscription_cursors",
+      "schema": "",
+      "columns": {
+        "subscription_id": {
+          "name": "subscription_id",
+          "type": "text",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "last_processed_block": {
+          "name": "last_processed_block",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.poly_wallet_connections": {
