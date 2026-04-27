@@ -40,8 +40,17 @@ export const metadata: Metadata = {
 };
 
 // See operator/app/src/app/layout.tsx for rationale — `headers()` in the
-// root layout requires dynamic rendering so Next can't prerender `/_not-found`.
+// root layout requires dynamic rendering and the helper below tolerates the
+// `/_not-found` build-time call where headers() throws.
 export const dynamic = "force-dynamic";
+
+async function readCookieHeaderSafely(): Promise<string | null> {
+  try {
+    return (await headers()).get("cookie");
+  } catch {
+    return null;
+  }
+}
 
 export default async function RootLayout({
   children,
@@ -50,7 +59,7 @@ export default async function RootLayout({
 }>) {
   const initialState = cookieToInitialState(
     wagmiConfig,
-    (await headers()).get("cookie")
+    await readCookieHeaderSafely()
   );
 
   return (

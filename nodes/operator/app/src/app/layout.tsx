@@ -40,11 +40,26 @@ export const metadata: Metadata = {
 };
 
 // Reading `headers()` in the root layout makes every route dynamic; this
-// export makes that explicit so Next's build pipeline doesn't try to
-// statically prerender the framework's `/_not-found` page (which would fail
-// the "DynamicServerError: headers" check). See:
+// export makes that explicit. Next still collects page data for the framework's
+// `/_not-found` route during build — see `readCookieHeaderSafely` below for
+// why we tolerate `headers()` throwing in that path.
 // https://nextjs.org/docs/app/api-reference/file-conventions/route-segment-config#dynamic
 export const dynamic = "force-dynamic";
+
+/**
+ * `headers()` throws `DynamicServerError` when invoked outside a request
+ * context — Next's `/_not-found` data-collection pass during `next build` is
+ * one such path. Returning `null` lets `cookieToInitialState` fall back to an
+ * empty wagmi state for that build-time pass; at runtime the cookie is read
+ * normally and hydration matches the client's cookie-stored wallet state.
+ */
+async function readCookieHeaderSafely(): Promise<string | null> {
+  try {
+    return (await headers()).get("cookie");
+  } catch {
+    return null;
+  }
+}
 
 export default async function RootLayout({
   children,
@@ -53,7 +68,7 @@ export default async function RootLayout({
 }>) {
   const initialState = cookieToInitialState(
     wagmiConfig,
-    (await headers()).get("cookie")
+    await readCookieHeaderSafely()
   );
 
   return (
