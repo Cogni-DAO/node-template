@@ -30,7 +30,7 @@ import type {
   PolyTraderSigningContext,
   PolyTraderWalletPort,
 } from "@cogni/poly-wallet";
-import { eq } from "drizzle-orm";
+import { isNull } from "drizzle-orm";
 import type { Logger } from "pino";
 import {
   type Account,
@@ -82,7 +82,7 @@ export async function startRedeemPipeline(
   const activeConnections = await deps.serviceDb
     .select({ billingAccountId: polyWalletConnections.billingAccountId })
     .from(polyWalletConnections)
-    .where(eq(polyWalletConnections.revokedAt, null as unknown as Date));
+    .where(isNull(polyWalletConnections.revokedAt));
 
   if (activeConnections.length === 0) {
     log.info(

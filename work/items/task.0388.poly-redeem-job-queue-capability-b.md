@@ -239,3 +239,69 @@ Source: <https://polygonscan.com/address/0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35
 - **N=5 (~12.5 s) hard-pinned for v0.2** — see invariant `FINALITY_IS_FIXED_N`. 2.5× margin over the 5 s upper bound, well under the 30 s HTTP timeout ceiling. **No `finalized` block-tag opt-in** in v0.2 — was previously listed as optional; demoted to a separate follow-up task to keep v0.2 single-code-path. Two code paths for finality in a money-movement state machine = two failure modes to reason about.
 - Sources: [forum.polygon.technology v0.3.0 release announcement](https://forum.polygon.technology/t/heimdall-v2-v0-3-0-release-for-mainnet/21270), [Polygon Heimdall-v2 docs](https://docs.polygon.technology/pos/architecture/heimdall/checkpoint/) (vote-extensions section).
 - Revisit cadence: after first 30 days of `PayoutRedemption` observation, ratchet down to N=3 (~7.5 s) if zero `confirmed → submitted` reverts; hold at N=5 if any reverts occur. The eventual `finalized` block-tag follow-up task piggybacks on this telemetry.
+
+## Static review of CP1.6+1.7+CP2 (2026-04-27, pre-`/closeout`)
+
+Reviewer pass over commits `7498c6577` (CP1.5b blockers), `cd518c193` (real-mainnet fixtures), `18ef34ead` (CP1.6+1.7 boot wiring + sweep deletion + manual route rewrite), `764b5a4b8` (CP2 lifecycle projection). Three blocker fixes (B1/B2/B3) verified clean. Two new issues found in CP1.6+CP2; one is a **ship-blocker that silently disables the entire feature in production**.
+
+### 🔴 SHIP-BLOCKER #1 — `eq(col, null)` always returns FALSE in Postgres (`redeem-pipeline.ts:85`)
+
+`startRedeemPipeline` queries the active wallet with:
+
+```ts
+.where(eq(polyWalletConnections.revokedAt, null as unknown as Date));
+```
+
+In Postgres, `WHERE revoked_at = NULL` is **always NULL (never TRUE)** — `IS NULL` is the correct predicate. Drizzle's `eq(col, null)` generates `=` literally, not `IS NULL`. Verified by grep: this is the only `eq(col, null)` in the entire poly app/packages tree; every other `revokedAt`/`endedAt` predicate in this codebase uses `sql\`${col} IS NULL\`` (`wallet-connections.ts:123,128,136`, `wallet-grants.ts:100,103`).
+
+**Production impact** if shipped as-is:
+
+- `activeConnections.length === 0` for every boot, regardless of how many active rows exist.
+- Pipeline logs `poly.ctf.redeem.pipeline_skipped` with `reason: "no_active_wallet"` and returns `null`.
+- `container.redeemPipeline === null`. Subscriber + worker + catchup + backfill never start.
+- Dust losers stay in the Open tab (no backfill).
+- `/api/v1/poly/wallet/positions/redeem` returns `503 redeem_pipeline_unavailable` for every click.
+- `/api/v1/poly/wallet/execution`'s lifecycle gate (`container.redeemPipeline?.funderAddress === address`) is always false → no projection.
+
+The `null as unknown as Date` cast is the smoking gun — typecheck was actively suppressed to make it compile. **Action**: this review patches it inline with `isNull(polyWalletConnections.revokedAt)`.
+
+### 🔴 SHIP-BLOCKER #2 — `onConflictDoNothing` strands the resolving → winner transition
+
+`DrizzleRedeemJobsAdapter.enqueue` UPSERTs with `onConflictDoNothing` on `(funder_address, condition_id)`. CP2's backfill writes a `status='skipped' / lifecycle_state='resolving'` row for every currently-unresolved position the funder holds. When that market later resolves on-chain:
+
+1. Subscriber's `ConditionResolution` handler fires `enqueueForCondition`.
+2. `decideRedeem` returns `{ kind: 'redeem', flavor, ... }`.
+3. `decisionToEnqueueInput` returns input with `status: 'pending'` (default), `lifecycleState: 'winner'`.
+4. **Adapter's UPSERT does nothing — the row remains `skipped/resolving` forever.**
+5. Worker's `claimNextPending` filters `WHERE status IN ('pending', 'failed_transient')` — `skipped` is invisible. No tx ever fires.
+6. User clicks Redeem → manual route enqueues the same input → same UPSERT no-op → poll loop sees `status='skipped'` → 30s timeout → 202 `pending`. User retries forever, never sees confirmation, dust never clears.
+
+The CP2 commit message acknowledges _decision-time_ staleness ("subscriber's ConditionResolution will fire enqueueForCondition on resolution and the existing skip-row stays as-is. Acceptable v0.2 staleness; a 5-min cron would close it later") — but the consequence isn't UI staleness, it's **the manual-redeem route being permanently broken for any position that existed before the market resolved**. That's the user-facing path.
+
+**Why the fix is bigger than #1.** It's a deliberate UPSERT-semantics call: should `skipped → pending` (a stale skip becoming a fresh redeem decision) overwrite, or be a separate operation? Two reasonable shapes:
+
+- (a) Adapter-level: change `onConflictDoNothing` → `onConflictDoUpdate({ target, set: ..., where: existing.status = 'skipped' AND new.status != 'skipped' })`. Drizzle supports the `where` clause on `onConflictDoUpdate`. Cleanest, fewest moving parts.
+- (b) Subscriber-level: detect "skip row exists, fresh decision is redeem" and call a new `RedeemJobsPort.reclassifyFromSkip(jobId, ...)` method. More explicit, more code.
+
+I'd take (a) and add a transitions-module event `skip_reclassified_to_redeem` so the state machine stays the source of truth on what's allowed.
+
+**Action**: NOT fixing in this review — the semantic shape is the dev's call. Flagged here as a CP1.8 follow-up that must land before the PR merges. Repro for stack test:
+
+```
+1. Boot pipeline with funder F holding position P on unresolved condition C.
+2. Backfill writes (F, C, status='skipped', lifecycle='resolving').
+3. Resolve C on-chain (synthesize a ConditionResolution log into the mock public client).
+4. Wait for subscriber tick → assert (F, C, status='pending', lifecycle='winner'). Currently fails.
+```
+
+### 🟡 Should-fix — minor
+
+- **Manual route polling cost.** `POLL_INTERVAL_MS=500` × 30 s ceiling = up to 60 DB roundtrips per redeem request. Acceptable at v0.2 (1 user, ≤14 dust positions, manual click cadence) but worth a follow-up to swap for `LISTEN`/`NOTIFY` once the user count grows.
+- **Catchup-then-subscriber race window.** `runRedeemCatchup` runs to completion, then `subscriber.start()` runs. Events landing in the gap `[catchup_to_block, subscriber_start_block]` are missed until the next catchup pass. Tiny window (single-digit blocks); the daily catchup cron — not yet wired — would close it. Document or wire up in CP1.8.
+- **Multi-subscriber duplicate work at `replicas > 1`.** B3 made the queue multi-pod-safe at the SQL layer, but multiple subscriber pods would each enqueue the same row on the same `ConditionResolution` event (UPSERT idempotent at the DB layer, but the `decideRedeem` chain reads run N times). Acceptable for v0.2 (single replica). Document the constraint in `nodes/poly/app/AGENTS.md`.
+
+### Verdict
+
+🟡 **NOT YET APPROVED FOR FLIGHT.** Fix #1 is a 1-line correctness blocker patched inline by this review. Fix #2 is a design call requiring a follow-up commit on this branch before PR. Once both are in and a stack test in CP1.8 covers the resolving→winner repro, the PR is shippable.
+
+The B1/B2/B3 blocker fixes themselves and the real-mainnet fixture coverage are solid. The remaining work is small, scoped, and well-understood.
