@@ -83,28 +83,31 @@ Replace local-flag inference with on-chain measurement at N=5:
 
 ## Validation
 
-**exercise:** post-deploy operator action — reset the 7 wrongly-abandoned rows on prod's `cogni_poly` DB and observe the reaper drain them.
+**exercise:** post-deploy operator data-fix — reconcile the 7 wrongly-abandoned rows on prod's `cogni_poly` DB directly to `status='confirmed'`. The on-chain truth is already preserved in `tx_hashes`; this is bookkeeping reconciliation, not a re-redemption.
 
-Operator action — reset the 7 wrongly-abandoned rows on prod:
+Do NOT route these rows through the reaper. Each abandoned row's `submitted_at_block` was overwritten by the no-op retry tx (the very bug we're fixing), so the reaper's `getLogs` window starts after the original `PayoutRedemption` block — it would defensive-confirm via `balance_zero_no_payout` (false-positive audit signal) and additionally burn ~1.2M gas across 7 no-op `redeemPositions` resubmissions. Direct UPDATE is correct here.
 
 ```sql
 UPDATE poly_redeem_jobs
-SET status = 'pending', attempt_count = 0, error_class = NULL,
-    last_error = NULL, abandoned_at = NULL,
-    lifecycle_state = 'winner', updated_at = now()
-WHERE status = 'abandoned' AND error_class = 'transient_exhausted'
+SET status = 'confirmed',
+    lifecycle_state = 'redeemed',
+    confirmed_at = now(),
+    error_class = NULL,
+    last_error = NULL,
+    abandoned_at = NULL,
+    updated_at = now()
+WHERE status = 'abandoned'
+  AND error_class = 'transient_exhausted'
   AND funder_address = '0x95e407fE03996602Ed1BF4289ecb3B5AF88b5134'
 RETURNING id, condition_id, flavor;
 ```
 
-**observability:** on next reaper tick (≤5s + N=5 finality wait), Loki at the deployed SHA shows:
+**observability:** rows transition straight to terminal state via SQL — no chain activity, no new pipeline events.
 
-- `poly.ctf.redeem.tx_submitted` (≤7x as worker re-claims pending rows)
-- `poly.ctf.redeem.job_confirmed source=reaper` (7x — chain query finds prior PayoutRedemption logs)
-- Zero `poly.ctf.redeem.bleed_detected` events
-- Zero `poly.ctf.redeem.balance_zero_no_payout` (positions had real payouts)
-
-If `bleed_detected` fires for any of the 7, that's a real bleed and we audit. If `balance_zero_no_payout` fires, that's off-pipeline settlement (acceptable, surface for audit).
+- DB: 7 rows now `status='confirmed', lifecycle_state='redeemed'`, audit trail (`tx_hashes`) preserved
+- Dashboard History tab renders 7 rows as redeemed; Open tab no longer shows them
+- Zero new `poly.ctf.redeem.*` events from this UPDATE
+- Going forward, any new resolution on the operator funder flows cleanly through the new reaper (chain-truth-based) — `bleed_detected` is now trustworthy, and `balance_zero_no_payout` is reserved for genuine off-pipeline settlement.
 
 ## Out-of-scope follow-ups
 
