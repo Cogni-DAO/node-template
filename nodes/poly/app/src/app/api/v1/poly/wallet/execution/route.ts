@@ -7,8 +7,10 @@
  *          counts) for the caller's own Polymarket trading wallet. Powers the dashboard's
  *          `OperatorWalletChartsRow` + `ExecutionActivityCard`.
  * Scope: Session-auth, tenant-scoped. Resolves the caller's billing account,
- *   asks `PolyTraderWalletPort` for its `funder_address`, then delegates to
- *   `getExecutionSlice(funderAddress)` in the shared wallet-analysis service
+ *   asks `PolyTraderWalletPort` for its `funder_address`, queries the redeem
+ *   pipeline's `RedeemJobsPort.listForFunder` for a `(conditionId →
+ *   lifecycle_state)` map, then delegates to `getExecutionSlice(addr,
+ *   { lifecycleByConditionId })` in the shared wallet-analysis service
  *   (Polymarket Data API for trades + positions, public CLOB for price
  *   history). No writes, no operator capability.
  * Invariants:

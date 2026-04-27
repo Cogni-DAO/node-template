@@ -65,7 +65,7 @@ Take a Polymarket wallet that demonstrably trades with edge, and mirror its fill
 | E2E test suite — wallet onboarding (`connect`, grants, enable-trading) + trading path to `placeOrder` (deferred from #992 review) | Needs Triage    | 5   | [task.0356](../items/task.0356.poly-wallet-onboarding-trading-e2e-test-suite.md)  |
 | Trading hardening — executor cache, cap-source column, prototype residue, agent tool re-enable                                    | Needs Triage    | 3   | [task.0354](../items/task.0354.poly-trading-hardening-followups.md)               |
 | Capability A — pure redeem policy + fixture audit (stops bug.0384 bleed; supersedes task.0379)                                    | Needs Implement | 3   | [task.0387](../items/task.0387.poly-redeem-policy-capability-a.md)                |
-| Capability B — event-driven redeem job queue (rips sweep + cooldown + mutex; removes SINGLE_POD_ASSUMPTION)                       | Needs Implement | 5   | [task.0388](../items/task.0388.poly-redeem-job-queue-capability-b.md)             |
+| Capability B — event-driven redeem job queue (rips sweep + cooldown + mutex; removes SINGLE_POD_ASSUMPTION)                       | In Review       | 5   | [task.0388](../items/task.0388.poly-redeem-job-queue-capability-b.md)             |
 
 ### Phase 4 (P4) — Streaming + adversarial-robust ranking
 

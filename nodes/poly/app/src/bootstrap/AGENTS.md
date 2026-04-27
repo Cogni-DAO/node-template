@@ -52,7 +52,9 @@ System setup installers were moved to `scripts/bootstrap/` and are out of scope 
   - `getContainer()` - Singleton DI container with logger and config
   - `resetContainer()` - Reset singleton (tests only)
   - `startPolyPublishers(deps)` - Start health (60s) + market snapshot (60s) publishers to node stream
-  - `Container` interface - Ports + logger + config (includes accountsForUser(userId), serviceAccountService, metricsQuery, metricsCapability, repoCapability, toolSource, threadPersistenceForUser(userId), modelCatalog, providerResolver, nodeStream; no usageService)
+  - `Container` interface - Ports + logger + config (includes accountsForUser(userId), serviceAccountService, metricsQuery, metricsCapability, repoCapability, toolSource, threadPersistenceForUser(userId), modelCatalog, providerResolver, nodeStream, redeemPipeline; no usageService)
+  - `Container.redeemPipeline` - `{ redeemJobs: RedeemJobsPort, funderAddress } | null` — event-driven CTF redeem pipeline; `null` when no active `poly_wallet_connections` row at boot (task.0388)
+  - `startRedeemPipeline(deps)` - From `redeem-pipeline.ts`. Boots one `RedeemSubscriber` (3 viem `watchContractEvent` subs) + one `RedeemWorker` (drains pending + reaps stale at N=5) + a one-shot catch-up replay + lifecycle backfill against current funder positions. v0.2 single-funder; >1 active connection ⇒ no-op + warn (task.0318 Phase C)
   - `ContainerConfig` interface - Runtime config (unhandledErrorPolicy, rateLimitBypass, DEPLOY_ENVIRONMENT)
   - `UnhandledErrorPolicy` type - `"rethrow" | "respond_500"`
   - `getTemporalWorkflowClient()` - Process-wide Temporal WorkflowClient singleton (race-safe init, cleaned up by resetContainer)
@@ -68,7 +70,7 @@ System setup installers were moved to `scripts/bootstrap/` and are out of scope 
   - `RateLimitBypassConfig` - Test bypass config type (from `http/wrapPublicRoute`)
   - `TokenBucketRateLimiter`, `publicApiLimiter`, `extractClientIp` - Rate limiting utilities (from `http/`)
 - **Env/Config keys:** none (uses `@/shared/env`)
-- **Files considered API:** `container.ts`, `graph-executor.factory.ts`, `agent-discovery.ts`, `http/index.ts`, `http/wrapPublicRoute.ts`, `http/rateLimiter.ts`
+- **Files considered API:** `container.ts`, `graph-executor.factory.ts`, `agent-discovery.ts`, `redeem-pipeline.ts`, `http/index.ts`, `http/wrapPublicRoute.ts`, `http/rateLimiter.ts`
 
 **Subdirectories:**
 

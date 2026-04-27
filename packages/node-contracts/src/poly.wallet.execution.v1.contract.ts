@@ -10,6 +10,7 @@
  *   - Position timelines are price-series traces, not fabricated balance curves.
  *   - Market links must come from upstream slugs, never title guessing.
  *   - live_positions contains open/redeemable rows only; closed_positions contains closed rows only.
+ *   - lifecycleState (optional) reflects the redeem-pipeline classification (task.0388). Drives Open vs History tab membership and the Redeem-button gate; absent / null when the pipeline has not yet classified the position.
  * Side-effects: none
  * Links: docs/design/poly-dashboard-balance-and-positions.md, docs/design/wallet-analysis-components.md
  * @public

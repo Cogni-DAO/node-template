@@ -2,7 +2,7 @@
 id: task.0388
 type: task
 title: "Capability B — event-driven redeem job queue (rips the sweep)"
-status: needs_implement
+status: needs_merge
 priority: 0
 rank: 2
 estimate: 5
@@ -19,7 +19,7 @@ revision: 0
 blocked_by: []
 deploy_verified: false
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-04-27
 labels:
   [
     poly,

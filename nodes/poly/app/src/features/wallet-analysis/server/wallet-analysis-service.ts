@@ -10,6 +10,7 @@
  *   - DETERMINISTIC_METRICS: snapshot math is identical to `computeWalletMetrics` (spike.0323 v3).
  *   - PARTIAL_FAILURE_NEVER_THROWS: each slice returns a `{ value | warning }` result; the route surfaces warnings without 5xx-ing.
  *   - CLOB_HISTORY_OPEN_ONLY: `getPriceHistory` is fetched only for open/redeemable positions; closed positions use trade-derived timelines only.
+ *   - LIFECYCLE_OVERRIDES_TRADE_DERIVED_STATUS: `getExecutionSlice` accepts an optional `lifecycleByConditionId` map sourced from `poly_redeem_jobs` (task.0388). Positions whose lifecycle resolves to a terminal state (`closed | redeemed | loser | dust | abandoned`) move to `closed_positions` even when the trade-derived status would have kept them in `live_positions`. Absent map ⇒ legacy split unchanged.
  * Side-effects: IO (Polymarket Data API + Polymarket CLOB public + Polymarket user-pnl).
  * Notes: Cache is process-scoped — see `instrumentation.ts` single-replica boot assert.
  * Links: docs/design/wallet-analysis-components.md, packages/market-provider/src/analysis/wallet-metrics.ts, packages/node-contracts/src/poly.wallet-analysis.v1.contract.ts, packages/node-contracts/src/poly.wallet.execution.v1.contract.ts
