@@ -55,6 +55,8 @@ Does NOT re-export packages with `node:` transitive dependencies.
 - OperatorWalletPort, TransferIntent
 - ProviderFundingPort, ProviderFundingContext, ProviderFundingOutcome
 - TreasurySettlementPort, TreasurySettlementOutcome
+- RedeemJobsPort (event-driven CTF redeem queue per task.0388 — `enqueue` UPSERTs on `(funder, conditionId)`; `claimNextPending` is an atomic UPDATE-from-CTE flipping `pending|failed_transient → claimed` under `FOR UPDATE SKIP LOCKED`; `markSubmitted` / `markConfirmed` / `markTransientFailure` / `markAbandoned` / `revertConfirmedToSubmitted` / `setLifecycleState` close the state machine; `claimReaperCandidates(headBlock, finalityBlocks)` returns stale `submitted` rows past N=5; `getLastProcessedBlock` / `setLastProcessedBlock` carry the per-subscription cursor for catch-up replay)
+- RedeemSubscriptionId, EnqueueRedeemJobInput, EnqueueRedeemJobResult, RedeemJobNotFoundPortError
 - Types (ChargeReceiptParams, LlmCaller, BillingAccount, CreditLedgerEntry, etc.)
 
 ### `server.ts` — Server-only barrel

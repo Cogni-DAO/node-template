@@ -10,6 +10,7 @@
  *   - Position timelines are price-series traces, not fabricated balance curves.
  *   - Market links must come from upstream slugs, never title guessing.
  *   - live_positions contains open/redeemable rows only; closed_positions contains closed rows only.
+ *   - lifecycleState (optional) reflects the redeem-pipeline classification (task.0388). Drives Open vs History tab membership and the Redeem-button gate; absent / null when the pipeline has not yet classified the position.
  * Side-effects: none
  * Links: docs/design/poly-dashboard-balance-and-positions.md, docs/design/wallet-analysis-components.md
  * @public
@@ -26,6 +27,36 @@ export const WalletExecutionPositionStatusSchema = z.enum([
 export type WalletExecutionPositionStatus = z.infer<
   typeof WalletExecutionPositionStatusSchema
 >;
+
+/**
+ * Lifecycle state from the redeem pipeline (`poly_redeem_jobs`). Drives the
+ * dashboard's Open vs History tab membership and the Redeem-button gate.
+ * `null` when the pipeline has not classified the position yet.
+ */
+export const WalletExecutionLifecycleStateSchema = z.enum([
+  "unresolved",
+  "open",
+  "closing",
+  "closed",
+  "resolving",
+  "winner",
+  "redeem_pending",
+  "redeemed",
+  "loser",
+  "dust",
+  "abandoned",
+]);
+export type WalletExecutionLifecycleState = z.infer<
+  typeof WalletExecutionLifecycleStateSchema
+>;
+export const WALLET_EXECUTION_TERMINAL_LIFECYCLE_STATES: ReadonlySet<WalletExecutionLifecycleState> =
+  new Set<WalletExecutionLifecycleState>([
+    "closed",
+    "redeemed",
+    "loser",
+    "dust",
+    "abandoned",
+  ]);
 
 export const WalletExecutionTimelinePointSchema = z.object({
   ts: z.string(),
@@ -65,6 +96,7 @@ export const WalletExecutionPositionSchema = z.object({
   marketUrl: z.string().url().nullable(),
   outcome: z.string(),
   status: WalletExecutionPositionStatusSchema,
+  lifecycleState: WalletExecutionLifecycleStateSchema.nullable().optional(),
   openedAt: z.string(),
   closedAt: z.string().nullable(),
   heldMinutes: z.number().int().nonnegative(),
