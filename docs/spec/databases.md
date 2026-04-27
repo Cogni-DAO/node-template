@@ -193,6 +193,22 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 
 **Future: Atlas + GitOps migrations** — declarative schema, CRD-based Argo integration, destructive-change linting. Deferred to task.0325 with full spike intel preserved.
 
+### 2.6 Hand-Authored Migrations & Snapshot Chain Integrity
+
+`drizzle-kit generate` cannot model RLS policies, triggers, `ALTER POLICY`, ARRAY DEFAULTs, custom functions, or other Postgres-specific DDL. When you need any of these, hand-author the `.sql` file — but you **must** also hand-author the matching snapshot, or `db:generate:<node>` will silently rot for the next dev.
+
+**The recipe (every hand-authored migration):**
+
+1. Write `meta/NNNN_<tag>.sql` with your DDL.
+2. Append `{ "idx": NNNN, "tag": "NNNN_<tag>", ... }` to `meta/_journal.json` (mirror existing entry shape).
+3. Copy the prior snapshot: `cp meta/(N-1)_snapshot.json meta/NNNN_snapshot.json`.
+4. In the new snapshot file: regenerate `id` (any new UUID), set `prevId` to the prior snapshot's `id`, and edit the `tables` block to reflect the deltas your `.sql` applies (add/drop columns, indexes, FKs).
+5. Commit `.sql` + journal entry + snapshot together in a single commit.
+
+**The gate:** `pnpm db:check` runs `drizzle-kit check` against every node config (operator + resy + poly Postgres + poly Doltgres). It catches missing snapshots, broken `prevId` chains, and self-referential snapshots. It is invoked automatically by `pnpm check` and `pnpm check:fast`.
+
+**Hard rule — do not paper over chain breaks:** never edit a _previously committed_ snapshot's `prevId` to "fix" a chain that `drizzle-kit check` rejects. That's a known footgun (see PR #930 / bug.0389) — the symptom you'd be hiding is real and gets worse the longer it's unaddressed. If `db:check` goes red, file a chain-restoration bug and fix the chain, not the script.
+
 ### 2.1 Local Development
 
 **Databases:** `cogni_operator`, `cogni_poly`, `cogni_resy` (per `COGNI_NODE_DBS`)
