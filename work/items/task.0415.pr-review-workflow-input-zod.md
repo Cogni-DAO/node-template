@@ -1,12 +1,12 @@
 ---
-id: task.0412
+id: task.0415
 type: task
 title: "PrReviewWorkflowInput Zod schema + contract test — fix modelRef-shape regression class"
 status: needs_merge
 priority: 0
 rank: 1
 estimate: 1
-branch: feat/task-0412-pr-review-input-zod
+branch: feat/task-0415-pr-review-input-zod
 summary: "Workflow input contracts drift between dispatch and route — PR #1067 fixed the modelRef instance, but the regression class survives. Add a single Zod schema for `PrReviewWorkflowInput` in `packages/temporal-workflows/`; convert dispatch + activity types to `z.infer<>`; add a round-trip contract test. ~150 lines, lands independently of any other in-flight VCS work. Highest-value cleanup that does NOT gate on test:external."
 outcome: "(1) `PrReviewWorkflowInputSchema` (Zod) is the single source of truth for the workflow input shape. (2) `dispatch.server.ts`, `pr-review.workflow.ts`, and `services/scheduler-worker/src/activities/review.ts` all consume the type via `z.infer<typeof PrReviewWorkflowInputSchema>`; no manual TS interfaces duplicating the shape. (3) A round-trip contract test in `tests/unit/packages/temporal-workflows/` parses a fixture through `z.parse()` and asserts the dispatch-side payload + the activity-side input both validate. Future drift between dispatch and activity will fail the test before it ships."
 spec_refs:
@@ -17,7 +17,7 @@ credit:
 project: proj.vcs-integration
 pr: https://github.com/Cogni-DAO/node-template/pull/1109
 reviewer:
-revision: 2
+revision: 3
 blocked_by: []
 deploy_verified: false
 created: 2026-04-28
@@ -101,7 +101,7 @@ Add `PrReviewWorkflowInputSchema = z.object({...})` in `packages/temporal-workfl
 ### Blocking (resolved in revision 2)
 
 - **B1 — Stale base branch.** Branch `feat/task-0410-pr-review-input-zod` was based on `cb2d46355`; PR #1098 (`33aa1a003`) merged in between. Diff against current `origin/main` showed ~1100 lines of regressions. Rebased onto current `origin/main`. Auto-merge resolved code-side conflicts in `pr-review.workflow.ts` and `index.ts`; the only manual conflict was `_index.md` (regenerated post-rename).
-- **B2 — Task ID collision.** PR #1098 renumbered the dev's `task.0403` → `task.0410` at merge, taking the ID. My filing renumbered to `task.0412` (next available — my originally-filed `task.0412` tenant-config-audit was dropped from PR #1098's merge, so the slot reopened). Branch renamed to `feat/task-0412-pr-review-input-zod`. References in `task.0407`, `task.0411`, this file, and the schema file's docstring updated to point at `task.0412`.
+- **B2 — Task ID collision.** PR #1098 renumbered the dev's `task.0403` → `task.0410` at merge, taking the ID. My filing renumbered to `task.0415` (next available — my originally-filed `task.0415` tenant-config-audit was dropped from PR #1098's merge, so the slot reopened). Branch renamed to `feat/task-0412-pr-review-input-zod`. References in `task.0407`, `task.0411`, this file, and the schema file's docstring updated to point at `task.0415`.
 - **B3 — Missing ZodError handling in dispatch.** `dispatch.server.ts` now catches `ZodError` distinctly from `WorkflowExecutionAlreadyStartedError`, logs structured `issues` payload to Pino at `error` level with a separate message, and returns. Drift bugs are now queryable in Loki separately from infra failures.
 
 ### Suggestions (applied in revision 2)
@@ -110,6 +110,40 @@ Add `PrReviewWorkflowInputSchema = z.object({...})` in `packages/temporal-workfl
 - **S2 — Strengthened regression-class tests.** Replaced the misnamed "stray legacy field" test with two explicit cases: (a) string-in-place-of-int (the literal modelRef-shape pattern), (b) typo'd field name + missing required (the renamed-field pattern that `.strict()` closes).
 - **S3 — `workflowId` template uses parsed input.** Now built from `workflowInput.*` (post-parse), not unparsed `ctx.*`. A future shape drift in `ctx` cannot bypass validation by routing through the workflowId template.
 
-### Not addressed (filed as separate concerns)
+### Not addressed in revision 2 (rolled into revision 3)
 
-- **S4 — zod 3.x vs 4.x split in monorepo.** Out of scope for this task. Filing a separate cleanup task once two more zod-using packages drift further apart.
+- **S4 — zod 3.x vs 4.x split in monorepo.** Triggered the critical bug below; addressed inline in revision 3 (only this package's zod was bumped — broader monorepo unification still a separate task).
+
+## Review Feedback (revision 3)
+
+`/review-implementation` returned **REQUEST CHANGES** with one critical bug + four suggestions. All addressed:
+
+### Critical (resolved)
+
+- **B1 — Cross-package Zod-version `instanceof` failure.** revision 2 added `if (error instanceof ZodError)` in `dispatch.server.ts:158` to log structured Zod issues. Operator's `import { ZodError } from "zod"` resolved to `zod 4.3.6`; the schema in `@cogni/temporal-workflows` used `zod ^3.24.1` (resolved `3.25.76`). When the schema threw, the error class was zod 3's `ZodError` — `instanceof` (against zod 4's class) returned `false`. The whole structured-error log path was dead code. Verified via runtime test before fix:
+
+  ```
+  thrown class: ZodError
+  instanceof ZodError (operator zod): false
+  ```
+
+  Fix: bumped `packages/temporal-workflows`'s `zod` from `^3.24.1` to `^4.1.12` (matches operator + node-contracts + node-shared). Re-verified post-fix:
+
+  ```
+  thrown class: ZodError
+  instanceof ZodError (operator zod): true
+  issues count: 9
+  ```
+
+- **B2 — Missing test for the dispatch-side ZodError handling.** Added `nodes/operator/app/tests/unit/app/_facades/review/zod-version-cross-package.spec.ts`. Single test: parses an empty payload through `PrReviewWorkflowInputSchema`, asserts the thrown error `instanceof ZodError` (operator's import) returns `true` and `.issues.length > 0`. This pins the cross-package version-parity invariant — any future regression where temporal-workflows' zod and operator's zod drift apart breaks this test before it ships.
+
+### Suggestions (applied)
+
+- **S1 — Reorganized test file.** Tests `rejects unknown fields under .strict()` and `rejects typo'd field name` moved out of the `valid inputs` describe block into `rejects misshapen inputs`. Added new `rejects misshapen numeric inputs` and `rejects format-violating strings` describe blocks for cleaner taxonomy.
+- **S2 — Tightened schema field formats.** `nodeId`, `actorUserId`, `billingAccountId` use `z.string().uuid()`. `headSha` uses `z.string().regex(/^[a-f0-9]{40}$/)` (Git SHA-1 lowercase hex). Adds tests for non-UUID nodeId, malformed headSha, uppercase headSha.
+- **S3 — Trimmed `SINGLE_INPUT_CONTRACT` spec invariant** in `temporal-patterns.md` from a 6-sentence paragraph to one sentence + reference. Matches the tightness of invariants #1-9.
+- **S4 — Added boundary tests** for `prNumber: 0` and `installationId: 0` (edges of `.positive()`).
+
+### Renumbering (B3 from this round)
+
+PR #1107 (merge-queue tracking) merged `task.0412` and `task.0413` while this PR was in review. My filing renumbered `task.0412` → `task.0415` (next available). Branch renamed `feat/task-0412-*` → `feat/task-0415-*`. PR #1109 retitled to match.

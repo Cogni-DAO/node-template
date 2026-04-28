@@ -9,7 +9,7 @@
  *   - SINGLE_INPUT_CONTRACT: schema is the single source of truth (see Purpose).
  *   - DISPATCH_FAIL_FAST: producers parse with this schema before `workflowClient.start(...)`.
  * Side-effects: none
- * Links: task.0412, PR #1067 (modelRef-shape regression — the regression class this schema closes).
+ * Links: task.0415, PR #1067 (modelRef-shape regression — the regression class this schema closes).
  * @public
  */
 
@@ -33,23 +33,23 @@ import { z } from "zod";
  */
 export const PrReviewWorkflowInputSchema = z
   .object({
-    /** Originating node ID from repo-spec. Routes execution to correct node. */
-    nodeId: z.string().min(1),
+    /** Originating node ID from repo-spec (UUID). Routes execution to correct node. */
+    nodeId: z.string().uuid(),
     /** GitHub repo owner (login). */
     owner: z.string().min(1),
     /** GitHub repo name. */
     repo: z.string().min(1),
     /** Pull request number. */
     prNumber: z.number().int().positive(),
-    /** PR head SHA — keys workflow idempotency + identifies the build. */
-    headSha: z.string().min(1),
+    /** PR head SHA — 40-char hex (Git SHA-1). Keys workflow idempotency + identifies the build. */
+    headSha: z.string().regex(/^[a-f0-9]{40}$/),
     /** GitHub App installation ID for this repo. */
     installationId: z.number().int().positive(),
-    /** System principal user ID (COGNI_SYSTEM_PRINCIPAL_USER_ID from @cogni/ids constants). */
-    actorUserId: z.string().min(1),
-    /** System billing account ID (resolved by webhook handler from DB). */
-    billingAccountId: z.string().min(1),
-    /** System virtual key ID (resolved by webhook handler from DB). */
+    /** System principal user ID (UUID). COGNI_SYSTEM_PRINCIPAL_USER_ID from @cogni/ids constants. */
+    actorUserId: z.string().uuid(),
+    /** System billing account ID (UUID). Resolved by webhook handler from DB. */
+    billingAccountId: z.string().uuid(),
+    /** System virtual key ID. Resolved by webhook handler from DB. */
     virtualKeyId: z.string().min(1),
   })
   .strict();
