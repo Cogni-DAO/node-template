@@ -36,12 +36,14 @@ const OPERATOR_NODE = "operator";
  * → Dolt). Adding to this list weakens the gate; do so deliberately.
  *
  * - `pnpm-lock.yaml`: mechanical side-effect of node-level package.json edits.
- * - `work/items/**`: per-task work items; high merge-conflict + index-regen
- *   churn. Ride-along until task tracking moves to Dolt.
+ * - `work/**`: work items, projects, charters, handoffs, initiatives — all
+ *   per-task / per-project tracking metadata with the same churn shape and
+ *   the same Dolt migration trajectory as `work/items/**` did. Ride-along
+ *   until task tracking moves to Dolt.
  */
 const RIDE_ALONG_PATTERNS: ReadonlyArray<(p: string) => boolean> = [
   (p) => p === "pnpm-lock.yaml",
-  (p) => p.startsWith("work/items/"),
+  (p) => p.startsWith("work/"),
 ];
 
 function isRideAlong(path: string): boolean {

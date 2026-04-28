@@ -315,7 +315,7 @@ export function extractNodePath(spec: RepoSpec, nodeId: string): string | null {
  *                this is an "operator-only" PR — `nodes/operator/**` ∪ `packages/**` ∪
  *                `.github/**` ∪ `docs/**` ∪ root configs are all the operator's territory.
  *                `rideAlongApplied: true` flags a bounded carve-out where operator-domain
- *                paths matching the ride-along whitelist (`pnpm-lock.yaml`, `work/items/**`)
+ *                paths matching the ride-along whitelist (`pnpm-lock.yaml`, `work/**`)
  *                tagged along a single non-operator node PR.
  * - `conflict` — two or more domains touched. Refuse to review (post diagnostic).
  * - `miss`     — empty input. The reviewer surfaces a no-op neutral check.
@@ -347,12 +347,14 @@ const NODES_PREFIX = "nodes/";
  * of operator territory.
  *
  * - `pnpm-lock.yaml`: mechanical side-effect of node-level package.json edits.
- * - `work/items/**`: per-task work items; high merge-conflict + index-regen
- *   churn. Ride-along until task tracking moves to Dolt.
+ * - `work/**`: work items, projects, charters, handoffs, initiatives — all
+ *   per-task / per-project tracking metadata with the same churn shape and
+ *   the same Dolt migration trajectory as `work/items/**` did. Ride-along
+ *   until task tracking moves to Dolt.
  */
 const RIDE_ALONG_PATTERNS: ReadonlyArray<(p: string) => boolean> = [
   (p) => p === "pnpm-lock.yaml",
-  (p) => p.startsWith("work/items/"),
+  (p) => p.startsWith("work/"),
 ];
 
 function isRideAlong(p: string): boolean {
@@ -382,7 +384,7 @@ function topUnderNodes(p: string): string | null {
  * - two or more → `conflict` (sorted by `nodeId.localeCompare`)
  *
  * `RIDE_ALONG` exception: when domains is exactly `{operator, X}` and every operator-domain
- * path matches the ride-along whitelist (`pnpm-lock.yaml`, `work/items/**`), drop operator →
+ * path matches the ride-along whitelist (`pnpm-lock.yaml`, `work/**`), drop operator →
  * `single { X, rideAlongApplied: true }`.
  *
  * Path safety: paths are consumed verbatim — no `..` rejection. Same boundary as `extractNodePath`.
