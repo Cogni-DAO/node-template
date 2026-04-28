@@ -1,8 +1,8 @@
 ---
-id: task.0412
+id: task.0415
 type: task
 title: "Speed up `pnpm check:fast` — collapse to one turbo DAG, drop test serialization, cache docs/db checks"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 3
@@ -22,13 +22,13 @@ spec_refs: []
 assignees: []
 credit:
 project:
-branch: task/0412-check-fast-turbo-dag
+branch: task/0415-check-fast-turbo-dag
 created: 2026-04-28
-updated: 2026-04-28
+updated: 2026-04-29
 labels: [dev-loop, monorepo, turbo, p0]
 ---
 
-# task.0412 — Speed up `pnpm check:fast`
+# task.0415 — Speed up `pnpm check:fast`
 
 ## Problem
 
@@ -215,6 +215,36 @@ The husky pre-push gate `pnpm check:fast` becomes fast enough that no agent or h
 - Modify: `package.json` (root) — name the root workspace package so it's a turbo participant; expose `format:check` and root `lint` as scripts the turbo task can call.
 - Test: manual benchmark before/after on (a) clean `main` rerun (b) 1-file change (c) global build input change. Capture in PR description.
 
+## Implementation Result
+
+Phase 1 implementation complete and benchmarked locally:
+
+| Mode                           | Before | After | Speedup |
+| ------------------------------ | ------ | ----- | ------- |
+| Cold cache (fresh worktree)    | ~4 min | ~32s  | ~7.5×   |
+| Warm cache (no source changes) | ~4 min | ~3s   | ~80×    |
+
+Detail per phase on warm cache:
+
+```
+✓ packages:build passed (0s)   — scoped builder skips when no package source changed
+✓ workspace passed (1s)        — turbo cache hit on lint/typecheck/test/format:check/db:check
+✓ check:docs passed (2s)       — runs every time (deferred per design review C2)
+✓ All fast checks passed!
+3.0s wall-clock total (191% CPU)
+```
+
+CPU is now bounded at 50% by `--concurrency=50%`, preventing vitest fork-pool exhaustion (the original reason for `--concurrency=1`; commit 42b2b432b). Scales with hardware: 8-core dev → 4 parallel; 4-core CI → 2 parallel.
+
+### Files changed
+
+- `turbo.json` — added `//#lint`, `//#format:check`, `//#db:check` root tasks with explicit `inputs:` for cache correctness.
+- `scripts/check-fast.sh` — collapsed 8 sequential `run_check` phases into 3 (`packages:build`, `workspace`, `check:docs`); single turbo invocation drives all parallel-safe checks.
+
+### Note on `MAIN_IS_HOLY_CLEAN` regression
+
+During implementation, surfaced 7 pre-existing lint errors in `@cogni/poly-app` from PR #1103 (commit 5930d4abb). User patched main directly before I rebased, so these are no longer relevant to this PR. Root cause for future watch: `--affected` against `origin/main` from poly-app-untouched feature branches never re-ran `poly-app#lint`, masking the regression until a global-hash-invalidating change like this one.
+
 ## Validation
 
 ### exercise
@@ -222,7 +252,7 @@ The husky pre-push gate `pnpm check:fast` becomes fast enough that no agent or h
 ```bash
 # Worktree freshly bootstrapped (cold cache):
 cd /tmp && rm -rf cogni-bench && git clone --depth 1 git@github.com:Cogni-DAO/node-template cogni-bench
-cd cogni-bench && git checkout task/0412-check-fast-turbo-dag
+cd cogni-bench && git checkout task/0415-check-fast-turbo-dag
 pnpm install --frozen-lockfile
 time pnpm check:fast   # cold-cache target: <90s
 

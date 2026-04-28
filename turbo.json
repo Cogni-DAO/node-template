@@ -90,6 +90,38 @@
         "OPENROUTER_PROVISIONING_KEY",
         "OPENROUTER_WALLET_SEED_PHRASE"
       ]
+    },
+    "//#lint": {
+      "inputs": [
+        "biome.json",
+        "eslint.config.*",
+        ".eslintrc*",
+        ".eslintignore",
+        "nodes/operator/app/src/app/**/*.{ts,tsx,js,jsx}",
+        "nodes/operator/app/src/components/**/*.{ts,tsx,js,jsx}",
+        "nodes/operator/app/src/features/**/*.{ts,tsx,js,jsx}",
+        "nodes/operator/app/src/styles/**/*.{ts,tsx,js,jsx}"
+      ]
+    },
+    "//#format:check": {
+      "inputs": [
+        "**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,yml,yaml}",
+        "biome.json",
+        ".prettierrc*",
+        ".prettierignore",
+        "!**/dist/**",
+        "!**/.next/**",
+        "!**/node_modules/**"
+      ]
+    },
+    "//#db:check": {
+      "inputs": [
+        "nodes/*/drizzle.config.ts",
+        "nodes/*/drizzle.doltgres.config.ts",
+        "nodes/*/packages/db-schema/**",
+        "nodes/*/packages/doltgres-schema/**",
+        "nodes/*/migrations/**"
+      ]
     }
   }
 }
