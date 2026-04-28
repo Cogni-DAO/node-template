@@ -15,7 +15,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.vcs-integration
-pr: https://github.com/Cogni-DAO/node-template/pull/1109
+pr: https://github.com/Cogni-DAO/node-template/pull/1111
 reviewer:
 revision: 3
 blocked_by: []
