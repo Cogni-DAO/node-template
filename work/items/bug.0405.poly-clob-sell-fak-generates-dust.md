@@ -1,13 +1,13 @@
 ---
 id: bug.0405
 type: bug
-title: "Polymarket CLOB SELL via FAK strands sub-min-order-size dust on every partial fill"
+title: "Polymarket BUY GTC partial-fills land below min_order_size — produces structurally unsellable dust"
 status: needs_implement
 priority: 1
 rank: 5
 estimate: 2
-summary: "`PolymarketClobAdapter.sellPositionAtMarket` and `poly-trade-executor.exitPosition` both default to `OrderType.FAK` (Fill-And-Kill). On thin order books — i.e. most Polymarket markets outside the top ~50 — partial fills are the norm: CLOB matches what's available at the inside ask and kills the rest. The killed remainder stays on chain as a position. When that residual is below the market's `min_order_size` (typically 5 shares), the next sell preflight throws `share balance below market floor` and the position is **structurally unsellable** until the market resolves. Multi-tenant redeem (task.0412 / PR #1106) auto-recovers winning-side dust at resolution, but losing-side dust is a write-off and the system generates more on every mirror SELL tick."
-outcome: 'After this PR, mirroring a target''s SELL on a thin-liquidity market does NOT leave sub-min residual on chain. Either (a) the FAK leg''s killed remainder is followed by a GTC tail-limit at our worst-acceptable price so the residual eventually exits, or (b) a depth pre-check declines to attempt a size that would partial-fill below floor. The Loki query `{env="production",service="app"} | json | reason=~".*share balance below market floor.*"` trends to zero and the user''s open-position rows do not accumulate stranded dust over multiple mirror-SELL cycles.'
+summary: "Mirror BUYs go to Polymarket CLOB as `OrderType.GTC` limit orders. The sizing policy (`applySizingPolicy`) correctly clamps the *intent* size up to the market floor, but GTC matches against whatever depth is at the inside ask *right now* and rests the remainder. The matched portion settles to our wallet *with no min_order_size check on the matched amount* — Polymarket only enforces the floor on order placement, not on partial-fill matched amounts. When depth is thin (most Polymarket markets outside the top ~50), the matched amount lands below `min_order_size`. The resting remainder either fails to fill (price moved) or auto-cancels (sub-min stub). Result: a position below the market floor on chain, neither sellable (preflight rejects sub-min) nor redeemable until market resolution. Today's two stranded positions on the user's tenant (`4.88` + `2.20` shares) are exactly this shape."
+outcome: 'After this PR, every mirror BUY uses `OrderType.FOK` (Fill-Or-Kill) by default — atomic-or-nothing relative to the floor, enforced by the exchange. No partial fills, no sub-min settlements, no new dust on chain. Mirror divergence (FOK fails on thin books → no position taken) is acceptable: the *next* signal recovers, and divergence is recoverable while dust isn''t. The choice surfaces as a per-target `executionMode: "fok" | "gtc"` dial on `MirrorTargetConfig` (default `"fok"`) and is exposed in the policy control panel alongside the sizing policy. Existing dust is left to redeem at market resolution via task.0412 (free, automatic, winning-side only — losing-side is a write-off).'
 spec_refs:
   - poly-copy-trade-phase1
   - poly-positions
@@ -17,132 +17,160 @@ branch: fix/poly-clob-sell-fak-dust
 created: 2026-04-28
 updated: 2026-04-28
 deploy_verified: false
-labels: [poly, polymarket, clob, sell, fak, dust, copy-trading]
+labels: [poly, polymarket, clob, buy, fok, gtc, dust, copy-trading, bet-sizer]
 external_refs:
   - work/items/bug.0342.poly-clob-dynamic-min-order-size.md
-  - work/items/bug.0329.poly-sell-neg-risk-empty-reject.md
+  - work/items/task.0404.poly-bet-sizer-v0.md
   - work/items/task.0412.poly-redeem-multi-tenant-fanout.md
 ---
 
-# bug.0405 — Polymarket CLOB SELL via FAK generates dust
+# bug.0405 — BUY GTC partial-fills below floor produce unsellable dust
 
-> Surfaced 2026-04-28 during candidate-a validation of [task.0412](task.0412.poly-redeem-multi-tenant-fanout.md). Derek's tenant `0x9A9e…160A` had two stuck positions (4.88 shares + 2.20 shares, both `< min_order_size = 5`) on open markets — neither sellable, neither redeemable until resolution.
+> Surfaced 2026-04-28 during candidate-a validation of [task.0412](task.0412.poly-redeem-multi-tenant-fanout.md). Derek's tenant `0x9A9e…160A` held two stranded positions (`4.88` and `2.20` shares, both below `min_order_size = 5`) on open markets that the close button could not exit:
+>
+> ```
+> PolymarketClobAdapter.sellPositionAtMarket: share balance below market floor (gotShares=4.88, minShares=5, tokenId=98988…)
+> PolymarketClobAdapter.sellPositionAtMarket: share balance below market floor (gotShares=2.1978, minShares=5, tokenId=10816…)
+> ```
 
-## Symptom
+## Root cause — the structural invariant we're missing
 
+**A fill must never land below `min_order_size`.** Today, intent size respects the floor but execution doesn't.
+
+`packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts:309` sends BUY orders as `OrderType.GTC`. GTC means: place a limit at price X, match against whatever ask-side depth exists at-or-below X right now, rest the remainder as a resting bid until it fills, expires, or is cancelled.
+
+| Layer                                                        | Floor check?                                                                                                                         |
+| ------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `applySizingPolicy` (intent)                                 | ✅ Clamps `intent.size_usdc` up to `floor = max(minShares × price, minUsdcNotional)`. Correct.                                       |
+| Polymarket CLOB on order placement                           | ✅ Rejects sub-min orders (returns `{}`; `bug.0342`'s symptom).                                                                      |
+| **Polymarket CLOB on the matched portion of a partial fill** | ❌ **No floor enforcement.** Whatever the orderbook actually had at our price settles to us, even if that amount is below the floor. |
+
+The third row is the bug. GTC turns a "5-share intent" into "whatever matched now + a sub-min resting stub." When the matched amount is below `min_order_size`, we hold dust the moment settlement clears. The resting remainder is also sub-min and either:
+
+- **(a)** fails to fill because the inside ask moved up after our match
+- **(b)** is auto-cancelled by Polymarket because it's a sub-min order
+- **(c)** sits indefinitely if the market is dead
+
+In all three cases, the matched-but-sub-min portion stays in our wallet permanently. SELL preflight then rejects every exit attempt (sub-min). Redemption only recovers it on market resolution, and only if we're on the winning side.
+
+**Why depth pre-check doesn't fix this:** the orderbook moves between check and submit. TOCTOU. You can verify depth at moment N and still partial-fill at moment N+1. Don't bother.
+
+## Fix — push the floor invariant into the execution primitive
+
+**`OrderType.FOK` on BUY.** Atomic-or-nothing. The exchange itself enforces "fill the entire intent at the limit price, or fill nothing." No partial fills, no sub-min settlements, no new dust ever.
+
+The trade-off is real but worth taking:
+
+- **FOK fails on thin books** → mirror skips this signal → mirror diverges from target.
+- **Divergence is recoverable.** The next observed fill from the target re-enters the pipeline. We trade "follow the target perfectly" for "never accumulate stranded dust," and the loss from the former is bounded by the next-signal latency.
+
+The opposite (`gtc`) stays available for callers who explicitly want best-effort matching — paper mode, agent-driven trades, or operators who know the orderbook. It's not the default.
+
+## Where the dial lives — slotting into task.0404 (bet sizer)
+
+`MirrorTargetConfig.sizing` already carries the per-target sizing policy (`fixed | min_bet`). `executionMode` is **orthogonal to sizing** — it controls how the sized intent reaches CLOB, regardless of whether the size came from `fixed` or `min_bet`. So it's a sibling of `sizing` on `MirrorTargetConfig`, not nested inside the policy variants.
+
+```ts
+// nodes/poly/app/src/features/copy-trade/types.ts (sketch)
+export const ExecutionModeSchema = z.enum(["fok", "gtc"]);
+export type ExecutionMode = z.infer<typeof ExecutionModeSchema>;
+
+export const MirrorTargetConfigSchema = z.object({
+  // ... existing fields ...
+  sizing: SizingPolicySchema,
+  /** How the sized intent is sent to CLOB. Default `"fok"` — atomic-or-nothing,
+   *  prevents sub-floor partial fills (bug.0405). `"gtc"` allows resting limit
+   *  orders that may partial-fill; only use when the caller is willing to
+   *  accept dust risk in exchange for follow-rate guarantees. */
+  executionMode: ExecutionModeSchema.default("fok"),
+});
 ```
-PolymarketClobAdapter.sellPositionAtMarket: share balance below market floor
-  (gotShares=4.88, minShares=5, tokenId=98988926036595680874524757369522175158926857952274791209257914378313521382612)
 
-PolymarketClobAdapter.sellPositionAtMarket: share balance below market floor
-  (gotShares=2.1978, minShares=5, tokenId=108168321272125351184874253365168267070112746402325926653632248412356285567627)
-```
+The dial is per-target, same scope as `sizing`. A user can have aggressive FOK on high-conviction targets and GTC on opportunistic ones, etc.
 
-Both surfaced via `route="poly.wallet.positions.close"` on candidate-a (Loki, 2026-04-28T07:57Z and T07:58Z). The user clicked "Close" on the dashboard for each; the route returned 500 with the share-floor error; the positions remained on chain.
+## Files to touch
 
-## Root cause
+**Contract / type — adds the dial:**
 
-`packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts`:
+- `nodes/poly/app/src/features/copy-trade/types.ts`
+  - Add `ExecutionModeSchema` (`"fok" | "gtc"`, default `"fok"`).
+  - Add `executionMode` field to `MirrorTargetConfigSchema`.
 
-| Side | OrderType                                                                | Behavior                                               |
-| ---- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| BUY  | `OrderType.GTC` (line 309)                                               | Partial-fill OK; remainder rests on book               |
-| SELL | `OrderType.FAK` (line 420 default; line 521 hardcoded in `exitPosition`) | Fill what's available, **kill the unfilled remainder** |
+**Pipeline — propagates the dial to the adapter:**
 
-When a SELL FAK lands against a thin orderbook at the inside ask, the killed amount becomes a residual position on chain. Three concrete dust-generation paths:
+- `nodes/poly/app/src/features/copy-trade/plan-mirror.ts` — `buildIntent` carries `executionMode` into `OrderIntent.attributes` (or a typed sibling field) so the adapter can read it.
+- `nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts` — passes `config.executionMode` through.
 
-**Path A — Copy-trade SELL via FAK on thin liquidity (most common).** Target wallet sells N shares; mirror copies the SELL via FAK; CLOB fills only the depth at the inside ask, kills the rest. If the killed residual is below `min_order_size`, the position becomes unsellable.
-
-**Path B — `exitPosition` retry loop hits the floor mid-iteration.** `nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts:489-522` retries the FAK SELL up to 4×, refreshing `position.size` each iteration. When the residual drops below `min_order_size`, the next iteration's preflight throws → loop exits → dust persists.
-
-**Path C — BUY GTC partial-fill + later cancel.** Less common (GTC remainders rest on the book until filled or explicitly cancelled), but possible if our reconciler or Polymarket cancel an unfilled bid after the orderbook moves past our price.
-
-## Why this isn't covered by existing fixes
-
-- [bug.0342](bug.0342.poly-clob-dynamic-min-order-size.md) (`needs_closeout`) fixed the **BUY** side: the coordinator pre-scales intents up to `min_order_size` or skips. It explicitly couldn't generalize to SELL because (1) you can't refuse to sell what you already hold and (2) you can't scale up beyond your holdings.
-- [task.0412](task.0412.poly-redeem-multi-tenant-fanout.md) (multi-tenant redeem, just shipped) auto-recovers **winning-side** dust at market resolution. **Losing-side** dust is a write-off and the system continues generating more on every mirror-SELL tick.
-- [bug.0329](bug.0329.poly-sell-neg-risk-empty-reject.md) is a different SELL failure mode (neg-risk empty reject), not dust generation.
-
-## Implementation plan
-
-### Phase A — Stop creating new dust (the high-leverage fix)
-
-Two viable patterns; we ship pattern (1) because it's lower-API-cost and matches existing copy-trade semantics.
-
-**Pattern 1 — FAK + GTC tail-limit residual disposal.**
-
-After every FAK SELL, if `position.size > 0` AND `position.size < min_order_size`:
-
-1. Place a GTC limit-SELL at our worst-acceptable price (configurable; v0 default = `current_best_bid - 1¢` or `0.01` floor, whichever is higher) for the residual amount.
-2. Track the resting order in `poly_copy_trade_fills` with status=`open` so the existing reconciler manages it.
-3. If the limit fills, residual exits cleanly. If it doesn't, the residual sits as a resting order on chain (not a stranded position) — at resolution it auto-cancels and the underlying shares redeem via task.0412.
-
-**Pattern 2 (deferred) — depth pre-check.** Query `getOrderBook(tokenId)` before SELL; only attempt the portion of the position that has matching ask-side depth at acceptable price; defer the rest to a tail-limit identical to Pattern 1's cleanup. Cleaner correctness, more API calls. Deferred unless Pattern 1 proves insufficient.
-
-### Phase B — Surface remaining dust in the dashboard
-
-Out of scope for this PR — file follow-up. The UI gap (close buttons offered on dust rows that will fail) is a real issue but blocking on solving the source first means we don't churn UI logic against a moving target.
-
-### Files to touch
-
-**Adapter — owns the tail-limit primitive:**
+**Adapter — selects FOK vs GTC at the CLOB call:**
 
 - `packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts`
-  - Extract a `placeTailLimitSell(tokenId, residualShares, ...) → OrderReceipt` private helper that wraps the existing limit-place flow (`createAndPostOrder` with `OrderType.GTC`).
-  - Add a new method `sellPositionAtMarketWithTailLimit(params)` that:
-    1. Calls existing FAK SELL (preserving today's preflight).
-    2. Re-queries position post-fill.
-    3. If residual `> 0` and `< min_order_size`, places `placeTailLimitSell` at `tail_limit_price` (param, defaulted in caller).
-    4. Returns combined receipt with both order ids surfaced.
-  - Keep the existing `sellPositionAtMarket` as-is — callers that don't want the tail behavior (operator scripts, agent tools) keep direct access.
+  - In `placeOrder` (line ~300), branch on the intent's `executionMode`:
+    - `"fok"` → `OrderType.FOK`
+    - `"gtc"` → `OrderType.GTC` (current behavior)
+  - The existing intent-side `min_order_size` preflight stays — FOK still needs it because the exchange floor is checked at placement.
+  - Map FOK rejections (`success=false`, "not enough depth"-style errors) to a typed reason `"fok_no_match"` distinct from real errors so the coordinator skips cleanly rather than retrying.
 
-**Executor — orchestrates the loop:**
+**Coordinator — handles the FOK skip case:**
 
-- `nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts`
-  - Replace the current 4-iteration `exitPosition` loop with a single FAK + tail-limit call. The loop existed to chase partial fills via repeated FAKs; the tail-limit captures the long-tail residual in one resting order, removing the need for retry.
-  - Or, if the loop adds value (multiple full-FAK-min iterations on big positions), keep it but call the tail-limit-aware variant on the final iteration.
+- `nodes/poly/app/src/features/copy-trade/mirror-coordinator.ts` (or wherever placement results are processed)
+  - When the receipt carries `status: "rejected"` with `reason: "fok_no_match"`, mark the fill row as `placement_failed` with reason `fok_no_match` and emit a `poly.mirror.skipped reason=fok_no_match` log. Don't retry — the next observed fill from the target is the recovery path.
 
-**Mirror coordinator — emits the SELL with tail policy:**
+**DB — persists the per-target dial:**
 
-- `nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts` (and/or `mirror-coordinator.ts`)
-  - When emitting a copy-trade SELL intent, populate `attributes.tail_limit_policy` so the executor knows to apply the tail-limit. Default `tail_limit_policy = "tail_limit_at_floor"` (configurable; off-by-default for non-mirror callers).
+- `nodes/poly/app/src/adapters/server/db/schema/poly_copy_trade_targets.ts` (or wherever the targets table lives) — add `execution_mode` column with default `'fok'`.
+- A new drizzle migration `nodes/poly/app/src/adapters/server/db/migrations/00XX_poly_copy_trade_execution_mode.sql`.
+
+**API — exposes the dial:**
+
+- `packages/node-contracts/src/poly.copy-trade-targets.v1.contract.ts` (or equivalent) — add `executionMode` to the create / update payload.
+- `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/route.ts` and `[id]/route.ts` — accept and persist the field.
+
+**UI — surfaces the dial in the policy control panel (REQUIRED — user-controllable):**
+
+- `nodes/poly/app/src/components/kit/policy/PolicyControls.tsx` — add an "Execution mode" toggle next to the sizing policy controls. Default `FOK (safe)`; `GTC (best-effort, may strand dust)` as the alternative with a warning copy.
+- `nodes/poly/app/src/app/(app)/.../...settings...` (target edit page; track down the actual location) — wire the new control through.
 
 **Tests:**
 
-- Unit: `tests/unit/adapters/polymarket-clob-tail-limit.test.ts` — given a fake CLOB client where FAK fills 4.88 of 5, assert `placeTailLimitSell` is called with 0.12 residual and a GTC SELL request lands at the configured tail price.
-- Component: extend `tests/component/...` with a fake-CLOB scenario that captures both the FAK and the tail-limit, asserts ledger has both order rows.
-- Integration: stack test that mirrors a SELL on a thin-orderbook fake, asserts no `share balance below market floor` errors after one cycle.
+- Unit: `tests/unit/features/copy-trade/plan-mirror.test.ts` — assert `executionMode` propagates from config to intent.
+- Unit: `tests/unit/adapters/polymarket-clob-execution-mode.test.ts` — given an intent with `executionMode: "fok"`, the CLOB call uses `OrderType.FOK`. Same with `"gtc"`.
+- Component: extend the existing CLOB component test with an FOK-no-match scenario; assert the coordinator marks the fill `placement_failed reason=fok_no_match`.
 
-### Out of scope
+## Out of scope
 
-- **Phase B dashboard UI for displaying dust** — file as `task.NNNN.poly-dashboard-stranded-dust-affordance` after this lands.
-- **Limit prices below `min_order_size` for opening new positions** — separate question, separate task.
-- **bug.0329 neg-risk SELL empty reject** — different failure mode, different bug.
-- **Cleanup of existing stranded dust** — once Phase A lands, new dust generation stops; existing dust requires either market resolution (free, automatic via task.0412) or a one-shot operator script. Not blocking this PR.
+- **Existing stranded dust cleanup.** Wait for market resolution; the redeem pipeline (PR #1106) recovers winning-side dust automatically. Losing-side is a write-off. No code path needed.
+- **SELL execution mode dial.** SELL is a separate analysis — once we have FOK BUYs, no new dust is created, and existing positions can be sold whole at any time (they'll always be ≥ floor by construction). Revisit only if observation shows SELL-side dust generation outside the BUY-fill mechanism.
+- **Depth pre-check.** TOCTOU; the exchange-side FOK invariant supersedes any client-side depth analysis.
+- **Dashboard "stranded — awaiting resolution" affordance.** Real UX gap, but downstream of source fix. File as `task.NNNN.poly-dashboard-stranded-dust-affordance` after this lands.
+- **bug.0329 (neg-risk SELL empty reject).** Different failure mode, different bug.
 
 ## Validation
 
 **exercise:**
 
-On candidate-a, against a tenant holding a position large enough to need a partial fill:
+On candidate-a, with a tenant configured for `executionMode: "fok"` (the default after this lands):
 
-1. Trigger a mirror SELL (or call `POST /api/v1/poly/wallet/positions/close`) for a token where the orderbook lacks full depth at the inside ask.
-2. Confirm Loki shows two ordered events: `poly.clob.place side=SELL order_mode=market` (FAK) followed by `poly.clob.place side=SELL order_mode=limit` (GTC tail) for the same `client_order_id` family.
-3. Confirm `GET /api/v1/poly/wallet/positions` no longer lists the asset (or lists it with `size = 0`) once the tail-limit fills, OR the position shows the tail order as `open` while no longer reporting raw shares < min.
-4. Loki at deployed SHA: `event="poly.exit.tail_limit_placed"` (new log emitted by the adapter) shows for the partial-fill cycle.
+1. Trigger a mirror BUY for a market with thin orderbook depth at the inside ask (e.g. via a target wallet that just opened a niche market).
+2. Confirm Loki shows either:
+   - Full match: `event="poly.clob.place" side="BUY" status="filled" filled_size_usdc≈intent.size_usdc`, OR
+   - Skip: `event="poly.mirror.skipped" reason="fok_no_match"`
+3. Confirm `GET /api/v1/poly/wallet/positions` for the tenant shows ONLY positions with `size ≥ min_order_size` for the market in question. No sub-min entries appear.
+4. Toggle the same target to `executionMode: "gtc"` via the policy panel; observe a subsequent BUY uses GTC and may produce a sub-min position (expected; this is the explicit opt-in).
 
 **observability:**
 
 ```logql
-# Should trend to zero post-fix
+# Should trend to zero at the deployed SHA
 {env="candidate-a",service="app"} | json
   | reason=~".*share balance below market floor.*"
 
-# New event from this PR — should appear on partial fills
+# New skip reason from FOK no-match — appears on thin-book scenarios
 {env="candidate-a",service="app"} | json
-  | event="poly.exit.tail_limit_placed"
+  | event="poly.mirror.skipped"
+  | reason="fok_no_match"
 
-# Existing event for forensics — should still emit but no longer be terminal
+# Existing successful BUY events should now ALL have filled_size_usdc within
+# epsilon of intent.size_usdc — partial-fill log signature disappears
 {env="candidate-a",service="app"} | json
-  | event="poly.clob.place" | side="SELL" | order_mode="market" | phase="ok"
+  | event="poly.clob.place" | side="BUY" | phase="ok"
 ```
