@@ -2,7 +2,7 @@
 id: task.0419
 type: task
 title: "v0 'Send to Cogni' error intake — UI button → API → Temporal queue"
-status: needs_implement
+status: needs_closeout
 priority: 1
 rank: 1
 estimate: 3
