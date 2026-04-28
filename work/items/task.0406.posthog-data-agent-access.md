@@ -23,7 +23,7 @@ updated: 2026-04-27
 labels: [observability, agent-tooling, posthog, validation, frontend, perf]
 external_refs:
   - work/items/task.0403.operator-loading-error-boundaries.md
-  - work/items/task.0404.port-loading-error-boundaries-other-nodes.md
+  - work/items/task.0408.port-loading-error-boundaries-other-nodes.md
   - work/items/task.0405.per-node-skeleton-accuracy-matrix.md
 ---
 

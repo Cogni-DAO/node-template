@@ -7,7 +7,7 @@ priority: 1
 rank: 1
 estimate: 3
 branch: feat/task-0405-poly-skeleton-accuracy
-summary: "After task.0403 + task.0404 land, every route renders a *generic* `PageSkeleton` (one heading bar + a few rows). For routes whose actual content is a sidebar table, a chat composer, a data grid, or a wallet widget, that generic skeleton is visibly wrong — flashes one shape, then snaps to a different shape on RSC arrival. Lay out a per-node × per-route matrix of (page, what its skeleton shows now, what it should show, accuracy verdict), then drive each high-traffic route to a layout-accurate skeleton."
+summary: "After task.0403 + task.0408 land, every route renders a *generic* `PageSkeleton` (one heading bar + a few rows). For routes whose actual content is a sidebar table, a chat composer, a data grid, or a wallet widget, that generic skeleton is visibly wrong — flashes one shape, then snaps to a different shape on RSC arrival. Lay out a per-node × per-route matrix of (page, what its skeleton shows now, what it should show, accuracy verdict), then drive each high-traffic route to a layout-accurate skeleton."
 outcome: "A scorecard, then code: for each high-traffic route per node, the `loading.tsx` skeleton matches the rendered page's macro layout (column count, table-vs-card, sidebar-vs-form) closely enough that there is no perceptible 'shape pop' between skeleton and content. Top priority: node-template + operator routes (per derek). Skeleton accuracy is graded by a 4-state scorecard (🟢 accurate · 🟡 close · 🔴 wrong shape · ⚪ generic). Net change is a tree of per-route or per-section `loading.tsx` files overriding the route-group default where needed."
 spec_refs:
 assignees: derekg1729
@@ -16,20 +16,20 @@ project:
 pr:
 reviewer:
 revision: 0
-blocked_by: [task.0404]
+blocked_by: [task.0408]
 deploy_verified: false
 created: 2026-04-27
 updated: 2026-04-27
 labels: [frontend, perf, ux, nextjs, ssr, app-router]
 external_refs:
   - work/items/task.0403.operator-loading-error-boundaries.md
-  - work/items/task.0404.port-loading-error-boundaries-other-nodes.md
+  - work/items/task.0408.port-loading-error-boundaries-other-nodes.md
   - work/items/spike.0401.nextjs-frontend-perf.md
 ---
 
 ## Problem
 
-Task.0403 + task.0404 deliver "instant skeleton on click" — but it's
+Task.0403 + task.0408 deliver "instant skeleton on click" — but it's
 the **same generic skeleton** (one heading bar + 3 short rows from
 `PageSkeleton`) regardless of what the route actually renders. Per
 human validation on operator candidate-a:
@@ -285,7 +285,7 @@ observability:
 
 ## Closes / Relates
 
-- Blocked-by: task.0404 (must have boundaries in place before
+- Blocked-by: task.0408 (must have boundaries in place before
   refining their accuracy).
 - Implements spike.0401 Phase 2c (skeleton-fidelity refinement).
 - Related: task.0406 (PostHog data-agent access for retroactive
