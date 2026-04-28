@@ -23,9 +23,9 @@ import type {
   ThresholdCriterion,
 } from "@cogni/repo-spec";
 
-const OPERATOR_PATH = "nodes/operator";
-const SPEC_LINK =
-  "https://github.com/Cogni-DAO/node-template/blob/main/docs/spec/node-ci-cd-contract.md#single-domain-scope";
+// Relative path so each fork's PR comments link to its own spec copy.
+// GitHub renders relative links in PR comments against the comment's own repo.
+const SPEC_LINK = "docs/spec/node-ci-cd-contract.md#single-domain-scope";
 
 // ---------------------------------------------------------------------------
 // Types (serializable — used by workflow and activities)
@@ -375,24 +375,16 @@ export function formatPrComment(
 
 /**
  * Format the PR comment body for a cross-domain refusal.
- * Pure — no I/O, no time, no randomness.
+ * Pure — no I/O, no time, no randomness, no path classification. Reads only
+ * the resolver-labeled fields (`nodes`, `operatorPaths`, `operatorNodeId`)
+ * on the OwningNode.
  */
 export function formatCrossDomainRefusal(
-  owningNode: Extract<OwningNode, { kind: "conflict" }>,
-  changedFiles: readonly string[]
+  owningNode: Extract<OwningNode, { kind: "conflict" }>
 ): string {
   const domains = owningNode.nodes.map((n) => n.nodeId);
-  const operatorEntry = owningNode.nodes.find((n) => n.path === OPERATOR_PATH);
-  const operatorPaths: string[] = [];
-  if (operatorEntry) {
-    for (const f of changedFiles) {
-      // Operator territory = anything not under a non-operator nodes/<X>/.
-      const otherDomain = owningNode.nodes.find(
-        (n) => n.path !== OPERATOR_PATH && f.startsWith(`${n.path}/`)
-      );
-      if (!otherDomain) operatorPaths.push(f);
-    }
-  }
+  const { operatorPaths, operatorNodeId } = owningNode;
+  const operatorInvolved = operatorNodeId !== undefined;
 
   const lines: string[] = [];
   lines.push("## Cogni Review — Cross-Domain PR refused");
@@ -406,7 +398,7 @@ export function formatCrossDomainRefusal(
   );
   lines.push("");
 
-  if (operatorEntry && operatorPaths.length > 0) {
+  if (operatorInvolved && operatorPaths.length > 0) {
     lines.push("**Operator-territory paths in this PR:**");
     lines.push("");
     for (const p of operatorPaths.slice(0, 20)) {
@@ -420,8 +412,8 @@ export function formatCrossDomainRefusal(
 
   lines.push("**How to resolve:**");
   lines.push("");
-  if (operatorEntry) {
-    const others = domains.filter((d) => d !== operatorEntry.nodeId);
+  if (operatorInvolved) {
+    const others = domains.filter((d) => d !== operatorNodeId);
     lines.push(
       `1. File an operator PR with the operator-territory paths above.`
     );

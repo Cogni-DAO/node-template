@@ -159,7 +159,6 @@ describe("fetchPrContextActivity — owning-node routing", () => {
 
     expect(mockLogger.info).toHaveBeenCalledWith(
       expect.objectContaining({
-        msg: "review.routed",
         owningNodeKind: "single",
         owningNodePath: "nodes/poly",
         changedFileCount: 1,
@@ -169,10 +168,10 @@ describe("fetchPrContextActivity — owning-node routing", () => {
     );
   });
 
-  it("operator-only PR keeps fetching rules from root .cogni/rules/", async () => {
+  it("operator-only PR fetches rules from nodes/operator/.cogni/rules/ (no special case)", async () => {
     setFetchPrHandlers({
       changedFiles: ["packages/repo-spec/src/x.ts"],
-      ruleAvailableAt: ".cogni/rules/quality.rule.yaml",
+      ruleAvailableAt: "nodes/operator/.cogni/rules/quality.rule.yaml",
     });
     const acts = makeActivities();
 
@@ -195,7 +194,7 @@ describe("fetchPrContextActivity — owning-node routing", () => {
     );
     expect(ruleFetches.length).toBe(1);
     expect((ruleFetches[0]!.params as { path: string }).path).toBe(
-      ".cogni/rules/quality.rule.yaml"
+      "nodes/operator/.cogni/rules/quality.rule.yaml"
     );
   });
 
@@ -263,6 +262,7 @@ describe("postRoutingDiagnosticActivity", () => {
           { nodeId: "poly", path: "nodes/poly" },
           { nodeId: "resy", path: "nodes/resy" },
         ],
+        operatorPaths: [],
       },
       changedFiles: ["nodes/poly/a.ts", "nodes/resy/b.ts"],
     });

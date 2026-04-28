@@ -235,42 +235,37 @@ describe("formatPrComment", () => {
 
 describe("formatCrossDomainRefusal", () => {
   it("names the conflicting domains and operator-territory paths", () => {
-    const body = formatCrossDomainRefusal(
-      {
-        kind: "conflict",
-        nodes: [
-          { nodeId: "operator", path: "nodes/operator" },
-          { nodeId: "poly", path: "nodes/poly" },
-        ],
-      },
-      [
-        "nodes/poly/app/src/foo.ts",
+    const body = formatCrossDomainRefusal({
+      kind: "conflict",
+      nodes: [
+        { nodeId: "operator", path: "nodes/operator" },
+        { nodeId: "poly", path: "nodes/poly" },
+      ],
+      operatorPaths: [
         "packages/repo-spec/src/bar.ts",
         ".github/workflows/ci.yml",
-      ]
-    );
+      ],
+      operatorNodeId: "operator",
+    });
     expect(body).toContain("Cross-Domain PR refused");
     expect(body).toContain("`operator`");
     expect(body).toContain("`poly`");
     expect(body).toContain("Operator-territory paths");
     expect(body).toContain("packages/repo-spec/src/bar.ts");
     expect(body).toContain(".github/workflows/ci.yml");
-    expect(body).not.toContain("nodes/poly/app/src/foo.ts");
     expect(body).toContain("File an operator PR");
     expect(body).toContain("single-node-scope");
   });
 
   it("for non-operator multi-domain conflict, omits operator section and instructs split", () => {
-    const body = formatCrossDomainRefusal(
-      {
-        kind: "conflict",
-        nodes: [
-          { nodeId: "poly", path: "nodes/poly" },
-          { nodeId: "resy", path: "nodes/resy" },
-        ],
-      },
-      ["nodes/poly/app/x.ts", "nodes/resy/app/y.ts"]
-    );
+    const body = formatCrossDomainRefusal({
+      kind: "conflict",
+      nodes: [
+        { nodeId: "poly", path: "nodes/poly" },
+        { nodeId: "resy", path: "nodes/resy" },
+      ],
+      operatorPaths: [],
+    });
     expect(body).toContain("`poly`");
     expect(body).toContain("`resy`");
     expect(body).not.toContain("Operator-territory paths");
@@ -279,16 +274,15 @@ describe("formatCrossDomainRefusal", () => {
 
   it("truncates long operator-path lists", () => {
     const operatorPaths = Array.from({ length: 25 }, (_, i) => `docs/f${i}.md`);
-    const body = formatCrossDomainRefusal(
-      {
-        kind: "conflict",
-        nodes: [
-          { nodeId: "operator", path: "nodes/operator" },
-          { nodeId: "poly", path: "nodes/poly" },
-        ],
-      },
-      [...operatorPaths, "nodes/poly/x.ts"]
-    );
+    const body = formatCrossDomainRefusal({
+      kind: "conflict",
+      nodes: [
+        { nodeId: "operator", path: "nodes/operator" },
+        { nodeId: "poly", path: "nodes/poly" },
+      ],
+      operatorPaths,
+      operatorNodeId: "operator",
+    });
     expect(body).toContain("docs/f0.md");
     expect(body).toContain("docs/f19.md");
     expect(body).not.toContain("docs/f20.md");

@@ -11,9 +11,9 @@
  *   - Activities resolve GitHub App creds from worker env (never from workflow input)
  *   - Domain logic (criteria evaluation, formatting) in domain/review.ts, not here
  *   - Per PER_NODE_RULE_LOADING: `fetchPrContextActivity` resolves owning domain via
- *     `extractOwningNode` and fetches rule files from `<owningNode.path>/.cogni/rules/`
- *     for non-operator singles; operator domain keeps reading root `.cogni/rules/`.
- *     Emits structured `review.routed` log for the deploy_verified loop.
+ *     `extractOwningNode` and fetches rule files from `resolveRulePath(owningNode)`
+ *     (`<owningNode.path>/.cogni/rules/` for every node — operator + sovereign alike,
+ *     no special case). Emits structured `review.routed` log for the deploy_verified loop.
  *   - `postRoutingDiagnosticActivity` handles `conflict` + `miss` outcomes with a
  *     pure formatter + neutral check run — no AI tokens, no GraphRunWorkflow child.
  * Side-effects: IO (GitHub API via Octokit)
@@ -32,6 +32,7 @@ import {
   parseRule,
   type RepoSpec,
   type Rule,
+  resolveRulePath,
 } from "@cogni/repo-spec";
 import type { GraphRunResult } from "@cogni/temporal-workflows";
 import {
@@ -321,7 +322,6 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
 
     logger.info(
       {
-        msg: "review.routed",
         owningNodeKind: owningNode.kind,
         owningNodeId:
           owningNode.kind === "single" ? owningNode.nodeId : undefined,
@@ -338,12 +338,11 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
       "review.routed"
     );
 
-    // Per-node rule path: non-operator singles fetch rules from
-    // `<owningNode.path>/.cogni/rules/`. Operator domain (path === "nodes/operator")
-    // keeps the root path because operator rules live at root.
+    // Per-node rule path resolved via single source of truth in @cogni/repo-spec.
+    // Conflict / miss never reach the rule fetch — workflow short-circuits first.
     const ruleBasePath =
-      owningNode.kind === "single" && owningNode.path !== "nodes/operator"
-        ? `${owningNode.path}/.cogni/rules`
+      owningNode.kind === "single"
+        ? resolveRulePath(owningNode)
         : ".cogni/rules";
 
     // Fetch rule files referenced by ai-rule gates
@@ -568,7 +567,7 @@ export function createReviewActivities(deps: ReviewActivityDeps) {
     let body: string;
     let title: string;
     if (input.owningNode.kind === "conflict") {
-      body = formatCrossDomainRefusal(input.owningNode, input.changedFiles);
+      body = formatCrossDomainRefusal(input.owningNode);
       title = "Cross-domain PR refused";
     } else {
       // kind === "miss" — empty diff or no parsable spec.

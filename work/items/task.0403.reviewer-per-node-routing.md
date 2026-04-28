@@ -2,7 +2,7 @@
 id: task.0403
 type: task
 title: "Reviewer per-node routing — wire `extractOwningNode` into PrReviewWorkflow so PR webhooks load per-node `.cogni/rules/`"
-status: needs_merge
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 2
@@ -17,7 +17,7 @@ project: proj.vcs-integration
 branch: feat/task-0403-reviewer-per-node-routing
 pr: https://github.com/Cogni-DAO/node-template/pull/1098
 reviewer:
-revision: 0
+revision: 1
 blocked_by:
 deploy_verified: false
 created: 2026-04-26
@@ -118,3 +118,41 @@ observability: |
 - [`scheduler-worker/src/activities/review.ts`](../../services/scheduler-worker/src/activities/review.ts) — `fetchPrContextActivity` extension
 - [task.0382 work item](task.0382.extract-owning-node-resolver.md) — what we're consuming
 - [task.0381 work item](task.0381.single-node-scope-ci-gate.md) — the CI-side counterpart we mirror
+
+## Review Feedback (revision 1)
+
+Self-review (and external reviewer) caught **hardcoded routing in two places** — exactly the anti-pattern this task is supposed to prevent. Three blocking fixes, one design choice up front.
+
+### Blocking
+
+1. **Hardcoded operator-path string-compare at two sites.**
+   - `services/scheduler-worker/src/activities/review.ts:322` — `owningNode.path !== "nodes/operator"` decides where to fetch rules from.
+   - `packages/temporal-workflows/src/domain/review.ts:23` — `const OPERATOR_PATH = "nodes/operator"` is then used in the formatter to identify operator-territory paths.
+
+   Both must go. Pick **one** of:
+   - **(A) Preferred — move operator's rules to `nodes/operator/.cogni/rules/`** in this PR. Then routing collapses to `${owningNode.path}/.cogni/rules/${ruleFile}` with no special case. Add a single `resolveRulePath(spec, owningNode): string` helper to `@cogni/repo-spec` for the seam, even though the body is a one-liner — that way future overrides have a place to land. Requires moving the existing root `.cogni/rules/*` files under `nodes/operator/.cogni/rules/` + a follow-up to update any other consumer (currently only this activity).
+   - **(B) Identify operator via the registry**: `spec.nodes.find(n => n.path === "nodes/operator")?.node_id === owningNode.nodeId`. Still has one literal but in one place — strictly worse than (A) because you keep the asymmetry. Only choose if (A)'s file move is somehow blocked.
+
+2. **Spec link hardcoded to `Cogni-DAO/node-template`** (`domain/review.ts:24`).
+   The repo is forkable. A fork posts review comments linking back to upstream — wrong. Replace with relative path `docs/spec/node-ci-cd-contract.md#single-domain-scope` (GitHub renders relative links in PR comments against the comment's own repo). When `task.0407` lands per-node `repo-spec.cogni_dao` config, swap to a config-sourced link so each fork brands its own. Don't fix it twice.
+
+3. **Path classification duplicated in `formatCrossDomainRefusal`** (`domain/review.ts:376-385`).
+   Formatter does its own `f.startsWith(\`${n.path}/\`)`matching to find operator-territory paths. The activity already has the spec — it should precompute`operatorPaths: readonly string[]`and pass it in. Or expose`classifyPaths(spec, paths): { byNodeId, operatorPaths }`from`@cogni/repo-spec`so any caller routes through one classifier. Pure formatter input → no spec import in`domain/review.ts` either.
+
+### Non-blocking nits (fold in)
+
+- `review.routed` log payload includes `msg: "review.routed"` AND passes `"review.routed"` as Pino's second arg. Drop the object key — Pino's second arg owns `msg`.
+- Lenient-parse fallback (activity L298) returns `kind: "miss"` so the diagnostic comment says "no recognizable scope" when the real cause is "spec parse failed." Either log the parse failure separately or split the miss reason so the formatter can disambiguate. Low priority — affects only malformed forks.
+
+### Document the principle (do this in this PR)
+
+Add one paragraph to `docs/spec/node-ci-cd-contract.md` (or `architecture.md`):
+
+> **Review routing is shared infrastructure** (`packages/temporal-workflows`, `@cogni/repo-spec`). **Review policy — rules, prompts, models — is per-node** (`nodes/<X>/.cogni/`). Routing code never special-cases a particular node.
+
+Citing this rule next time prevents the next dev rediscovering it.
+
+### After fixes
+
+- Re-run `pnpm vitest run packages/temporal-workflows/tests/review-domain.test.ts services/scheduler-worker/tests/review-activities.test.ts services/scheduler-worker/tests/review-activities.test.ts` — operator-rules-at-root test must be updated to assert the new path if you take strategy (A).
+- `pnpm check:fast`, then re-`/closeout`.
