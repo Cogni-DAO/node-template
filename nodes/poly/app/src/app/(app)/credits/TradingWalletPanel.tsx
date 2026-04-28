@@ -45,6 +45,7 @@ import Link from "next/link";
 import { useSession } from "next-auth/react";
 import type { ReactElement } from "react";
 import { AddressChip, Card, HintText } from "@/components";
+import { PolicyPanel } from "./PolicyPanel";
 import { TradingReadinessSection } from "./TradingReadinessSection";
 import { TradingWalletConnectFlow } from "./TradingWalletConnectFlow";
 
@@ -168,6 +169,8 @@ export function TradingWalletPanel(): ReactElement {
             polBalance={balances?.pol ?? null}
             usdcBalance={balances?.usdc_e ?? null}
           />
+
+          {status.trading_ready ? <PolicyPanel /> : null}
 
           {status.trading_ready ? (
             <Link

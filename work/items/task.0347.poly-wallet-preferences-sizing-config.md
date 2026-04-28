@@ -1,186 +1,174 @@
 ---
 id: task.0347
 type: task
-title: "Poly wallet — per-tenant preferences + copy-trade sizing config"
-status: needs_design
-priority: 2
-rank: 19
+title: "Poly wallet — minimal policy UI for grants caps"
+status: needs_implement
+priority: 1
+rank: 6
 estimate: 3
-summary: "Replace the hardcoded v0 wallet funding suggestions and mirror-size caps with per-tenant preferences. Honest `requires_funding`/balance reads on `/connect` + `/status` driven by a live Polygon RPC call, tenant-owned funding + sizing config persisted in Postgres, mirror-coordinator reads sizing from config instead of env + constants."
-outcome: "A tenant can configure (a) the USDC.e + MATIC amounts the UI suggests for initial funding, (b) how much of each mirrored target trade to size (fixed USDC or ratio of target size), and (c) per-order / daily / hourly caps. `/connect` and `/status` report real on-chain balances, so a re-hit against an already-funded wallet returns `requires_funding: false`. The mirror-coordinator reads each tenant's sizing row at decision time; no preferences row = safe defaults matching today's hardcoded constants."
+summary: "Surface the existing `poly_wallet_grants` row as an editable Money-page card and a read-only per-target view on Research wallets. Reusable `<PolicyControls>` component, two numeric inputs (per-trade cap, per-day cap), no schema changes. Today caps can only be changed via raw SQL — derek hit this on task.0404 candidate-a validation."
+outcome: "From the Money page a user reads + edits their `polyWalletGrants.{perOrderUsdcCap,dailyUsdcCap}` and the change takes effect on the next mirror tick. From a Research wallet detail (when copy-trade is on) the same component renders read-only with a link back to Money. No SQL required to bump caps."
 spec_refs:
   - poly-trader-wallet-port
   - poly-multi-tenant-auth
-  - poly-copy-trade-phase1
-assignees: []
-project: proj.poly-copy-trading
-pr:
+assignees: [derekg1729]
+project: proj.poly-bet-sizer
+branch: feat/task-0347-policy-ui
+pr: https://github.com/Cogni-DAO/node-template/pull/1103
 created: 2026-04-21
-updated: 2026-04-21
-labels: [poly, polymarket, wallets, copy-trade, config, rls, multi-tenant]
+updated: 2026-04-28
+labels: [poly, polymarket, wallets, ui, grants, money-page]
 external_refs:
   - work/items/task.0318.poly-wallet-multi-tenant-auth.md
+  - work/items/task.0404.poly-bet-sizer-v0.md
+  - work/projects/proj.poly-bet-sizer.md
   - docs/spec/poly-trader-wallet-port.md
-  - docs/spec/poly-copy-trade-phase1.md
-  - nodes/poly/app/src/app/api/v1/poly/wallet/connect/route.ts
-  - nodes/poly/packages/db-schema/src/copy-trade.ts
+  - docs/design/poly-policy-ui/desired-policy-ui.png
+  - nodes/poly/app/src/app/(app)/credits/TradingWalletPanel.tsx
+  - nodes/poly/packages/db-schema/src/wallet-grants.ts
 ---
 
-# task.0347 — Per-tenant wallet preferences + copy-trade sizing config
+# task.0347 — Minimal policy UI for grants caps
 
-> Spun out of the task.0318 Phase B review (revision 6) on 2026-04-21. The v0 connect/status/mirror path ships with hardcoded funding suggestions and hardcoded live-money caps. That is fine to ship, not fine to stay.
+## Why this exists
+
+Task.0404 validation surfaced the user pain in production form: the user hit `cap_exceeded_per_order` on candidate-a, and the only way to lift the cap was for an agent to SSH into the VM and run a raw SQL `UPDATE poly_wallet_grants`. Nobody who isn't on the dev team can do that. v1 of the v0 bet sizer is meaningfully shippable to a non-Derek user only after this surface lands.
+
+Earlier scope of this task bundled three concerns (funding suggestions, balance reads, sizing config). Two of those are now handled: balance reads ship via `/api/v1/poly/wallet/balances` (task.0353), and sizing math is a discriminated union variant (task.0404). The remaining pain — caps editing — is what this task ships.
 
 ## Context
 
-Three specific v0 shortcuts that a single, scoped follow-up can retire:
+- `polyWalletGrants` table exists with `per_order_usdc_cap`, `daily_usdc_cap`, `hourly_fills_cap` (numeric/int), one active row per tenant, RLS-enforced via `tenant_isolation` policy. Schema is right; what's missing is the edit surface.
+- Today the only writers are `provisionWithGrant()` at wallet-onboarding time and ad-hoc SQL.
+- `authorizeIntent` reads the grant row fresh per call (no in-process cache) — config changes take effect on the next mirror tick.
+- Per-target overrides are explicitly **out of scope** for this task. v1 = single global policy; per-target variable allocation is `proj.poly-bet-sizer` Walk phase.
 
-1. **`/api/v1/poly/wallet/connect` hardcodes the funding response.**
-   [`route.ts:137-143`](../../nodes/poly/app/src/app/api/v1/poly/wallet/connect/route.ts)
-   returns `requires_funding: true`, `suggested_usdc: 5`, `suggested_matic: 0.1` on **every**
-   call — including idempotent re-hits against a wallet that already holds USDC.e + MATIC.
-   There is no Polygon RPC read in the path, so the API lies to the UI about whether funding
-   is actually needed.
+## Design
 
-2. **`/api/v1/poly/wallet/status` does not surface balances.**
-   `connected: true` only proves the signing context can be resolved. The `/profile` page
-   still has to guess whether the wallet is usable for trading (has MATIC gas + USDC.e
-   principal) and cannot render honest "ready / underfunded" state.
+### Outcome
 
-3. **Copy-trade live-money caps are hardcoded in code and env.**
-   `proj.poly-copy-trading` locks caps at `$1/trade, $10/day, 5 fills/hr`. Any lift requires
-   code change + redeploy. `poly_copy_trade_config` exists per-tenant
-   ([`copy-trade.ts:153`](../../nodes/poly/packages/db-schema/src/copy-trade.ts)) but only
-   holds `enabled`. There is no per-tenant sizing (ratio vs fixed USDC, per-order cap, daily
-   cap, hourly-fill cap) — the mirror-coordinator reads constants.
+A user opens **Money** → **Trading wallet** card → sees `Per trade $X · Per day $Y` row → clicks edit → adjusts → save persists to `polyWalletGrants` and the new caps gate the very next placement attempt. From any Research wallet detail (when that target is in copy-trade), the same `<PolicyControls>` shows read-only with "Edit on Money" link. No raw SQL.
 
-These three are a single user-visible concept — **"what this tenant wants their wallet to do"** —
-so they belong in one work item rather than three scattered tweaks.
+### Approach
 
-## Goal
+**Solution.** One reusable component, two numeric inputs, two routes, zero schema changes:
 
-Turn the hardcoded wallet-adjacent knobs into per-tenant, RLS-scoped config that the UI can
-read + write, and that the mirror-coordinator reads at decision time.
+1. **`<PolicyControls>`** — pure presentational React component, props `{values, onSave?, readonly}`. When `readonly`, renders just the numbers + "Edit on Money" link. When editable, renders inline edit (numeric `Input` from `kit/inputs/Input.tsx` × 2) + Save button (`kit/inputs/Button.tsx`). No sliders for v1 — numeric input is denser, more honest about precision, and matches the existing AI-credits panel pattern. Sliders land in vNext when the value is a percentage of a known budget (allocation %).
 
-### Deliverables
+2. **Routes.**
+   - `GET /api/v1/poly/wallet/grants` — return active grant row for the calling tenant
+   - `PUT /api/v1/poly/wallet/grants` — partial update of `{per_order_usdc_cap, daily_usdc_cap}` (intentionally NOT `hourly_fills_cap` — keeping the editable surface to the two numbers users actually feel)
+   - Both authed via session, RLS-clamped via `appDb`. No service-DB writes.
 
-- **Schema**: extend `poly_copy_trade_config` (preferred — reuses existing tenant row + RLS)
-  or add a sibling `poly_wallet_preferences` table (decide in `/design`). Fields:
-  - `preferred_initial_usdc` (numeric, default 5)
-  - `preferred_initial_matic` (numeric, default 0.1)
-  - `mirror_size_mode` (text enum: `'fixed_usdc' | 'ratio'`, default `'fixed_usdc'`)
-  - `mirror_size_usdc` (numeric, used when mode=fixed, default 1)
-  - `mirror_size_ratio` (numeric 0..1, used when mode=ratio, default 1.0)
-  - `cap_per_order_usdc` (numeric, default 1)
-  - `cap_daily_usdc` (numeric, default 10)
-  - `cap_hourly_fills` (integer, default 5)
-- **Migration**: additive columns with `DEFAULT` matching today's constants, so existing
-  tenants keep v0 behaviour on rollout. No data-class change; same RLS policy.
-- **Contract**: `poly.wallet.preferences.v1` Zod contract (`GET` + `PUT`). Numeric
-  ranges enforced at the wire boundary.
-- **Routes**: `GET /api/v1/poly/wallet/preferences` + `PUT /api/v1/poly/wallet/preferences`,
-  tenant-scoped via appDb + session.
-- **Balance read**: one small Polygon RPC adapter (USDC.e ERC-20 `balanceOf` + native
-  MATIC balance) behind a port. Used by:
-  - `/api/v1/poly/wallet/status` to return `{ usdc_balance, matic_balance, funded }`
-  - `/api/v1/poly/wallet/connect` to compute honest `requires_funding` on idempotent re-hit
-- **Mirror-coordinator wiring**: replace hardcoded sizing + cap constants in the decide
-  path with a read from the tenant's config row. Falls back to the schema defaults when
-  no row exists (no code path change for tenants who haven't opted in).
+3. **Contract.** `poly.wallet.grants.v1` — Zod, mirrors the schema's CHECK constraints (`per_order > 0`, `daily >= per_order`, both `numeric(10,2)`). Lives in `packages/node-contracts`.
 
-## Non-goals
+4. **UI integration.**
+   - **Money page** (`TradingWalletPanel.tsx`): add `<PolicyControls editable />` row below "Trading enabled" badge, above the existing `Fund/Withdraw` row. React Query reads `/grants`, mutation invalidates on save.
+   - **Research wallet detail** (existing `CopyTradedWalletsCard.tsx` row click → wallet detail): when the wallet is an active copy-trade target, render `<PolicyControls readonly />` with the same values + a `<Link href="/credits">` "Edit on Money".
 
-- **Wallet grants / authorization scope** — that belongs in task.0318 Phase B4
-  (`poly_wallet_grants`). Grants may eventually _enforce_ a subset of these caps, but the
-  preferences table is tenant-authored config; grants are a signed authorization envelope.
-  Decide in B4 design whether grants read caps from here or carry them inline. This task
-  just makes the caps live in a row.
-- **UI work** — `/profile` copy changes + the preferences form belong with the
-  wallets-dashboard line of work (task.0343 / task.0344). This task only has to guarantee
-  the API is honest + configurable.
-- **Polygon RPC health / multi-provider failover** — we already depend on `POLYGON_RPC_URL`
-  for the executor. This task uses the same env var; production-grade RPC redundancy is its
-  own concern.
-- **On-chain allowance / approval state** — SELL-path approvals are tracked via
-  `bug.0329` + task.0323. This task only reads balances.
+5. **Hourly-fills cap** stays at its provisioned default; no UI surface in v1. If we ever need to lift it, that's another row.
 
-## Design questions (resolve in `/design`)
+**Reuses.**
 
-- **Table shape.** Extend `poly_copy_trade_config` (one row per tenant already, RLS
-  already set up, "one place for wallet+trade config" is simpler) vs new
-  `poly_wallet_preferences` (cleaner separation — wallet-level knobs vs copy-trade-level
-  knobs, matters once a tenant has multiple wallet connections). Default recommendation:
-  extend the existing table for v0; split later if a second wallet connection per tenant
-  ships.
-- **Cap enforcement seam.** Today the mirror-coordinator owns cap checks. Once task.0318
-  B4 ships `poly_wallet_grants`, caps could move to the signed grant envelope. Which layer
-  is authoritative? Leaning: **config is the source of truth, grants are a snapshot** —
-  grants signed with a cap get honoured even if config moves, but new grants pull from
-  config.
-- **Balance cache.** Live RPC read on every `/status` hit is fine at v0 traffic but will
-  not scale. A 30s in-memory cache per connection_id is probably enough for v1; out-of-band
-  invalidate on fill events in a later task.
-- **Ratio mode semantics.** `mirror_size_ratio: 0.5` on a $100 target fill means $50 or
-  clamped to `cap_per_order_usdc = $1`? Almost certainly the latter, but spell it out.
-- **Precision.** USDC.e is 6 decimals on-chain, but tenant input is likely dollar floats.
-  Store as `numeric(18, 6)` or as integer microUSDC? Whichever the existing fills ledger
-  uses — match it.
+- Existing `polyWalletGrants` schema + RLS policy + `provisionWithGrant()` defaults.
+- Existing `Card`, `HintText`, `AddressChip` from `@/components/kit`.
+- Existing React Query setup in `TradingWalletPanel.tsx`.
+- Existing `authorizeIntent` cap enforcement — caps are read fresh per call so updates take effect immediately.
+
+**Rejected.**
+
+- **Sliders for v1 caps.** User sketch suggested "1-2 sliders/toggles". Caps are dollar amounts with no natural anchor (range $0 → $∞), so sliders need an arbitrary max → wrong abstraction. Numeric input is honest about the cents-precision the schema enforces. The toggle half of the user's ask IS satisfied — it's the per-target `<TargetActiveToggle>`. Sliders return for v2 when allocation % lands and the range is implicitly 0-100%.
+- **Per-target cap overrides in v1.** Requires either a new `poly_copy_trade_target_grants` table or per-target columns on `polyCopyTradeTargets` — meaningful schema lift. Walk-phase concern. v1 ships single global cap surfaced in two places.
+- **Touching `poly_copy_trade_config` for caps.** Caps live on `polyWalletGrants`, full stop. The original task.0347 design predated grants shipping.
+- **Polygon RPC balance read on `/connect`.** Already shipped via `/wallet/balances` (task.0353). Out of scope here.
+- **Editing `hourly_fills_cap`.** Sane default already provisioned; another control adds clutter without measurable user value at MVP.
+
+### Invariants
+
+- [ ] **CAPS_LIVE_IN_GRANT**: edits flow to `polyWalletGrants`, never to `polyCopyTradeConfig`. (spec: poly-multi-tenant-auth)
+- [ ] **TENANT_ISOLATION**: routes use `appDb` (RLS-clamped) — never `serviceDb`. A tenant cannot read or write another tenant's grant. (spec: poly-multi-tenant-auth)
+- [ ] **CHECK_CONSTRAINTS_AT_WIRE**: Zod contract enforces `per_order > 0`, `daily >= per_order` so a malformed PUT is rejected before hitting the DB CHECK constraint. (spec: schema)
+- [ ] **REUSABLE_COMPONENT**: `<PolicyControls>` is a single component with `readonly` mode; Money page mounts it editable, Research wallet detail mounts it read-only with a Money-page link. No two divergent implementations of the same row.
+- [ ] **SIMPLE_SOLUTION**: two routes, two numeric inputs, one component, zero schema changes.
+
+### Files
+
+- **Create:** `packages/node-contracts/src/poly.wallet.grants.v1.contract.ts` — Zod contract (Get/Put input + output, plus typed error codes `invalid_caps | not_authenticated | no_active_grant`).
+- **Create:** `nodes/poly/app/src/app/api/v1/poly/wallet/grants/route.ts` — GET + PUT, session-required, appDb-scoped, RLS-clamped.
+- **Create:** `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/[id]/route.ts` (PATCH) — toggle `disabled_at` for one of the calling user's targets. Uses existing `polyCopyTradeTargets` row, no schema change.
+- **Create:** `nodes/poly/app/src/app/_facades/poly/wallet-grants.server.ts` — facade owning DB read/write + error translation. Throws `{code: 'invalid_caps'}` on PG `23514` so the component can render the inline message.
+- **Create (done — committed):** `nodes/poly/app/src/components/kit/policy/PolicyControls.tsx` — reusable two-row caps component, props `{values, onSave?, readonly}`. Editable mode = numeric inputs with `inputMode="decimal"` (NOT sliders — see Rejected). Readonly mode = values + `Edit on Money →` link.
+- **Create (done — committed):** `nodes/poly/app/src/components/kit/policy/TargetActiveToggle.tsx` — sibling toggle for the per-target view. Props `{active, onToggle}`. The toggle the user's sketch called for; pairs with `<PolicyControls readonly />` on the Research wallet detail.
+- **Create (done — committed):** `nodes/poly/app/src/components/kit/policy/AGENTS.md` — directory scope.
+- **Modify:** `nodes/poly/app/src/app/(app)/credits/TradingWalletPanel.tsx` — mount `<PolicyControls />` (editable) below the "Trading enabled" badge. Uses React Query (`/grants` query + mutation), invalidates on save.
+- **Modify:** `nodes/poly/app/src/features/wallet-analysis/components/WalletAnalysisSurface.tsx` — when this wallet is an active copy-trade target, render `<TargetActiveToggle />` + `<PolicyControls readonly />` near the existing `CopyWalletButton`. Reuses the same `/grants` query.
+- **Test:** unit (`PolicyControls.test.tsx`, `TargetActiveToggle.test.tsx`) + contract round-trip (`poly.wallet.grants.v1.contract.test.ts`) + route happy path + `daily < per_order` → 422 with `code: 'invalid_caps'`.
+
+### Sketch
+
+The desired UX layout (sketch by user, 2026-04-28):
+[`docs/design/poly-policy-ui/desired-policy-ui.png`](../../docs/design/poly-policy-ui/desired-policy-ui.png)
+
+Reference current state:
+
+- [`docs/design/poly-policy-ui/current-money-desktop.png`](../../docs/design/poly-policy-ui/current-money-desktop.png) — desktop Money page (no policy row today)
+- [`docs/design/poly-policy-ui/current-money-mobile.png`](../../docs/design/poly-policy-ui/current-money-mobile.png) — mobile Trading wallet tab
+
+Visual target (verbatim from sketch, expressed in our existing kit):
+
+```
+TRADING WALLET                         0x9A9e…160A  ⧉
+  USDC.E 16.52        POL 124.7385
+  ✓ Trading enabled  · Approvals signed in-app
+
+  POLICY                                            edit
+  Per trade   $5.00       Per day  $50.00
+  ─────────────────────────────────────────
+  → Next — pick a wallet to copy on Research
+  Fund                Withdraw
+```
+
+Per-target view (Research wallet detail, when copy-trade active):
+
+```
+COPY TRADE
+  ✓ Active                                          toggle
+  Per trade  $5.00       Per day  $50.00
+  Edit on Money →
+```
 
 ## Validation
 
 ### exercise
 
-- `GET /api/v1/poly/wallet/preferences` on a fresh tenant returns the schema defaults
-  without requiring a prior `PUT`.
-- `PUT /api/v1/poly/wallet/preferences` with `{ mirror_size_mode: "fixed_usdc",
-mirror_size_usdc: 2, cap_per_order_usdc: 2 }` succeeds, and a subsequent `GET` echoes
-  the written values.
-- `GET /api/v1/poly/wallet/status` on a funded wallet returns non-zero `usdc_balance` +
-  `matic_balance` and `funded: true`.
-- `POST /api/v1/poly/wallet/connect` on a tenant whose wallet is already funded returns
-  `requires_funding: false` on the idempotent re-hit, with `suggested_usdc` / `_matic`
-  matching the tenant's preferences row (not hardcoded 5 / 0.1).
-- On candidate-a, a mirrored trade for a tenant with `mirror_size_usdc: 2` places a $2
-  order (not $1). A tenant with no preferences row still places $1 per-order.
+- **Unit:** `pnpm test nodes/poly/app/src/components/kit/wallet/PolicyControls.test.tsx` — render in both modes, save calls `onSave` with parsed numbers.
+- **Component:** `pnpm test:component grants-editor` — full Money-page card mount with React Query, save → mutation hits PUT, refetch shows new values.
+- **Stack:** existing wallet-onboarding stack tests pass unchanged. Add one case: a fresh tenant's grant row reads back `per_order_usdc_cap=5, daily_usdc_cap=50` (the new default — confirms `provisionWithGrant` defaults match the UI's initial state).
+- **Candidate-a:** load https://poly-test.cognidao.org/credits, the Trading wallet card shows my actual cap values; click edit, change `per_order` to $7, save, then trigger a mirror tick — observe an order placed at the new ceiling on a market with `minUsdcNotional ≤ 7`.
 
 ### observability
 
-- Pino log line on `poly.wallet.preferences.{read,write}` with `billing_account_id` and
-  a delta of changed fields (no values for numeric caps — those are fine to log).
-- Pino log line on `poly.wallet.status` with `usdc_balance` / `matic_balance` / `funded`.
-  Query Loki at the deployed SHA for `route_id="poly.wallet.status"` and confirm the
-  balance fields are present and non-null.
-- Pino log line on `poly.copy-trade.decide` already exists; extend it with
-  `sizing_mode`, `sizing_value`, `cap_per_order_usdc` so the decision layer is auditable
-  against the tenant's config at the time of the decision.
+- Pino log line `poly.wallet.grants.read` (route_id) and `poly.wallet.grants.write` with `billing_account_id`, `delta` (which fields changed, NOT the values).
+- Loki query at the deployed SHA: `{namespace="cogni-candidate-a"} |= "poly.wallet.grants.write"` returns my own edit.
+- Existing `poly.authorize.outcome` already logs `intent_usdc` + `reason` — verifies the cap edit took effect.
 
 ## Risks
 
-- **Schema migration on an RLS-sensitive table.** `poly_copy_trade_config` is tenant-
-  scoped. Adding columns with `DEFAULT` is safe, but the RLS policy must continue to
-  apply. Migration tests must cover: default-only read (new tenant), write as
-  `app_user`, read-after-write.
-- **Coordinator regression.** The mirror-coordinator is the only real-money seam. A bug
-  that reads a null column and treats it as zero becomes a trade-suppression bug.
-  Component-test the fallback path with a null config row before shipping.
-- **Lying about balances.** If the Polygon RPC read fails, `/status` must surface
-  `balances_unavailable: true` — not silently return zero. Otherwise a healthy tenant
-  looks underfunded during an RPC hiccup and the UI pushes them to re-fund.
+- **Stale grant value visible in UI.** React Query default `staleTime` is 0; on save we invalidate. Mostly fine, but if multiple tabs are open one tab won't see the other's edit until refetch. Acceptable v1.
+- **CHECK constraint violations server-side** despite Zod. Belt-and-suspenders: route catches PG error code `23514` and returns a 422 with the specific constraint name in the response body so the UI can show "daily must be ≥ per-trade".
+- **Ledger pollution still real.** Editing the cap doesn't retroactively clean up the 4,246 `placement_failed` rows on candidate-a from task.0404 validation. Separate bug: filter out `error`-status fills from the daily-sum query (already excluded — confirmed in validation; status filter holds).
 
-## Dependencies
+## Review Checklist
 
-- [x] `poly_copy_trade_config` table exists (task.0315 migration 0027)
-- [x] Per-tenant RLS already wired on copy-trade tables (task.0318 Phase A)
-- [x] `POLYGON_RPC_URL` env var already set on candidate-a (executor path)
-- [ ] `@cogni/node-contracts` Zod contracts package accepts the new preferences contract
-      (additive, no existing contract change)
+- [ ] **Work Item:** `task.0347` linked in PR body
+- [ ] **Spec:** `CAPS_LIVE_IN_GRANT` + `TENANT_ISOLATION` upheld
+- [ ] **Tests:** unit + component + one stack case
+- [ ] **Reviewer:** assigned and approved
 
-## Why separate from task.0318
+## PR / Links
 
-- task.0318 Phase B is scoped to "provision a per-tenant wallet + use it to place a real
-  trade". Adding a config surface blows up that scope.
-- The current hardcoded defaults _are safe_ — tenants keep the v0 caps until they opt in.
-  Nothing about shipping task.0318 as-is is wrong; this task just removes the scaffolding
-  once tenants exist.
-- Grants (B4 in task.0318) are signed authorization envelopes; preferences are tenant-
-  authored config. Mixing them now would bake a design decision that `/design` on this
-  task is meant to answer.
+-
+
+## Attribution
+
+-
