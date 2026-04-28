@@ -22,7 +22,7 @@ updated: 2026-04-28
 labels: [cicd, operator-template, scaffolding, test-repo]
 external_refs:
   - work/items/task.0391.enable-merge-queue.md
-  - work/items/task.0412.operator-recover-from-merge-queue-cancel.md
+  - work/items/task.0415.operator-recover-from-merge-queue-cancel.md
 ---
 
 # task.0413 — Promote test-repo to a basic operator-template scaffold
