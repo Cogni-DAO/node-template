@@ -6,16 +6,17 @@ status: needs_implement
 priority: 0
 rank: 1
 estimate: 3
-summary: "`pnpm check:fast` is the husky pre-push gate. Today it sequences 8 phases through bash, runs `workspace:test --concurrency=1` (172s), pre-builds all .d.ts (24s) before typecheck, and excludes `check:docs` + `db:check` from the turbo graph so they always run. Total ~4 min on clean main, with hard CPU spikes that make multiple agents on one machine (or one cloud runner) thrash. Phase 1 ships the high-leverage low-risk wins: collapse parallel-safe phases into a single `turbo run` invocation, move `check:docs` and `db:check` into the turbo graph with proper inputs (so they cache), drop `--concurrency=1` on tests, scope vitest to `--changed` against merge-base. Phase 2 (remote cache + tsc project references / isolatedDeclarations) is a follow-up."
+summary: "`pnpm check:fast` is the husky pre-push gate. Today it sequences 8 phases through bash, runs `workspace:test --concurrency=1` (172s), pre-builds all .d.ts (24s) before typecheck, and excludes `db:check` + root lint/format from the turbo graph so they always run unparallelized. Total ~4 min on clean main, with hard CPU spikes that make multiple agents on one machine (or one cloud runner) thrash. Phase 1 ships the high-leverage low-risk wins: collapse parallel-safe phases into a single `turbo run` invocation, model root `lint`/`format:check` + `db:check` as turbo root tasks with proper `inputs:` so they cache and parallelize, drop `--concurrency=1` on tests. Vitest `--changed` and `check:docs` caching deliberately deferred (correctness/regen-loop hazards covered in design review). Phase 2 (remote cache + tsc project references / isolatedDeclarations) is a follow-up."
 outcome: |
   After Phase 1:
-    - `pnpm check:fast` on `main` (no changes vs upstream): <30s warm cache, <90s cold cache.
-    - `pnpm check:fast` on a typical 1-package PR: <20s warm.
-    - One `turbo run lint typecheck test check:docs db:check --affected` invocation drives all parallel-safe work.
-    - `check:docs` and `db:check` are turbo tasks with `inputs:` pinned to docs/* and drizzle config/migration files; cached when those don't change.
-    - Vitest runs `--changed` against merge-base inside affected packages.
-    - `workspace:test --concurrency=1` removed; restored to default (CPU-1).
-    - `packages:build` (24s prebuild) still runs but only when global build inputs changed; phase 2 will eliminate it.
+    - `pnpm check:fast` on incremental local rerun (warm Turbo cache): <30s.
+    - `pnpm check:fast` on a typical 1-package PR (warm cache): <20s.
+    - `pnpm check:fast` cold-cache (fresh worktree, agent VM, cloud runner): improves vs today by parallelism + dropping `--concurrency=1`, but the *full* cold-start fix lands in Phase 2 with remote cache.
+    - One `turbo run lint typecheck test db:check format:check --affected` invocation drives all parallel-safe work.
+    - `db:check` and `format:check`/`lint` (root) are turbo root-package tasks with `inputs:` pinned to drizzle configs/migrations and root config files; cached when those don't change.
+    - `workspace:test --concurrency=1` removed; restored to default (CPU-1). Pre-flight: confirm WHY it was added (likely testcontainer port collision or DB role contention) and either fix root cause inside the offending package or keep its in-package serialization, but never globally.
+    - `packages:build` (24s prebuild) still runs but only when global build inputs changed; Phase 2 will eliminate it.
+    - `check:docs` continues to run as today (unchanged) — caching deferred until `work:index` regen is split out (separate task).
     - Husky pre-push hook still calls `pnpm check:fast` and still catches drift.
 spec_refs: []
 assignees: []
@@ -61,9 +62,9 @@ Five root causes:
 
 ## Phase 1 scope (this PR)
 
-Ship the wins that don't touch the package import surface or require infra:
+Ship the wins that don't touch the package import surface, don't introduce vitest-level filtering, and don't try to cache the work-index generator:
 
-### 1. Single `turbo run` invocation for parallel-safe tasks
+### 1. Collapse the bash sequencer into one turbo invocation
 
 Replace this:
 
@@ -80,41 +81,33 @@ run_check "workspace:test"      "bash scripts/run-turbo-checks.sh test --concurr
 With:
 
 ```bash
-# packages:build still runs first (Phase 2 removes it) — captured as a pre-step
+# packages:build still runs first (Phase 2 removes it) — outside the turbo run.
 run_check "packages:build" "node scripts/run-scoped-package-build.mjs"
 
-# One turbo invocation, full parallelism, affected-aware, with all checks in the DAG.
-# Per-task caching means rerun on no-change is ~2s (graph hash + cache restore).
-run_check "workspace" "bash scripts/run-turbo-checks.sh lint typecheck test check:docs db:check"
+# One turbo invocation, full parallelism, affected-aware, with everything in the DAG
+# *except* check:docs (deferred — see "Deferred from Phase 1" below).
+run_check "workspace" "bash scripts/run-turbo-checks.sh lint typecheck test format:check db:check"
 
-# Root-only checks that aren't packageable (biome/prettier on root files, root-layout, etc.)
-run_check "root:lint+format" "pnpm lint && pnpm format:check"
+# check:docs continues to run as a separate root step — unchanged from today.
+run_check "check:docs" "pnpm -s check:docs"
 ```
 
-This is 3 `run_check` calls instead of 8, and the middle one runs all 5 turbo tasks in one process so Turbo can schedule across the whole graph.
+This collapses 7 `run_check` calls into 3. Root `lint` and `format:check` become root-workspace turbo tasks (see step 3) so they participate in the DAG. `check:docs` stays outside until the `work:index` regen issue is split out (separate task).
 
 ### 2. Drop `--concurrency=1` on tests
 
-Default (CPU-1) restored. If a specific package has DB/port flakiness, fix it inside that package (e.g., dynamic ports, test-scoped containers) — never globally serialize all packages. Tracked as follow-up bug if any flake surfaces.
+Pre-flight required: grep history for why `--concurrency=1` was added. Two outcomes:
 
-### 3. Move `check:docs` and `db:check` into the turbo graph
+- **Cause known and fixable inside the offending package** (e.g., testcontainer dynamic ports, isolated DB schema per worker) → fix it there, drop the global flag.
+- **Cause unknown or systemic** → keep `--concurrency=1` in _that one package's_ vitest config, drop the global flag.
 
-Add to `turbo.json`:
+Never globally serialize the whole workspace because one package has a flake.
+
+### 3. Move `db:check` and root `lint`/`format:check` into the turbo graph
+
+Root `package.json` becomes a participating workspace package with these turbo tasks. Add to `turbo.json`:
 
 ```jsonc
-"check:docs": {
-  "inputs": [
-    "docs/**/*.md",
-    "AGENTS.md",
-    "**/AGENTS.md",
-    "work/**/*.md",
-    "scripts/validate-docs-metadata.mjs",
-    "scripts/validate-doc-headers.ts",
-    "scripts/validate-agents-md.mjs",
-    "scripts/generate-work-index.mjs"
-  ],
-  "outputs": ["work/items/_index.md"]
-},
 "db:check": {
   "inputs": [
     "nodes/*/drizzle.config.ts",
@@ -123,26 +116,44 @@ Add to `turbo.json`:
     "nodes/*/packages/doltgres-schema/**",
     "nodes/*/migrations/**"
   ]
+},
+"format:check": {
+  "inputs": [
+    "**/*.{ts,tsx,js,jsx,mjs,cjs,json,md,yml,yaml}",
+    ".prettierrc*",
+    ".prettierignore"
+  ]
 }
 ```
 
-Both become root-package turbo tasks (root `package.json` already exposes them). Re-runs on no-change hit cache in <500ms.
+Workspace-package `lint` task already exists; the root package gets its own `lint` script that turbo runs as part of the DAG.
 
-### 4. Vitest `--changed` for affected pkgs
+Re-runs on no-change hit cache in <500ms each.
 
-Each package's `test` script becomes (or is wrapped to become):
+### 4. Compact turbo logs (already wired)
 
-```jsonc
-"test": "vitest run --changed=${TURBO_SCM_BASE:-origin/main} --passWithNoTests"
-```
+`run-turbo-checks.sh` already sets `--output-logs=errors-only --log-order=grouped`. Verify it propagates to the new multi-task form.
 
-Combined with `turbo --affected`, only test files whose source changed run, inside packages whose surface changed. Wired via env propagation in `run-turbo-checks.sh` (already exports `TURBO_SCM_BASE`).
+## Deferred from Phase 1
 
-If `--changed` finds nothing in a package, vitest exits 0 instantly.
+These were in the original design but were called out in the design review (C1, C2) as correctness-fragile or coupled to a separate concern:
 
-### 5. Compact turbo logs (already wired)
+### Vitest `--changed` (deferred — correctness risk)
 
-`run-turbo-checks.sh` already sets `--output-logs=errors-only --log-order=grouped`. Verify it propagates to the new single-invocation form.
+In a monorepo where cross-package types resolve through built `.d.ts` in sibling `dist/`, vitest `--changed` walks each test's static import graph and can miss transitive source changes that Turbo `--affected` correctly identifies. Layering this on top of Turbo `--affected` buys little and risks false-negative test runs. Defer until import boundaries are resolved through TS project references (Phase 2).
+
+### `check:docs` caching (deferred — work-index regen is a separate concern)
+
+`check:docs` mutates `work/items/_index.md` via `work:index`. Caching this task hits a self-invalidating output (the index is both an input and an output) and would need either (a) splitting `work:index` out of `check:docs` or (b) excluding the index file from inputs/outputs and relying on drift detection. Both are real changes; user has explicitly asked to handle the work-item index in a separate task. Leave `check:docs` as-is.
+
+## Phase 2 (follow-up — separate task)
+
+- **Turbo Remote Cache** (Vercel free tier or self-hosted `turborepo-remote-cache` on R2/S3). Cold worktree → warm cache → 5-10s `check:fast`. Single biggest agent/CI cold-start win.
+- **TS project references** _or_ `isolatedDeclarations` to delete `packages:build` entirely. Phase 2 task owes a tradeoff write-up before scheduling — these are very different migrations:
+  - _Project references_: requires `composite: true` in every `tsconfig.json` and an explicit `references` graph; downstream cost is migration-only.
+  - _Isolated declarations_ (TS 5.5+): requires explicit return-type annotations on every public export; downstream cost is permanent stylistic burden.
+- **Root format → biome only**, drop prettier from the gate (move to commit-time only). Prettier check on the world is 18s.
+- **`work:index` split out of `check:docs`** so docs validation can be cached independently of the index regenerator.
 
 ## Phase 2 (follow-up — separate task)
 
@@ -164,7 +175,7 @@ The husky pre-push gate `pnpm check:fast` becomes fast enough that no agent or h
 
 ### Approach
 
-**Solution**: Collapse the bash sequencer into a single `turbo run` invocation that drives lint + typecheck + test + check:docs + db:check as one DAG; pull `check:docs` and `db:check` into the turbo graph with explicit `inputs:` so they cache; drop `--concurrency=1`; scope vitest to `--changed`. Keep the existing `scripts/check-fast.sh` shell as the husky entrypoint and keep the drift-detection guardrails.
+**Solution**: Collapse the bash sequencer into one `turbo run` invocation that drives lint + typecheck + test + format:check + db:check as one parallel DAG; pull root `lint`/`format:check` and `db:check` into the turbo graph with explicit `inputs:` so they cache; drop `--concurrency=1`; keep `check:docs` and `packages:build` outside the turbo run for now. Keep the existing `scripts/check-fast.sh` shell as the husky entrypoint and keep the drift-detection guardrails.
 
 **Reuses**:
 
@@ -185,9 +196,12 @@ The husky pre-push gate `pnpm check:fast` becomes fast enough that no agent or h
 
 - [ ] HUSKY_PREPUSH_UNCHANGED: `.husky/pre-push` still calls `pnpm check:fast` and exits non-zero on any failure.
 - [ ] DRIFT_DETECTION_INTACT: `scripts/check-fast.sh` still snapshots tree hash before/after and fails on mid-run mutation.
-- [ ] CACHE_INPUTS_COMPLETE: `check:docs` and `db:check` task `inputs:` cover every file the validators read; missing inputs → silent stale cache → broken push.
-- [ ] NO_GLOBAL_TEST_SERIALIZATION: `--concurrency=1` removed from the test invocation; per-package serialization stays inside that package's vitest config if needed.
+- [ ] CACHE_INPUTS_COMPLETE: `db:check` and `format:check` task `inputs:` cover every file the validators read; missing inputs → silent stale cache → broken push.
+- [ ] NO_GLOBAL_TEST_SERIALIZATION: `--concurrency=1` removed from the global test invocation; per-package serialization stays inside that package's vitest config if needed.
+- [ ] CONCURRENCY_ROOT_CAUSE_KNOWN: before dropping `--concurrency=1` globally, the original reason for adding it is identified (commit/PR archaeology) and either fixed or scoped to one package.
 - [ ] AFFECTED_FALLBACK_PRESERVED: On `main` (no upstream), behavior falls back to full workspace run, same as today.
+- [ ] WORK_INDEX_UNTOUCHED: `check:docs` (which regenerates `work/items/_index.md`) is unchanged in this PR; caching it is a separate task.
+- [ ] NO_VITEST_CHANGED_FILTER: vitest `--changed` is NOT introduced in this PR (deferred per design review C1).
 - [ ] SIMPLE_SOLUTION: One turbo invocation + two new task entries; no new orchestration code.
 - [ ] PHASE_2_DEFERRED: Remote cache, project references, prebuild removal explicitly out of scope; tracked separately.
 
@@ -195,11 +209,10 @@ The husky pre-push gate `pnpm check:fast` becomes fast enough that no agent or h
 
 <!-- High-level scope -->
 
-- Modify: `scripts/check-fast.sh` — collapse 8 `run_check` calls into 3 (prebuild, single turbo run, root lint/format).
-- Modify: `scripts/run-turbo-checks.sh` — accept multiple task names in one invocation; pass through unchanged.
-- Modify: `turbo.json` — add `check:docs` and `db:check` task definitions with `inputs:`.
-- Modify: per-package `package.json` `test` scripts that need vitest `--changed` wiring (audit first; some may already use `vitest run`).
-- Modify: `package.json` root scripts — ensure `check:docs` and `db:check` are turbo-discoverable as root tasks.
+- Modify: `scripts/check-fast.sh` — collapse 7 `run_check` calls into 3 (prebuild, single turbo run, check:docs).
+- Modify: `scripts/run-turbo-checks.sh` — accept multiple task names in one invocation; remove `--concurrency=1` plumbing.
+- Modify: `turbo.json` — add `db:check` and `format:check` task definitions with `inputs:`. Confirm `lint` task already covers root lint.
+- Modify: `package.json` (root) — name the root workspace package so it's a turbo participant; expose `format:check` and root `lint` as scripts the turbo task can call.
 - Test: manual benchmark before/after on (a) clean `main` rerun (b) 1-file change (c) global build input change. Capture in PR description.
 
 ## Validation
