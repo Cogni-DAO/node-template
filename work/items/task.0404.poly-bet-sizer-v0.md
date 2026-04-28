@@ -14,8 +14,8 @@ spec_refs:
 assignees: [derekg1729]
 credit:
 project: proj.poly-bet-sizer
-branch: feat/task-0404-poly-bet-sizer-v0
-pr:
+branch: worktree-poly-bet-sizer
+pr: https://github.com/Cogni-DAO/node-template/pull/1097
 reviewer:
 revision: 0
 blocked_by: []
