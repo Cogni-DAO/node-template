@@ -31,19 +31,19 @@ external_refs:
 
 # v0 "Send to Cogni" error intake
 
-> **Scope reduction → v0-of-v0 (2026-04-28)**: After reviewing the
-> approved design, we noticed the Temporal + cross-runtime LokiQueryPort
-> work alone is a clean multi-file lift. To prove the user-visible loop
-> on candidate-a in a single PR, this task ships v0-of-v0: same UX, but
-> the route handler does an **inline** `error_reports` insert and an
-> **inline** Loki window pull (server-side fetch, ~50ms over local
-> network). No Temporal. No `packages/loki-query/`. The hardening to
-> the originally-approved design — extract Loki adapter to a shared
-> package, move work into a Temporal workflow, add a stack test — is
-> tracked in **task.0420**, blocked_by this. The original Design
-> section below is preserved verbatim as the v1 target; the **Files
-> (v0-of-v0)** subsection at the bottom is what this PR actually
-> ships.
+> **Scope reduction → v0-of-v0 (2026-04-28)**: To prove the
+> user-visible loop on candidate-a in a single PR, this task ships
+> v0-of-v0: route handler **inline-inserts** the `error_reports` row
+> and **emits a structured Pino log line carrying the `digest`** —
+> that log line, captured by Alloy → Loki, IS the v0 observability
+> signal. **No `loki_window` pull** in v0-of-v0 (column stays nullable
+> in the schema; v1 fills it). No Temporal. No `packages/loki-query/`.
+> No cross-network fetch from the operator pod. The hardening — extract
+> Loki query to a shared package, move work into a Temporal workflow
+> that fills `loki_window`, add a stack test — is tracked in
+> **task.0420**, blocked_by this. The original Design section below is
+> preserved verbatim as the v1 target; the **Files (v0-of-v0)**
+> subsection at the bottom is what this PR actually ships.
 
 ## Problem
 
@@ -332,15 +332,14 @@ deferred to **task.0420**. v0-of-v0 ships:
   re-exported from `index.ts`.
 - `nodes/operator/app/src/adapters/server/db/migrations/<ts>_error_reports.sql`
   — generated migration.
-- `nodes/operator/app/src/adapters/server/loki-query.ts` —
-  fetch-based Loki helper (~40 lines). **Lives in app code on
-  purpose for v0-of-v0; task.0420 moves it to `packages/loki-query/`.**
 - `nodes/operator/app/src/app/api/v1/error-report/route.ts` —
-  POST: Origin check → in-memory per-IP rate limit → Zod parse →
-  best-effort session userId → server stamps build SHA →
-  insert row (`loki_status=pending`) → `await` Loki query (with
-  ≤2s timeout, swallow failures and mark `loki_status=failed`) →
-  update row → return 202 `{ trackingId, status: "received" }`.
+  POST: per-IP rate limit (`TokenBucketRateLimiter` from existing
+  `bootstrap/http/rateLimiter.ts`) → Zod parse → best-effort
+  session userId → server stamps build SHA → insert row
+  (`loki_status='pending'`, `loki_window=null`) → emit structured
+  Pino line `{ event: "error_report.intake", trackingId, digest, route, build_sha, ... }` so it
+  lands in Loki via Alloy → return 202 `{ trackingId, status: "received" }`.
+  No Loki query; no Temporal start; no second network hop.
 - `nodes/operator/app/src/components/SendToCogniButton.tsx` —
   client component; reads `error.digest` + `error` from props,
   truncates message/stack client-side, POSTs `/api/v1/error-report`,

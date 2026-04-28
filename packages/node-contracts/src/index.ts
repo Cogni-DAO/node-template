@@ -47,8 +47,9 @@ export * from "./attribution.review-subject-overrides.v1.contract";
 export * from "./attribution.sign-data.v1.contract";
 // ── Billing ─────────────────────────────────────────────────────────────────
 export * from "./billing-ingest.internal.v1.contract";
-// ── Chat errors ─────────────────────────────────────────────────────────────
 export * from "./error.chat.v1.contract";
+// ── Chat errors ─────────────────────────────────────────────────────────────
+export * from "./error-report.v1.contract";
 export * from "./governance.status.v1.contract";
 // ── Governance ──────────────────────────────────────────────────────────────
 export * from "./governance-schedules-sync.internal.v1.contract";
