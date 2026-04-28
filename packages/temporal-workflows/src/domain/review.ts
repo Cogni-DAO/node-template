@@ -3,14 +3,17 @@
 
 /**
  * Module: `@cogni/temporal-workflows/domain/review`
- * Purpose: Pure domain logic for PR review — criteria evaluation and markdown formatting.
+ * Purpose: Pure domain logic for PR review — criteria evaluation, markdown formatting, and routing-diagnostic comment formatting.
  * Scope: Deterministic functions over serializable data. Does not perform I/O or side effects.
  * Invariants:
  *   - Per WORKER_IS_DUMB: domain logic lives here, not in activities
  *   - All inputs/outputs are plain serializable objects
  *   - Formatting matches cogni-git-review markdown conventions
+ *   - Routing-diagnostic wording mirrors docs/spec/node-ci-cd-contract.md
+ *     § Single-Domain Scope > Diagnostic contract: name conflicting domains,
+ *     name operator-territory paths, suggest the split, link the spec.
  * Side-effects: none
- * Links: task.0191, docs/spec/temporal-patterns.md
+ * Links: task.0191, task.0403, docs/spec/temporal-patterns.md, docs/spec/node-ci-cd-contract.md
  * @internal
  */
 

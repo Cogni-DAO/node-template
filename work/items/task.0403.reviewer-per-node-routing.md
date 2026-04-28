@@ -2,7 +2,7 @@
 id: task.0403
 type: task
 title: "Reviewer per-node routing — wire `extractOwningNode` into PrReviewWorkflow so PR webhooks load per-node `.cogni/rules/`"
-status: needs_closeout
+status: needs_merge
 priority: 0
 rank: 1
 estimate: 2

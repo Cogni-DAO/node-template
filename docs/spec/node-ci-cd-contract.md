@@ -54,7 +54,7 @@ Define the CI/CD invariants, merge gate, and file ownership boundaries that ensu
 
 ## Single-Domain Scope
 
-Every path in the repo belongs to **exactly one node domain**. A PR may touch exactly one domain. This invariant is enforced statically by the `single-node-scope` job in `ci.yaml` (task.0381) and routed at runtime by the operator's reviewer via `extractOwningNode` in `@cogni/repo-spec` (task.0382). Both implementations consume the same set of fixtures and must agree.
+Every path in the repo belongs to **exactly one node domain**. A PR may touch exactly one domain. This invariant is enforced statically by the `single-node-scope` job in `ci.yaml` (task.0381), and at review-time by `PrReviewWorkflow` via `extractOwningNode` (resolver: task.0382; consumer: task.0403). The reviewer fetches per-node rule files from `<owningNode.path>/.cogni/rules/` for non-operator singles, refuses cross-domain PRs with a diagnostic comment + neutral check (no AI tokens spent), and emits a structured `review.routed` log. Both implementations consume the same set of fixtures and must agree.
 
 ### Domains
 

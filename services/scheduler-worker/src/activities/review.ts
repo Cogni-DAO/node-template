@@ -3,15 +3,21 @@
 
 /**
  * Module: `@cogni/scheduler-worker-service/activities/review`
- * Purpose: Temporal Activities for PR review — GitHub I/O and review orchestration.
+ * Purpose: Temporal Activities for PR review — GitHub I/O, owning-domain resolution, and review orchestration.
  * Scope: Activities perform I/O (GitHub API). Domain logic delegated to domain/review.ts.
  * Invariants:
  *   - Per ACTIVITY_IDEMPOTENCY: GitHub writes use stable business keys (repo/pr/headSha)
  *   - Per EXECUTION_VIA_SERVICE_API: graph execution goes through GraphRunWorkflow child, not activities
  *   - Activities resolve GitHub App creds from worker env (never from workflow input)
  *   - Domain logic (criteria evaluation, formatting) in domain/review.ts, not here
+ *   - Per PER_NODE_RULE_LOADING: `fetchPrContextActivity` resolves owning domain via
+ *     `extractOwningNode` and fetches rule files from `<owningNode.path>/.cogni/rules/`
+ *     for non-operator singles; operator domain keeps reading root `.cogni/rules/`.
+ *     Emits structured `review.routed` log for the deploy_verified loop.
+ *   - `postRoutingDiagnosticActivity` handles `conflict` + `miss` outcomes with a
+ *     pure formatter + neutral check run — no AI tokens, no GraphRunWorkflow child.
  * Side-effects: IO (GitHub API via Octokit)
- * Links: task.0191, docs/spec/temporal-patterns.md
+ * Links: task.0191, task.0403, docs/spec/temporal-patterns.md, docs/spec/node-ci-cd-contract.md#single-domain-scope
  * @internal
  */
 
