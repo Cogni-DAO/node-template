@@ -47,14 +47,17 @@ if [ -z "$IMAGE_TAG" ]; then
   exit 1
 fi
 
-# SOURCE_SHA is the PR head SHA baked into every image via pr-build.yml
+# SOURCE_SHA is the BUILD_SHA baked into every image via pr-build.yml
 # (BUILD_SHA label / /version.buildSha). Flows into the payload envelope so
 # promote-build-payload.sh can write .promote-state/source-sha-by-app.json
 # for cross-env contract verification (bug.0321 Fix 4). Fall back to
-# parsing the IMAGE_TAG (`pr-{N}-{sha}` convention) when the caller
-# didn't pass it explicitly.
+# parsing the IMAGE_TAG when the caller didn't pass it explicitly.
+# Two tag namespaces (bug.0412):
+#   pr-{N}-{X}  — pull_request build, X = BUILD_SHA = original PR head SHA
+#   mq-{N}-{Y}  — merge_group build, Y = BUILD_SHA = queue/rebased commit
+# Both encode BUILD_SHA as the trailing 40-char hex.
 if [ -z "$SOURCE_SHA" ]; then
-  SOURCE_SHA=$(printf '%s' "$IMAGE_TAG" | sed -E 's/^pr-[0-9]+-//')
+  SOURCE_SHA=$(printf '%s' "$IMAGE_TAG" | sed -E 's/^(pr|mq)-[0-9]+-//')
 fi
 
 if ! command -v docker >/dev/null 2>&1; then

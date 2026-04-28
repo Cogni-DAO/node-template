@@ -7,12 +7,15 @@ name: PR Build
 # artifact so downstream candidate-flight consumers see no contract change.
 #
 # Triggers on both `pull_request` and `merge_group` (task.0391):
-# - pull_request: builds at PR head SHA, tagged pr-{N}-{X}. PR-time CI signal.
-# - merge_group: builds at the queue's rebased candidate SHA, OVERWRITES the
-#   pr-{N}-{X} tag with rebased-tree content. flight-preview.yml on push:main
-#   then re-tags this rebased image as preview-{mainSHA}, so the preview env
-#   reflects the actual merged tree. Without this, flight-preview would re-tag
-#   pre-rebase content (the bug class observed in PR #1033).
+# - pull_request: builds at PR head SHA, tagged pr-{N}-{X}. PR-time CI signal,
+#   consumed by candidate-flight.yml. Tag is IMMUTABLE post-build.
+# - merge_group: builds at the queue's rebased candidate SHA Y, tagged
+#   mq-{N}-{Y}. flight-preview.yml on push:main resolves this tag and re-tags
+#   it as preview-{mainSHA}, so the preview env reflects the rebased tree
+#   (PR #1033). Tag namespace is intentionally distinct from pr-{N}-{X} so
+#   merge_group rebuilds cannot mutate the PR-time image — that mutation
+#   broke candidate-flight verify-buildsha when a PR merged mid-flight
+#   (bug.0412).
 
 on:
   pull_request:
@@ -95,13 +98,21 @@ jobs:
             echo "::error::Unsupported event: $EVENT_NAME"
             exit 1
           fi
+          # bug.0412 — split tag namespaces so merge_group rebuilds cannot
+          # mutate the immutable pull_request-time image that candidate-flight
+          # consumes. pull_request → pr-{N}-{X}; merge_group → mq-{N}-{Y}.
+          if [ "$EVENT_NAME" = "merge_group" ]; then
+            IMAGE_TAG="mq-${PR_NUMBER}-${BUILD_SHA}"
+          else
+            IMAGE_TAG="pr-${PR_NUMBER}-${ORIGINAL_HEAD_SHA}"
+          fi
           echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
           echo "original_head_sha=$ORIGINAL_HEAD_SHA" >> "$GITHUB_OUTPUT"
           echo "build_sha=$BUILD_SHA" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
           echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
           echo "head_ref_name=$HEAD_REF_NAME" >> "$GITHUB_OUTPUT"
-          echo "image_tag=pr-${PR_NUMBER}-${ORIGINAL_HEAD_SHA}" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
 
   detect:
     needs: resolve
