@@ -87,6 +87,7 @@ import type {
   TradingApprovalStep,
   TradingApprovalsState,
 } from "@cogni/poly-wallet";
+import { getContractConfig as clobV2GetContractConfig } from "@polymarket/clob-client-v2";
 import type { AuthorizationContext, PrivyClient } from "@privy-io/node";
 import { createViemAccount } from "@privy-io/node/viem";
 import {
@@ -130,36 +131,40 @@ const ERC20_BALANCEOF_ABI = parseAbi([
   "function balanceOf(address owner) view returns (uint256)",
 ]);
 
-// ─── APPROVAL_TARGETS_PINNED ────────────────────────────────────────────────
-// Polymarket mainnet CLOB contracts. Source-of-truth: `@polymarket/clob-client`
-// `config.js` + `scripts/experiments/approve-polymarket-allowances.ts`. Not
-// env-overridable, not user-input — a misconfigured address here would
-// authorize an arbitrary spender to move the tenant's entire USDC.e balance.
-// ───────────────────────────────────────────────────────────────────────────
-const CTF_POLYGON = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" as Address;
-const EXCHANGE_POLYMARKET =
-  "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" as Address;
+const POLYMARKET_CONTRACTS = clobV2GetContractConfig(polygon.id);
+const CTF_POLYGON = POLYMARKET_CONTRACTS.conditionalTokens as Address;
+const EXCHANGE_POLYMARKET = POLYMARKET_CONTRACTS.exchangeV2 as Address;
 const NEG_RISK_EXCHANGE_POLYMARKET =
-  "0xC5d563A36AE78145C45a50134d48A1215220f80a" as Address;
+  POLYMARKET_CONTRACTS.negRiskExchangeV2 as Address;
 const NEG_RISK_ADAPTER_POLYMARKET =
-  "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296" as Address;
+  POLYMARKET_CONTRACTS.negRiskAdapter as Address;
+const PUSD_POLYGON = POLYMARKET_CONTRACTS.collateral as Address;
+const COLLATERAL_ONRAMP_POLYGON =
+  "0x93070a847efEf7F70739046A929D47a521F5B8ee" as Address;
 
-/** 3 USDC.e spenders that need max-uint256 allowance (enables BUY). */
 const USDC_E_SPENDERS: readonly { label: string; address: Address }[] = [
-  { label: "USDC.e → Exchange", address: EXCHANGE_POLYMARKET },
+  { label: "USDC.e → Onramp", address: COLLATERAL_ONRAMP_POLYGON },
+];
+
+const PUSD_SPENDERS: readonly { label: string; address: Address }[] = [
+  { label: "pUSD → Exchange (V2)", address: EXCHANGE_POLYMARKET },
   {
-    label: "USDC.e → Neg-Risk Exchange",
+    label: "pUSD → Neg-Risk Exchange (V2)",
     address: NEG_RISK_EXCHANGE_POLYMARKET,
   },
-  { label: "USDC.e → Neg-Risk Adapter", address: NEG_RISK_ADAPTER_POLYMARKET },
+  { label: "pUSD → Neg-Risk Adapter", address: NEG_RISK_ADAPTER_POLYMARKET },
 ];
 
-/** 3 CTF operators that need `setApprovalForAll(true)` (enables SELL). */
 const CTF_OPERATORS: readonly { label: string; address: Address }[] = [
-  { label: "CTF → Exchange", address: EXCHANGE_POLYMARKET },
-  { label: "CTF → Neg-Risk Exchange", address: NEG_RISK_EXCHANGE_POLYMARKET },
+  { label: "CTF → Exchange (V2)", address: EXCHANGE_POLYMARKET },
+  {
+    label: "CTF → Neg-Risk Exchange (V2)",
+    address: NEG_RISK_EXCHANGE_POLYMARKET,
+  },
   { label: "CTF → Neg-Risk Adapter", address: NEG_RISK_ADAPTER_POLYMARKET },
 ];
+
+const COLLATERAL_ONRAMP_WRAP_ABI = parseAbi(["function wrap(uint256 amount)"]);
 
 const CTF_SET_APPROVAL_ABI = parseAbi([
   "function isApprovedForAll(address account, address operator) view returns (bool)",
@@ -437,19 +442,24 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         chain: polygon,
         transport: http(this.polygonRpcUrl),
       });
-      const [usdcRaw, polRaw] = await Promise.all([
+      const [usdcERaw, pusdRaw, polRaw] = await Promise.all([
         client.readContract({
           address: USDC_E_POLYGON,
           abi: ERC20_BALANCEOF_ABI,
           functionName: "balanceOf",
           args: [addr],
         }),
+        client.readContract({
+          address: PUSD_POLYGON,
+          abi: ERC20_BALANCEOF_ABI,
+          functionName: "balanceOf",
+          args: [addr],
+        }),
         client.getBalance({ address: addr }),
       ]);
-      return [
-        Number(formatUnits(usdcRaw, USDC_DECIMALS)),
-        Number(formatUnits(polRaw, POL_DECIMALS)),
-      ];
+      const usdcE = Number(formatUnits(usdcERaw, USDC_DECIMALS));
+      const pusd = Number(formatUnits(pusdRaw, USDC_DECIMALS));
+      return [usdcE + pusd, Number(formatUnits(polRaw, POL_DECIMALS))];
     } catch (err) {
       errors.push(
         `polygon_rpc: ${err instanceof Error ? err.message : String(err)}`
@@ -1068,12 +1078,28 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       transport: http(this.polygonRpcUrl),
     });
 
-    const [polRaw, usdcAllowances, ctfApprovals] = await Promise.all([
+    const [
+      polRaw,
+      usdcEAllowances,
+      pusdAllowances,
+      ctfApprovals,
+      usdcEBalanceRaw,
+    ] = await Promise.all([
       publicClient.getBalance({ address }),
       Promise.all(
         USDC_E_SPENDERS.map((sp) =>
           publicClient.readContract({
             address: USDC_E_POLYGON,
+            abi: erc20Abi,
+            functionName: "allowance",
+            args: [address, sp.address],
+          })
+        )
+      ),
+      Promise.all(
+        PUSD_SPENDERS.map((sp) =>
+          publicClient.readContract({
+            address: PUSD_POLYGON,
             abi: erc20Abi,
             functionName: "allowance",
             args: [address, sp.address],
@@ -1090,9 +1116,16 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           })
         )
       ),
+      publicClient.readContract({
+        address: USDC_E_POLYGON,
+        abi: ERC20_BALANCEOF_ABI,
+        functionName: "balanceOf",
+        args: [address],
+      }),
     ]);
 
     const polBalance = Number(formatUnits(polRaw, POL_DECIMALS));
+    const usdcEBalance = usdcEBalanceRaw;
 
     this.log.info(
       {
@@ -1100,24 +1133,28 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         connection_id: signingContext.connectionId,
         funder_address: address,
         pol_balance: polBalance,
-        usdc_allowances: usdcAllowances.map((a) => a === maxUint256),
+        usdc_e_allowances: usdcEAllowances.map((a) => a === maxUint256),
+        pusd_allowances: pusdAllowances.map((a) => a === maxUint256),
         ctf_approvals: ctfApprovals,
+        usdc_e_balance_raw: usdcEBalance.toString(),
       },
       "poly.wallet.enable_trading.start"
     );
 
-    const steps: TradingApprovalStep[] = [];
-    const needsUsdc = usdcAllowances.map((a) => a !== maxUint256);
+    const needsUsdcE = usdcEAllowances.map((a) => a !== maxUint256);
+    const needsPusd = pusdAllowances.map((a) => a !== maxUint256);
     const needsCtf = ctfApprovals.map((b) => !b);
+    const needsWrap = usdcEBalance > 0n;
     const workCount =
-      needsUsdc.filter(Boolean).length + needsCtf.filter(Boolean).length;
+      needsUsdcE.filter(Boolean).length +
+      (needsWrap ? 1 : 0) +
+      needsPusd.filter(Boolean).length +
+      needsCtf.filter(Boolean).length;
 
-    if (workCount === 0) {
-      // Already-satisfied — record every target as `satisfied` and stamp DB.
-      for (let i = 0; i < USDC_E_SPENDERS.length; i++) {
-        const sp = USDC_E_SPENDERS[i];
-        if (!sp) continue;
-        steps.push({
+    const buildSatisfiedSteps = (): TradingApprovalStep[] => {
+      const out: TradingApprovalStep[] = [];
+      for (const sp of USDC_E_SPENDERS) {
+        out.push({
           kind: "erc20_approve",
           label: sp.label,
           tokenContract: USDC_E_POLYGON,
@@ -1127,10 +1164,28 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           error: null,
         });
       }
-      for (let i = 0; i < CTF_OPERATORS.length; i++) {
-        const op = CTF_OPERATORS[i];
-        if (!op) continue;
-        steps.push({
+      out.push({
+        kind: "collateral_wrap",
+        label: "Wrap USDC.e → pUSD",
+        tokenContract: COLLATERAL_ONRAMP_POLYGON,
+        operator: COLLATERAL_ONRAMP_POLYGON,
+        state: "satisfied",
+        txHash: null,
+        error: null,
+      });
+      for (const sp of PUSD_SPENDERS) {
+        out.push({
+          kind: "erc20_approve",
+          label: sp.label,
+          tokenContract: PUSD_POLYGON,
+          operator: sp.address,
+          state: "satisfied",
+          txHash: null,
+          error: null,
+        });
+      }
+      for (const op of CTF_OPERATORS) {
+        out.push({
           kind: "ctf_set_approval_for_all",
           label: op.label,
           tokenContract: CTF_POLYGON,
@@ -1140,6 +1195,13 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           error: null,
         });
       }
+      return out;
+    };
+
+    const steps: TradingApprovalStep[] = [];
+
+    if (workCount === 0) {
+      steps.push(...buildSatisfiedSteps());
       const readyAt = await this.stampTradingReady(
         signingContext.connectionId,
         billingAccountId
@@ -1155,25 +1217,41 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       return { ready: true, address, polBalance, steps, readyAt };
     }
 
-    // Gas preflight: fail-fast with skipped steps, no tx submitted.
     if (polBalance < ENABLE_TRADING_MIN_POL) {
-      for (let i = 0; i < USDC_E_SPENDERS.length; i++) {
-        const sp = USDC_E_SPENDERS[i];
-        if (!sp) continue;
+      USDC_E_SPENDERS.forEach((sp, i) => {
         steps.push({
           kind: "erc20_approve",
           label: sp.label,
           tokenContract: USDC_E_POLYGON,
           operator: sp.address,
-          state: usdcAllowances[i] === maxUint256 ? "satisfied" : "skipped",
+          state: usdcEAllowances[i] === maxUint256 ? "satisfied" : "skipped",
           txHash: null,
           error:
-            usdcAllowances[i] === maxUint256 ? null : "insufficient_pol_gas",
+            usdcEAllowances[i] === maxUint256 ? null : "insufficient_pol_gas",
         });
-      }
-      for (let i = 0; i < CTF_OPERATORS.length; i++) {
-        const op = CTF_OPERATORS[i];
-        if (!op) continue;
+      });
+      steps.push({
+        kind: "collateral_wrap",
+        label: "Wrap USDC.e → pUSD",
+        tokenContract: COLLATERAL_ONRAMP_POLYGON,
+        operator: COLLATERAL_ONRAMP_POLYGON,
+        state: needsWrap ? "skipped" : "satisfied",
+        txHash: null,
+        error: needsWrap ? "insufficient_pol_gas" : null,
+      });
+      PUSD_SPENDERS.forEach((sp, i) => {
+        steps.push({
+          kind: "erc20_approve",
+          label: sp.label,
+          tokenContract: PUSD_POLYGON,
+          operator: sp.address,
+          state: pusdAllowances[i] === maxUint256 ? "satisfied" : "skipped",
+          txHash: null,
+          error:
+            pusdAllowances[i] === maxUint256 ? null : "insufficient_pol_gas",
+        });
+      });
+      CTF_OPERATORS.forEach((op, i) => {
         steps.push({
           kind: "ctf_set_approval_for_all",
           label: op.label,
@@ -1183,7 +1261,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           txHash: null,
           error: ctfApprovals[i] ? null : "insufficient_pol_gas",
         });
-      }
+      });
       this.log.warn(
         {
           billing_account_id: billingAccountId,
@@ -1197,12 +1275,11 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       return { ready: false, address, polBalance, steps, readyAt: null };
     }
 
-    // Sequential writes — parallel would race the Privy signer's nonce.
     let allOk = true;
-    for (let i = 0; i < USDC_E_SPENDERS.length; i++) {
+    for (let i = 0; i < USDC_E_SPENDERS.length && allOk; i++) {
       const sp = USDC_E_SPENDERS[i];
       if (!sp) continue;
-      if (!needsUsdc[i]) {
+      if (!needsUsdcE[i]) {
         steps.push({
           kind: "erc20_approve",
           label: sp.label,
@@ -1219,16 +1296,68 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         walletClient,
         signingContext,
         billingAccountId,
+        USDC_E_POLYGON,
         sp
       );
       steps.push(step);
-      if (step.state !== "set") {
-        allOk = false;
-        break;
+      if (step.state !== "set") allOk = false;
+    }
+
+    if (allOk) {
+      if (!needsWrap) {
+        steps.push({
+          kind: "collateral_wrap",
+          label: "Wrap USDC.e → pUSD",
+          tokenContract: COLLATERAL_ONRAMP_POLYGON,
+          operator: COLLATERAL_ONRAMP_POLYGON,
+          state: "satisfied",
+          txHash: null,
+          error: null,
+        });
+      } else {
+        const step = await this.submitCollateralWrap(
+          publicClient,
+          walletClient,
+          signingContext,
+          billingAccountId,
+          usdcEBalance
+        );
+        steps.push(step);
+        if (step.state !== "set") allOk = false;
       }
     }
+
     if (allOk) {
-      for (let i = 0; i < CTF_OPERATORS.length; i++) {
+      for (let i = 0; i < PUSD_SPENDERS.length && allOk; i++) {
+        const sp = PUSD_SPENDERS[i];
+        if (!sp) continue;
+        if (!needsPusd[i]) {
+          steps.push({
+            kind: "erc20_approve",
+            label: sp.label,
+            tokenContract: PUSD_POLYGON,
+            operator: sp.address,
+            state: "satisfied",
+            txHash: null,
+            error: null,
+          });
+          continue;
+        }
+        const step = await this.submitErc20Approve(
+          publicClient,
+          walletClient,
+          signingContext,
+          billingAccountId,
+          PUSD_POLYGON,
+          sp
+        );
+        steps.push(step);
+        if (step.state !== "set") allOk = false;
+      }
+    }
+
+    if (allOk) {
+      for (let i = 0; i < CTF_OPERATORS.length && allOk; i++) {
         const op = CTF_OPERATORS[i];
         if (!op) continue;
         if (!needsCtf[i]) {
@@ -1251,18 +1380,18 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           op
         );
         steps.push(step);
-        if (step.state !== "set") {
-          allOk = false;
-          break;
-        }
+        if (step.state !== "set") allOk = false;
       }
     }
 
-    // Any failure aborts mid-sequence — don't stamp; pad remaining steps as
-    // skipped so the UI renders the full 6-pill row.
-    while (steps.length < USDC_E_SPENDERS.length + CTF_OPERATORS.length) {
+    const totalSteps =
+      USDC_E_SPENDERS.length + 1 + PUSD_SPENDERS.length + CTF_OPERATORS.length;
+    while (steps.length < totalSteps) {
       const idx = steps.length;
-      if (idx < USDC_E_SPENDERS.length) {
+      const usdcEEnd = USDC_E_SPENDERS.length;
+      const wrapEnd = usdcEEnd + 1;
+      const pusdEnd = wrapEnd + PUSD_SPENDERS.length;
+      if (idx < usdcEEnd) {
         const sp = USDC_E_SPENDERS[idx];
         if (!sp) break;
         steps.push({
@@ -1274,8 +1403,30 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           txHash: null,
           error: "aborted_after_prior_failure",
         });
+      } else if (idx < wrapEnd) {
+        steps.push({
+          kind: "collateral_wrap",
+          label: "Wrap USDC.e → pUSD",
+          tokenContract: COLLATERAL_ONRAMP_POLYGON,
+          operator: COLLATERAL_ONRAMP_POLYGON,
+          state: "skipped",
+          txHash: null,
+          error: "aborted_after_prior_failure",
+        });
+      } else if (idx < pusdEnd) {
+        const sp = PUSD_SPENDERS[idx - wrapEnd];
+        if (!sp) break;
+        steps.push({
+          kind: "erc20_approve",
+          label: sp.label,
+          tokenContract: PUSD_POLYGON,
+          operator: sp.address,
+          state: "skipped",
+          txHash: null,
+          error: "aborted_after_prior_failure",
+        });
       } else {
-        const op = CTF_OPERATORS[idx - USDC_E_SPENDERS.length];
+        const op = CTF_OPERATORS[idx - pusdEnd];
         if (!op) break;
         steps.push({
           kind: "ctf_set_approval_for_all",
@@ -1323,12 +1474,13 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     walletClient: WalletClient,
     signingContext: PolyTraderSigningContext,
     billingAccountId: string,
+    token: Address,
     target: { label: string; address: Address }
   ): Promise<TradingApprovalStep> {
     try {
       // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
       const hash: Hex = await (walletClient.writeContract as any)({
-        address: USDC_E_POLYGON,
+        address: token,
         abi: erc20Abi,
         functionName: "approve",
         args: [target.address, maxUint256],
@@ -1337,6 +1489,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         {
           billing_account_id: billingAccountId,
           connection_id: signingContext.connectionId,
+          token_contract: token,
           operator: target.address,
           tx_hash: hash,
         },
@@ -1350,17 +1503,15 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         return {
           kind: "erc20_approve",
           label: target.label,
-          tokenContract: USDC_E_POLYGON,
+          tokenContract: token,
           operator: target.address,
           state: "failed",
           txHash: hash,
           error: "tx_reverted",
         };
       }
-      // Pin the post-verify to the receipt's block — publicnode RPCs
-      // round-robin, a fresh read can hit a lagging node.
       const after = await publicClient.readContract({
-        address: USDC_E_POLYGON,
+        address: token,
         abi: erc20Abi,
         functionName: "allowance",
         args: [signingContext.funderAddress, target.address],
@@ -1370,7 +1521,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         return {
           kind: "erc20_approve",
           label: target.label,
-          tokenContract: USDC_E_POLYGON,
+          tokenContract: token,
           operator: target.address,
           state: "failed",
           txHash: hash,
@@ -1381,6 +1532,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         {
           billing_account_id: billingAccountId,
           connection_id: signingContext.connectionId,
+          token_contract: token,
           operator: target.address,
           tx_hash: hash,
           block_number: Number(receipt.blockNumber),
@@ -1390,7 +1542,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       return {
         kind: "erc20_approve",
         label: target.label,
-        tokenContract: USDC_E_POLYGON,
+        tokenContract: token,
         operator: target.address,
         state: "set",
         txHash: hash,
@@ -1400,8 +1552,87 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       return {
         kind: "erc20_approve",
         label: target.label,
-        tokenContract: USDC_E_POLYGON,
+        tokenContract: token,
         operator: target.address,
+        state: "failed",
+        txHash: null,
+        error:
+          err instanceof Error ? err.message.slice(0, 128) : "submit_failed",
+      };
+    }
+  }
+
+  private async submitCollateralWrap(
+    publicClient: PublicClient,
+    walletClient: WalletClient,
+    signingContext: PolyTraderSigningContext,
+    billingAccountId: string,
+    amount: bigint
+  ): Promise<TradingApprovalStep> {
+    const baseStep: Omit<TradingApprovalStep, "state" | "txHash" | "error"> = {
+      kind: "collateral_wrap",
+      label: "Wrap USDC.e → pUSD",
+      tokenContract: COLLATERAL_ONRAMP_POLYGON,
+      operator: COLLATERAL_ONRAMP_POLYGON,
+    };
+    try {
+      // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
+      const hash: Hex = await (walletClient.writeContract as any)({
+        address: COLLATERAL_ONRAMP_POLYGON,
+        abi: COLLATERAL_ONRAMP_WRAP_ABI,
+        functionName: "wrap",
+        args: [amount],
+      });
+      this.log.info(
+        {
+          billing_account_id: billingAccountId,
+          connection_id: signingContext.connectionId,
+          amount: amount.toString(),
+          tx_hash: hash,
+        },
+        "poly.wallet.enable_trading.wrap.submitted"
+      );
+      const receipt = await publicClient.waitForTransactionReceipt({
+        hash,
+        confirmations: 1,
+      });
+      if (receipt.status !== "success") {
+        return {
+          ...baseStep,
+          state: "failed",
+          txHash: hash,
+          error: "tx_reverted",
+        };
+      }
+      const remaining = await publicClient.readContract({
+        address: USDC_E_POLYGON,
+        abi: ERC20_BALANCEOF_ABI,
+        functionName: "balanceOf",
+        args: [signingContext.funderAddress],
+        blockNumber: receipt.blockNumber,
+      });
+      if (remaining > 0n) {
+        return {
+          ...baseStep,
+          state: "failed",
+          txHash: hash,
+          error: "post_verify_residual_usdc_e",
+        };
+      }
+      this.log.info(
+        {
+          billing_account_id: billingAccountId,
+          connection_id: signingContext.connectionId,
+          amount: amount.toString(),
+          tx_hash: hash,
+          block_number: Number(receipt.blockNumber),
+        },
+        "poly.wallet.enable_trading.wrap.confirmed"
+      );
+      return { ...baseStep, state: "set", txHash: hash, error: null };
+    } catch (err) {
+      return {
+        ...baseStep,
         state: "failed",
         txHash: null,
         error:

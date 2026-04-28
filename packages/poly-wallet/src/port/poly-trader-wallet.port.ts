@@ -109,7 +109,8 @@ export type AuthorizeIntentResult =
  */
 export type TradingApprovalStepKind =
   | "erc20_approve"
-  | "ctf_set_approval_for_all";
+  | "ctf_set_approval_for_all"
+  | "collateral_wrap";
 
 export type TradingApprovalStepState =
   /** Before run: target was already at MaxUint256 / approved. Written as-is. */

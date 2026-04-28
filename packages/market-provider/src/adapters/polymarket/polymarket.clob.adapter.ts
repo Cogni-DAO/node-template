@@ -24,12 +24,6 @@ import {
   type TickSize,
 } from "@polymarket/clob-client-v2";
 
-// clob-client-v2 declares `ClobSigner = EthersSigner | WalletClient` locally
-// but does not export it (1.0.2). The constructor's `signer` parameter type is
-// the canonical source — pluck it out via TS's parameter inference so we stay
-// in lockstep with the SDK without re-declaring its EthersSigner shape and
-// without depending on a specific viem version (we resolve viem@2.23.2 in this
-// repo while the SDK uses 2.39.3, and the WalletClient surface differs).
 type ClobSigner = NonNullable<
   ConstructorParameters<typeof ClobClient>[0]["signer"]
 >;
@@ -187,12 +181,6 @@ export class PolymarketClobAdapter implements MarketProviderPort {
   constructor(config: PolymarketClobAdapterConfig) {
     this.funderAddress = config.funderAddress;
     this.chainId = config.chainId ?? Chain.POLYGON;
-    // bug.0418 — clob-client-v2 takes an options object (not positional args)
-    // and resolves the V1/V2 order envelope automatically based on the live
-    // exchange version. Replaces clob-client@5.8.1 which only signs against
-    // V1 exchange contracts (0x4bFb…982E / 0xC5d5…f80a) — Polymarket rolled
-    // V2 (0xE111… / 0xe222…) and rejects v1-signed orders with
-    // `order_version_mismatch`.
     this.client = new ClobClient({
       host: config.host ?? DEFAULT_CLOB_HOST,
       chain: this.chainId,
@@ -265,8 +253,6 @@ export class PolymarketClobAdapter implements MarketProviderPort {
     let tickSize: TickSize | undefined;
     let negRisk: boolean | undefined;
     let feeRateBps: number | undefined;
-    // Hoisted so the catch block can distinguish FOK no-match (clean skip) from
-    // limit GTC rejections (bug.0405 FILL_NEVER_BELOW_FLOOR).
     let orderTypeUsed: OrderType | undefined;
 
     try {
@@ -315,29 +301,9 @@ export class PolymarketClobAdapter implements MarketProviderPort {
 
       const postOnly = intent.attributes?.post_only === true;
 
-      // FILL_NEVER_BELOW_FLOOR (bug.0405): default to atomic-or-nothing market
-      // FOK so the matched fill is always either the full intent or 0. GTC
-      // limit orders partial-fill against orderbook depth and settle the
-      // matched portion to our wallet with NO min_order_size check on the
-      // matched amount — that's how we ended up holding 4.88 + 2.20 share
-      // dust positions on candidate-a 2026-04-28.
-      //
-      // The Polymarket SDK only exposes FOK / FAK on `createAndPostMarketOrder`;
-      // `createAndPostOrder` is limit-only (GTC | GTD). So switching to FOK
-      // means switching to the market-order method. The price field on
-      // UserMarketOrder is an OPTIONAL cap (BUY: max price; SELL: min price).
-      // Amount semantics differ by side per the SDK comment:
-      //   BUY  → amount = USDC dollars to spend
-      //   SELL → amount = outcome shares to sell
-      //
-      // postOnly is incompatible with market+FOK by definition (postOnly = rest
-      // as maker; FOK = match now or kill). postOnly callers keep limit GTC.
       let response: unknown;
       if (postOnly) {
         orderTypeUsed = OrderType.GTC;
-        // clob-client-v2 swapped postOnly/deferExec arg order from v1:
-        //   v1: (order, options, orderType, deferExec, postOnly)
-        //   v2: (order, options, orderType, postOnly, deferExec)
         response = await this.client.createAndPostOrder(
           {
             tokenID: tokenId,
@@ -348,8 +314,8 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           },
           { tickSize, negRisk },
           OrderType.GTC,
-          /* postOnly */ true,
-          /* deferExec */ false
+          true,
+          false
         );
       } else {
         orderTypeUsed = OrderType.FOK;
@@ -398,12 +364,6 @@ export class PolymarketClobAdapter implements MarketProviderPort {
         err instanceof ClobRejectionError
           ? err.details
           : classifyClientError(err);
-      // bug.0405 FILL_NEVER_BELOW_FLOOR — when we sent FOK and CLOB returned a
-      // no-fill rejection (empty body, classic shape), it's an atomic no-match,
-      // not a real error: flag with `fokNoMatch` so the coordinator marks the
-      // fill `placement_failed` without retry. Other rejection codes
-      // (insufficient_balance, invalid_signature, http_error) keep their
-      // semantics — those are real and a retry might be the right call.
       if (
         orderTypeUsed === OrderType.FOK &&
         details.error_code === POLY_CLOB_ERROR_CODES.emptyResponse

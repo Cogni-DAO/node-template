@@ -33,7 +33,11 @@ const txHashSchema = z
   .nullable();
 
 const approvalStepSchema = z.object({
-  kind: z.enum(["erc20_approve", "ctf_set_approval_for_all"]),
+  kind: z.enum([
+    "erc20_approve",
+    "ctf_set_approval_for_all",
+    "collateral_wrap",
+  ]),
   label: z.string(),
   token_contract: addressSchema,
   operator: addressSchema,

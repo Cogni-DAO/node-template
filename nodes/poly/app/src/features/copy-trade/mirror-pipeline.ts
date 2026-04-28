@@ -517,11 +517,6 @@ async function executeMirrorOrder(
     );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    // bug.0405 — surface `details.error_code` from typed `ClobRejectionError`
-    // so FOK no-match (`fok_no_match`) is distinguishable in Loki from other
-    // failures (insufficient_balance, http_error, etc.). Duck-typed read keeps
-    // this pipeline platform-agnostic — no subpath import on the polymarket
-    // adapter. Falls back to "placement_failed" when no typed code present.
     const adapterErrorCode =
       typeof (err as { details?: { error_code?: unknown } } | null)?.details
         ?.error_code === "string"
