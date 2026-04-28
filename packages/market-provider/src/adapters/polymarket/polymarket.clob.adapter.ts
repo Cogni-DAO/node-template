@@ -392,6 +392,8 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           http_status: details.http_status,
           response_keys: details.response_keys,
           reason: details.reason,
+          error_class: details.error_class,
+          stack_top: details.stack_top,
         },
         `placeOrder: ${result}`
       );
@@ -874,6 +876,19 @@ export interface ClobFailureDetails {
   http_status?: number;
   /** Short operator-facing reason text, truncated. Never contains user content. */
   reason?: string;
+  /**
+   * JS error constructor name when an Error was thrown (`TypeError`, `AxiosError`,
+   * `ZodError`, `ClobRejectionError`, etc.). Always set when `classifyClientError`
+   * was the source — distinguishes "thrown JS error inside the SDK" from "CLOB
+   * returned a structured rejection body" without relying on `error_code`.
+   */
+  error_class?: string;
+  /**
+   * First stack frame of a thrown Error, truncated. Surfaces "where the throw
+   * happened" so operators can tell e.g. an SDK-internal `TypeError` from an
+   * adapter-side classification miss.
+   */
+  stack_top?: string;
 }
 
 export class ClobRejectionError extends Error {
@@ -967,6 +982,7 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
   const anyErr = err as {
     response?: { status?: unknown; data?: unknown };
     message?: unknown;
+    stack?: unknown;
   } | null;
   const http_status =
     typeof anyErr?.response?.status === "number"
@@ -974,37 +990,47 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
       : undefined;
   const message =
     typeof anyErr?.message === "string" ? anyErr.message : String(err);
+  const error_class =
+    err && typeof err === "object" && err.constructor?.name
+      ? err.constructor.name
+      : undefined;
+  const stack_top =
+    typeof anyErr?.stack === "string"
+      ? (anyErr.stack.split("\n")[1] ?? "").trim().slice(0, 200) || undefined
+      : undefined;
+  const enrich = <T extends ClobFailureDetails>(d: T): T => ({
+    ...d,
+    ...(error_class !== undefined ? { error_class } : {}),
+    ...(stack_top !== undefined ? { stack_top } : {}),
+  });
 
-  // HTTP status is the strongest signal when present — 401/403 = stale creds
-  // regardless of what the body looks like.
   if (http_status === 401 || http_status === 403) {
-    return {
+    return enrich({
       error_code: POLY_CLOB_ERROR_CODES.staleApiKey,
       response_keys: [],
       ...(http_status !== undefined ? { http_status } : {}),
       reason: message.slice(0, 128),
-    };
+    });
   }
 
-  // Body classification wins for other 4xx (e.g. 400 with "not enough balance").
   const data = anyErr?.response?.data;
   if (data && typeof data === "object" && Object.keys(data).length > 0) {
     const fromBody = classifyClobFailure(data);
-    return {
+    return enrich({
       ...fromBody,
       ...(http_status !== undefined ? { http_status } : {}),
-    };
+    });
   }
 
   const error_code = http_status
     ? POLY_CLOB_ERROR_CODES.httpError
     : classifyRejectionMessage(message);
-  return {
+  return enrich({
     error_code,
     response_keys: [],
     ...(http_status !== undefined ? { http_status } : {}),
     reason: message.slice(0, 128),
-  };
+  });
 }
 
 export function mapOrderResponseToReceipt(
