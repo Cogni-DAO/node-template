@@ -73,14 +73,12 @@ jobs:
           TARGET_URL: ${{ steps.meta.outputs.status_url }}
         run: bash scripts/ci/report-candidate-status.sh
 
-      # Source-of-truth for "what this PR changed" is the GitHub
-      # `pulls/N/files` API — same list shown on the PR's Files Changed tab.
-      # `git diff origin/main...HEAD` is unsafe when this PR's branch was
-      # forked from another PR's branch: after the upstream PR is
-      # squash-merged into main, the original commits remain reachable from
-      # this PR's head and pollute the diff with paths the PR never
-      # actually changed. Caused PR #1088 (docs-only) to flight all 4 nodes
-      # because its branch shared history with squash-merged #1098.
+      # Use the GitHub PR `files` API (same list as the Files Changed tab)
+      # as the authoritative changed-paths source. `git diff origin/main...HEAD`
+      # is unreliable here: when a branch is forked from a sibling branch
+      # that later gets squash-merged into main, the original commits stay
+      # reachable from HEAD and pollute the merge-base diff with paths the
+      # PR never actually changed.
       - name: Fetch PR changed-paths from GitHub API
         id: pr-files
         env:

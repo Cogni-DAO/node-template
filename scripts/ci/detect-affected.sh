@@ -45,15 +45,16 @@ scope_base=""
 selection_reason="default-full-scope"
 changed_paths=""
 
-# CHANGED_PATHS_FILE: callers (PR-flight workflows) can pre-compute the
-# authoritative changed-paths list from the GitHub PR `files` API and pass
-# it here. Bypasses `git diff origin/main...HEAD`, which after a squash-merge
-# of a sibling branch will pull in orphaned commits — observed when PR #1088
-# (docs-only) flighted all 4 nodes because its branch shared history with
-# squash-merged #1098.
+# CHANGED_PATHS_FILE: callers may pre-compute the authoritative
+# changed-paths list (e.g. from the GitHub PR `files` API) and pass it
+# here. Preferred over `git diff <base>...HEAD` for PR-flight workflows
+# because git's merge-base diff includes orphaned commits when this
+# branch was forked from a sibling branch that was later squash-merged
+# into main — those commits stay reachable from HEAD and pollute the
+# diff with paths the PR never actually changed.
 if [ -n "${CHANGED_PATHS_FILE:-}" ] && [ -f "${CHANGED_PATHS_FILE}" ]; then
   scope_mode="affected"
-  scope_base="${UPSTREAM_REF:-pr-files}"
+  scope_base="pr-files"
   selection_reason="pr-files-api"
   changed_paths=$(tr -d '\r' < "${CHANGED_PATHS_FILE}")
 elif [ "$use_affected" = true ]; then
