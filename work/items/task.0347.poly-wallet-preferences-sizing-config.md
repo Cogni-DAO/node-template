@@ -77,7 +77,7 @@ A user opens **Money** → **Trading wallet** card → sees `Per trade $X · Per
 
 **Rejected.**
 
-- **Sliders for v1.** Sliders without a known min/max range are bad UX (user has no anchor for "how much is enough"). Numeric input is honest about the cents-precision the schema enforces. Sliders return when allocation % lands and the range is implicitly 0-100%.
+- **Sliders for v1 caps.** User sketch suggested "1-2 sliders/toggles". Caps are dollar amounts with no natural anchor (range $0 → $∞), so sliders need an arbitrary max → wrong abstraction. Numeric input is honest about the cents-precision the schema enforces. The toggle half of the user's ask IS satisfied — it's the per-target `<TargetActiveToggle>`. Sliders return for v2 when allocation % lands and the range is implicitly 0-100%.
 - **Per-target cap overrides in v1.** Requires either a new `poly_copy_trade_target_grants` table or per-target columns on `polyCopyTradeTargets` — meaningful schema lift. Walk-phase concern. v1 ships single global cap surfaced in two places.
 - **Touching `poly_copy_trade_config` for caps.** Caps live on `polyWalletGrants`, full stop. The original task.0347 design predated grants shipping.
 - **Polygon RPC balance read on `/connect`.** Already shipped via `/wallet/balances` (task.0353). Out of scope here.
@@ -93,13 +93,16 @@ A user opens **Money** → **Trading wallet** card → sees `Per trade $X · Per
 
 ### Files
 
-- **Create:** `packages/node-contracts/src/poly.wallet.grants.v1.contract.ts` — Zod contract (Get/Put input + output).
-- **Create:** `nodes/poly/app/src/app/api/v1/poly/wallet/grants/route.ts` — GET + PUT, session-required, appDb-scoped.
-- **Create:** `nodes/poly/app/src/app/_facades/poly/wallet-grants.server.ts` — facade for the route to keep the route thin (mirrors existing `payments/credits.server.ts` shape).
-- **Create:** `nodes/poly/app/src/components/kit/wallet/PolicyControls.tsx` — reusable component, props `{values, onSave?, readonly}`.
-- **Modify:** `nodes/poly/app/src/app/(app)/credits/TradingWalletPanel.tsx` — mount `<PolicyControls editable />`. React Query hook + mutation.
-- **Modify:** wallet-detail surface (find via `CopyTradedWalletsCard.tsx` route target — usually `/dashboard/wallets/[id]` or similar) — mount `<PolicyControls readonly />` with `Edit on Money` link.
-- **Test:** unit tests for `<PolicyControls>` render (editable + readonly), contract round-trip, route happy path + `daily < per_order` 422.
+- **Create:** `packages/node-contracts/src/poly.wallet.grants.v1.contract.ts` — Zod contract (Get/Put input + output, plus typed error codes `invalid_caps | not_authenticated | no_active_grant`).
+- **Create:** `nodes/poly/app/src/app/api/v1/poly/wallet/grants/route.ts` — GET + PUT, session-required, appDb-scoped, RLS-clamped.
+- **Create:** `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/[id]/route.ts` (PATCH) — toggle `disabled_at` for one of the calling user's targets. Uses existing `polyCopyTradeTargets` row, no schema change.
+- **Create:** `nodes/poly/app/src/app/_facades/poly/wallet-grants.server.ts` — facade owning DB read/write + error translation. Throws `{code: 'invalid_caps'}` on PG `23514` so the component can render the inline message.
+- **Create (done — committed):** `nodes/poly/app/src/components/kit/policy/PolicyControls.tsx` — reusable two-row caps component, props `{values, onSave?, readonly}`. Editable mode = numeric inputs with `inputMode="decimal"` (NOT sliders — see Rejected). Readonly mode = values + `Edit on Money →` link.
+- **Create (done — committed):** `nodes/poly/app/src/components/kit/policy/TargetActiveToggle.tsx` — sibling toggle for the per-target view. Props `{active, onToggle}`. The toggle the user's sketch called for; pairs with `<PolicyControls readonly />` on the Research wallet detail.
+- **Create (done — committed):** `nodes/poly/app/src/components/kit/policy/AGENTS.md` — directory scope.
+- **Modify:** `nodes/poly/app/src/app/(app)/credits/TradingWalletPanel.tsx` — mount `<PolicyControls />` (editable) below the "Trading enabled" badge. Uses React Query (`/grants` query + mutation), invalidates on save.
+- **Modify:** `nodes/poly/app/src/features/wallet-analysis/components/WalletAnalysisSurface.tsx` — when this wallet is an active copy-trade target, render `<TargetActiveToggle />` + `<PolicyControls readonly />` near the existing `CopyWalletButton`. Reuses the same `/grants` query.
+- **Test:** unit (`PolicyControls.test.tsx`, `TargetActiveToggle.test.tsx`) + contract round-trip (`poly.wallet.grants.v1.contract.test.ts`) + route happy path + `daily < per_order` → 422 with `code: 'invalid_caps'`.
 
 ### Sketch
 

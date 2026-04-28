@@ -17,7 +17,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-import { Button, Input } from "@/components";
+import { Button } from "@/components";
 import { cn } from "@/shared/util/cn";
 
 export interface PolicyValues {
@@ -228,13 +228,13 @@ function PolicyEditCell({
       </label>
       <span className="flex items-baseline gap-1">
         <span className="font-semibold text-base text-muted-foreground">$</span>
-        <Input
+        <input
           id={id}
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
-          className="h-6 border-0 bg-transparent p-0 font-semibold text-base tabular-nums tracking-tight focus-visible:ring-0"
+          className="w-full bg-transparent font-semibold text-base tabular-nums tracking-tight outline-none disabled:opacity-50"
         />
       </span>
     </div>
