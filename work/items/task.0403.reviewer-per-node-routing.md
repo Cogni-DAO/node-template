@@ -2,7 +2,7 @@
 id: task.0403
 type: task
 title: "Reviewer per-node routing — wire `extractOwningNode` into PrReviewWorkflow so PR webhooks load per-node `.cogni/rules/`"
-status: needs_implement
+status: needs_closeout
 priority: 0
 rank: 1
 estimate: 2
@@ -21,7 +21,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-04-26
-updated: 2026-04-26
+updated: 2026-04-27
 labels: [vcs, review, temporal, per-node, routing]
 ---
 
@@ -39,51 +39,49 @@ Without this task, `extractOwningNode` is dead code and the per-node reviewer st
 
 ## Requirements
 
-- **PER_NODE_RULE_LOADING**: `PrReviewWorkflow` resolves the owning domain from changed files via `extractOwningNode`. When result is `single`, the review handler reads rules from `<repoRoot>/<owningNode.path>/.cogni/rules/` (not the root). For an operator-only PR, `path === "nodes/operator"` so rules come from `nodes/operator/.cogni/rules/`.
-- **CONFLICT_REFUSAL**: When `extractOwningNode` returns `conflict`, the workflow posts a single diagnostic PR comment (named domains, "split into N PRs" instruction) + neutral `Check Run` conclusion. **No AI tokens spent**, no `GraphRunWorkflow` child started, no gate evaluation.
+- **PER_NODE_RULE_LOADING**: `fetchPrContextActivity` resolves the owning domain via `extractOwningNode(parsedRootSpec, changedFiles)`. When result is `single` AND `owningNode.path !== "nodes/operator"`, rule files are fetched from GitHub at `<owningNode.path>/.cogni/rules/<file>` (not the root). Operator-domain PRs keep reading root `.cogni/rules/` (operator's rules already live at root). Root `.cogni/repo-spec.yaml` is always the gates-config source — per-node specs are a future seam (task.0407).
+- **CONFLICT_REFUSAL**: When `extractOwningNode` returns `conflict`, the workflow posts a single diagnostic PR comment (named domains, split instruction) + neutral `Check Run` conclusion. **No AI tokens spent**, no `GraphRunWorkflow` child started, no gate evaluation.
 - **MISS_NEUTRAL**: When `extractOwningNode` returns `miss` (empty diff in practice — meta-test invariant prevents unregistered-node leakage), workflow posts a neutral `Check Run` summarizing "no recognizable scope" and exits.
-- **RIDE_ALONG_RESPECTED**: A PR with `nodes/poly/...` + `pnpm-lock.yaml` (or `work/items/**`) routes to poly per the resolver's `rideAlongApplied` carve-out — not flagged as conflict.
-- **OBSERVABILITY**: Workflow logs a structured event `review.routed` with `{ owningNodeKind, owningNodeId, owningNodePath, changedFileCount, prNumber, headSha }` so the deploy_verified loop can find the route decision in Loki for a specific PR.
-- **IDEMPOTENCY**: Diagnostic comment uses a stable marker (e.g., body prefix `<!-- cogni-cross-domain-refusal -->`) and the existing PR-comment idempotency mechanism so retries don't spam.
-- **SPEC_PARITY**: Diagnostic comment text and the failure-mode wording match `docs/spec/node-ci-cd-contract.md § Single-Domain Scope > Diagnostic contract`.
+- **RIDE_ALONG_RESPECTED**: A PR with `nodes/poly/...` + `pnpm-lock.yaml` (or `work/items/**`) routes to poly per the resolver's `rideAlongApplied` carve-out — not flagged as conflict. Covered transitively via the parity test in `task.0382`; one passthrough fixture in the activity test is sufficient here.
+- **OBSERVABILITY**: `fetchPrContextActivity` emits a Pino structured log `review.routed` with `{ owningNodeKind, owningNodeId, owningNodePath, changedFileCount, prNumber, headSha }`. Activity-side (not workflow-side) — Pino in workflow code is non-deterministic. Loki query in Validation block matches this shape.
+- **SPEC_PARITY**: Diagnostic comment text matches `docs/spec/node-ci-cd-contract.md § Single-Domain Scope > Diagnostic contract` — names conflicting domains, names operator-territory paths when operator is involved, suggests the split, links the spec section.
 
 ## Allowed Changes
 
-- `packages/temporal-workflows/src/workflows/pr-review.workflow.ts` — new routing step + branching on `OwningNode.kind`
-- `packages/temporal-workflows/src/activity-types.ts` — extend `fetchPrContextActivity` return shape with `changedFiles: string[]` and `owningNode: OwningNode`
-- `packages/temporal-workflows/src/domain/review.ts` — small helper(s) for diagnostic-comment formatting; pure
-- `services/scheduler-worker/src/activities/review.ts` — call `extractOwningNode` inside `fetchPrContextActivity`; new activity `postCrossDomainRefusalActivity` (or extend existing post-comment activity)
-- `nodes/operator/app/src/bootstrap/review-adapter.factory.ts` — add `nodeBasePath?: string` parameter (default `"."`); thread into `readRuleFile` (and only `readRuleFile` — `readRepoSpec` keeps reading root)
+- `packages/temporal-workflows/src/workflows/pr-review.workflow.ts` — new routing step + branching on `OwningNode.kind`; no `nodeBasePath` parameter on existing activities (path is resolved inside `fetchPrContextActivity` and applied there)
+- `packages/temporal-workflows/src/activity-types.ts` — extend `fetchPrContextActivity` return shape with `changedFiles: string[]` and `owningNode: OwningNode`; add `postCrossDomainRefusalActivity` activity type
+- `packages/temporal-workflows/src/domain/review.ts` (NEW or existing) — pure helper formatting the diagnostic comment body from a `conflict`-kind `OwningNode`
+- `services/scheduler-worker/src/activities/review.ts` — call `extractOwningNode` inside `fetchPrContextActivity`; emit `review.routed`; switch the rule-file fetch path to `<owningNode.path>/.cogni/rules/...` for non-operator singles; add `postCrossDomainRefusalActivity` (also calls `postCrossDomainCheckRun` + `postCrossDomainComment` — or extends existing `postReviewResultActivity` with a "diagnostic" mode)
 - Tests:
-  - `tests/unit/packages/temporal-workflows/pr-review.workflow.test.ts` — new tests for the three branches (single / conflict / miss)
-  - `tests/unit/packages/temporal-workflows/domain/review.test.ts` — diagnostic-comment formatter
-  - `services/scheduler-worker/tests/review-activities.test.ts` (or sibling) — `fetchPrContextActivity` returns `owningNode`; `postCrossDomainRefusalActivity` posts the right body
-  - `nodes/operator/app/tests/unit/bootstrap/review-adapter.factory.spec.ts` — factory respects `nodeBasePath` for `readRuleFile`, ignores it for `readRepoSpec`
+  - `tests/unit/packages/temporal-workflows/workflows/pr-review.workflow.test.ts` — three branches (single / conflict / miss)
+  - `tests/unit/packages/temporal-workflows/domain/review.test.ts` — diagnostic-comment formatter (snapshot OK)
+  - `services/scheduler-worker/tests/unit/activities/review.test.ts` (or sibling) — `fetchPrContextActivity` returns `owningNode`, fetches rules from per-node path for non-operator singles, fetches from root for operator
 - `work/items/_index.md` — auto-regenerated
-- `work/projects/proj.vcs-integration.md` — add a row for this deliverable + mark `extractOwningNode` row as Done
+- `work/projects/proj.vcs-integration.md` — already updated
 
 **Out of scope** (separate tasks):
 
-- Thin-CLI wrapper letting `task.0381`'s bash gate consume `extractOwningNode` (task to file)
-- Per-node `.cogni/rules/` content authoring — only the routing mechanism here
-- Per-node `repo-spec.yaml` (still read root spec for registry; per-node specs are a future seam)
-- The `nodeBasePath` propagation into evidence-gathering / check-run scoping (the routing decision is enough; downstream adapters keep their current GitHub API behavior)
+- `createReviewAdapterDeps` factory in `nodes/<x>/app/src/bootstrap/` — verified to have **zero production callers** (live path is 100% Temporal). Pruning is a separate cleanup task, not a routing-feature task.
+- Per-node `repo-spec.yaml` and per-rule modelRef — owned by **task.0407** (filed alongside PR #1067).
+- Thin-CLI wrapper letting `task.0381`'s bash gate consume `extractOwningNode` — separate task.
+- Per-node `.cogni/rules/` content authoring — only the routing mechanism here.
 
 ## Plan
 
-- [ ] **Step 1 — Read the canonical spec**: `docs/spec/node-ci-cd-contract.md § Single-Domain Scope > Diagnostic contract` to lock the comment wording.
-- [ ] **Step 2 — Extend activity return**: `fetchPrContextActivity` adds `changedFiles: string[]` (via `octokit.pulls.listFiles`) + `owningNode: OwningNode` (via `extractOwningNode(parsedRootSpec, changedFiles)`). Update `ReviewActivities` types.
-- [ ] **Step 3 — Workflow branching**: in `pr-review.workflow.ts`, after the `fetchPrContextActivity` call, switch on `context.owningNode.kind`:
-  - `single` → continue existing flow but pass `nodeBasePath = owningNode.path` to downstream activities that load rules
-  - `conflict` → call `postCrossDomainRefusalActivity` + finalize check run as `neutral`, return
-  - `miss` → finalize check run as `neutral` with "no recognizable scope" body, return
-- [ ] **Step 4 — Factory parameterization**: `createReviewAdapterDeps(installationId, appId, key, nodeBasePath = ".")` — `readRuleFile` joins `<repoRoot>/<nodeBasePath>/.cogni/rules/<file>`. `readRepoSpec` always reads root.
-- [ ] **Step 5 — Activity wiring**: any activity that constructs a `ReviewHandlerDeps`-shaped object (or calls the factory) accepts `nodeBasePath` from the workflow and passes it through.
-- [ ] **Step 6 — Diagnostic comment formatter**: pure function in `domain/review.ts` that takes `OwningNode & { kind: "conflict" }` and produces the markdown body. Match spec's diagnostic-contract wording verbatim.
-- [ ] **Step 7 — Idempotency**: marker comment in body so retries dedupe via existing `postPrComment` upsert mechanism.
-- [ ] **Step 8 — Structured log**: emit `review.routed` event after the routing decision (workflow-side `logEvent` or activity-side; pick whichever doesn't break determinism).
-- [ ] **Step 9 — Tests**: workflow-level (mock activities, assert branch taken); domain-level (formatter snapshot); activity-level (assert `extractOwningNode` is called + returned in context); factory-level (assert path joining).
-- [ ] **Step 10 — `pnpm check` clean**, then `/closeout` flow.
+- [ ] **Step 1 — Read the canonical spec**: `docs/spec/node-ci-cd-contract.md § Single-Domain Scope > Diagnostic contract` to lock the comment wording (already read during /review-design — points 1-4: name conflicting domains, name operator-territory paths, suggest the split, link the spec section).
+- [ ] **Step 2 — Extend activity return**: in `services/scheduler-worker/src/activities/review.ts`, `fetchPrContextActivity` already calls `octokit.pulls.listFiles`. Add `changedFiles: string[]` (filenames from that response) and `owningNode: OwningNode` (via `extractOwningNode(parsedRootSpec, changedFiles)`) to `FetchPrContextOutput`. Update `ReviewActivities` interface in `activity-types.ts` to match.
+- [ ] **Step 3 — Per-node rule path**: when `owningNode.kind === "single"` and `owningNode.path !== "nodes/operator"`, change the `fetchRepoFile(..., \`.cogni/rules/${ruleFile}\`, ...)` call (line ~294) to `\`${owningNode.path}/.cogni/rules/${ruleFile}\``. Operator domain keeps the root path (its rules already live at root).
+- [ ] **Step 4 — Diagnostic comment formatter**: pure function `formatCrossDomainRefusal(owningNode: OwningNode & { kind: "conflict" }, changedFiles: string[]): string` in `packages/temporal-workflows/src/domain/review.ts`. Output matches spec's diagnostic-contract: lists conflicting domains, calls out operator-territory paths if operator is one, suggests the split, links spec section.
+- [ ] **Step 5 — New activity**: `postCrossDomainRefusalActivity({ owner, repo, prNumber, headSha, installationId, checkRunId, owningNode, changedFiles })` in `services/scheduler-worker/src/activities/review.ts`. Calls the formatter, posts the comment, completes the check run as `neutral` with the same summary. (Alternatively: extend `postReviewResultActivity` with a `diagnostic: { kind: "conflict" | "miss", ... }` mode — implementer's call. Single activity preferred for fewer top-level surfaces.)
+- [ ] **Step 6 — Workflow branching**: in `pr-review.workflow.ts`, after `fetchPrContextActivity`, switch on `context.owningNode.kind`:
+  - `single` → existing flow (rule-file path is already correct because activity resolved it)
+  - `conflict` → `postCrossDomainRefusalActivity(...)`, return
+  - `miss` → same activity with miss-shaped input (or a tiny separate activity), return
+- [ ] **Step 7 — Structured log**: in `fetchPrContextActivity`, after computing `owningNode`, emit `logger.info({ msg: "review.routed", owningNodeKind, owningNodeId, owningNodePath, changedFileCount, prNumber, headSha }, "review.routed")`. This is the line the deploy_verified Loki query will match.
+- [ ] **Step 8 — Tests**: workflow tests mock activities and assert branch taken; activity tests use a fake Octokit and assert (a) `owningNode` shape, (b) per-node rule fetch path for non-operator singles, (c) root rule fetch path for operator, (d) `review.routed` log emitted; domain test snapshots the formatter for one each of `conflict-with-operator` and `conflict-without-operator`.
+- [ ] **Step 9 — `pnpm check` clean**, then `/closeout` flow.
+
+**PR #1067 coordination**: PR #1067 (currently open) renames `model: string` → `modelRef: { providerKey, modelId, connectionId? }` in the same three files I'm editing (activity-types.ts, pr-review.workflow.ts, scheduler-worker/activities/review.ts). Whichever lands second rebases. My changes are additive on different lines, so the merge is mechanical. If #1067 lands first, my code uses `modelRef` shape unchanged. If mine lands first, #1067 rebases its rename on top. No design-level conflict.
 
 ## Validation
 
@@ -103,7 +101,8 @@ exercise: |
 observability: |
   # Pre-merge: tests pass; CI's single-node-scope job passes (PR is operator-only).
   # Post-merge candidate-a: query Loki for the routing event triggered by your PR:
-  scripts/loki-query.sh '{namespace="cogni-candidate-a", pod=~"operator-node-app-.*"} | json | msg="review.routed"' 10 50 \
+  # review.routed is emitted by fetchPrContextActivity in scheduler-worker (NOT operator pod).
+  scripts/loki-query.sh '{namespace="cogni-candidate-a", pod=~"scheduler-worker-.*"} | json | msg="review.routed"' 10 50 \
     | jq '.data.result[].values[][1] | fromjson | {ts:.time, owningNodeKind, owningNodeId, owningNodePath, prNumber, headSha}'
   # Expected: a single line with owningNodeKind=single, owningNodePath="nodes/poly", and prNumber
   # matching the PR you opened. Once seen, set deploy_verified: true on this work item AND on

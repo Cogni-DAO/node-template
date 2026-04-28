@@ -14,7 +14,15 @@
  * @internal
  */
 
-import type { SuccessCriteria, ThresholdCriterion } from "@cogni/repo-spec";
+import type {
+  OwningNode,
+  SuccessCriteria,
+  ThresholdCriterion,
+} from "@cogni/repo-spec";
+
+const OPERATOR_PATH = "nodes/operator";
+const SPEC_LINK =
+  "https://github.com/Cogni-DAO/node-template/blob/main/docs/spec/node-ci-cd-contract.md#single-domain-scope";
 
 // ---------------------------------------------------------------------------
 // Types (serializable — used by workflow and activities)
@@ -353,4 +361,91 @@ export function formatPrComment(
   }
 
   return lines.join("\n");
+}
+
+// ---------------------------------------------------------------------------
+// Routing diagnostics — formatters for cross-domain refusal + miss neutral.
+// Wording mirrors docs/spec/node-ci-cd-contract.md § Single-Domain Scope >
+// Diagnostic contract: name conflicting domains, name operator-territory
+// paths, suggest the split, link the spec.
+// ---------------------------------------------------------------------------
+
+/**
+ * Format the PR comment body for a cross-domain refusal.
+ * Pure — no I/O, no time, no randomness.
+ */
+export function formatCrossDomainRefusal(
+  owningNode: Extract<OwningNode, { kind: "conflict" }>,
+  changedFiles: readonly string[]
+): string {
+  const domains = owningNode.nodes.map((n) => n.nodeId);
+  const operatorEntry = owningNode.nodes.find((n) => n.path === OPERATOR_PATH);
+  const operatorPaths: string[] = [];
+  if (operatorEntry) {
+    for (const f of changedFiles) {
+      // Operator territory = anything not under a non-operator nodes/<X>/.
+      const otherDomain = owningNode.nodes.find(
+        (n) => n.path !== OPERATOR_PATH && f.startsWith(`${n.path}/`)
+      );
+      if (!otherDomain) operatorPaths.push(f);
+    }
+  }
+
+  const lines: string[] = [];
+  lines.push("## Cogni Review — Cross-Domain PR refused");
+  lines.push("");
+  lines.push(
+    `This PR touches **${domains.length} domains**: \`${domains.join("` + `")}\`.`
+  );
+  lines.push("");
+  lines.push(
+    "Per the single-node-scope contract, each PR must own exactly one domain. The reviewer cannot apply per-node rules to a multi-domain change."
+  );
+  lines.push("");
+
+  if (operatorEntry && operatorPaths.length > 0) {
+    lines.push("**Operator-territory paths in this PR:**");
+    lines.push("");
+    for (const p of operatorPaths.slice(0, 20)) {
+      lines.push(`- \`${p}\``);
+    }
+    if (operatorPaths.length > 20) {
+      lines.push(`- … and ${operatorPaths.length - 20} more`);
+    }
+    lines.push("");
+  }
+
+  lines.push("**How to resolve:**");
+  lines.push("");
+  if (operatorEntry) {
+    const others = domains.filter((d) => d !== operatorEntry.nodeId);
+    lines.push(
+      `1. File an operator PR with the operator-territory paths above.`
+    );
+    lines.push(`2. Rebase your \`${others.join("` + `")}\` change on it.`);
+  } else {
+    lines.push(
+      `Split this PR into ${domains.length} separate PRs — one per domain (\`${domains.join("`, `")}\`).`
+    );
+  }
+  lines.push("");
+  lines.push(`See [single-node-scope spec](${SPEC_LINK}) for rationale.`);
+
+  return lines.join("\n");
+}
+
+/**
+ * Format the PR comment body for an unrecognized-scope (miss) outcome.
+ * In practice this only fires on empty diffs — the operator domain catches
+ * everything else by construction. Kept as a deliberate branch so the
+ * workflow never silently passes an empty PR through the AI gate.
+ */
+export function formatNoScopeNeutral(): string {
+  return [
+    "## Cogni Review — No recognizable scope",
+    "",
+    "This PR has no changed files matching any registered domain. Skipping review.",
+    "",
+    `See [single-node-scope spec](${SPEC_LINK}).`,
+  ].join("\n");
 }

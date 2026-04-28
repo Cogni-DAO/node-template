@@ -26,6 +26,7 @@ const {
   createCheckRunActivity,
   fetchPrContextActivity,
   postReviewResultActivity,
+  postRoutingDiagnosticActivity,
 } = proxyActivities<ReviewActivities>(EXTERNAL_API_ACTIVITY_OPTIONS);
 
 /**
@@ -88,13 +89,32 @@ export async function PrReviewWorkflow(
     // Continue without check run — non-fatal
   }
 
-  // 2. Fetch PR context from GitHub API
+  // 2. Fetch PR context from GitHub API. The activity also resolves the
+  //    owning domain (extractOwningNode) so the workflow can dispatch on it
+  //    without doing I/O itself.
   const context = await fetchPrContextActivity({
     owner,
     repo,
     prNumber,
     installationId,
   });
+
+  // 2a. Routing — short-circuit conflict / miss without spending AI tokens.
+  //     Per docs/spec/node-ci-cd-contract.md § Single-Domain Scope, cross-domain
+  //     PRs are refused at review-time mirroring the CI gate's verdict.
+  if (context.owningNode.kind !== "single") {
+    await postRoutingDiagnosticActivity({
+      owner,
+      repo,
+      prNumber,
+      headSha,
+      installationId,
+      checkRunId,
+      owningNode: context.owningNode,
+      changedFiles: context.changedFiles,
+    });
+    return;
+  }
 
   // If no gates configured, mark check run as pass and exit
   if (context.gatesConfig.gates.length === 0) {
