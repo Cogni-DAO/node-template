@@ -20,36 +20,66 @@
  *   Pattern follows the canonical wagmi App Router SSR guide:
  *   https://wagmi.sh/react/guides/ssr and
  *   https://github.com/rainbow-me/rainbowkit/tree/main/examples/with-next-app
- * Follow-up: connectors registered here are `injected` + optional
- *   `walletConnect`. Coinbase Smart Wallet (`coinbaseWallet`) and Safe
- *   (`safe`) connectors from `wagmi/connectors` can be added when we have
- *   project credentials — see task.0402 §"Connector roster follow-up".
- *   `walletConnect({ showQrModal: true })` is intentional in this
- *   non-`getDefaultConfig` path: RainbowKit's modal only renders the QR
- *   when `rkDetails` flags are set (which only `getDefaultConfig` sets),
- *   so we let WC's own Web3Modal handle QR display.
+ *   Connectors:
+ *     - `injected` — every browser-extension wallet (MetaMask, Rabby, etc.)
+ *     - `coinbaseWallet` — Coinbase Smart Wallet (passkey-based, no app
+ *       install on mobile, single-prompt SIWE via EIP-5792 wallet_connect
+ *       capability when supported by RainbowKit). `preference: "all"`
+ *       lets users pick smart wallet OR the Coinbase Wallet app.
+ *     - `walletConnect` (optional) — mobile wallet pairing via QR / deep
+ *       link. `metadata.redirect` is set lazily from `window.location.origin`
+ *       so mobile wallets auto-return to this app after sign instead of
+ *       stranding the user in MetaMask. Server-side renders skip the
+ *       redirect (origin not available) — wagmi rebuilds connectors on
+ *       client hydration with the real value.
  * @public
  */
 
 import { cookieStorage, createConfig, createStorage, http } from "wagmi";
-import { injected, walletConnect } from "wagmi/connectors";
+import { coinbaseWallet, injected, walletConnect } from "wagmi/connectors";
 
 import { clientEnv } from "@/shared/env/client";
 import { CHAIN } from "./evm-wagmi";
 
+const APP_NAME = "Cogni Operator";
+
 const projectId = clientEnv().NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID;
+
+const browserOrigin =
+  typeof window !== "undefined" ? window.location.origin : undefined;
+
+const wcMetadata = browserOrigin
+  ? {
+      name: APP_NAME,
+      description: APP_NAME,
+      url: browserOrigin,
+      icons: [`${browserOrigin}/favicon.ico`],
+      redirect: {
+        universal: browserOrigin,
+      },
+    }
+  : undefined;
 
 const connectors = [
   injected(),
-  ...(projectId ? [walletConnect({ projectId, showQrModal: true })] : []),
+  coinbaseWallet({ appName: APP_NAME, preference: "all" }),
+  ...(projectId
+    ? [
+        walletConnect({
+          projectId,
+          showQrModal: true,
+          ...(wcMetadata ? { metadata: wcMetadata } : {}),
+        }),
+      ]
+    : []),
 ];
 
 /**
  * Static wagmi configuration for wallet connections.
  *
  * SSR-enabled with cookieStorage to prevent IndexedDB hydration errors.
- * WalletConnect projectId is optional — app degrades to injected wallet
- * (MetaMask, etc.) if missing.
+ * WalletConnect projectId is optional — app degrades to injected +
+ * Coinbase Smart Wallet if missing.
  */
 export const wagmiConfig = createConfig({
   chains: [CHAIN],
