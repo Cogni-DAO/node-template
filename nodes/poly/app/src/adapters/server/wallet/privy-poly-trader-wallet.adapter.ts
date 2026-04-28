@@ -1633,13 +1633,24 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       );
       return { ...baseStep, state: "set", txHash: hash, error: null };
     } catch (err) {
-      return {
-        ...baseStep,
-        state: "failed",
-        txHash: null,
-        error:
-          err instanceof Error ? err.message.slice(0, 128) : "submit_failed",
-      };
+      const errMsg =
+        err instanceof Error ? err.message.slice(0, 128) : "submit_failed";
+      const errorClass =
+        err && typeof err === "object" && err.constructor?.name
+          ? err.constructor.name
+          : undefined;
+      this.log.error(
+        {
+          event: "poly.wallet.enable_trading.wrap.error",
+          billing_account_id: billingAccountId,
+          connection_id: signingContext.connectionId,
+          amount: amount.toString(),
+          err: errMsg,
+          error_class: errorClass,
+        },
+        "wrap: failed"
+      );
+      return { ...baseStep, state: "failed", txHash: null, error: errMsg };
     }
   }
 
