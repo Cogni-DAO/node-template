@@ -31,6 +31,20 @@ external_refs:
 
 # v0 "Send to Cogni" error intake
 
+> **Scope reduction → v0-of-v0 (2026-04-28)**: After reviewing the
+> approved design, we noticed the Temporal + cross-runtime LokiQueryPort
+> work alone is a clean multi-file lift. To prove the user-visible loop
+> on candidate-a in a single PR, this task ships v0-of-v0: same UX, but
+> the route handler does an **inline** `error_reports` insert and an
+> **inline** Loki window pull (server-side fetch, ~50ms over local
+> network). No Temporal. No `packages/loki-query/`. The hardening to
+> the originally-approved design — extract Loki adapter to a shared
+> package, move work into a Temporal workflow, add a stack test — is
+> tracked in **task.0420**, blocked_by this. The original Design
+> section below is preserved verbatim as the v1 target; the **Files
+> (v0-of-v0)** subsection at the bottom is what this PR actually
+> ships.
+
 ## Problem
 
 `story.0417` calls for a UI standard: every error has a "Send to Cogni"
@@ -302,6 +316,47 @@ Because the route is anonymous-allowed:
   `packages/temporal-workflows/src/workflows/`,
   `services/scheduler-worker/src/activities/`,
   `packages/db-schema/src/`.
+
+### Files (v0-of-v0 — what this PR actually ships)
+
+The Temporal workflow, the three activities, the worker registration,
+the worker-side DB injection, and `packages/loki-query/` are all
+deferred to **task.0420**. v0-of-v0 ships:
+
+**Create:**
+
+- `packages/node-contracts/src/error-report.v1.contract.ts` — Zod
+  request/response (digest, route, errorName/Message/Stack,
+  componentStack, userNote, clientTs).
+- `packages/db-schema/src/error-reports.ts` — Drizzle schema slice;
+  re-exported from `index.ts`.
+- `nodes/operator/app/src/adapters/server/db/migrations/<ts>_error_reports.sql`
+  — generated migration.
+- `nodes/operator/app/src/adapters/server/loki-query.ts` —
+  fetch-based Loki helper (~40 lines). **Lives in app code on
+  purpose for v0-of-v0; task.0420 moves it to `packages/loki-query/`.**
+- `nodes/operator/app/src/app/api/v1/error-report/route.ts` —
+  POST: Origin check → in-memory per-IP rate limit → Zod parse →
+  best-effort session userId → server stamps build SHA →
+  insert row (`loki_status=pending`) → `await` Loki query (with
+  ≤2s timeout, swallow failures and mark `loki_status=failed`) →
+  update row → return 202 `{ trackingId, status: "received" }`.
+- `nodes/operator/app/src/components/SendToCogniButton.tsx` —
+  client component; reads `error.digest` + `error` from props,
+  truncates message/stack client-side, POSTs `/api/v1/error-report`,
+  shows `trackingId` on success.
+- `nodes/operator/app/src/app/dev/boom/page.tsx` — server
+  component that throws on render so we can drive the loop on
+  candidate-a. Behind a `DEV_ROUTES_ENABLED` env or just shipped
+  always with a clear `dev/` route prefix — v0-of-v0 ships always
+  to keep the smoke test trivial.
+- `docs/spec/observability.md` — append a short section pointing
+  to story.0417 + this contract + the table.
+
+**Modify:**
+
+- `nodes/operator/app/src/app/(app)/error.tsx` and
+  `(public)/error.tsx` — render `<SendToCogniButton />`.
 
 **Test:**
 
