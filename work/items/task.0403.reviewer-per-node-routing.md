@@ -15,7 +15,7 @@ spec_refs:
 assignees: []
 project: proj.vcs-integration
 branch: feat/task-0403-reviewer-per-node-routing
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1098
 reviewer:
 revision: 0
 blocked_by:
