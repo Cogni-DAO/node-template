@@ -157,6 +157,7 @@
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
 | 1 | 6 | 2 | needs_triage | task.0185 | Migrate spy-based observability tests to correct test pyramid layer | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | 6 | 2 | needs_implement | bug.0345 | Polymarket neg-risk SELL close fails unless CTF setApprovalForAll also covers the Neg-Risk Adapter | Cogni Poly | proj.poly-copy-trading |
+| 1 | 6 | 3 | needs_implement | task.0347 | Poly wallet — minimal policy UI for grants caps | Poly | proj.poly-bet-sizer |
 | 1 | 6 | 1 | needs_implement | bug.0380 | core__poly_data_resolve_username silently returns empty — Gamma /public-search?profile=true does not serve profiles | Cogni Poly | proj.poly-prediction-bot |
 | 1 | 7 | 2 | needs_triage | bug.0051 | Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 7 | 5 | needs_merge | task.0189 | Dashboard P0→P1 bridge: thread linking, page consolidation, public Cogni Live, streaming status | Live Operations Dashboard | proj.live-dashboard |
@@ -246,7 +247,6 @@
 | 2 | 15 | 3 | needs_implement | task.0192 | Walk: Per-tenant BYO-AI — Profile page OAuth + DrizzleConnectionBroker | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 2 | 16 | 3 | needs_design | task.0003 | Sweep stale doc references across the codebase | Maximize OSS Tools | proj.maximize-oss-tools |
 | 2 | 17 | 1 | needs_research | spike.0037 | Research Tailscale/Headscale mesh VPN for Cogni infrastructure |  |  |
-| 2 | 19 | 3 | needs_design | task.0347 | Poly wallet — per-tenant preferences + copy-trade sizing config | Cogni Poly | proj.poly-copy-trading |
 | 2 | 20 | 3 | needs_design | task.0211 | BYO-AI ChatGPT — auth manager + Codex CLI in Docker image | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 2 | 20 | 2 | needs_closeout | bug.0342 | poly copy-trade places sub-min orders — CLOB rejects silently (success=undefined, orderID=<missing>, errorMsg="") | Cogni Poly | proj.poly-copy-trading |
 | 2 | 20 | 3 | needs_triage | task.0351 | Poly trading wallet withdrawal — backend + UI | Cogni Poly | proj.poly-copy-trading |
