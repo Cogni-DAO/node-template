@@ -9,7 +9,7 @@ summary: Temporal workflow/activity patterns — determinism rules, LangGraph vs
 read_when: Writing Temporal workflows or activities, configuring schedules, or debugging replay issues.
 owner: derekg1729
 created: 2026-02-06
-verified: 2026-03-24
+verified: 2026-04-28
 tags: [ai-graphs, infra]
 ---
 
@@ -62,6 +62,8 @@ Ensure all Temporal workflows are replay-safe, Workflow code performs no I/O dir
 8. **CRUD_AUTHORITY**: Schedule lifecycle (create/update/pause/delete) is owned by CRUD endpoints, not workers. Workers only execute workflows fired by Temporal.
 
 9. **WORKFLOW_TOP_LEVEL_VISIBILITY**: User/admin UI shows Workflow executions as the primary object. Graph runs are drill-down detail linked from Workflow steps. The dashboard's live view lists Workflow runs; expanding a run reveals its child graph run stream.
+
+10. **SINGLE_INPUT_CONTRACT**: Each parent workflow's input shape is defined exactly once as a Zod schema in `packages/temporal-workflows/src/workflows/<name>.schema.ts` (or sibling), and consumed via `z.infer<typeof Schema>` at every call site (dispatch, workflow, activity). No parallel TS interfaces duplicating the shape. Producers parse the input through the schema before `workflowClient.start(...)` so misshapen payloads fail loudly at the source instead of becoming an Activity-side `400` later. `.strict()` mode catches typo'd field names. Reference implementation: `pr-review.schema.ts` (task.0412). Origin: PR #1067 modelRef-shape regression.
 
 ## Design
 

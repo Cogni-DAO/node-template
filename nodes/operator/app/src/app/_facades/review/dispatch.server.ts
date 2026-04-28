@@ -4,14 +4,15 @@
 /**
  * Module: `@app/_facades/review/dispatch.server`
  * Purpose: App-layer facade for dispatching PR reviews via Temporal workflow.
- * Scope: Extracts webhook payload, resolves billing context, starts PrReviewWorkflow. Fire-and-forget.
+ * Scope: Extracts webhook payload, resolves billing context, validates the workflow input via the source-of-truth Zod schema, then starts PrReviewWorkflow. Fire-and-forget.
  * Invariants:
  *   - Per NORMATIVE_WEBHOOK_PATTERN: starts Temporal workflow and exits immediately
- *   - Per ACTIVITY_IDEMPOTENCY: workflowId = pr-review:{owner}/{repo}/{prNumber}/{headSha}
+ *   - Per ACTIVITY_IDEMPOTENCY: workflowId = pr-review:{owner}/{repo}/{prNumber}/{headSha}, built from the parsed input (post-validation), not raw ctx
+ *   - Per DISPATCH_FAIL_FAST (task.0412): payload is parsed through `PrReviewWorkflowInputSchema` before `workflowClient.start(...)`; misshapen payloads fail with structured ZodError logged distinctly from infra failures
  *   - No inline graph execution — all AI runs through GraphRunWorkflow child
  *   - No secrets in workflow input — only installationId (public)
  * Side-effects: IO (starts Temporal workflow)
- * Links: task.0191, docs/spec/temporal-patterns.md
+ * Links: task.0191, task.0412, docs/spec/temporal-patterns.md
  * @public
  */
 
