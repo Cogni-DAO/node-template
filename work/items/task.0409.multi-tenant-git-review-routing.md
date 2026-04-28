@@ -91,97 +91,83 @@ Today the operator's review pipeline knows one GitHub App. `.env.local` carries 
 - [task.0403](task.0403.reviewer-per-node-routing.md) — concurrent reviewer-side routing work; this task is the auth/tenancy layer beneath it
 - [task.0408](task.0408.split-temporal-workflows-per-node.md) — adjacent packaging concern; orthogonal
 
-## Design
+## Design — MVP
 
 ### Outcome
 
-Two GitHub App identities (prod, test) coexist on the operator codebase. A delivery to `/api/internal/webhooks/github` is verified against each tenant's secret in turn — first match becomes the active `tenantId` for the rest of the call chain. `tenantId` flows through `dispatchPrReview → PrReviewWorkflow → fetchPrContextActivity` so every Octokit call uses the matched tenant's App creds. `pnpm test:external` becomes safe to run because the test tenant only ever touches `Cogni-DAO/test-repo` and the prod App never wakes up for it.
+`pnpm test:external` runs safely against `Cogni-DAO/test-repo`, exercising a real review pipeline through a **separate** `cogni-review-test` GitHub App. The production GitHub App (`cogni-review-production`) is **not installed** on the test repo, so production operator never sees the delivery in the first place. No code-level multi-tenant routing — just two App identities and two operator deployments running the same single-tenant binary.
+
+### Key insight (correction from the original framing)
+
+The work item title says "multi-tenant routing." The original 6-PR design built that as **in-binary multi-tenancy** (one operator pod handling both prod + test webhooks, picking tenant via try-each-secret). That is over-built for our actual blocker.
+
+The actual blocker: **prevent the production App from reviewing test-repo PRs.** GitHub Apps already give us this for free — an App only receives webhooks for repos it's installed on. If the production App is never installed on `Cogni-DAO/test-repo`, production never sees its events. The test App is installed only on test-repo. Each operator deployment loads exactly one App's creds. The "tenancy boundary" is **operational** (separate deploys + separate App installations), not in code.
+
+This is the same pattern `docs/guides/github-app-webhook-setup.md:19-23` already documents (one App per environment, distinct webhook URL per App). The work item was reaching for a code-side abstraction that the existing GitHub-App-per-environment pattern already covers.
 
 ### Approach
 
-**Solution.** Generalize the existing single-tenant config + dispatch path into a tenant-resolution layer. No new dependencies. No new services. The whole change is config-shape + a try-each-secret loop + a `tenantId` field threaded through the existing workflow input schema.
+**Solution.** Three concrete moves, all small:
+
+1. **Defense-in-depth allowlist check at the webhook route.** Today the operator dispatches review on any `pull_request` event whose signature verifies against `GH_WEBHOOK_SECRET`. If the App somehow ends up installed on a repo not in `GH_REPOS` (misconfig, intentional addition by repo admin, secret leak, etc.), we silently review the wrong repo. Add a 5-line check: `if (!GH_REPOS.includes(payload.repository.full_name)) { log+drop }`. ~10 lines + 1 test.
+2. **Bootstrap `Cogni-DAO/test-repo`.** Port the multi-node directory scaffolding from PR #920 (`derekg1729/test-repo`) to `Cogni-DAO/test-repo`. Install the new `cogni-review-test` GitHub App on it. Update `nodes/operator/app/tests/external/AGENTS.md` to declare `Cogni-DAO/test-repo` canonical (it already does — code defaults are the drift). Flip `E2E_GITHUB_REPO` default in the four `.external.test.ts` files. Retire `derekg1729/test-repo` from code defaults.
+3. **Document the dual-deploy pattern.** Update `docs/guides/github-app-webhook-setup.md` to make it explicit: prod operator (`cognidao.org`) runs with `cogni-review-production` App + `GH_REPOS=Cogni-DAO/node-template`. Test operator (`test.cognidao.org`) runs with `cogni-review-test` App + `GH_REPOS=Cogni-DAO/test-repo`. Local `pnpm dev:stack:test` reads `.env.test` which carries the test App creds. **The same single-tenant operator binary serves both deploys** — only env differs.
+
+That's the MVP. No tenant-id workflow plumbing. No `loadTenants` helper. No try-each-secret webhook handler. No new packages.
 
 **Reuses.**
 
-- `@octokit/webhooks-methods` (already a deps in both `nodes/operator/app` and `services/scheduler-worker`) — provides the HMAC `verify(secret, payload, signature)` primitive needed for the try-each-tenant loop.
-- Existing `receiveWebhook(deps, params)` ingestion service (`features/ingestion/services/webhook-receiver.ts:43`) — keep its signature untouched; the route resolves the tenant first, then passes the matched secret through unchanged.
-- Existing `dispatchPrReview` facade — extend with one new field, no structural change.
-- Existing `PrReviewWorkflow` input — extend the workflow's input schema with `tenantId: string`. Per the modelRef-shape lesson (PR #1067), every workflow input field MUST be defined in a single Zod schema in `packages/temporal-workflows/` and consumed via `z.infer<>` at every call site. This task adds that schema if it doesn't already exist (it doesn't today — input is a plain TS interface).
-- Existing `ReviewActivityDeps` — generalize from `{ ghAppId, ghPrivateKey }` to `{ tenants: ReadonlyMap<TenantId, TenantCreds> }`. Activity resolves creds per-call by `tenantId`.
+- Existing single-App env shape (`GH_REVIEW_APP_ID`, `GH_REVIEW_APP_PRIVATE_KEY_BASE64`, `GH_WEBHOOK_SECRET`, `GH_REPOS`) — unchanged.
+- Existing `pnpm dev:stack:test` infrastructure that already loads `.env.test`.
+- Existing GitHub-App-per-environment guide (`docs/guides/github-app-webhook-setup.md`) — extend, don't replace.
+- Existing operator deploy charts (preview, production) — copy to spawn `test.cognidao.org` (ops work, no code change).
 
 **Rejected.**
 
-- **Path-based routing** (`/api/internal/webhooks/github/test`, `/api/internal/webhooks/github/prod`). Requires updating GitHub App webhook URL config every time you add a tenant + breaks the existing `[source]` dynamic route convention. The HMAC try-each-secret pattern is the standard from `octokit/webhooks` docs and survives any future tenant change without GitHub-side reconfiguration.
-- **Single GitHub App with installation-id allowlist.** Conflates identity with scope. Test-tenant feature-validation work might intentionally trigger different reviewer behavior, post different comments, use different bot accounts — that requires actual identity separation, not just installation filtering.
-- **JSON-blob env (`GH_TENANTS_CONFIG=[...]`).** Forces JSON-string-in-env quoting hell that breaks `gh secret set` ergonomics. Per-tenant prefixed env vars (`GH_REVIEW_APP_ID`, `GH_TEST_REVIEW_APP_ID`) are easier to rotate and visually inspect.
-- **Generic N-tenant loader on day 1.** v0 only has two tenants (prod + test). A loader pattern that extracts tenant IDs from a `GH_TENANTS=prod,test` list is over-engineered for the scope; build the two-tenant version with a clean abstraction (`loadTenants(env): Map<TenantId, TenantConfig>`) and generalize when N > 2.
-
-### Resolutions to design questions
-
-The work item enumerated 7 design questions. Each resolved:
-
-1. **Tenant identification — try-each-secret HMAC.** Webhook handler iterates the configured tenants; for each one, calls `verify(tenant.webhookSecret, body, headers["x-hub-signature-256"])` from `@octokit/webhooks-methods`. First success → that tenant. No success → 401. No header inspection, no path tricks. Pure crypto.
-2. **Tenant config shape — per-tenant prefixed env vars, backward-compatible.** Existing `GH_REVIEW_APP_ID` / `GH_REVIEW_APP_PRIVATE_KEY_BASE64` / `GH_WEBHOOK_SECRET` / `GH_REPOS` become the **prod** tenant's config (zero-migration for existing deploys). New optional vars `GH_TEST_REVIEW_APP_ID` / `GH_TEST_REVIEW_APP_PRIVATE_KEY_BASE64` / `GH_TEST_WEBHOOK_SECRET` / `GH_TEST_REPOS` define the **test** tenant. A `loadTenants(env): Map<"prod"|"test", TenantConfig>` helper assembles both at boot — only includes a tenant if its complete cred set is present. Worker-side: a parallel JSON env (`GH_TENANTS_CONFIG_JSON`) for the worker's structured-env conventions, populated by deploy infra from the same upstream secrets — same logical config, different transport because workers don't read individual env vars at runtime as ergonomically.
-3. **Workflow input plumbing — single Zod schema, contract-tested.** Add `PrReviewWorkflowInputSchema` to `packages/temporal-workflows/src/workflows/pr-review.workflow.ts` (or sibling `schemas.ts`). Both `dispatch.server.ts` and `fetchPrContextActivity` import the schema and use `z.infer<>` for their types. Add a unit test in `tests/unit/packages/temporal-workflows/` that round-trips a fixture through `z.parse()` to catch any future drift — directly addresses the modelRef-shape regression class. `tenantId: z.enum(["prod", "test"])` for v0 (zod refinement makes invalid values fail loudly at the boundary, not silently downstream).
-4. **Allowlist enforcement per tenant — webhook router rejects pre-dispatch.** After tenant resolution, the route reads `payload.repository.full_name` and verifies it's in `tenant.allowlist`. Mismatch → log + drop (200 to GitHub, dispatch skipped — secret could leak, allowlist is the second moat). Activity-side also re-checks before any Octokit call as defense-in-depth.
-5. **Test-environment deploy — separate operator pod, same code, different env.** `test.cognidao.org` is a sibling deployment of the operator container, env-loaded with **only** the `test` tenant's vars (no `GH_REVIEW_APP_ID` at all). All Pino logs in that pod include `tenantId` from the request context (already mostly there via webhook-route's child logger; just add the field). Loki labels: `namespace="cogni-test"` for the pod, `tenantId="test"` from the structured log payload. Cross-tenant leak detection = any log line in `cogni-test` namespace with `tenantId !== "test"`.
-6. **`Cogni-DAO/test-repo` migration — ports the existing scaffolding from `derekg1729/test-repo`.** Re-create the multi-node directory structure (`nodes/{gizmo,sprocket,bertius,operator}/`, `infra/`, `packages/`, root `package.json` + `pnpm-lock.yaml` + ci.yaml) on `Cogni-DAO/test-repo` via a single bootstrap PR — the same shape PR #920 lands on `derekg1729/test-repo` today. Install the test-tenant App on it. Update `nodes/operator/app/tests/external/AGENTS.md` and the `E2E_GITHUB_REPO` defaults in all `.external.test.ts` files to `Cogni-DAO/test-repo`. Retire `derekg1729/test-repo` from code defaults in this PR.
-7. **Agentic-API validation flow — uses existing `/api/v1/ai/chat`.** No new endpoint. Flow: (a) authed shell hits `https://test.cognidao.org/.well-known/agent.json` to discover endpoints; (b) registers via `POST /api/v1/agent/register` to get an API key (existing flow per `docs/guides/agent-api-validation.md`); (c) opens a chat session via `/api/v1/ai/chat` with prompt `"flight PR #N on Cogni-DAO/test-repo"`. (d) The operator agent calls `core__vcs_flight_candidate` against the test tenant's installation. (e) Agent returns the flight workflow URL. The only new piece is wiring the agent's `core__vcs_*` tools to honor the tenant context resolved from the request's auth chain — system tenant resolution defaults to `prod`, but a request to `test.cognidao.org` overrides via env (only `test` tenant configured in that pod).
+- **In-binary multi-tenant routing** (original 6-PR plan: try-each-secret HMAC, `tenantId` in workflow input, `loadTenants` helper, worker-side tenant map). Premature. We don't have a use-case for one operator pod handling two GitHub Apps simultaneously. **The day we ship Cogni as a SaaS that reviews 100 customer forks from one pod, that's when we build it.** Until then, separate deploys are simpler, more secure (no shared creds in one pod), and require zero new code. Filed as task.0411 (out-of-scope here, future).
+- **Try-each-secret on a single deployment.** Same problem at smaller scale. If both prod and test creds are loaded in one pod's env, a misconfig that crosses them silently is exactly the failure mode we want to make impossible. Two pods with non-overlapping env eliminates the failure mode entirely.
+- **Path-based routing** (`/webhooks/github/test`). Same answer — the per-deploy approach removes the need.
 
 ### Invariants
 
 <!-- CODE REVIEW CRITERIA -->
 
-- [ ] **TENANT_VERIFY_FIRST**: Webhook signature must be HMAC-validated against a tenant's secret BEFORE any tenant context is established. Match-first-secret is the only acceptable pattern — no header parsing, no payload inspection, no path-based routing. (spec: github-app-webhook-setup)
-- [ ] **TENANT_ALLOWLIST_ENFORCED**: After tenant match, `payload.repository.full_name` must be present in the matched tenant's `allowlist` before any dispatch. Mismatch → log + drop. Activity layer re-checks defense-in-depth.
-- [ ] **TENANT_ID_IN_WORKFLOW_INPUT**: `tenantId: z.enum([...])` is a required field on `PrReviewWorkflowInputSchema`. Defined exactly once in `packages/temporal-workflows/`. Both dispatch and activities consume via `z.infer<>` — no manual typedefs duplicating the shape.
-- [ ] **TENANT_ID_IN_WORKFLOW_KEY**: `workflowId = pr-review:tenant=<tenantId>:<owner>/<repo>/<pr>/<sha>`. Test + prod can run review on the same SHA simultaneously without Temporal collision.
-- [ ] **NO_DEFAULT_TENANT_FALLBACK**: If no tenant matches the signature, return 401. No fallback to "first configured" or "prod by default." Silent fallback masks misconfiguration.
-- [ ] **PROD_BACKWARD_COMPAT**: Existing prod deploys with only `GH_REVIEW_APP_*` set continue to work unchanged — `loadTenants` produces a single-entry map with `tenantId="prod"`. No env migration required.
-- [ ] **SIMPLE_SOLUTION**: No new dependencies; reuses `@octokit/webhooks-methods` already installed. (spec: SIMPLICITY_WINS)
-- [ ] **ARCHITECTURE_ALIGNMENT**: Hexagonal — tenant config is a runtime-wiring concern (lives in app/service `bootstrap/`, not in shared packages). The workflow-input schema is pure domain (lives in `packages/temporal-workflows/`). (spec: architecture, packages-architecture)
+- [ ] **WEBHOOK_REPO_ALLOWLIST_ENFORCED**: After signature verification, webhook route rejects (logs + drops, returns 200) any payload whose `repository.full_name` is not in the operator's configured `GH_REPOS` allowlist. Defense-in-depth gate; never silently dispatch on un-allowlisted repo.
+- [ ] **NO_TENANT_PLUMBING_IN_CODE_PATH**: PR-review pipeline (webhook → dispatch → workflow → activity) has no `tenantId` field, no try-each-secret loop, no in-binary tenant map. Tenancy is achieved via separate deployments + separate GH Apps + separate `GH_REPOS` allowlists. (spec: SIMPLE_SOLUTION)
+- [ ] **TEST_REPO_CANONICAL**: `Cogni-DAO/test-repo` is the canonical default in all `.external.test.ts` `E2E_GITHUB_REPO` references and in `nodes/operator/app/tests/external/AGENTS.md`. `derekg1729/test-repo` is fully retired from code defaults in this PR.
+- [ ] **PROD_APP_NOT_INSTALLED_ON_TEST_REPO**: The production `cogni-review-production` GitHub App is never installed on `Cogni-DAO/test-repo`. Documented as an operational invariant in `docs/guides/github-app-webhook-setup.md` + tracked as a manual checklist on the deploy runbook.
+- [ ] **TEST_APP_NOT_INSTALLED_ON_PROD_REPO**: Symmetric — `cogni-review-test` App is never installed on `Cogni-DAO/node-template`.
+- [ ] **SIMPLE_SOLUTION**: No new dependencies; ~10 lines of code change in MVP. (spec: SIMPLICITY_WINS)
+- [ ] **ARCHITECTURE_ALIGNMENT**: Tenancy boundary is operational, not in code. Single-tenant binary, parameterized by env. (spec: architecture)
 
 ### Files
 
-<!-- High-level scope. PR #1098 changes the line numbers cited here; rebase first. -->
+**Modify** (this PR):
 
-**Create**:
-
-- `nodes/operator/app/src/bootstrap/tenants/load-tenants.ts` — `loadTenants(env): ReadonlyMap<TenantId, TenantConfig>`. Pure function over env. Reads `GH_REVIEW_APP_*` for prod (back-compat) + `GH_TEST_REVIEW_APP_*` for test. Returns map; only includes a tenant if its complete cred set is present.
-- `nodes/operator/app/src/bootstrap/tenants/types.ts` — `TenantId`, `TenantConfig` (`appId, privateKey, webhookSecret, allowlist: ReadonlyArray<string>`).
-- `nodes/operator/app/src/bootstrap/tenants/AGENTS.md` — module contract.
-- `tests/unit/nodes/operator/bootstrap/load-tenants.test.ts` — happy paths + missing-cred + back-compat fixture.
-- `tests/unit/packages/temporal-workflows/pr-review-input-contract.test.ts` — round-trip `z.parse` of a fixture; asserts dispatch and activities both produce/consume schemata that pass.
-- `services/scheduler-worker/src/bootstrap/tenants.ts` — JSON-env loader that produces the same `Map<TenantId, TenantConfig>` shape from `GH_TENANTS_CONFIG_JSON`.
-
-**Modify**:
-
-- `nodes/operator/app/src/shared/env/server-env.ts` — add `GH_TEST_REVIEW_APP_ID`, `GH_TEST_REVIEW_APP_PRIVATE_KEY_BASE64`, `GH_TEST_WEBHOOK_SECRET`, `GH_TEST_REPOS` (all optional).
-- `nodes/operator/app/src/app/api/internal/webhooks/[source]/route.ts` — replace `resolveWebhookSecret` with `resolveTenant(tenants, source, headers, body): {tenantId, secret} | null`; pass `tenantId` to `dispatchPrReview`. The existing `receiveWebhook` call gets the matched secret unchanged.
-- `nodes/operator/app/src/app/_facades/review/dispatch.server.ts` — accept `tenantId` from caller; include in workflow input + `workflowId` template; fail-fast if tenantId not in configured tenants map.
-- `packages/temporal-workflows/src/workflows/pr-review.workflow.ts` — add `PrReviewWorkflowInputSchema` (Zod) with `tenantId: z.enum(["prod", "test"])`. Existing TS interface becomes `z.infer<typeof PrReviewWorkflowInputSchema>`. NB: PR #1098 currently in flight modifies this file; rebase clean.
-- `packages/temporal-workflows/src/activity-types.ts` — add `tenantId: string` to `fetchPrContextActivity` input + `postReviewResultActivity` input.
-- `services/scheduler-worker/src/bootstrap/env.ts` — add `GH_TENANTS_CONFIG_JSON` (optional JSON string, validated by Zod schema matching tenant config shape).
-- `services/scheduler-worker/src/worker.ts` — pass tenant map to `createReviewActivities`.
-- `services/scheduler-worker/src/activities/review.ts` — `ReviewActivityDeps.tenants: ReadonlyMap<TenantId, TenantCreds>`. Octokit factory takes `tenantId` and resolves creds; activity signatures accept `tenantId` from workflow input.
-- `nodes/operator/app/tests/external/review/pr-review-e2e.external.test.ts` (and 3 sibling per-node copies) — flip `E2E_GITHUB_REPO` default to `Cogni-DAO/test-repo`; suite skips unless test-tenant App creds available.
-- `nodes/operator/app/tests/external/AGENTS.md` — update test-repo guidance.
-- `docs/guides/github-app-webhook-setup.md` — add a "Multi-tenant" section explaining the prefix convention + try-each-secret semantics.
-- `docs/guides/agent-api-validation.md` — append a worked example of the `test.cognidao.org` flight DM flow.
+- `nodes/operator/app/src/app/api/internal/webhooks/[source]/route.ts` — after `receiveWebhook` succeeds, before dispatching review: read `payload.repository.full_name`, check membership in `env.GH_REPOS.split(",")`. Mismatch → log warn + return 200 without dispatching. ~10 lines.
+- `nodes/operator/app/tests/external/review/pr-review-e2e.external.test.ts` (and the 3 sibling per-node copies) — flip `E2E_GITHUB_REPO` default to `Cogni-DAO/test-repo`. Suite skips unless test-tenant App creds available.
+- `nodes/operator/app/tests/external/AGENTS.md` — `Cogni-DAO/test-repo` is already canonical here; reconcile any remaining drift.
+- `docs/guides/github-app-webhook-setup.md` — add a worked-example "Test environment" section showing the `test.cognidao.org` deploy + `cogni-review-test` App + `.env.test` triad. Make explicit: **never install both Apps on the same repo**.
+- `tests/unit/nodes/operator/app/api/webhook-allowlist.test.ts` (NEW) — single test for the allowlist guard: payload with un-allowlisted repo → no dispatch.
 
 **New (separate bootstrap PR on `Cogni-DAO/test-repo`)**:
 
-- Multi-node directory scaffolding mirroring PR #920's structure (no production code in this repo's PR).
+- Multi-node directory scaffolding ported from PR #920 — no production code, just shape.
 
-### Implementation slicing — recommended PR breakdown (separate from this PR, pure execution)
+**Operational (no code, document in this PR's body + the deploy runbook)**:
 
-Implementer's call. Suggested slices, in order:
+- Create `cogni-review-test` GitHub App in the Cogni-DAO org.
+- Install on `Cogni-DAO/test-repo` only.
+- Capture creds + provision into `test.cognidao.org`'s deploy secrets and into the local `.env.test`.
 
-1. **PR-A — Workflow input schema + contract test** (smallest blast radius). Add `PrReviewWorkflowInputSchema` Zod; convert existing usages to `z.infer<>`. No tenant changes yet. Cleans up the modelRef-shape lesson at the type level. ~150 lines.
-2. **PR-B — `tenantId` plumbing through dispatch + workflow + activity** (no actual multi-tenant config yet — `tenantId` always defaults to `"prod"`). Adds the field, the schema enum, the workflowId prefix. ~250 lines.
-3. **PR-C — `loadTenants` helper + per-tenant prefixed env vars + worker tenant map**. Webhook route still uses single-tenant logic but reads from the map. ~300 lines.
-4. **PR-D — Try-each-secret webhook resolution + per-tenant allowlist enforcement**. The actual multi-tenant routing. ~200 lines.
-5. **PR-E — `Cogni-DAO/test-repo` bootstrap + test-tenant App install + retire `derekg1729/test-repo` defaults in external tests + docs**. The migration. ~400 lines + ops work.
-6. **PR-F — `test.cognidao.org` deploy + Loki labels + agentic-API DM validation**. The deploy_verified gate. Mostly ops + a runbook.
+### Top-priority follow-ups (same project: proj.vcs-integration)
 
-PR-A and PR-B are unblocked by PR #1098 merging (they touch the same files). PR-C through PR-F depend on PR-A + PR-B landing first.
+Documented as separate work items so this MVP stays small. Both filed (or to be filed) at `needs_design`. **In priority order**:
+
+1. **task.0410 — `PrReviewWorkflowInputSchema` Zod contract.** Direct fix to the modelRef-shape regression class (PR #1067). Add a single Zod schema in `packages/temporal-workflows/` for `PrReviewWorkflowInput`; convert dispatch + activity types to `z.infer<>`; add a round-trip contract test. **Standalone, ~150 lines, ships independently of this work.** Highest-value cleanup that doesn't gate on test:external.
+2. **task.0411 — In-binary multi-tenant operator (vFuture).** When Cogni ships as a SaaS reviewing N customer forks, we'll need one pod handling N GH Apps. That's the original 6-PR design. **Do not build until there's a real second use-case.** Today's two-deploy pattern is enough.
+
+### Validation (refines work item's existing block)
+
+- **exercise:** (1) From `Cogni-DAO/test-repo` PR opened by `pnpm test:external:operator`, the `cogni-review-test` App posts a "Cogni Git PR Review" Check Run. (2) Production `cogni-review-production` App's Recent Deliveries page (App settings → Advanced) shows zero events for `Cogni-DAO/test-repo`. (3) From a separate authed shell, DM `https://test.cognidao.org/api/v1/ai/chat` with "flight PR #N on Cogni-DAO/test-repo" — agent calls `core__vcs_flight_candidate`, returns the flight workflow URL.
+- **observability:** Loki query against the test deploy: `{namespace="cogni-test", pod=~"operator-.*"} | json | component="webhook-route"` — every entry has `repository.full_name` in `Cogni-DAO/test-repo` (only). Cross-leak detection: any entry with a non-test-repo full_name → fail.
