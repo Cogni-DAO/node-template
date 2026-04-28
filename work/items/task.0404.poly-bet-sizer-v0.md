@@ -6,8 +6,8 @@ status: needs_implement
 priority: 1
 rank: 5
 estimate: 2
-summary: "Add a `{ kind: 'min_bet' }` variant to the existing `SizingPolicy` discriminated union. Use the market's `minUsdcNotional` as the bet size instead of the hardcoded `MIRROR_USDC = 1` constant. FCFS budget gating remains in `authorizeIntent` (CAPS_LIVE_IN_GRANT). No new port, no new schema, no UI."
-outcome: "A user copy-trading multiple targets on a small grant cap places real min-bet orders on every market regardless of the market's specific minimum, instead of silently skipping markets with `minUsdcNotional > 1`. The `MIRROR_USDC` and `MIRROR_MAX_USDC_PER_TRADE` env-driven constants are gone; sizing is sourced from the market itself."
+summary: "Add a `{ kind: 'min_bet', max_usdc_per_trade }` variant to the existing `SizingPolicy` discriminated union. Use the market's `minUsdcNotional` as the bet size instead of the hardcoded `MIRROR_USDC = 1` constant. FCFS budget gating remains in `authorizeIntent` (CAPS_LIVE_IN_GRANT). No new port, no new schema, no UI."
+outcome: "Bet size is sourced from the market's `minUsdcNotional` (clamped to share-floor) instead of the hardcoded `MIRROR_USDC = 1`. Markets where the min lands within the tenant's per-order grant cap place real orders. Markets above the variant's `max_usdc_per_trade` skip cleanly at `plan-mirror` (no ledger bloat) with the existing `below_market_min` reason. The `MIRROR_USDC` env-read constant is deleted."
 spec_refs:
   - poly-copy-trade-phase1
   - poly-multi-tenant-auth
@@ -48,21 +48,36 @@ Every poly copy-trade order's `size_usdc` is the market's `minUsdcNotional` for 
 
 ### Approach
 
-**Solution:** Add a new variant to the existing `SizingPolicy` discriminated union:
+**Solution:** Add a new variant to the existing `SizingPolicy` discriminated union — the variant carries its own per-order ceiling so cap-exceeded fills skip at `plan-mirror` (cheap) rather than at `authorizeIntent` (after `INSERT_BEFORE_PLACE`, ledger-polluting):
 
 ```ts
 export const MinBetSizingPolicySchema = z.object({
   kind: z.literal("min_bet"),
+  /**
+   * Hard ceiling. When the market's share-floor or `minUsdcNotional` forces
+   * notional above this, skip with `below_market_min` BEFORE the ledger insert.
+   * Set to match the tenant's `polyWalletGrants.perOrderUsdcCap` so cap-exceed
+   * cases are not duplicated at the authorize boundary.
+   */
+  max_usdc_per_trade: z.number().positive(),
 });
-export const SizingPolicySchema = z.discriminatedUnion("kind", [
-  FixedSizingPolicySchema,
-  MinBetSizingPolicySchema,
-]);
 ```
 
-Extend `applySizingPolicy` switch in `plan-mirror.ts` with a `case "min_bet"` that returns `minUsdcNotional` directly, or `{ ok: false, reason: "below_market_min" }` when `minUsdcNotional` is undefined (market constraints unknown — fail closed).
+`applySizingPolicy("min_bet", price, minShares, minUsdcNotional)` math (mirrors the `fixed` variant's tail; only the desired-shares step changes):
 
-In bootstrap, swap the `{ kind: "fixed", mirror_usdc: 1, max_usdc_per_trade: 5 }` config for `{ kind: "min_bet" }`. Delete the `MIRROR_USDC` and `MIRROR_MAX_USDC_PER_TRADE` constants and their env reads.
+```
+if (minUsdcNotional === undefined) → skip "below_market_min"   // fail closed
+sharesForUsdcFloor = minUsdcNotional / price
+floorShares        = max(minShares ?? 0, sharesForUsdcFloor)
+rawUsdc            = floorShares * price
+size_usdc          = max(rawUsdc, minUsdcNotional)              // bug.0342 ε-clamp
+if (size_usdc > max_usdc_per_trade) → skip "below_market_min"
+return ok { size_usdc }
+```
+
+`nominalSizeUsdc(sizing)` in `mirror-pipeline.ts:40` (used by SELL-close `max_size_usdc` and the audit blob) gets a `case "min_bet": return sizing.max_usdc_per_trade` — for SELL it acts as the close-cap ceiling, for the audit blob it logs the configured ceiling. Both correct.
+
+In bootstrap, swap to `{ kind: "min_bet", max_usdc_per_trade: 5 }` (matches today's effective `MIRROR_MAX_USDC_PER_TRADE = 5` and the operator wallet's $5/order grant cap, so the ceiling lands at `plan-mirror` and never at `authorize`). Delete `MIRROR_USDC` and `MIRROR_MAX_USDC_PER_TRADE` env reads + constants. The ceiling now lives in the policy variant where it belongs, not as a free-floating env knob.
 
 **Reuses:**
 
@@ -77,6 +92,7 @@ In bootstrap, swap the `{ kind: "fixed", mirror_usdc: 1, max_usdc_per_trade: 5 }
 - **Move sizing to a shared package.** Same reason — only one runtime (poly app) consumes this. Promoting now is premature. The existing in-app discriminated union covers all known P1 policies (allocation %, sub-min handling) as additional variants.
 - **Pass `grant.dailyRemainingUsdc` into the sizer for early-skip optimization.** Violates [`CAPS_LIVE_IN_GRANT`](../../nodes/poly/app/src/features/copy-trade/types.ts) — caps are enforced exclusively at `authorizeIntent`. The pure decision must not read cap state.
 - **Delete the `fixed` variant.** Tempting but bad. Stack tests, fixtures, and dev/test configs use it. Keeping both variants is one extra `case` and zero migration risk.
+- **Skip `max_usdc_per_trade` on `min_bet` and let `authorizeIntent` reject above-cap intents.** Considered. Rejected because every cap-rejected fill writes a `markError` + `placement_failed` decision row at [`mirror-pipeline.ts:445`](../../nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts) — that's `INSERT_BEFORE_PLACE` doing its job for real failures, but it pollutes the ledger with deterministic skips. Carrying the ceiling in the policy variant lets `plan-mirror` skip cleanly _before_ the insert, same as the `fixed` variant does today.
 
 ### Invariants
 
@@ -93,21 +109,23 @@ In bootstrap, swap the `{ kind: "fixed", mirror_usdc: 1, max_usdc_per_trade: 5 }
 ### Files
 
 - **Modify:** `nodes/poly/app/src/features/copy-trade/types.ts` — add `MinBetSizingPolicySchema`, extend `SizingPolicySchema` discriminated union.
-- **Modify:** `nodes/poly/app/src/features/copy-trade/plan-mirror.ts` — extend `applySizingPolicy` switch with `case "min_bet"` (4–8 lines).
-- **Modify:** `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` — swap config to `{ kind: "min_bet" }`; delete `MIRROR_USDC` + `MIRROR_MAX_USDC_PER_TRADE` constants and their env reads.
-- **Modify:** existing tests under `nodes/poly/app/src/features/copy-trade/__tests__/` that build a sizing config — update to reference the new variant where appropriate (mostly leave existing `fixed` tests alone; add new `min_bet` cases).
-- **Test (new cases in existing file):** unit fixtures for `applySizingPolicy({ kind: "min_bet" }, ...)`:
-  - `minUsdcNotional` defined → returns that size
-  - `minUsdcNotional` undefined → returns `below_market_min`
-  - `minShares * price > minUsdcNotional` → returns `minShares * price` (share-floor clamp)
+- **Modify:** `nodes/poly/app/src/features/copy-trade/plan-mirror.ts` — extend `applySizingPolicy` switch with `case "min_bet"` (~12 lines mirroring the fixed variant's floor/clamp tail).
+- **Modify:** `nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts` — extend `nominalSizeUsdc` switch with `case "min_bet": return sizing.max_usdc_per_trade`. (Required for exhaustiveness; without it the SELL path and audit blob break on the new variant.)
+- **Modify:** `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` — swap config to `{ kind: "min_bet", max_usdc_per_trade: 5 }`; delete `MIRROR_USDC` + `MIRROR_MAX_USDC_PER_TRADE` constants and their env reads.
+- **Modify:** existing test files under `nodes/poly/app/src/features/copy-trade/__tests__/` that build a sizing config — add new `min_bet` cases; leave existing `fixed` tests alone.
+- **Test (new cases in existing `plan-mirror.test.ts`):** unit fixtures for `applySizingPolicy({ kind: "min_bet", max_usdc_per_trade }, ...)`:
+  - `minUsdcNotional` undefined → skip `below_market_min` (fail closed)
+  - `minUsdcNotional` defined and ≤ `max_usdc_per_trade` → returns `size_usdc = minUsdcNotional`
+  - `minUsdcNotional > max_usdc_per_trade` → skip `below_market_min` (ceiling)
+  - `minShares × price > minUsdcNotional` → returns `minShares × price` (share-floor wins)
 
 ## Validation
 
 ### exercise
 
-- **Local unit:** `pnpm test nodes/poly/app/src/features/copy-trade` — new fixture matrix passes.
-- **Local stack:** `pnpm test:stack:dev nodes/poly/app/src/features/copy-trade` — existing mirror-pipeline suite passes; one new case asserts a $2-min market places at $2 instead of skipping.
-- **Candidate-a:** with a configured target trading on a market where `minUsdcNotional > 1`, observe one real mirror tick that lands an order. The CLOB receipt's notional matches `minUsdcNotional`. Same target on a $1-min market continues to land at $1.
+- **Local unit:** `pnpm test nodes/poly/app/src/features/copy-trade/__tests__/plan-mirror.test.ts` — new fixture matrix for `min_bet` passes (4 cases above).
+- **Local stack:** `pnpm test:stack:dev nodes/poly/app/src/features/copy-trade` — existing mirror-pipeline suite passes with the bootstrap swap.
+- **Candidate-a:** with a configured target trading on a market where `1 < minUsdcNotional ≤ 5`, observe one real mirror tick that lands an order at the market's min (not at $1). On a market where `minUsdcNotional > 5`, the decision row is `skipped/below_market_min` (NOT `error/placement_failed`) — proves the ceiling lives in `plan-mirror`, not `authorize`.
 
 ### observability
 

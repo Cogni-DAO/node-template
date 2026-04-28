@@ -39,8 +39,27 @@ export const FixedSizingPolicySchema = z.object({
 });
 export type FixedSizingPolicy = z.infer<typeof FixedSizingPolicySchema>;
 
+/**
+ * Always-min-bet policy. Bet size is the market's `minUsdcNotional` (clamped to
+ * `minShares × price` per SHARE_SPACE_MATH). When the floor exceeds
+ * `max_usdc_per_trade`, the pipeline skips with `below_market_min` BEFORE the
+ * `INSERT_BEFORE_PLACE` row lands — so cap-exceed cases are not duplicated at
+ * the `authorizeIntent` boundary as `placement_failed` decisions.
+ *
+ * FCFS budget gating across multi-target copy-trading is handled downstream by
+ * `authorizeIntent` against the tenant's `poly_wallet_grants` row
+ * (`CAPS_LIVE_IN_GRANT`); this policy intentionally does not read grant state.
+ */
+export const MinBetSizingPolicySchema = z.object({
+  kind: z.literal("min_bet"),
+  /** Hard per-intent ceiling. Skip at plan-mirror when floor exceeds this. */
+  max_usdc_per_trade: z.number().positive(),
+});
+export type MinBetSizingPolicy = z.infer<typeof MinBetSizingPolicySchema>;
+
 export const SizingPolicySchema = z.discriminatedUnion("kind", [
   FixedSizingPolicySchema,
+  MinBetSizingPolicySchema,
 ]);
 export type SizingPolicy = z.infer<typeof SizingPolicySchema>;
 
