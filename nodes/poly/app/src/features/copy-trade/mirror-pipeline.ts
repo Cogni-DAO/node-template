@@ -517,6 +517,16 @@ async function executeMirrorOrder(
     );
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
+    // bug.0405 — surface `details.error_code` from typed `ClobRejectionError`
+    // so FOK no-match (`fok_no_match`) is distinguishable in Loki from other
+    // failures (insufficient_balance, http_error, etc.). Duck-typed read keeps
+    // this pipeline platform-agnostic — no subpath import on the polymarket
+    // adapter. Falls back to "placement_failed" when no typed code present.
+    const adapterErrorCode =
+      typeof (err as { details?: { error_code?: unknown } } | null)?.details
+        ?.error_code === "string"
+        ? (err as { details: { error_code: string } }).details.error_code
+        : undefined;
     deps.metrics.incr(MIRROR_PIPELINE_METRICS.placementErrorsTotal, {});
     await deps.ledger.markError({ client_order_id, error: msg });
     emitDecisionMetric(deps.metrics, "error", "placement_failed", source);
@@ -527,17 +537,21 @@ async function executeMirrorOrder(
       intent: buildDecisionIntentBlob(fill, deps.target, client_order_id),
       receipt: null,
     });
-    log.error(
+    const isFokNoMatch = adapterErrorCode === "fok_no_match";
+    const logLevel = isFokNoMatch ? "info" : "error";
+    log[logLevel](
       {
         event: EVENT_NAMES.POLY_MIRROR_DECISION,
         outcome: "error",
-        errorCode: "placement_failed",
+        errorCode: adapterErrorCode ?? "placement_failed",
         reason: "placement_failed",
         source,
         fill_id: fill.fill_id,
         client_order_id,
       },
-      "mirror pipeline: placement error"
+      isFokNoMatch
+        ? "mirror pipeline: FOK no-match — clean skip, no retry"
+        : "mirror pipeline: placement error"
     );
   }
 }

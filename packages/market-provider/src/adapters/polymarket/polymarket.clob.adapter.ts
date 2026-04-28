@@ -250,6 +250,9 @@ export class PolymarketClobAdapter implements MarketProviderPort {
     let tickSize: TickSize | undefined;
     let negRisk: boolean | undefined;
     let feeRateBps: number | undefined;
+    // Hoisted so the catch block can distinguish FOK no-match (clean skip) from
+    // limit GTC rejections (bug.0405 FILL_NEVER_BELOW_FLOOR).
+    let orderTypeUsed: OrderType | undefined;
 
     try {
       // B1 — fetch per-market tickSize + negRisk + feeRateBps rather than hardcoding.
@@ -297,19 +300,54 @@ export class PolymarketClobAdapter implements MarketProviderPort {
 
       const postOnly = intent.attributes?.post_only === true;
 
-      const response: unknown = await this.client.createAndPostOrder(
-        {
-          tokenID: tokenId,
-          price: intent.limit_price,
-          size: shareSize,
-          side,
-          feeRateBps,
-        },
-        { tickSize, negRisk },
-        OrderType.GTC,
-        /* deferExec */ undefined,
-        /* postOnly */ postOnly || undefined
-      );
+      // FILL_NEVER_BELOW_FLOOR (bug.0405): default to atomic-or-nothing market
+      // FOK so the matched fill is always either the full intent or 0. GTC
+      // limit orders partial-fill against orderbook depth and settle the
+      // matched portion to our wallet with NO min_order_size check on the
+      // matched amount — that's how we ended up holding 4.88 + 2.20 share
+      // dust positions on candidate-a 2026-04-28.
+      //
+      // The Polymarket SDK only exposes FOK / FAK on `createAndPostMarketOrder`;
+      // `createAndPostOrder` is limit-only (GTC | GTD). So switching to FOK
+      // means switching to the market-order method. The price field on
+      // UserMarketOrder is an OPTIONAL cap (BUY: max price; SELL: min price).
+      // Amount semantics differ by side per the SDK comment:
+      //   BUY  → amount = USDC dollars to spend
+      //   SELL → amount = outcome shares to sell
+      //
+      // postOnly is incompatible with market+FOK by definition (postOnly = rest
+      // as maker; FOK = match now or kill). postOnly callers keep limit GTC.
+      let response: unknown;
+      if (postOnly) {
+        orderTypeUsed = OrderType.GTC;
+        response = await this.client.createAndPostOrder(
+          {
+            tokenID: tokenId,
+            price: intent.limit_price,
+            size: shareSize,
+            side,
+            feeRateBps,
+          },
+          { tickSize, negRisk },
+          OrderType.GTC,
+          /* deferExec */ undefined,
+          /* postOnly */ true
+        );
+      } else {
+        orderTypeUsed = OrderType.FOK;
+        const marketAmount = intent.side === "BUY" ? effectiveUsdc : shareSize;
+        response = await this.client.createAndPostMarketOrder(
+          {
+            tokenID: tokenId,
+            price: intent.limit_price,
+            amount: marketAmount,
+            side,
+            feeRateBps,
+          },
+          { tickSize, negRisk },
+          OrderType.FOK
+        );
+      }
 
       const receipt = mapOrderResponseToReceipt(response, intent);
       const duration_ms = Date.now() - start;
@@ -342,6 +380,18 @@ export class PolymarketClobAdapter implements MarketProviderPort {
         err instanceof ClobRejectionError
           ? err.details
           : classifyClientError(err);
+      // bug.0405 FILL_NEVER_BELOW_FLOOR — when we sent FOK and CLOB returned a
+      // no-fill rejection (empty body, classic shape), it's an atomic no-match,
+      // not a real error: flag with `fokNoMatch` so the coordinator marks the
+      // fill `placement_failed` without retry. Other rejection codes
+      // (insufficient_balance, invalid_signature, http_error) keep their
+      // semantics — those are real and a retry might be the right call.
+      if (
+        orderTypeUsed === OrderType.FOK &&
+        details.error_code === POLY_CLOB_ERROR_CODES.emptyResponse
+      ) {
+        details.error_code = POLY_CLOB_ERROR_CODES.fokNoMatch;
+      }
       const result = err instanceof ClobRejectionError ? "rejected" : "error";
       this.metrics.incr(POLY_CLOB_METRICS.placeTotal, {
         result,
@@ -822,6 +872,15 @@ export const POLY_CLOB_ERROR_CODES = {
    * bug.0342 (dynamic scale-up-to-min).
    */
   belowMinOrderSize: "below_min_order_size",
+  /**
+   * FOK (Fill-Or-Kill) order could not be fully matched at submission. The
+   * order was rejected atomically — nothing settled. This is a CLEAN SKIP:
+   * the coordinator should mark the fill as `placement_failed` with no retry
+   * (next signal from the target re-enters the pipeline). Distinct from
+   * `belowMinOrderSize` (intent-shape problem) and `emptyResponse` (which
+   * could mean a CLOB-internal error). bug.0405 FILL_NEVER_BELOW_FLOOR.
+   */
+  fokNoMatch: "fok_no_match",
   emptyResponse: "empty_response",
   httpError: "http_error",
   unknown: "unknown",

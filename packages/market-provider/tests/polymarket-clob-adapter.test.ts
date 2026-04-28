@@ -343,13 +343,13 @@ describe("PolymarketClobAdapter", () => {
     return adapter;
   }
 
-  it("placeOrder maps size_usdc → share size via limit_price and echoes client_order_id", async () => {
-    const createAndPostOrder = vi.fn().mockResolvedValue({
+  it("placeOrder uses market FOK by default (BUY: amount=USDC) and echoes client_order_id (bug.0405)", async () => {
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xresp",
-      status: "live",
+      status: "matched",
       makingAmount: "1",
     });
-    const adapter = makeAdapter({ createAndPostOrder });
+    const adapter = makeAdapter({ createAndPostMarketOrder });
 
     const receipt = await adapter.placeOrder({
       ...BASE_INTENT,
@@ -358,39 +358,64 @@ describe("PolymarketClobAdapter", () => {
       side: "BUY",
     });
 
-    expect(createAndPostOrder).toHaveBeenCalledOnce();
-    const [userOrder, opts, orderType] = createAndPostOrder.mock.calls[0] as [
-      { tokenID: string; price: number; size: number; side: string },
+    expect(createAndPostMarketOrder).toHaveBeenCalledOnce();
+    const [userOrder, opts, orderType] = createAndPostMarketOrder.mock
+      .calls[0] as [
+      { tokenID: string; price: number; amount: number; side: string },
       { tickSize: string; negRisk: boolean },
       string,
     ];
     expect(userOrder.tokenID).toBe(BASE_INTENT.attributes?.token_id);
+    // FILL_NEVER_BELOW_FLOOR: BUY market FOK uses USDC amount with price as cap.
     expect(userOrder.price).toBe(0.5);
-    expect(userOrder.size).toBe(2); // 1 USDC / 0.5 = 2 shares
+    expect(userOrder.amount).toBe(1); // size_usdc=1 forwards as-is
     expect(userOrder.side).toBe("BUY");
     expect(opts.negRisk).toBe(false);
-    expect(orderType).toBe("GTC");
+    expect(orderType).toBe("FOK");
     expect(receipt.order_id).toBe("0xresp");
     expect(receipt.client_order_id).toBe(BASE_INTENT.client_order_id);
     expect(receipt.filled_size_usdc).toBe(1);
   });
 
+  it("placeOrder uses market FOK on SELL (amount=shares) per bug.0405", async () => {
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
+      orderID: "0xsell",
+      status: "matched",
+      takingAmount: "1",
+    });
+    const adapter = makeAdapter({ createAndPostMarketOrder });
+    await adapter.placeOrder({
+      ...BASE_INTENT,
+      size_usdc: 1,
+      limit_price: 0.5,
+      side: "SELL",
+    });
+    const [userOrder, , orderType] = createAndPostMarketOrder.mock.calls[0] as [
+      { amount: number; side: string },
+      unknown,
+      string,
+    ];
+    expect(userOrder.side).toBe("SELL");
+    expect(userOrder.amount).toBe(2); // SELL: 1 USDC / 0.5 = 2 shares
+    expect(orderType).toBe("FOK");
+  });
+
   it("placeOrder fetches per-market tickSize + negRisk and forwards them (B1)", async () => {
     const getTickSize = vi.fn().mockResolvedValue("0.001");
     const getNegRisk = vi.fn().mockResolvedValue(true);
-    const createAndPostOrder = vi.fn().mockResolvedValue({
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xresp",
-      status: "live",
+      status: "matched",
     });
     const adapter = makeAdapter({
-      createAndPostOrder,
+      createAndPostMarketOrder,
       getTickSize,
       getNegRisk,
     });
     await adapter.placeOrder(BASE_INTENT);
     expect(getTickSize).toHaveBeenCalledWith(BASE_INTENT.attributes?.token_id);
     expect(getNegRisk).toHaveBeenCalledWith(BASE_INTENT.attributes?.token_id);
-    const [, opts] = createAndPostOrder.mock.calls[0] as [
+    const [, opts] = createAndPostMarketOrder.mock.calls[0] as [
       unknown,
       { tickSize: string; negRisk: boolean },
       string,
@@ -401,16 +426,16 @@ describe("PolymarketClobAdapter", () => {
 
   it("placeOrder fetches per-market feeRateBps and forwards it (B1b)", async () => {
     const getFeeRateBps = vi.fn().mockResolvedValue(1000);
-    const createAndPostOrder = vi.fn().mockResolvedValue({
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xfee",
-      status: "live",
+      status: "matched",
     });
-    const adapter = makeAdapter({ createAndPostOrder, getFeeRateBps });
+    const adapter = makeAdapter({ createAndPostMarketOrder, getFeeRateBps });
     await adapter.placeOrder(BASE_INTENT);
     expect(getFeeRateBps).toHaveBeenCalledWith(
       BASE_INTENT.attributes?.token_id
     );
-    const [userOrder] = createAndPostOrder.mock.calls[0] as [
+    const [userOrder] = createAndPostMarketOrder.mock.calls[0] as [
       { feeRateBps: number },
       unknown,
       string,
@@ -418,7 +443,7 @@ describe("PolymarketClobAdapter", () => {
     expect(userOrder.feeRateBps).toBe(1000);
   });
 
-  it("placeOrder forwards attributes.post_only=true to the CLOB (B5 safety)", async () => {
+  it("placeOrder forwards attributes.post_only=true via limit GTC (postOnly is incompatible with market FOK)", async () => {
     const createAndPostOrder = vi.fn().mockResolvedValue({
       orderID: "0xpo",
       status: "live",
@@ -428,21 +453,11 @@ describe("PolymarketClobAdapter", () => {
       ...BASE_INTENT,
       attributes: { ...BASE_INTENT.attributes, post_only: true },
     });
+    // postOnly path uses createAndPostOrder (limit) with GTC + postOnly=true.
     // positional args: (userOrder, options, orderType, deferExec, postOnly)
     const call = createAndPostOrder.mock.calls[0] as unknown[];
     expect(call[2]).toBe("GTC");
     expect(call[4]).toBe(true);
-  });
-
-  it("placeOrder omits postOnly by default", async () => {
-    const createAndPostOrder = vi.fn().mockResolvedValue({
-      orderID: "0xdef",
-      status: "live",
-    });
-    const adapter = makeAdapter({ createAndPostOrder });
-    await adapter.placeOrder(BASE_INTENT);
-    const call = createAndPostOrder.mock.calls[0] as unknown[];
-    expect(call[4]).toBeUndefined();
   });
 
   it("placeOrder rejects when token_id attribute is missing", async () => {
@@ -634,16 +649,16 @@ describe("PolymarketClobAdapter", () => {
     // The round-trip loses precision but the intent clears the floor by
     // design; without epsilon tolerance the adapter bounced prod mirror
     // placements.
-    const createAndPostOrder = vi.fn().mockResolvedValue({
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xresp",
-      status: "live",
-      makingAmount: "11.11",
+      status: "matched",
+      makingAmount: "1",
     });
     const getOrderBook = vi.fn().mockResolvedValue({
       min_order_size: "5",
       tick_size: "0.01",
     });
-    const adapter = makeAdapter({ createAndPostOrder, getOrderBook });
+    const adapter = makeAdapter({ createAndPostMarketOrder, getOrderBook });
 
     await expect(
       adapter.placeOrder({
@@ -653,13 +668,13 @@ describe("PolymarketClobAdapter", () => {
         side: "BUY",
       })
     ).resolves.toMatchObject({ order_id: "0xresp" });
-    expect(createAndPostOrder).toHaveBeenCalled();
+    expect(createAndPostMarketOrder).toHaveBeenCalled();
   });
 
   it("placeOrder proceeds when shareSize >= min_order_size", async () => {
-    const createAndPostOrder = vi.fn().mockResolvedValue({
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xresp",
-      status: "live",
+      status: "matched",
       makingAmount: "5",
     });
     // $5 @ 0.50 → 10 shares ≥ 5-share min
@@ -667,7 +682,7 @@ describe("PolymarketClobAdapter", () => {
       min_order_size: "5",
       tick_size: "0.01",
     });
-    const adapter = makeAdapter({ createAndPostOrder, getOrderBook });
+    const adapter = makeAdapter({ createAndPostMarketOrder, getOrderBook });
 
     const receipt = await adapter.placeOrder({
       ...BASE_INTENT,
@@ -675,7 +690,7 @@ describe("PolymarketClobAdapter", () => {
       limit_price: 0.5,
     });
 
-    expect(createAndPostOrder).toHaveBeenCalledOnce();
+    expect(createAndPostMarketOrder).toHaveBeenCalledOnce();
     expect(receipt.order_id).toBe("0xresp");
   });
 });
@@ -764,11 +779,14 @@ describe("PolymarketClobAdapter — observability", () => {
   it("placeOrder emits start + ok logs with correlation fields and result=ok metrics", async () => {
     const { logger, calls } = makeRecordingLogger();
     const metrics = createRecordingMetrics();
-    const createAndPostOrder = vi.fn().mockResolvedValue({
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xok",
-      status: "live",
+      status: "matched",
     });
-    const adapter = makeAdapter({ createAndPostOrder }, { logger, metrics });
+    const adapter = makeAdapter(
+      { createAndPostMarketOrder },
+      { logger, metrics }
+    );
 
     await adapter.placeOrder(BASE_INTENT);
 
@@ -819,12 +837,15 @@ describe("PolymarketClobAdapter — observability", () => {
   it("placeOrder classifies success=false response as result=rejected and logs error", async () => {
     const { logger, calls } = makeRecordingLogger();
     const metrics = createRecordingMetrics();
-    const createAndPostOrder = vi.fn().mockResolvedValue({
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xrej",
       success: false,
       errorMsg: "fee rate for the market must be 1000",
     });
-    const adapter = makeAdapter({ createAndPostOrder }, { logger, metrics });
+    const adapter = makeAdapter(
+      { createAndPostMarketOrder },
+      { logger, metrics }
+    );
 
     await expect(adapter.placeOrder(BASE_INTENT)).rejects.toThrow(
       /CLOB rejected order/
@@ -855,10 +876,13 @@ describe("PolymarketClobAdapter — observability", () => {
   it("placeOrder classifies thrown network errors as result=error", async () => {
     const { logger, calls } = makeRecordingLogger();
     const metrics = createRecordingMetrics();
-    const createAndPostOrder = vi
+    const createAndPostMarketOrder = vi
       .fn()
       .mockRejectedValue(new Error("ECONNRESET"));
-    const adapter = makeAdapter({ createAndPostOrder }, { logger, metrics });
+    const adapter = makeAdapter(
+      { createAndPostMarketOrder },
+      { logger, metrics }
+    );
 
     await expect(adapter.placeOrder(BASE_INTENT)).rejects.toThrow(/ECONNRESET/);
 
@@ -873,6 +897,36 @@ describe("PolymarketClobAdapter — observability", () => {
     const errLog = calls.find((c) => c.level === "error");
     expect(errLog?.obj.phase).toBe("error");
     expect(String(errLog?.obj.reason)).toContain("ECONNRESET");
+  });
+
+  it("placeOrder reclassifies FOK empty-response rejects as fok_no_match (bug.0405)", async () => {
+    const { logger, calls } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    // Polymarket CLOB returns `{}` (or `{success:false}` with no orderID) when
+    // FOK can't fully match. Should bucket as `fok_no_match` so the coordinator
+    // can skip cleanly without retry, distinct from real errors.
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({});
+    const adapter = makeAdapter(
+      { createAndPostMarketOrder },
+      { logger, metrics }
+    );
+
+    await expect(adapter.placeOrder(BASE_INTENT)).rejects.toThrow(
+      /CLOB rejected order/
+    );
+
+    const rejects = metrics.emissions.filter(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.placeTotal &&
+        e.labels.result === "rejected"
+    );
+    expect(rejects).toHaveLength(1);
+    expect(rejects[0]?.labels.error_code).toBe(
+      POLY_CLOB_ERROR_CODES.fokNoMatch
+    );
+    const errLog = calls.find((c) => c.level === "error");
+    expect(errLog?.obj.error_code).toBe(POLY_CLOB_ERROR_CODES.fokNoMatch);
   });
 
   it("placeOrder with missing token_id emits error metric and log before throwing", async () => {

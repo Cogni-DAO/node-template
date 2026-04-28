@@ -206,6 +206,10 @@ All invariants are enforced either by code (header comments + Biome `noRestricte
 - **`INTENT_BASED_CAPS`** _(decide.ts)_ — `today_spent_usdc` and `fills_last_hour` count INTENT submissions, not realized fills. Strict `>` comparison.
 - **`MIRROR_REASON_BOUNDED`** _(types.ts)_ — reason codes are a closed enum so the `reason` Prometheus label stays bounded-cardinality.
 
+### Execution-primitive floor
+
+- **`FILL_NEVER_BELOW_FLOOR`** _(packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts → `placeOrder`)_ — every matched fill amount must be either `0` or `≥ market_min_order_size`. The intent-shape preflight (`bug.0342`) is necessary but not sufficient: the older GTC limit-order path matched against orderbook depth at the inside ask and settled the matched portion to our wallet with no min-order-size check on the matched amount, producing sub-min positions that were structurally unsellable. This invariant is held by the **execution primitive**: `placeOrder` defaults to `OrderType.FOK` via `createAndPostMarketOrder` (atomic-or-nothing — exchange enforces "fill the entire intent at the limit price, or fill nothing"). `postOnly` callers fall back to `OrderType.GTC` via `createAndPostOrder` (resting maker bid is the deliberate intent). FOK no-match rejections are bucketed under the `fok_no_match` `error_code` and surfaced in mirror-pipeline as a clean skip — next signal from the target re-enters the pipeline. Owner: bug.0405.
+
 ### Ordering + at-most-once
 
 - **`INSERT_BEFORE_PLACE`** _(order-ledger.ts + mirror-coordinator.ts)_ — `order-ledger.insertPending(cid, target_id, fill_id, intent)` runs **before** `placeIntent(intent)`. Crash between insert and place leaves a pending row whose `client_order_id` will be in the next tick's `already_placed_ids`, so `decide()` returns `skip/already_placed`. This is the at-most-once argument — do not reorder.

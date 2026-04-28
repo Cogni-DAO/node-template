@@ -88,60 +88,64 @@ export const MirrorTargetConfigSchema = z.object({
 
 The dial is per-target, same scope as `sizing`. A user can have aggressive FOK on high-conviction targets and GTC on opportunistic ones, etc.
 
-## Files to touch
+## Ship plan — 2 PRs
 
-**Contract / type — adds the dial:**
+This bug ships in two stages to reduce review burden and unblock the bleeding fast.
 
-- `nodes/poly/app/src/features/copy-trade/types.ts`
-  - Add `ExecutionModeSchema` (`"fok" | "gtc"`, default `"fok"`).
-  - Add `executionMode` field to `MirrorTargetConfigSchema`.
+### PR-A — Stop the bleeding (this PR)
 
-**Pipeline — propagates the dial to the adapter:**
+Hardcode FOK on the unified `placeOrder` path in the Polymarket CLOB adapter. No DB, no API, no UI. ~50 LoC + tests + spec. Branch: `fix/poly-clob-sell-fak-dust`.
 
-- `nodes/poly/app/src/features/copy-trade/plan-mirror.ts` — `buildIntent` carries `executionMode` into `OrderIntent.attributes` (or a typed sibling field) so the adapter can read it.
-- `nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts` — passes `config.executionMode` through.
+Scope:
 
-**Adapter — selects FOK vs GTC at the CLOB call:**
+- `packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts:309` — `OrderType.GTC` → `OrderType.FOK` (applies to both BUY and SELL through this path; mirror-emitted orders use this).
+- Map the CLOB's "no-match" rejection (`success=false`, empty body — same shape as the bug.0342 sub-min reject) to a typed `fok_no_match` reason in `classifyClobFailure` so the coordinator can skip cleanly without retry.
+- Manual close (`sellPositionAtMarket` → `OrderType.FAK`) **stays as FAK** — different intent: a user clicking Close wants partial-exit-better-than-no-exit, even at dust risk. FAK is the right default there.
+- `nodes/poly/app/src/features/copy-trade/mirror-coordinator.ts` (or wherever placement results are processed) — ensure `fok_no_match` results in `placement_failed reason=fok_no_match` with no retry, distinct from real errors.
+- `docs/spec/poly-copy-trade-phase1.md` — add the structural invariant `FILL_NEVER_BELOW_FLOOR: a matched fill amount must always be ≥ market min_order_size, enforced at the execution primitive (FOK)`.
+- Tests:
+  - Unit: adapter places FOK on BUY/SELL via `placeOrder`.
+  - Unit: FOK rejection classifies as `fok_no_match`.
+  - Component (if cheap): copy-trade fills row stamps `placement_failed reason=fok_no_match` on a fake-CLOB no-match scenario.
 
-- `packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts`
-  - In `placeOrder` (line ~300), branch on the intent's `executionMode`:
-    - `"fok"` → `OrderType.FOK`
-    - `"gtc"` → `OrderType.GTC` (current behavior)
+### PR-B — Operator dial (follow-up, separate branch)
+
+`executionMode` field on `MirrorTargetConfig`, DB column, API, UI control in `PolicyControls.tsx`. Default is `"fok"` (matches PR-A's hardcode); existing rows backfill to `"fok"` AT THE SAME TIME the UI ships, so operators can opt back to `"gtc"` if they want best-effort matching with explicit dust-acceptance.
+
+Out of PR-A scope. Filed as `task.NNNN.poly-execution-mode-dial-bet-sizer-panel` once PR-A is in main.
+
+## Files to touch (PR-A)
+
+**Adapter — flip BUY/SELL on `placeOrder` to FOK:**
+
+- `packages/market-provider/src/adapters/polymarket/polymarket.clob.adapter.ts:309`
+  - `createAndPostOrder(..., OrderType.GTC, ...)` → `createAndPostOrder(..., OrderType.FOK, ...)`.
   - The existing intent-side `min_order_size` preflight stays — FOK still needs it because the exchange floor is checked at placement.
-  - Map FOK rejections (`success=false`, "not enough depth"-style errors) to a typed reason `"fok_no_match"` distinct from real errors so the coordinator skips cleanly rather than retrying.
+  - Manual close path (`sellPositionAtMarket`, line 420) keeps `OrderType.FAK` as default — see Ship plan above.
+  - In `classifyClobFailure` (~line 925): when `success === false` AND no `placedOrderId` AND error pattern matches FOK no-match (empty body or "not enough" reason), emit `error_code: "fok_no_match"` distinct from `below_min_order_size`.
 
-**Coordinator — handles the FOK skip case:**
+**Coordinator — `fok_no_match` is a clean skip, not a retry:**
 
-- `nodes/poly/app/src/features/copy-trade/mirror-coordinator.ts` (or wherever placement results are processed)
-  - When the receipt carries `status: "rejected"` with `reason: "fok_no_match"`, mark the fill row as `placement_failed` with reason `fok_no_match` and emit a `poly.mirror.skipped reason=fok_no_match` log. Don't retry — the next observed fill from the target is the recovery path.
+- `nodes/poly/app/src/features/copy-trade/mirror-coordinator.ts` (or wherever rejection results are processed)
+  - Map `error_code: "fok_no_match"` to `placement_failed reason=fok_no_match` on the fill row. Emit `poly.mirror.skipped event` log at info-level.
 
-**DB — persists the per-target dial:**
+**Spec — land the invariant:**
 
-- `nodes/poly/app/src/adapters/server/db/schema/poly_copy_trade_targets.ts` (or wherever the targets table lives) — add `execution_mode` column with default `'fok'`.
-- A new drizzle migration `nodes/poly/app/src/adapters/server/db/migrations/00XX_poly_copy_trade_execution_mode.sql`.
-
-**API — exposes the dial:**
-
-- `packages/node-contracts/src/poly.copy-trade-targets.v1.contract.ts` (or equivalent) — add `executionMode` to the create / update payload.
-- `nodes/poly/app/src/app/api/v1/poly/copy-trade/targets/route.ts` and `[id]/route.ts` — accept and persist the field.
-
-**UI — surfaces the dial in the policy control panel (REQUIRED — user-controllable):**
-
-- `nodes/poly/app/src/components/kit/policy/PolicyControls.tsx` — add an "Execution mode" toggle next to the sizing policy controls. Default `FOK (safe)`; `GTC (best-effort, may strand dust)` as the alternative with a warning copy.
-- `nodes/poly/app/src/app/(app)/.../...settings...` (target edit page; track down the actual location) — wire the new control through.
+- `docs/spec/poly-copy-trade-phase1.md` — add `FILL_NEVER_BELOW_FLOOR` invariant to the phase-1 invariant list with a one-paragraph rationale + link to bug.0405.
 
 **Tests:**
 
-- Unit: `tests/unit/features/copy-trade/plan-mirror.test.ts` — assert `executionMode` propagates from config to intent.
-- Unit: `tests/unit/adapters/polymarket-clob-execution-mode.test.ts` — given an intent with `executionMode: "fok"`, the CLOB call uses `OrderType.FOK`. Same with `"gtc"`.
-- Component: extend the existing CLOB component test with an FOK-no-match scenario; assert the coordinator marks the fill `placement_failed reason=fok_no_match`.
+- Unit: `packages/market-provider/tests/.../polymarket.clob.adapter.test.ts` — `placeOrder` constructs the CLOB call with `OrderType.FOK` for both BUY and SELL.
+- Unit: `classifyClobFailure` returns `error_code: "fok_no_match"` on the no-match shape.
+- Component: extend the existing copy-trade fills test with a fake-CLOB no-match scenario; assert the fills row stamps `placement_failed reason=fok_no_match` and no retry happens on the next tick.
 
-## Out of scope
+## Out of scope (PR-A)
 
-- **Existing stranded dust cleanup.** Wait for market resolution; the redeem pipeline (PR #1106) recovers winning-side dust automatically. Losing-side is a write-off. No code path needed.
-- **SELL execution mode dial.** SELL is a separate analysis — once we have FOK BUYs, no new dust is created, and existing positions can be sold whole at any time (they'll always be ≥ floor by construction). Revisit only if observation shows SELL-side dust generation outside the BUY-fill mechanism.
+- **Operator dial UI + DB column.** Deferred to PR-B as described in Ship plan above. PR-A's hardcoded FOK is the right default; PR-B exposes it as toggleable.
+- **Manual close (`sellPositionAtMarket` → FAK).** Different intent semantics; user clicking Close prefers partial-exit-with-dust over no-exit. Keeping FAK there is intentional, not an oversight.
+- **Existing stranded dust cleanup.** Wait for market resolution; the redeem pipeline (PR #1106) recovers winning-side dust automatically. Losing-side is a write-off.
 - **Depth pre-check.** TOCTOU; the exchange-side FOK invariant supersedes any client-side depth analysis.
-- **Dashboard "stranded — awaiting resolution" affordance.** Real UX gap, but downstream of source fix. File as `task.NNNN.poly-dashboard-stranded-dust-affordance` after this lands.
+- **Dashboard "stranded — awaiting resolution" affordance.** Real UX gap, downstream of source fix. File `task.NNNN.poly-dashboard-stranded-dust-affordance` after PR-A lands.
 - **bug.0329 (neg-risk SELL empty reject).** Different failure mode, different bug.
 
 ## Validation
