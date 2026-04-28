@@ -110,6 +110,7 @@
 | 1 | 1 | 3 | needs_implement | task.0405 | Per-node skeleton-accuracy matrix — make each `loading.tsx` actually match its page |  |  |
 | 1 | 1 | 2 | needs_design | task.0407 | Wire per-node/per-rule review.modelRef from repo-spec into PR review pipeline |  |  |
 | 1 | 1 | 5 | needs_design | task.0411 | Split `@cogni/temporal-workflows` per-node — `nodes/<X>/packages/temporal-workflows` for node-owned workflows |  |  |
+| 1 | 1 | 1 | needs_closeout | task.0417 | Fresh-worktree bootstrap fixes — drop `.env.local` from `db:check`, detect orphan-missing dist in scoped build |  |  |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -291,7 +292,7 @@
 | 3 | 50 | 2 | needs_design | task.0390 | flatten `nodes/node-template/` migration baseline to a single 0000 fresh-start | Database Operations | proj.database-ops |
 | 3 | 80 | 3 | needs_design | task.0146 | Extract payments application orchestration + billing ports into packages | AI Operator Wallet | proj.ai-operator-wallet |
 | 3 | 80 | 5 | needs_design | task.0325 | Atlas + GitOps migrations (future upgrade, deferred) | Database Operations | proj.database-ops |
-| 3 | 95 | 2 | needs_design | task.0415 | Operator recovery from merge-queue cancellation: find + re-PR + re-queue dropped PRs | CI/CD Pipeline | proj.cicd-services-gitops |
+| 3 | 95 | 2 | needs_design | task.0416 | Operator recovery from merge-queue cancellation: find + re-PR + re-queue dropped PRs | CI/CD Pipeline | proj.cicd-services-gitops |
 | 3 | 96 | 5 | needs_design | task.0413 | Promote Cogni-DAO/test-repo to a basic operator-template scaffold (turbo + real CICD + merge queue) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 3 | 99 | 1 | needs_triage | task.0098 | Temporal retry workflow for failed identity bindings + scheduled backstop | User Identity Bindings + DID Readiness | proj.decentralized-identity |
 | 3 | 99 | 1 | needs_triage | bug.0150 | getAllReceipts query is unbounded — will degrade at scale |  |  |
@@ -361,6 +362,7 @@
 | 0 | task.0361 | Poly — first-user onboarding flow v0 (sign-on → provision → fund → select targets) | Cogni Poly | proj.poly-copy-trading |
 | 0 | task.0381 | Single-node-scope CI gate — reject PRs that touch >1 node domain (operator owns repo infra) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | bug.0383 | poly CTF redeem sweep loops on losing-outcome ERC1155 — bug.0376 fix-of-fix | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
+| 0 | task.0415 | Speed up `pnpm check:fast` — collapse to one turbo DAG, drop test serialization, cache docs/db checks |  |  |
 | 1 | task.0006 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0007 | Billing enforcement decorator at GraphExecutorPort level | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0010 | OpenClaw gateway model selection — session-level override or agent-per-specialty | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
