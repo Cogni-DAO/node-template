@@ -26,7 +26,7 @@ labels: [vcs, multi-tenant, github-app, review, test-infra, operator]
 external_refs:
   - work/items/task.0410.reviewer-per-node-routing.md
   - work/items/task.0407.review-modelref-from-repo-spec.md
-  - work/items/task.0408.split-temporal-workflows-per-node.md
+  - work/items/task.0411.split-temporal-workflows-per-node.md
   - docs/guides/github-app-webhook-setup.md
   - docs/guides/agent-api-validation.md
 ---
@@ -58,7 +58,7 @@ Today the operator's review pipeline knows one GitHub App. `.env.local` carries 
 
 ## Out of scope
 
-- Per-node Temporal workflow split (task.0408) — adjacent architectural concern, can land independently.
+- Per-node Temporal workflow split (task.0411) — adjacent architectural concern, can land independently.
 - Per-rule modelRef in repo-spec (task.0407) — orthogonal.
 - Reviewer per-node routing (task.0410) — already in flight; this task does not change the routing semantics, only the tenant identity used to authenticate the GitHub App calls.
 - Per-user / BYO-AI tenants — different problem space (this task is system-actor multi-tenancy only).
@@ -89,4 +89,4 @@ Today the operator's review pipeline knows one GitHub App. `.env.local` carries 
 - [`docs/guides/agent-api-validation.md`](../../docs/guides/agent-api-validation.md) — discover → register → auth → execute flow this task validates against
 - [PR #920 (derekg1729/test-repo)](https://github.com/derekg1729/test-repo/pull/920) — bootstrap scaffolding to port to Cogni-DAO/test-repo
 - [task.0410](task.0410.reviewer-per-node-routing.md) — concurrent reviewer-side routing work; this task is the auth/tenancy layer beneath it
-- [task.0408](task.0408.split-temporal-workflows-per-node.md) — adjacent packaging concern; orthogonal
+- [task.0411](task.0411.split-temporal-workflows-per-node.md) — adjacent packaging concern; orthogonal
