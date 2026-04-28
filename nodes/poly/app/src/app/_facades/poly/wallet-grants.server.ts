@@ -33,8 +33,7 @@ import { polyWalletGrants } from "@cogni/poly-db-schema";
 import { and, desc, gt, isNull, or, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 
-import { getAppDb } from "@/adapters/server";
-import { getContainer } from "@/bootstrap/container";
+import { getContainer, resolveAppDb } from "@/bootstrap/container";
 import {
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
@@ -97,7 +96,7 @@ export async function getWalletGrantsFacade(
     return { configured: false, connected: false, grant: null };
   }
   const actor = userActor(toUserId(sessionUser.id));
-  const db = getAppDb();
+  const db = resolveAppDb();
   const grant = await withTenantScope(db, actor, async (tx) => {
     const [row] = await tx
       .select({
@@ -139,7 +138,7 @@ export async function putWalletGrantsFacade(
     .getOrCreateBillingAccountForUser({ userId: sessionUser.id });
 
   const actor = userActor(toUserId(sessionUser.id));
-  const db = getAppDb();
+  const db = resolveAppDb();
 
   try {
     const updated = await withTenantScope(db, actor, async (tx) => {

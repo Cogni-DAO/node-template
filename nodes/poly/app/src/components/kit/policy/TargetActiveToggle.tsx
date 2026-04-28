@@ -54,7 +54,7 @@ export function TargetActiveToggle({
         className
       )}
     >
-      <span className="font-mono text-[11px] text-muted-foreground uppercase tracking-wide">
+      <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
         Copy trade
       </span>
       <button
@@ -63,7 +63,7 @@ export function TargetActiveToggle({
         disabled={busy || disabled}
         aria-pressed={active}
         className={cn(
-          "font-mono text-[11px] uppercase tracking-wide transition-colors disabled:opacity-50",
+          "font-mono text-xs uppercase tracking-wide transition-colors disabled:opacity-50",
           active
             ? "text-success-foreground hover:text-success"
             : "text-muted-foreground hover:text-foreground"

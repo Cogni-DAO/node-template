@@ -106,14 +106,14 @@ export function PolicyControls({
   return (
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-center justify-between">
-        <span className="font-mono text-[11px] text-muted-foreground uppercase tracking-wide">
+        <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
           Policy
         </span>
         {!readonly && !editing ? (
           <button
             type="button"
             onClick={startEdit}
-            className="font-mono text-[11px] text-muted-foreground uppercase tracking-wide transition-colors hover:text-foreground"
+            className="font-mono text-muted-foreground text-xs uppercase tracking-wide transition-colors hover:text-foreground"
           >
             edit
           </button>
@@ -146,7 +146,7 @@ export function PolicyControls({
               type="button"
               onClick={cancelEdit}
               disabled={saving}
-              className="font-mono text-[11px] text-muted-foreground uppercase tracking-wide transition-colors hover:text-foreground disabled:opacity-50"
+              className="font-mono text-muted-foreground text-xs uppercase tracking-wide transition-colors hover:text-foreground disabled:opacity-50"
             >
               cancel
             </button>
@@ -175,7 +175,7 @@ export function PolicyControls({
           {readonly ? (
             <Link
               href="/credits"
-              className="self-start font-mono text-[11px] text-muted-foreground uppercase tracking-wide transition-colors hover:text-foreground"
+              className="self-start font-mono text-muted-foreground text-xs uppercase tracking-wide transition-colors hover:text-foreground"
             >
               Edit on Money →
             </Link>
