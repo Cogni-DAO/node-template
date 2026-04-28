@@ -173,7 +173,6 @@
 | 1 | 10 | 1 | needs_implement | spike.0220 | Validate AiMo Network x402 passthrough — 402 flow, model coverage, E2E feasibility | x402 E2E Migration: Hyperbolic + Per-Request Settlement | proj.x402-e2e-migration |
 | 1 | 10 | 3 | needs_design | task.0332 | Poly mirror — shared batched poller (N wallets, 1 loop) replacing per-wallet setInterval | Cogni Poly | proj.poly-copy-trading |
 | 1 | 10 | 5 | needs_review | task.0355 | Poly trading wallet — Enable Trading (token approvals + readiness gate) | Cogni Poly | proj.poly-copy-trading |
-| 1 | 10 | 3 | needs_design | bug.0412 | candidate-flight verify fails when merge-queue rebuild mutates pr-{N}-{X} GHCR tag mid-flight | Reusable CI/CD Rails & Multi-Node Pipeline | proj.ci-cd-reusable |
 | 1 | 11 | 3 | needs_design | task.0045 | Enable OpenClaw subagent spawning — upstream header fix + Cogni config + delegation instructions | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 12 | 2 | needs_design | task.0034 | Wire OpenClaw memory search + bootstrap files for cogni-template repo context | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 13 | 1 | needs_design | task.0018 | Dynamic agent catalog in UI + OpenClaw model sync | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
@@ -439,6 +438,7 @@
 | 1 | task.0384 | POST /api/v1/vcs/flight — CI-gated candidate-a flight endpoint + vcs/pr cleanup | Agentic Interoperability | proj.agentic-interop |
 | 1 | task.0389 | Poly wallet research — single-source PnL via Polymarket user-pnl-api | Cogni Poly | proj.poly-copy-trading |
 | 1 | spike.0401 | Next.js frontend perf — operator + poly SSR / transitions / bundle audit |  |  |
+| 1 | bug.0412 | candidate-flight verify fails when merge-queue rebuild mutates pr-{N}-{X} GHCR tag mid-flight | Reusable CI/CD Rails & Multi-Node Pipeline | proj.ci-cd-reusable |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |

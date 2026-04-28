@@ -2,12 +2,13 @@
 id: bug.0412
 type: bug
 title: "candidate-flight verify fails when merge-queue rebuild mutates pr-{N}-{X} GHCR tag mid-flight"
-status: needs_design
+status: done
 priority: 1
 rank: 10
 estimate: 3
 created: 2026-04-28
 updated: 2026-04-28
+revision: 1
 summary: "pr-build.yml tags both pull_request and merge_group builds with `pr-{N}-{ORIGINAL_HEAD_SHA}`, even though the two builds bake different `BUILD_SHA` labels. When PR #1098 entered the merge queue, the merge_group rebuild overwrote the GHCR tag pointer for `pr-1098-de87108b8...` with a new image whose `/version.buildSha` is the queue commit `33aa1a003...`. A candidate-flight dispatched against PR head `de87108b8...` resolved that tag → got the merge_group's digest → Argo synced → /version returned `33aa1a003`, and verify-buildsha failed with a phantom mismatch even though the deploy branch was internally consistent. Per Derek: candidate-a flights must be node-independent and unaffected by other merge activity."
 outcome: "pr-build.yml emits distinct GHCR tags for pull_request vs merge_group events so the PR-head image is immutable post-build. Candidate-flight resolves the immutable PR-time tag and is unaffected by any subsequent merge-queue rebuild for the same PR. flight-preview.yml continues to consume the merge_group's rebased-tree image via the new tag namespace."
 spec_refs:
