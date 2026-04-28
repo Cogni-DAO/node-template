@@ -226,6 +226,10 @@ jobs:
           job_status: ${{ job.status }}
 
   component:
+    # Skip on merge_group: not in required-status-checks (see infra/github/branch-protection.json),
+    # so the queue doesn't gate on it. Re-running on the rebased candidate burns ~3 min for marginal
+    # incremental signal vs PR-time. Spec: docs/spec/merge-queue-config.md § Excluded from required.
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     needs: static
     env:
@@ -283,7 +287,9 @@ jobs:
   sonar:
     runs-on: ubuntu-latest
     needs: unit
-    if: needs.unit.result == 'success'
+    # Sonar is PR-time signal only (decorates the PR with a comment + Sonar dashboard link).
+    # Has no meaning on the merge_group ref; skip to save runtime.
+    if: needs.unit.result == 'success' && github.event_name != 'merge_group'
     permissions:
       contents: read
       pull-requests: write # Required for PR decoration
@@ -321,6 +327,12 @@ jobs:
           job_status: ${{ job.status }}
 
   stack-test:
+    # Skip on merge_group: not in required-status-checks (see infra/github/branch-protection.json),
+    # so the queue doesn't gate on it. stack-test is flaky AND slow (~10 min); re-running on the
+    # rebased candidate doubles flake surface for marginal incremental signal — real integration
+    # validation lives at candidate-a via /validate-candidate.
+    # Spec: docs/spec/merge-queue-config.md § Excluded from required.
+    if: github.event_name != 'merge_group'
     runs-on: ubuntu-latest
     needs: static
     env:
