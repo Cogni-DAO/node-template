@@ -132,40 +132,53 @@ That's the MVP. No tenant-id workflow plumbing. No `loadTenants` helper. No try-
 
 <!-- CODE REVIEW CRITERIA -->
 
-- [ ] **WEBHOOK_REPO_ALLOWLIST_ENFORCED**: After signature verification, webhook route rejects (logs + drops, returns 200) any payload whose `repository.full_name` is not in the operator's configured `GH_REPOS` allowlist. Defense-in-depth gate; never silently dispatch on un-allowlisted repo.
-- [ ] **NO_TENANT_PLUMBING_IN_CODE_PATH**: PR-review pipeline (webhook → dispatch → workflow → activity) has no `tenantId` field, no try-each-secret loop, no in-binary tenant map. Tenancy is achieved via separate deployments + separate GH Apps + separate `GH_REPOS` allowlists. (spec: SIMPLE_SOLUTION)
-- [ ] **TEST_REPO_CANONICAL**: `Cogni-DAO/test-repo` is the canonical default in all `.external.test.ts` `E2E_GITHUB_REPO` references and in `nodes/operator/app/tests/external/AGENTS.md`. `derekg1729/test-repo` is fully retired from code defaults in this PR.
-- [ ] **PROD_APP_NOT_INSTALLED_ON_TEST_REPO**: The production `cogni-review-production` GitHub App is never installed on `Cogni-DAO/test-repo`. Documented as an operational invariant in `docs/guides/github-app-webhook-setup.md` + tracked as a manual checklist on the deploy runbook.
+- [ ] **WEBHOOK_REPO_ALLOWLIST_ENFORCED**: `dispatchPrReview` (NOT the generic `[source]` webhook route) checks `payload.repository.full_name` against `env.GH_REPOS.split(",")` before queueing the workflow. Mismatch → log warn + return without dispatching. Domain-specific check stays in the domain-specific facade, not the generic transport.
+- [ ] **ACTIVITY_LAYER_ALLOWLIST_ENFORCED**: `fetchPrContextActivity` re-checks `${owner}/${repo}` against the activity-deps allowlist before the first GitHub call. `ApplicationFailure.nonRetryable` on mismatch. Defense-in-depth: closes any residual gap in case of cross-pickup or input tampering.
+- [ ] **TEMPORAL_QUEUE_ISOLATION**: Test deploy and prod deploy connect to **distinct Temporal namespaces** via env (`TEMPORAL_NAMESPACE=cogni-test` vs `cogni-production`). Already env-driven (`services/scheduler-worker/src/bootstrap/env.ts:32` + `nodes/operator/app/src/bootstrap/container.ts:322`). Eliminates queue/state cross-pickup risk between deploys. **THIS IS THE ANSWER TO REVIEW BLOCKING ISSUE B1.**
+- [ ] **NO_TENANT_PLUMBING_IN_CODE_PATH**: PR-review pipeline has no `tenantId` field, no try-each-secret loop, no in-binary tenant map. Tenancy is achieved via separate deployments + separate GH Apps + separate `GH_REPOS` allowlists + separate Temporal namespaces. (spec: SIMPLE_SOLUTION)
+- [ ] **TEST_REPO_CANONICAL**: `Cogni-DAO/test-repo` is the canonical default in all `.external.test.ts` `E2E_GITHUB_REPO` references and in `nodes/operator/app/tests/external/AGENTS.md`. `derekg1729/test-repo` is fully retired from code defaults in this PR. The repo itself is **archived** (read-only, kept for git history) in this PR's ops checklist; not deleted.
+- [ ] **PROD_APP_NOT_INSTALLED_ON_TEST_REPO**: The production `cogni-review-production` GitHub App is never installed on `Cogni-DAO/test-repo`. Documented + tracked as a manual checklist on the deploy runbook + audited at boot via task.0412.
 - [ ] **TEST_APP_NOT_INSTALLED_ON_PROD_REPO**: Symmetric — `cogni-review-test` App is never installed on `Cogni-DAO/node-template`.
-- [ ] **SIMPLE_SOLUTION**: No new dependencies; ~10 lines of code change in MVP. (spec: SIMPLICITY_WINS)
+- [ ] **SIMPLE_SOLUTION**: No new dependencies; ~25 lines of code change in MVP (10 in dispatch, 3 in activity, the rest in tests + the new allowlist check). (spec: SIMPLICITY_WINS)
 - [ ] **ARCHITECTURE_ALIGNMENT**: Tenancy boundary is operational, not in code. Single-tenant binary, parameterized by env. (spec: architecture)
 
 ### Files
 
 **Modify** (this PR):
 
-- `nodes/operator/app/src/app/api/internal/webhooks/[source]/route.ts` — after `receiveWebhook` succeeds, before dispatching review: read `payload.repository.full_name`, check membership in `env.GH_REPOS.split(",")`. Mismatch → log warn + return 200 without dispatching. ~10 lines.
+- `nodes/operator/app/src/app/_facades/review/dispatch.server.ts` — before `startPrReviewWorkflow(...)`, check `${repoOwner}/${repoName}` is in `env.GH_REPOS.split(",")`. Mismatch → `log.warn` + return. ~5 lines. (Per review C1: domain-specific check in domain facade, NOT the generic `[source]` route.)
+- `services/scheduler-worker/src/activities/review.ts` — at the top of `fetchPrContextActivity`, re-check `${input.owner}/${input.repo}` against `deps.allowlist`. `ApplicationFailure.nonRetryable` on miss. ~3 lines + 1 new dep field on `ReviewActivityDeps`. (Per review C2: defense-in-depth.)
+- `services/scheduler-worker/src/worker.ts` — pass `allowlist: env.GH_REPOS?.split(",") ?? []` into `createReviewActivities(...)`.
 - `nodes/operator/app/tests/external/review/pr-review-e2e.external.test.ts` (and the 3 sibling per-node copies) — flip `E2E_GITHUB_REPO` default to `Cogni-DAO/test-repo`. Suite skips unless test-tenant App creds available.
-- `nodes/operator/app/tests/external/AGENTS.md` — `Cogni-DAO/test-repo` is already canonical here; reconcile any remaining drift.
-- `docs/guides/github-app-webhook-setup.md` — add a worked-example "Test environment" section showing the `test.cognidao.org` deploy + `cogni-review-test` App + `.env.test` triad. Make explicit: **never install both Apps on the same repo**.
-- `tests/unit/nodes/operator/app/api/webhook-allowlist.test.ts` (NEW) — single test for the allowlist guard: payload with un-allowlisted repo → no dispatch.
+- `nodes/operator/app/tests/external/AGENTS.md` — reconcile any remaining drift toward `Cogni-DAO/test-repo`.
+- `docs/guides/github-app-webhook-setup.md` — add a worked-example "Test environment (dual-deploy)" section showing the `test.cognidao.org` deploy + `cogni-review-test` App + `.env.test` triad + distinct `TEMPORAL_NAMESPACE`. Make explicit: **never install both Apps on the same repo**.
+- `tests/unit/nodes/operator/app/_facades/review-dispatch-allowlist.test.ts` (NEW) — payload with un-allowlisted repo → no `workflowClient.start` call.
+- `tests/unit/services/scheduler-worker/activities/review-allowlist.test.ts` (NEW) — `fetchPrContextActivity` with un-allowlisted repo → throws `nonRetryable`.
 
 **New (separate bootstrap PR on `Cogni-DAO/test-repo`)**:
 
-- Multi-node directory scaffolding ported from PR #920 — no production code, just shape.
+- Multi-node directory scaffolding ported from PR #920.
+- `.github/workflows/ci.yaml` matching `Cogni-DAO/node-template`'s gate set (per review C7: explicit parity with parent so the test fixture exercises the real CI surface; deviations require a documented rationale).
 
 **Operational (no code, document in this PR's body + the deploy runbook)**:
 
 - Create `cogni-review-test` GitHub App in the Cogni-DAO org.
 - Install on `Cogni-DAO/test-repo` only.
+- Set `TEMPORAL_NAMESPACE=cogni-test` in test deploy env.
 - Capture creds + provision into `test.cognidao.org`'s deploy secrets and into the local `.env.test`.
+- **Archive `derekg1729/test-repo`** (read-only, kept for git history of PR #920) once external test code defaults flip and one green `pnpm test:external:operator` run is recorded against `Cogni-DAO/test-repo`. (Per review C6.)
 
 ### Top-priority follow-ups (same project: proj.vcs-integration)
 
-Documented as separate work items so this MVP stays small. Both filed (or to be filed) at `needs_design`. **In priority order**:
+Filed as separate work items so this MVP stays small. **In priority order, with ordering constraints**:
 
-1. **task.0410 — `PrReviewWorkflowInputSchema` Zod contract.** Direct fix to the modelRef-shape regression class (PR #1067). Add a single Zod schema in `packages/temporal-workflows/` for `PrReviewWorkflowInput`; convert dispatch + activity types to `z.infer<>`; add a round-trip contract test. **Standalone, ~150 lines, ships independently of this work.** Highest-value cleanup that doesn't gate on test:external.
-2. **task.0411 — In-binary multi-tenant operator (vFuture).** When Cogni ships as a SaaS reviewing N customer forks, we'll need one pod handling N GH Apps. That's the original 6-PR design. **Do not build until there's a real second use-case.** Today's two-deploy pattern is enough.
+1. **task.0410 — `PrReviewWorkflowInputSchema` Zod contract.** Filed at `needs_implement`. **Lands BEFORE this MVP** (per review feedback: every PR touching `PrReviewWorkflowInput` between now and 0410 risks repeating the modelRef-shape regression). Coordinates with task.0408 (split temporal-workflows per-node) — whichever lands first, the other rebases the schema location. ~150 LOC standalone.
+2. **task.0412 — Tenant config audit + Loki signal + cross-leak alert.** Filed at `needs_design`. Boot-time preflight that hits each App's `/installations` endpoint and asserts the App is installed only on its expected `GH_REPOS` set; logs `tenant.config_audit` to Loki; fails boot on drift. ~30 LOC + 1 alert rule. **Direct precursor to the vNext design where the operator owns a node-id database, registers internal/external nodes, and pings their installation endpoints on a cadence** (per Derek 2026-04-28). Files for task.0413+ once this MVP audit proves the signal is useful.
+3. **task.0411 — In-binary multi-tenant operator.** Filed at `needs_design`. The original 6-PR design archived for the day Cogni ships as a SaaS reviewing N customer forks. **Do not build until there's a real second use-case beyond prod/test.** Blocked by task.0410.
+
+### C4 — Agentic-API DM flow (verified, no code changes)
+
+`GitHubVcsAdapter` is constructed once at boot from `env.GH_REVIEW_APP_ID` + `env.GH_REVIEW_APP_PRIVATE_KEY_BASE64` (`nodes/operator/app/src/bootstrap/capabilities/vcs.ts:62-71`). InstallationId is resolved per-call. In a single-tenant pod, the adapter naturally uses that pod's App. The `core__vcs_*` tools (`packages/ai-tools/src/tools/vcs-flight-candidate.ts`, etc.) consume the adapter via DI — no tenant-context plumbing needed. **The agentic-API DM flow against `test.cognidao.org` works with zero code changes given dual-deploy.** Verified per task.0409 review C4.
 
 ### Validation (refines work item's existing block)
 

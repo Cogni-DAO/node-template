@@ -39,6 +39,7 @@
 | 0 | 1 | 2 | needs_implement | task.0402 | Restore SSR — adopt wagmi's canonical Next.js App Router SSR pattern |  |  |
 | 0 | 1 | 2 | needs_closeout | task.0403 | Reviewer per-node routing — wire `extractOwningNode` into PrReviewWorkflow so PR webhooks load per-node `.cogni/rules/` | VCS Integration | proj.vcs-integration |
 | 0 | 1 | 5 | needs_implement | task.0409 | Multi-tenant git-review routing — operator selects target repo (test vs prod) via per-tenant GitHub App | VCS Integration | proj.vcs-integration |
+| 0 | 1 | 1 | needs_implement | task.0410 | PrReviewWorkflowInput Zod schema + contract test — fix modelRef-shape regression class | VCS Integration | proj.vcs-integration |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -148,6 +149,7 @@
 | 1 | 5 | 3 | needs_triage | bug.0327 | No client-side crash telemetry — node apps can serve broken UX to users and we don't know | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 5 | 1 | needs_merge | bug.0333 | Base audit — move envs-identical ConfigMap values out of overlay patches into base | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 5 | 1 | needs_implement | bug.0379 | core__poly_data_holders schema is wrong — real /holders response is grouped per outcome token | Cogni Poly | proj.poly-prediction-bot |
+| 1 | 5 | 2 | needs_design | task.0412 | Tenant config audit — boot-time installation check + Loki signal + cross-leak alert (precursor to operator-owned node DB) | VCS Integration | proj.vcs-integration |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -278,6 +280,7 @@
 | 3 | 20 | 2 | needs_design | task.0274 | Wire NodeAppConfig into sidebar + layout components | Operator Plane | proj.operator-plane |
 | 3 | 30 | 3 | needs_merge | task.0207 | Run: BYO-AI hosted OSS provider — user connects their OpenAI-compatible endpoint | BYO-AI: Bring Your Own LLM Provider | proj.byo-ai |
 | 3 | 50 | 2 | needs_design | task.0390 | flatten `nodes/node-template/` migration baseline to a single 0000 fresh-start | Database Operations | proj.database-ops |
+| 3 | 50 | 5 | needs_design | task.0411 | In-binary multi-tenant operator — single pod handles N GitHub Apps (vFuture SaaS) | VCS Integration | proj.vcs-integration |
 | 3 | 80 | 3 | needs_design | task.0146 | Extract payments application orchestration + billing ports into packages | AI Operator Wallet | proj.ai-operator-wallet |
 | 3 | 80 | 5 | needs_design | task.0325 | Atlas + GitOps migrations (future upgrade, deferred) | Database Operations | proj.database-ops |
 | 3 | 99 | 1 | needs_triage | task.0098 | Temporal retry workflow for failed identity bindings + scheduled backstop | User Identity Bindings + DID Readiness | proj.decentralized-identity |
