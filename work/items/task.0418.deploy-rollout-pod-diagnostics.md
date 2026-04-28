@@ -1,5 +1,5 @@
 ---
-id: task.0417
+id: task.0418
 type: task
 title: "Surface pod-startup diagnostics on rollout failure + fix /logs anti-pattern"
 status: needs_merge
