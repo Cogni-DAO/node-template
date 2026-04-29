@@ -134,7 +134,7 @@ export function PositionsTable({
       isLoading={isLoading}
       loadingMode="skeleton"
       tableLayout={{
-        headerSticky: false,
+        headerSticky: true,
         headerBackground: true,
         rowBorder: true,
         dense: true,

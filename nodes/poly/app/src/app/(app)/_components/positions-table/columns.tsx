@@ -123,8 +123,8 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
         headerTitle: "Market",
         skeleton: (
           <div className="flex flex-col gap-1 py-0.5">
-            <Skeleton className="h-3.5 w-40" />
-            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3.5 w-28" />
+            <Skeleton className="h-3 w-20" />
           </div>
         ),
       },
@@ -152,7 +152,7 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
       },
       meta: {
         headerTitle: "Trace",
-        skeleton: <Skeleton className="h-10 w-72" />,
+        skeleton: <Skeleton className="h-3.5 w-64" />,
       },
     }),
 
@@ -290,7 +290,7 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
         ),
         meta: {
           headerTitle: "Action",
-          skeleton: <Skeleton className="ms-auto h-7 w-20" />,
+          skeleton: <Skeleton className="ms-auto h-3.5 w-12" />,
         },
       })
     );
