@@ -95,23 +95,26 @@ Every poly table-of-X uses the same reui DataGrid kit + per-column-header contro
 **Solution:** Create `nodes/poly/app/src/app/(app)/_components/positions-table/` mirroring the structure of the sibling `_components/wallets-table/`:
 
 - `PositionsTable.tsx` — `"use client"`, accepts `positions`, `variant`, `isLoading`, `onPositionAction`, `pendingActionPositionId`, `emptyMessage`. Builds a TanStack `useReactTable` with `getCoreRowModel + getSortedRowModel + getFilteredRowModel`, picks a `VisibilityState` per variant, renders inside `<DataGrid>/<DataGridContainer>/<DataGridTable />`. No pagination (positions lists are short).
-- `columns.tsx` — `makeColumns({ variant, onPositionAction, pendingActionPositionId })` returning the seven column defs:
-  - `market` — `col.display` (sort by `marketTitle` via custom `accessorFn`); cell renders the existing link/outcome block.
-  - `trace` — `col.display`, `enableSorting: false`, `enableHiding: false`, `size: 288`. Cell wraps `<PositionTimelineChart>` unchanged.
-  - `heldMinutes` — `col.accessor("heldMinutes")`, right-aligned, sortable; cell uses existing `formatHeldDuration()`.
-  - `currentValue` — accessor; **only included when variant === "default"**.
-  - `closedAt` — accessor; **only included when variant === "history"**.
-  - `pnlUsd` — accessor; right-aligned, sortable; tabular-nums; success/destructive color from sign.
-  - `pnlPct` — accessor; same coloring rules.
-  - `action` — `col.display`, `enableSorting: false`, `enableHiding: false`; **only included when variant === "default"**. Cell renders the existing `PositionActionButton` logic verbatim.
+- `columns.tsx` — `makeColumns({ variant, onPositionAction, pendingActionPositionId })` returning the seven column defs. Every accessor column carries `meta: { headerTitle, skeleton: <Skeleton …/> }` so DataGrid `loadingMode="skeleton"` renders correctly (mirrors wallets-table columns.tsx). Numeric columns wrap the header in `<div className="flex w-full justify-end">` to right-align it over right-aligned cells (mirrors wallets-table volumeUsdc/pnlUsdc/roiPct headers).
+  - `market` — `col.accessor((row) => row.marketTitle, { id: "market" })`. Sortable on the title text. Cell renders the existing link + outcome block.
+  - `trace` — `col.display({ id: "trace", enableSorting: false, enableHiding: false, size: 288 })`. Cell wraps `<PositionTimelineChart>` unchanged.
+  - `heldMinutes` — `col.accessor("heldMinutes", { id: "heldMinutes" })`. Right-aligned, sortable (numeric default sort). Cell uses existing `formatHeldDuration()`.
+  - `currentValue` — `col.accessor("currentValue", { id: "currentValue" })`. **Only included when variant === "default"**. Right-aligned, sortable.
+  - `closedAt` — `col.accessor("closedAt", { id: "closedAt", sortingFn: "datetime", sortUndefined: "last" })`. **Only included when variant === "history"**. `closedAt` is `string | null | undefined`; explicit `sortUndefined: "last"` keeps unset values at the end. Cell uses `formatClosedAt()` with em-dash fallback.
+  - `pnlUsd` — `col.accessor("pnlUsd", { id: "pnlUsd" })`. Right-aligned, sortable. Cell tabular-nums; class `text-success` when `>= 0` else `text-destructive`.
+  - `pnlPct` — `col.accessor("pnlPct", { id: "pnlPct" })`. Same coloring + format as old `formatSignedPct`.
+  - `action` — `col.display({ id: "action", enableSorting: false, enableHiding: false, size: 112 })`. **Only included when variant === "default"**. Cell renders the existing `PositionActionButton` logic verbatim — `isLoser` (lifecycle ∈ loser/dust/redeemed/abandoned), `isRedeemable` (status==="redeemable" && !isLoser), `isCloseable` (status==="open" && !isLoser), `busy` from `pendingActionPositionId`, full `title` text from old impl, `aria-label`. The onClick adds `event.stopPropagation()` (in addition to existing `preventDefault()`) so future `onRowClick` wiring on the DataGrid does not fire when a user clicks Close/Redeem.
 - `index.ts` — `export { PositionsTable } from "./PositionsTable"; export type { PositionsTableProps } from "./PositionsTable";`
 
-**Caller swap:**
+**Caller swap (layer-aware):**
 
-- `nodes/poly/app/src/features/wallet-analysis/index.ts` — replace the re-export of the old component with one pointing at the new path. Type signature is unchanged so `/research/w/[addr]` does not need to change.
-- `nodes/poly/app/src/app/(app)/dashboard/_components/ExecutionActivityCard.tsx` — update the import path (or rely on the re-export — verify in implementation).
+`features/` may not import from `app/` (per `wallet-analysis/AGENTS.md` `must_not_import: ["app"]`), so we cannot re-export the new component from `@features/wallet-analysis`. Each consumer imports the new component directly:
+
+- `nodes/poly/app/src/app/(app)/dashboard/_components/ExecutionActivityCard.tsx` — change `import { PositionsTable, type WalletPosition } from "@/features/wallet-analysis"` to import `PositionsTable` from `@/app/(app)/_components/positions-table` and keep `WalletPosition` import from `@/features/wallet-analysis` (type still lives in features/).
+- `nodes/poly/app/src/app/(app)/research/w/[addr]/page.tsx` — same swap.
+- `nodes/poly/app/src/features/wallet-analysis/index.ts` — drop `PositionsTable` from public surface.
+- `nodes/poly/app/src/features/wallet-analysis/AGENTS.md` — update "Public Surface" exports list (remove `PositionsTable` mention).
 - Delete `nodes/poly/app/src/features/wallet-analysis/components/PositionsTable.tsx`.
-- Update `nodes/poly/app/src/features/wallet-analysis/AGENTS.md` if it documents the old path.
 
 **Reuses:**
 
