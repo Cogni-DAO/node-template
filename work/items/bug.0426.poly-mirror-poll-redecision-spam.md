@@ -28,11 +28,11 @@ external_refs:
 
 Production (last 1h, after V2 cutover, single tenant, 2 active copy-trade targets):
 
-| `mirror.decision` outcome      | count |
-| ------------------------------ | ----: |
-| `error placement_failed`       |  2474 |
-| `skipped already_placed`       |   998 |
-| `placed ok`                    |    92 |
+| `mirror.decision` outcome | count |
+| ------------------------- | ----: |
+| `error placement_failed`  |  2474 |
+| `skipped already_placed`  |   998 |
+| `placed ok`               |    92 |
 
 Per-fill_id breakdown: each unique `fill_id` shows up in `mirror.decision` 11–12 times. First time → real placement attempt (logged once as `error` if CLOB rejects, or `placed ok` on accept). Subsequent 10–11 polls → `skipped already_placed`.
 
@@ -41,12 +41,14 @@ Per-fill_id breakdown: each unique `fill_id` shows up in `mirror.decision` 11–
 `INSERT_BEFORE_PLACE` correctly prevents double-placement at the COID layer — that's the at-most-once guarantee, working as designed. The cursor pipeline (`getCursor` / `setCursor` / `WalletActivitySource.fetchSince`) is also wired correctly end-to-end. The bug is in **two specific pieces** that conspire to defeat the cursor:
 
 1. **Client-side filter is `>=`, not `>`.** `packages/market-provider/src/adapters/polymarket/polymarket.data-api.client.ts:220`:
+
    ```ts
    if (params?.sinceTs !== undefined) {
      const since = params.sinceTs;
      return trades.filter((t) => t.timestamp >= since);
    }
    ```
+
    The cursor (`newSince`) is set to `max(trade.timestamp)` from the prior tick. On the next tick, the boundary fill (`t.timestamp === since`) is re-included. Off-by-one — `>=` should be `>`.
 
 2. **`limit=1000` and no server-side cutoff.** Same client, line 213: `url.searchParams.set("limit", String(params?.limit ?? 1000))`. The Polymarket data-api endpoint does not accept a `since` query param — we always pull the most recent 1000 trades and filter client-side. For high-frequency targets producing 100+ fills/min, the 1000-trade window covers ~10 minutes; every 30s tick re-pulls all fills inside that window and only filters out the ones older than `since`. Each new fill therefore re-enters `mirror.decision` ~20× before it falls off the back of the 1000-row window.

@@ -28,32 +28,32 @@ external_refs:
 
 Production data 2026-04-29 (1h window, single tenant, 2 active targets, post-V2 cutover):
 
-| stage                          | count |   notes |
-| ------------------------------ | ----: | ------: |
-| real placement attempts        |  2566 |      —  |
-| `placed ok` (CLOB accepted)    |    92 |   ~3.6% |
-| actually filled (size > 0)     |    13 |  ~0.5% |
+| stage                       | count | notes |
+| --------------------------- | ----: | ----: |
+| real placement attempts     |  2566 |     — |
+| `placed ok` (CLOB accepted) |    92 | ~3.6% |
+| actually filled (size > 0)  |    13 | ~0.5% |
 
 **~96% of orders are rejected pre-acceptance.** Of the ones the CLOB accepts, ~86% return zero fill (FOK no-match — ladder cleared before our turn). End-to-end attempt-to-fill ratio is 14:1.
 
 Two costs:
 
 1. **Position divergence** — bug.0405's design accepts dust by using FOK to avoid open-order baggage, but the cost is we mirror almost none of the target's trades, so position shape diverges hard from theirs. Already documented as a tradeoff there ("divergence is recoverable; dust isn't").
-2. **CLOB API pressure** — *new concern*. We're submitting ~40 orders/min on a single tenant. Polymarket may rate-limit, soft-throttle, or block us if we keep this up at scale. With one tenant + two targets we're at 40/min; the planned shared-poller (task.0332) and additional tenants multiply that linearly.
+2. **CLOB API pressure** — _new concern_. We're submitting ~40 orders/min on a single tenant. Polymarket may rate-limit, soft-throttle, or block us if we keep this up at scale. With one tenant + two targets we're at 40/min; the planned shared-poller (task.0332) and additional tenants multiply that linearly.
 
-bug.0426 reduces redundant *internal* decision work, not actual CLOB calls. This task is the actual CLOB-call problem.
+bug.0426 reduces redundant _internal_ decision work, not actual CLOB calls. This task is the actual CLOB-call problem.
 
 ## Why this is a design spike, not a fix
 
 There is no clear right answer. Each option trades off differently:
 
-| Option                                   | Miss rate | Open-order risk           | Position match | API pressure      |
-| ---------------------------------------- | --------- | ------------------------- | -------------- | ----------------- |
-| **A. Status quo (FOK at scrub price)**   | ~96%      | None                      | Bad            | Bad               |
-| **B. FOK at target's observed fill price** | Lower (?) | None                      | Better         | Better            |
-| **C. FOK at midpoint / mark-price**      | Medium    | None                      | Medium         | Medium            |
-| **D. Limit order at target's fill price** | Low miss; fills async | Open-order baggage (dust risk per bug.0405) | Best | Lowest |
-| **E. Hybrid: try FOK first, fall back to limit if miss** | Best in theory | Some open-order risk      | Best           | Worst — 2× calls per fill |
+| Option                                                   | Miss rate             | Open-order risk                             | Position match | API pressure              |
+| -------------------------------------------------------- | --------------------- | ------------------------------------------- | -------------- | ------------------------- |
+| **A. Status quo (FOK at scrub price)**                   | ~96%                  | None                                        | Bad            | Bad                       |
+| **B. FOK at target's observed fill price**               | Lower (?)             | None                                        | Better         | Better                    |
+| **C. FOK at midpoint / mark-price**                      | Medium                | None                                        | Medium         | Medium                    |
+| **D. Limit order at target's fill price**                | Low miss; fills async | Open-order baggage (dust risk per bug.0405) | Best           | Lowest                    |
+| **E. Hybrid: try FOK first, fall back to limit if miss** | Best in theory        | Some open-order risk                        | Best           | Worst — 2× calls per fill |
 
 Each needs measurement, not just argument. The `/design` lifecycle is the right shape.
 

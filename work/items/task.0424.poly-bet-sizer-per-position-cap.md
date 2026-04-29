@@ -30,11 +30,11 @@ external_refs:
 
 Production observation 2026-04-29 (after V2 cutover, candidate operator funder was $100):
 
-| market | mirrored fills | cumulative filled |
-| --- | ---: | ---: |
-| `9d79544c2682` | 7 | **$21.35** |
-| `542da4b33d86` | 3 | $9.00 |
-| `a7a23784dbba` | 3 | $6.75 |
+| market         | mirrored fills | cumulative filled |
+| -------------- | -------------: | ----------------: |
+| `9d79544c2682` |              7 |        **$21.35** |
+| `542da4b33d86` |              3 |             $9.00 |
+| `a7a23784dbba` |              3 |             $6.75 |
 
 Per-trade cap is $5. Every individual fill respected it. But the cap is **per-fill**, not **per-(tenant, market)**. When a target ladders into one market 7 times, we mirror 7 fills, all sub-cap, summing to >4× the per-trade ceiling on a single market. Account total exposure ballooned beyond what a $5 "max risk per copied fill" ever implied to the user.
 
