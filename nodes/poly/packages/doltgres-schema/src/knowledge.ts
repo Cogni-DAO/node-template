@@ -14,10 +14,17 @@
  * @public
  */
 
-// Base knowledge table — inherited from node-template, identical across nodes
-// until schema divergence is needed. Safe re-export; the Drizzle table object
-// is the same instance across all nodes' Doltgres schema packages.
-export { knowledge } from "@cogni/node-template-knowledge";
+// Syntropy seed bundle — inherited from node-template. Identical across all
+// knowledge-capable nodes until per-node schema divergence is needed. Safe
+// re-export; the Drizzle table objects are the same instances.
+// See docs/spec/knowledge-syntropy.md.
+export {
+  citations,
+  domains,
+  knowledge,
+  knowledgeContributions,
+  sources,
+} from "@cogni/node-template-knowledge";
 
 // Poly-specific companion tables go here as they're needed, e.g.:
 // export const polyMarketCategories = pgTable("poly_market_categories", { ... });
