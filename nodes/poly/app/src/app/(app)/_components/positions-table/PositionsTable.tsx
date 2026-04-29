@@ -30,7 +30,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import type { ReactElement, ReactNode } from "react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   DataGrid,
@@ -105,8 +105,18 @@ export function PositionsTable({
     [variant, onPositionAction, pendingActionPositionId]
   );
 
-  const columnVisibility =
+  const variantVisibility =
     variant === "history" ? HISTORY_VISIBILITY : DEFAULT_VISIBILITY;
+
+  // Variant determines which columns are visible by default; user toggles in
+  // the column-header dropdown override that. Reset to variant defaults when
+  // the variant changes so switching default↔history doesn't strand a hidden
+  // column from the previous variant.
+  const [columnVisibility, setColumnVisibility] =
+    useState<VisibilityState>(variantVisibility);
+  useEffect(() => {
+    setColumnVisibility(variantVisibility);
+  }, [variantVisibility]);
 
   const table = useReactTable({
     data,
@@ -114,6 +124,7 @@ export function PositionsTable({
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     state: { columnVisibility },
+    onColumnVisibilityChange: setColumnVisibility,
   });
 
   return (

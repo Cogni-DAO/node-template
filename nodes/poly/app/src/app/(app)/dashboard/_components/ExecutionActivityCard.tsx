@@ -84,6 +84,13 @@ export function ExecutionActivityCard(): ReactElement {
       ? positionAction.variables.position.positionId
       : null;
 
+  const handlePositionAction = useCallback(
+    (position: WalletPosition, action: "close" | "redeem") => {
+      positionAction.mutate({ kind: action, position });
+    },
+    [positionAction]
+  );
+
   const {
     data: executionData,
     isLoading: isExecutionLoading,
@@ -182,9 +189,7 @@ export function ExecutionActivityCard(): ReactElement {
             warnings={executionData?.warnings ?? []}
             isLoading={isExecutionLoading}
             isError={isExecutionError}
-            onPositionAction={(position, action) => {
-              positionAction.mutate({ kind: action, position });
-            }}
+            onPositionAction={handlePositionAction}
             pendingActionPositionId={pendingActionPositionId}
             positionActionError={positionActionError}
           />

@@ -18,7 +18,7 @@
 
 "use client";
 
-import { createColumnHelper } from "@tanstack/react-table";
+import { type ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { LoaderCircle } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
@@ -26,6 +26,9 @@ import { Button, Skeleton } from "@/components";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { PositionTimelineChart } from "@/features/wallet-analysis/components/PositionTimelineChart";
 import type { WalletPosition } from "@/features/wallet-analysis/types/wallet-analysis";
+
+// biome-ignore lint/suspicious/noExplicitAny: heterogeneous TanStack column array
+type AnyCol = ColumnDef<WalletPosition, any>;
 
 export type PositionsTableVariant = "default" | "history";
 
@@ -82,11 +85,11 @@ function pnlClass(value: number): string {
   return value >= 0 ? "text-success" : "text-destructive";
 }
 
-export function makeColumns(opts: MakeColumnsOpts) {
+export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
   const { variant, onPositionAction, pendingActionPositionId = null } = opts;
   const isHistory = variant === "history";
 
-  const columns: unknown[] = [
+  const columns: AnyCol[] = [
     col.accessor((row) => row.marketTitle, {
       id: "market",
       header: ({ column }) => (
@@ -293,7 +296,7 @@ export function makeColumns(opts: MakeColumnsOpts) {
     );
   }
 
-  return columns as ReturnType<typeof col.accessor>[];
+  return columns;
 }
 
 function actionLabel(status: WalletPosition["status"]): string {
