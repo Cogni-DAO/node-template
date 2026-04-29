@@ -2,7 +2,7 @@
 id: task.0423
 type: task
 title: "Port poly PositionsTable onto reui DataGrid (mirror wallets-table)"
-status: needs_design
+status: needs_implement
 priority: 1
 rank: 1
 estimate: 2
@@ -18,7 +18,7 @@ revision: 0
 blocked_by:
 deploy_verified: false
 created: 2026-04-28
-updated: 2026-04-28
+updated: 2026-04-29
 labels: [ui, ux, poly, frontend]
 ---
 
@@ -83,3 +83,70 @@ observability:
 - Loki query at deployed SHA: `{app="poly", env="candidate"} |= "/research/w/" |= "<my-test-wallet>"` returns the request line for my own page load.
 - Loki query: `{app="poly", env="candidate"} |= "/dashboard" | json | http_status="200"` returns my dashboard load.
 - SHA in `/version` matches PR head sha.
+
+## Design
+
+### Outcome
+
+Every poly table-of-X uses the same reui DataGrid kit + per-column-header controls, starting with `PositionsTable`. Users on `/research/w/[addr]` and `/dashboard` get the same column-controls UX they get on `/research`. Future tables in poly extend this pattern with zero design re-litigation.
+
+### Approach
+
+**Solution:** Create `nodes/poly/app/src/app/(app)/_components/positions-table/` mirroring the structure of the sibling `_components/wallets-table/`:
+
+- `PositionsTable.tsx` — `"use client"`, accepts `positions`, `variant`, `isLoading`, `onPositionAction`, `pendingActionPositionId`, `emptyMessage`. Builds a TanStack `useReactTable` with `getCoreRowModel + getSortedRowModel + getFilteredRowModel`, picks a `VisibilityState` per variant, renders inside `<DataGrid>/<DataGridContainer>/<DataGridTable />`. No pagination (positions lists are short).
+- `columns.tsx` — `makeColumns({ variant, onPositionAction, pendingActionPositionId })` returning the seven column defs:
+  - `market` — `col.display` (sort by `marketTitle` via custom `accessorFn`); cell renders the existing link/outcome block.
+  - `trace` — `col.display`, `enableSorting: false`, `enableHiding: false`, `size: 288`. Cell wraps `<PositionTimelineChart>` unchanged.
+  - `heldMinutes` — `col.accessor("heldMinutes")`, right-aligned, sortable; cell uses existing `formatHeldDuration()`.
+  - `currentValue` — accessor; **only included when variant === "default"**.
+  - `closedAt` — accessor; **only included when variant === "history"**.
+  - `pnlUsd` — accessor; right-aligned, sortable; tabular-nums; success/destructive color from sign.
+  - `pnlPct` — accessor; same coloring rules.
+  - `action` — `col.display`, `enableSorting: false`, `enableHiding: false`; **only included when variant === "default"**. Cell renders the existing `PositionActionButton` logic verbatim.
+- `index.ts` — `export { PositionsTable } from "./PositionsTable"; export type { PositionsTableProps } from "./PositionsTable";`
+
+**Caller swap:**
+
+- `nodes/poly/app/src/features/wallet-analysis/index.ts` — replace the re-export of the old component with one pointing at the new path. Type signature is unchanged so `/research/w/[addr]` does not need to change.
+- `nodes/poly/app/src/app/(app)/dashboard/_components/ExecutionActivityCard.tsx` — update the import path (or rely on the re-export — verify in implementation).
+- Delete `nodes/poly/app/src/features/wallet-analysis/components/PositionsTable.tsx`.
+- Update `nodes/poly/app/src/features/wallet-analysis/AGENTS.md` if it documents the old path.
+
+**Reuses:**
+
+- `@/components/reui/data-grid/{data-grid,data-grid-table,data-grid-column-header}` — already vendored, already in production via `WalletsTable`.
+- `@tanstack/react-table` — already a dep; same `useReactTable` glue as `WalletsTable`.
+- `PositionTimelineChart`, `PositionActionButton`-equivalent logic, all existing format helpers (`formatHeldDuration`, `formatUsd`, `formatSignedUsd`, `formatSignedPct`, `formatClosedAt`) — copied verbatim into the new module (no behavior change).
+- `WalletPosition` type from `@features/wallet-analysis/types/wallet-analysis` — unchanged.
+
+**Rejected:**
+
+- **Generic `_components/data-table/` shell extraction.** Premature with only two tables. Will re-evaluate once a third table appears (per `proj.premium-frontend-ux` roadmap). Drives complexity (variant-prop unions, generic column factories) without payoff.
+- **In-place upgrade of `features/wallet-analysis/components/PositionsTable.tsx`** instead of a new module. Rejected because the wallets-table convention is `app/(app)/_components/<table-name>/`, and we want positions-table to be discoverable next to its sibling for the next agent.
+- **Adding faceted filters in v0.** Positions don't have an obvious enum facet today (status enum has 3 values, lifecycleState 11 — both noisy). Defer until users ask.
+- **TanStack Table virtualization.** Positions lists are short (typically <50 rows). DataGrid kit doesn't ship a virtualizer wrapper for the basic table; adding one is out of scope.
+
+### Invariants
+
+<!-- CODE REVIEW CRITERIA -->
+
+- [ ] HEADER_OWNS_CONTROLS: Sort + visibility live on the column header dropdown via `DataGridColumnHeader`. No bespoke toolbar above the table.
+- [ ] BEHAVIOR_PARITY: Every column the old `PositionsTable` rendered renders here, with the same formatting and the same conditional show/hide for `default | history`. Action button preserves the lifecycle-gating logic verbatim (`isLoser`, `isRedeemable`, `isCloseable`, `busy`, title text).
+- [ ] NO_NEW_DEPS: Uses existing reui kit + TanStack Table; no package.json changes.
+- [ ] SIMPLE_SOLUTION: Mirrors `WalletsTable` structure 1:1; no shared abstraction extracted (spec: architecture).
+- [ ] ARCHITECTURE_ALIGNMENT: New module lives at `app/(app)/_components/positions-table/` next to the sibling `wallets-table/`; old hand-rolled file is deleted (no backwards-compat shim) — per CLAUDE.md "no backwards-compatibility hacks".
+- [ ] TYPED_VARIANTS: `variant: "default" | "history"` is the same discriminator used today; types unchanged at the boundary.
+
+### Files
+
+<!-- High-level scope -->
+
+- Create: `nodes/poly/app/src/app/(app)/_components/positions-table/PositionsTable.tsx` — DataGrid wrapper.
+- Create: `nodes/poly/app/src/app/(app)/_components/positions-table/columns.tsx` — TanStack column defs.
+- Create: `nodes/poly/app/src/app/(app)/_components/positions-table/index.ts` — public surface.
+- Modify: `nodes/poly/app/src/features/wallet-analysis/index.ts` — re-export from new path.
+- Modify: `nodes/poly/app/src/app/(app)/dashboard/_components/ExecutionActivityCard.tsx` — import from new path (or via the re-export).
+- Modify: `nodes/poly/app/src/features/wallet-analysis/AGENTS.md` — point to new module.
+- Delete: `nodes/poly/app/src/features/wallet-analysis/components/PositionsTable.tsx`.
+- Test: existing call sites + Phase 3 candidate-a self-validation. (Component-test parity with the old hand-rolled file is not maintained today; no new vitest required.)
