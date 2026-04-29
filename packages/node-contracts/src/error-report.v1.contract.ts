@@ -8,7 +8,7 @@
  * Invariants:
  *   - CONTRACTS_ARE_SOT: this file is the only declaration of the request/response shape.
  *   - BOUNDED_INTAKE: every string field has a hard byte cap to prevent abuse.
- *   - ANONYMOUS_ALLOWED: route is anonymous-allowed so (public)/error.tsx can submit; no auth fields here.
+ *   - AUTH_REQUIRED_AT_ROUTE: contract carries no auth fields because auth is enforced at the route (session OR Bearer key). userId is server-stamped from the resolved session.
  *   - DIGEST_IS_CORRELATION_KEY: `digest` is the Next.js error.digest, the join key against Loki logs.
  *   - Contract remains stable; breaking changes require new version.
  * Side-effects: none

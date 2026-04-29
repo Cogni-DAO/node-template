@@ -9,7 +9,7 @@
  * - ID_IS_TRACKING_ID: row id is the trackingId returned to the user; uuid v4.
  * - DIGEST_IS_CORRELATION_KEY: digest column joins reports to the original failing log line in Loki.
  * - LOKI_WINDOW_NULLABLE_V0: v0-of-v0 leaves loki_window null; task.0420's Temporal worker fills it.
- * - SYSTEM_OWNED: No RLS — the intake API is anonymous-allowed (so `(public)/error.tsx` can submit), and reads are admin-only via direct queries. Same precedent as poly_copy_trade_* tables.
+ * - SYSTEM_OWNED: No RLS — the intake API is auth-required and inserts via service-role; reads are admin-only via direct queries. Same precedent as poly_copy_trade_* tables.
  * Side-effects: none (schema definitions only)
  * Links: work/items/task.0423.send-to-cogni-error-intake-v0.md, work/items/task.0420.error-intake-temporal-v1.md
  * @public
@@ -44,10 +44,10 @@ export type ErrorReportLokiStatus = (typeof ERROR_REPORT_LOKI_STATUSES)[number];
  * intake API. `loki_window` and `loki_status` exist now but are filled
  * by task.0420's Temporal worker; v0-of-v0 leaves them null/'pending'.
  *
- * No FK to users — `user_id` is best-effort, populated when an
- * authenticated session was present, null otherwise. The intake route
- * is anonymous-allowed (so `(public)/error.tsx` can submit), so
- * `user_id` cannot be required.
+ * No FK to users — `user_id` is server-stamped from the resolved
+ * session (browser SIWE OR agent Bearer key). Column is nullable to
+ * leave room for future anonymous flows, but v0-of-v0 always populates
+ * it (route is auth-required).
  */
 export const errorReports = pgTable(
   "error_reports",

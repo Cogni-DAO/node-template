@@ -402,10 +402,14 @@ pnpm langfuse:trace
 **v1 (task.0420) adds Temporal worker + Loki window pull.**
 
 UI standard: any error surface (today: `(app)/error.tsx`,
-`(public)/error.tsx`; eventually: toasts, form failures, fetch failures)
-renders `<SendToCogniButton />`. One click POSTs to
-`/api/v1/error-report` (Zod contract: `error-report.v1.contract.ts`,
-anonymous-allowed, per-IP rate-limited, hard byte caps).
+`(public)/error.tsx`; next: chat error bubbles, poly trade failures;
+eventually: toasts, form failures, fetch failures) renders the
+standard widget. One click POSTs to `/api/v1/error-report` (Zod
+contract: `error-report.v1.contract.ts`, **auth-required** — SIWE
+session OR agent Bearer key — per-IP rate-limited, hard byte caps).
+The smallest reusable widget shape for non-full-page surfaces is
+research-tracked in **spike.0424** and implemented in **task.0425**;
+v0-of-v0 ships only the full-page button on route boundaries.
 
 **Pipeline (v0-of-v0):**
 
