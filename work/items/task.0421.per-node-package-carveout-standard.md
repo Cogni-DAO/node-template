@@ -98,16 +98,14 @@ The package is already named `@cogni/poly-wallet`; this batch is purely a folder
 - [x] `.dependency-cruiser.cjs`: no rules referenced poly contract paths — nothing to update
 - [x] Boundary audit clean: nothing outside `nodes/poly/**` imports `@cogni/poly-node-contracts`; shared `node-contracts` does NOT depend on poly-scoped pkg
 - [x] `pnpm install` → `pnpm packages:build` green (35 pkgs) → `@cogni/poly-node-contracts` typecheck clean → `@cogni/node-contracts` typecheck clean → `@cogni/poly-graphs` typecheck clean → `@cogni/poly-app` typecheck clean → poly-app unit suite 1129/1129 pass + 15 skipped + 1 contract test 6/6 pass
-- [ ] Commit: `refactor(poly): carve poly contracts into @cogni/poly-node-contracts under nodes/poly/packages/`
+- [x] Commit: `refactor(poly): carve poly contracts to @cogni/poly-node-contracts (task.0421 batch 3)` — `cb89897a8`
 
 ### Batch 4 — Script move + standard codification
 
-- [ ] `git mv scripts/experiments/approve-polymarket-allowances.ts nodes/poly/scripts/experiments/`
-- [ ] Update any `package.json` script entries that reference the old path
-- [ ] Add the **"Node-owned packages"** section to `docs/spec/node-ci-cd-contract.md` (rule + naming + workspace plumbing + drive-by stale-dep cleanup); link `nodes/node-template/packages/knowledge/` and the just-carved poly packages as canonical examples
-- [ ] Cross-link from `docs/spec/node-operator-contract.md` if it covers ownership boundaries
-- [ ] Targeted: `pnpm biome check docs/spec/node-ci-cd-contract.md` + spot-check moved script runs (`tsx --noEmit nodes/poly/scripts/experiments/approve-polymarket-allowances.ts` if cheap, otherwise skip)
-- [ ] Commit: `docs(node-boundary): codify node-owned packages standard + finish poly carve-out`
+- [x] `git mv scripts/experiments/approve-polymarket-allowances.ts nodes/poly/scripts/experiments/` (the originally-failing path; other 6 polymarket experiment scripts left as-is — not touched in PR #1118 and zero importers, surgical change only)
+- [x] No `package.json` script entries reference the old path
+- [x] Added the **"Node-owned packages"** section to `docs/spec/node-ci-cd-contract.md` — rule, `@cogni/<node>-<bare-name>` naming convention with table, workspace plumbing notes, full carve-out playbook (10 steps incl. the gotchas this PR hit: overlapping seds, fixture-relative paths, mixed-symbol importers, re-exports), drive-by stale-dep rule, and pointer to task.0422 for the dep-cruiser split. Existing `nodes/node-template/packages/knowledge/` cited as canonical example.
+- [x] `pnpm check:docs` green (`AGENTS.md OK`, 601 doc-header files OK, metadata OK)
 
 ### Pre-PR
 
