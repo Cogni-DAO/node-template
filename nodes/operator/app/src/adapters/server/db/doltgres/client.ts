@@ -11,9 +11,9 @@
  * @internal
  */
 
-import { buildDoltgresClient } from "@cogni/knowledge-store/adapters/doltgres";
 import * as schema from "@cogni/operator-doltgres-schema";
 import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 
 import { serverEnv } from "@/shared/env";
 
@@ -38,9 +38,15 @@ function createDb(): DoltgresDb {
   if (!env.DOLTGRES_URL) {
     throw new DoltgresNotConfiguredError();
   }
-  const sql = buildDoltgresClient({
-    connectionString: env.DOLTGRES_URL,
-    applicationName: `cogni_work_items_${env.SERVICE_NAME ?? "app"}`,
+  const sql = postgres(env.DOLTGRES_URL, {
+    max: 5,
+    idle_timeout: 30,
+    connect_timeout: 10,
+    fetch_types: false,
+    prepare: false,
+    connection: {
+      application_name: `cogni_work_items_${env.SERVICE_NAME ?? "app"}`,
+    },
   });
   return drizzle(sql, { schema });
 }
