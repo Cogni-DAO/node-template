@@ -61,6 +61,7 @@ export {
 } from "@cogni/scheduler-core";
 
 export type {
+  WorkItemsBulkInsertResult,
   WorkItemsCreateInput,
   WorkItemsDoltgresPort,
   WorkItemsPatchInput,

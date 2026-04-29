@@ -30,6 +30,7 @@ import { toWorkItemId } from "@cogni/work-items";
 import type { Sql } from "postgres";
 
 import type {
+  WorkItemsBulkInsertResult,
   WorkItemsCreateInput,
   WorkItemsDoltgresPort,
   WorkItemsPatchInput,
@@ -149,6 +150,81 @@ const PATCH_COLUMNS: Record<keyof WorkItemsPatchSet, string> = {
   node: "node",
 };
 
+const BULK_COLUMNS = [
+  "id",
+  "type",
+  "title",
+  "status",
+  "node",
+  "project_id",
+  "parent_id",
+  "priority",
+  "rank",
+  "estimate",
+  "summary",
+  "outcome",
+  "branch",
+  "pr",
+  "reviewer",
+  "revision",
+  "blocked_by",
+  "deploy_verified",
+  "claimed_by_run",
+  "claimed_at",
+  "last_command",
+  "assignees",
+  "external_refs",
+  "labels",
+  "spec_refs",
+  "created_at",
+  "updated_at",
+] as const;
+
+const BULK_COLUMN_LIST = BULK_COLUMNS.join(", ");
+
+function tsOrNull(v: string | undefined): string | null {
+  if (!v) return null;
+  return v;
+}
+
+function tsOrNow(v: string | undefined): string {
+  if (!v) return new Date().toISOString();
+  return v;
+}
+
+function rowValuesSql(item: WorkItem): string {
+  const values: Record<(typeof BULK_COLUMNS)[number], unknown> = {
+    id: item.id,
+    type: item.type,
+    title: item.title,
+    status: item.status,
+    node: item.node ?? "shared",
+    project_id: item.projectId ?? null,
+    parent_id: item.parentId ?? null,
+    priority: item.priority ?? null,
+    rank: item.rank ?? null,
+    estimate: item.estimate ?? null,
+    summary: item.summary ?? null,
+    outcome: item.outcome ?? null,
+    branch: item.branch ?? null,
+    pr: item.pr ?? null,
+    reviewer: item.reviewer ?? null,
+    revision: item.revision ?? 0,
+    blocked_by: item.blockedBy ?? null,
+    deploy_verified: item.deployVerified ?? false,
+    claimed_by_run: item.claimedByRun ?? null,
+    claimed_at: tsOrNull(item.claimedAt),
+    last_command: item.lastCommand ?? null,
+    assignees: item.assignees ?? [],
+    external_refs: item.externalRefs ?? [],
+    labels: item.labels ?? [],
+    spec_refs: item.specRefs ?? [],
+    created_at: tsOrNow(item.createdAt),
+    updated_at: tsOrNow(item.updatedAt),
+  };
+  return `(${BULK_COLUMNS.map((c) => escapeValue(values[c])).join(", ")})`;
+}
+
 export class DoltgresOperatorWorkItemAdapter implements WorkItemsDoltgresPort {
   constructor(private readonly sql: Sql) {}
 
@@ -249,6 +325,82 @@ export class DoltgresOperatorWorkItemAdapter implements WorkItemsDoltgresPort {
     );
 
     return rowToWorkItem(row);
+  }
+
+  async bulkInsert(
+    items: ReadonlyArray<WorkItem>,
+    authorTag: string
+  ): Promise<WorkItemsBulkInsertResult> {
+    if (items.length === 0) {
+      return {
+        inserted: 0,
+        skipped: 0,
+        failed: 0,
+        failures: [],
+        doltCommitHash: null,
+      };
+    }
+
+    const idList = items.map((it) => escapeValue(it.id as string)).join(", ");
+    const existing = await this.sql.unsafe(
+      `SELECT id FROM work_items WHERE id IN (${idList})`
+    );
+    const existingIds = new Set(
+      (existing as ReadonlyArray<Record<string, unknown>>).map((r) =>
+        String(r.id)
+      )
+    );
+
+    const failures: Array<{ id: string; error: string }> = [];
+    const rowSqls: string[] = [];
+    let skipped = 0;
+
+    for (const item of items) {
+      if (existingIds.has(item.id as string)) {
+        skipped += 1;
+        continue;
+      }
+      try {
+        rowSqls.push(rowValuesSql(item));
+      } catch (err) {
+        failures.push({
+          id: item.id as string,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
+    if (rowSqls.length === 0) {
+      return {
+        inserted: 0,
+        skipped,
+        failed: failures.length,
+        failures,
+        doltCommitHash: null,
+      };
+    }
+
+    await this.sql.unsafe(
+      `INSERT INTO work_items (${BULK_COLUMN_LIST}) VALUES ${rowSqls.join(", ")}`
+    );
+
+    const commitRows = await this.sql.unsafe(
+      `SELECT dolt_commit('-Am', ${escapeValue(`task.5002: import ${rowSqls.length} items by ${authorTag}`)}) AS hash`
+    );
+    const doltCommitHash =
+      (commitRows as ReadonlyArray<Record<string, unknown>>)[0]?.hash != null
+        ? String(
+            (commitRows as ReadonlyArray<Record<string, unknown>>)[0]?.hash
+          )
+        : null;
+
+    return {
+      inserted: rowSqls.length,
+      skipped,
+      failed: failures.length,
+      failures,
+      doltCommitHash,
+    };
   }
 
   async patch(

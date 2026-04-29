@@ -7,7 +7,7 @@ priority: 0
 rank: 2
 estimate: 2
 summary: "Bulk-import all existing `work/items/*.md` items into the operator's `knowledge_operator.work_items` table. Idempotent. Run once per env (candidate-a → preview → prod) by Derek with approval gates between. Existing markdown files stay on disk; the importer only fills the table so the dashboard + future tooling can read everything from Doltgres."
-outcome: "After running the importer once against a target env, `GET /api/v1/work/items/task.0001` (or any pre-existing markdown id) returns the row from Doltgres with title/status/type/node intact, and `dolt_log` shows one commit per import run."
+outcome: "Per task.0428, `GET /api/v1/work/items/:id` reads from Doltgres only — so legacy markdown IDs currently 404 via the API. After running this importer once against a target env, `GET /api/v1/work/items/task.0001` returns the row with title/status/type/node and the source `created_at` timestamp intact, and `dolt_log` shows one commit per import run. (Dashboard LIST view still reads markdown for v0; rewire is a separate follow-up.)"
 spec_refs: [knowledge-data-plane-spec, work-items-port]
 assignees: []
 credit:
@@ -31,7 +31,10 @@ external_refs:
 - A single CLI script in the operator package that reads every `.md` file under `work/items/` (skipping `_index.md`, `_archive/`, `_templates/`) via the existing `MarkdownWorkItemAdapter` and inserts each row into `knowledge_operator.work_items`.
 - **Idempotent.** Re-running the importer is a no-op for already-present IDs (`INSERT ... ON CONFLICT (id) DO NOTHING`, with a pre-flight `SELECT id` so we know the diff and can log it).
 - **Preserves original IDs.** The importer must NOT use the adapter's `create()` (which auto-allocates from the `5000+` floor). It writes the markdown `id` value verbatim — markdown items keep their `0001-04XX` IDs; API-allocated items keep their `5000+` IDs. ID_RANGE_RESERVED is preserved by construction.
-- **Single auto-commit per run.** All inserts in one Postgres transaction, then ONE `dolt_commit('-Am', 'import: <N> items by <authorTag>')` at the end. Per-row commits would explode `dolt_log`.
+- **Single auto-commit per run.** All INSERT statements are issued sequentially against the connection (no explicit BEGIN/COMMIT — Doltgres accumulates them in the working set), then ONE `dolt_commit('-Am', 'import: <N> items by <authorTag>')` snapshots the batch. Per-row commits would explode `dolt_log`.
+- **Timestamps preserved from source.** `bulkInsert` writes `created_at` from `WorkItem.createdAt` (frontmatter `created:`) and `updated_at` from `WorkItem.updatedAt` (frontmatter `updated:`). Without this, all 458 rows would collapse to the import-run instant and the dashboard's `ORDER BY created_at DESC` would lose months of history.
+- **Path resolution anchored to repo root.** The CLI's `--root` default resolves via `git rev-parse --show-toplevel` (or walking up to `pnpm-workspace.yaml`). Aborts with a clear error if the resolved path contains zero `.md` files. Avoids the `pnpm --filter` CWD trap where a package-relative default silently finds nothing.
+- **`ON CONFLICT` is verified before relied upon.** Checkpoint 1 probes `INSERT … ON CONFLICT (id) DO NOTHING` against a testcontainer Doltgres. If unsupported on Doltgres 0.56.2, fall back to a `SELECT id FROM work_items WHERE id IN (...)` preflight + set-difference + plain INSERT. Document the chosen branch.
 - **Author tag derives from env.** `IMPORTER_AUTHOR=<name>` env var is required; default would silently misattribute. Falls into `dolt_log` as `import: 458 items by user:derekg1729`.
 - **Defaults a missing `node`** to `"shared"` (column default — explicit at the row level so re-imports are stable).
 - **Prints a summary table** at the end: `<N inserted> / <N skipped already-present> / <N failed validation>`. Failures don't abort the whole run; bad rows are logged with their ID and skipped.
@@ -41,6 +44,7 @@ external_refs:
 
 - Dashboard rewire to read list-view from Doltgres (separate follow-up — current list facade still reads markdown for v0).
 - Two-way sync (markdown → Doltgres → markdown export). Importer is one-shot per env.
+- **Updates to already-imported items.** `ON CONFLICT (id) DO NOTHING` means: if a markdown file is edited after first import, the importer does NOT propagate the edit. Use `PATCH /api/v1/work/items/:id` for post-import edits. The importer is bootstrap, not sync.
 - A k8s CronJob or scheduled re-import. One-shot CLI only; rerun manually if a backfill is needed.
 - A new HTTP endpoint (`POST /api/v1/work/items/_import`). Adds an attack surface for a one-shot operation; CLI + bearer-token-gated SSH is simpler.
 - Migrating `_index.md` regeneration to derive from Doltgres. Future task; not blocking.
@@ -96,7 +100,9 @@ After Derek runs `pnpm --filter @cogni/operator-app import:work-items` against c
 - [ ] OPERATOR_LOCAL_ADAPTER_V0: The new `bulkInsert` method lives on `DoltgresOperatorWorkItemAdapter` in `nodes/operator/app/src/adapters/server/db/doltgres/`. Not in `packages/work-items/` (spec: packages-architecture)
 - [ ] FAILURES_DONT_ABORT: A single bad row (validation error, type mismatch) gets logged + skipped; the rest of the batch continues. Summary table reports `failed: N` with the offending IDs (spec: feature-development-guide)
 - [ ] CONTRACTS_ARE_TRUTH: The CLI does not invent new HTTP shapes; it imports `WorkItem` from `@cogni/work-items` directly (no contract change needed — there's no HTTP surface) (spec: architecture)
-- [ ] SIMPLE_SOLUTION: Reuses `MarkdownWorkItemAdapter` for read + extends `DoltgresOperatorWorkItemAdapter` by ~40 lines. Total new code ≤ 200 lines including the CLI and tests
+- [ ] SIMPLE_SOLUTION: Reuses `MarkdownWorkItemAdapter` for read + extends `DoltgresOperatorWorkItemAdapter` with one new method. Total new code ≤ 300 lines including the CLI and tests (realistic budget — `WorkItem` has 20+ columns to map)
+- [ ] TIMESTAMPS_PRESERVED_FROM_SOURCE: `bulkInsert` writes the source-frontmatter `createdAt`/`updatedAt` into the row, not `defaultNow()`. Component test asserts a row's `created_at` matches its source within ms (spec: knowledge-data-plane-spec)
+- [ ] PATH_ANCHORED_TO_REPO_ROOT: CLI resolves `--root` default against the git toplevel (or pnpm-workspace.yaml), not `process.cwd()`. Aborts with a clear error if the resolved path has zero `.md` files
 - [ ] ARCHITECTURE_ALIGNMENT: One-shot CLI invoked locally — no new k8s Job, no new HTTP endpoint, no new env-var secret to deploy
 
 ### Files
@@ -113,24 +119,27 @@ After Derek runs `pnpm --filter @cogni/operator-app import:work-items` against c
 
 ### Checkpoint 1 — `bulkInsert` adapter method + component test
 
-- Milestone: `DoltgresOperatorWorkItemAdapter.bulkInsert` lands; testcontainer test covers ID preservation, idempotency, single-commit, mixed `0001-04XX` + `5000+` coexistence
-- Invariants: ID_PRESERVED_FROM_SOURCE, SINGLE_COMMIT_PER_RUN, IDEMPOTENT, ID_FLOOR_RESPECTED
+- Milestone: `DoltgresOperatorWorkItemAdapter.bulkInsert` lands; testcontainer test covers ID preservation, idempotency, single-commit, mixed `0001-04XX` + `5000+` coexistence, timestamp preservation
+- Invariants: ID_PRESERVED_FROM_SOURCE, SINGLE_COMMIT_PER_RUN, IDEMPOTENT, ID_FLOOR_RESPECTED, TIMESTAMPS_PRESERVED_FROM_SOURCE
 - Todos:
-  - Implement `bulkInsert(items, authorTag)` — single transaction, `INSERT ... ON CONFLICT (id) DO NOTHING`, returns `{inserted, skipped}`
-  - Skip the `dolt_commit` call when `inserted === 0`
-  - Component test in `__tests__/work-items-adapter-bulk.component.test.ts`
+  - **Probe first.** Run a tiny smoke test against a testcontainer Doltgres: `INSERT INTO t VALUES (...) ON CONFLICT (id) DO NOTHING`. If supported, proceed. If not, switch to SELECT-existing-IDs preflight + plain INSERT.
+  - Implement `bulkInsert(items, authorTag)` — accumulated working set + one `dolt_commit`, returns `{inserted, skipped, doltCommitHash}`
+  - Skip the `dolt_commit` call when `inserted === 0` (preserves IDEMPOTENT — re-runs produce zero new commits)
+  - Map every `WorkItem` column including `created_at`/`updated_at`/`revision`/`deployVerified`/`externalRefs`/`branch`/`pr`/`reviewer`/`blockedBy`/`claimedByRun`/`claimedAt`/`lastCommand`
+  - Component test in `__tests__/work-items-adapter-bulk.component.test.ts` — must include a case asserting `created_at` round-trips from a source `WorkItem`
 - Validation/Testing:
   - [ ] component: `pnpm test:component nodes/operator/app/src/adapters/server/db/doltgres/`
 
 ### Checkpoint 2 — CLI script + local dry-run
 
 - Milestone: `pnpm --filter @cogni/operator-app import:work-items --dry-run` enumerates all 458 markdown items and reports counts without writing
-- Invariants: AUTHOR_REQUIRED, FAILURES_DONT_ABORT
+- Invariants: AUTHOR_REQUIRED, FAILURES_DONT_ABORT, PATH_ANCHORED_TO_REPO_ROOT
 - Todos:
   - `scripts/import-markdown-work-items.ts` — wire MarkdownWorkItemAdapter → bulkInsert
-  - Args: `--root <dir>` (default `work/items`), `--dry-run`, `--limit N`
-  - Hard-fail if `IMPORTER_AUTHOR` is unset
-  - Per-row try/catch with `failed` counter; final summary table
+  - Args: `--root <dir>` (default = `<repoToplevel>/work/items` via `git rev-parse --show-toplevel`), `--dry-run`, `--limit N`
+  - Abort with clear error if `--root` resolves to a path with zero `.md` files
+  - Hard-fail if `IMPORTER_AUTHOR` is unset (env-var-only auth path is unique to this CLI; documented asymmetry vs the HTTP `getSessionUser`-derived path)
+  - Per-row try/catch with `failed` counter; final summary table includes the `dolt_commit` hash printed by Doltgres
 - Validation/Testing:
   - [ ] manual: `IMPORTER_AUTHOR=user:derekg1729 pnpm --filter @cogni/operator-app import:work-items --dry-run` prints `would insert: 458, would skip: 0, failed: 0`
 
@@ -160,6 +169,14 @@ After Derek runs `pnpm --filter @cogni/operator-app import:work-items` against c
   - Same as Checkpoint 3 but pointed at prod's doltgres
   - Validate sampled GET against prod
   - Flip `deploy_verified: true`
+
+## Rollback
+
+If a wet run produces unexpected state on candidate-a / preview / prod:
+
+1. **Capture the pre-import HEAD before each run:** `psql "$DOLTGRES_URL_OPERATOR" -tAc "SELECT dolt_hashof('HEAD')" > /tmp/pre-import-<env>.sha` (the importer also prints this on stdout as its first line).
+2. **Reset on failure:** `psql "$DOLTGRES_URL_OPERATOR" -c "CALL dolt_reset('--hard', '<captured-sha>')"`.
+3. The importer is idempotent against an unchanged source corpus, so a clean re-run after a reset will produce identical inserted/skipped counts modulo author tag.
 
 ## Validation
 
