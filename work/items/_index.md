@@ -164,8 +164,7 @@
 | 1 | 5 | 2 | needs_implement | bug.0405 | Polymarket BUY GTC partial-fills land below min_order_size — produces structurally unsellable dust | Cogni Poly | proj.poly-copy-trading |
 | 1 | 5 | 3 | needs_implement | task.0420 | v1 'Send to Cogni' error intake — Temporal worker + shared LokiQueryPort | Observability Hardening | proj.observability-hardening |
 | 1 | 5 | 1 | needs_merge | task.0421 | Poly wallet research charter + first live screen + Dolt schema proposal | Cogni Poly | proj.poly-prediction-bot |
-| 1 | 5 | 1 | needs_research | spike.0424 | Research: top-0.1% patterns for in-app error-feedback widgets | Observability Hardening | proj.observability-hardening |
-| 1 | 5 | 3 | needs_design | task.0425 | Reusable 'Send to Cogni' widget across chat, poly trading, and every error surface | Observability Hardening | proj.observability-hardening |
+| 1 | 5 | 2 | needs_implement | task.0425 | Send-to-Cogni: shadcn-composed widget that posts a bug work item via the Doltgres work-items API | Observability Hardening | proj.observability-hardening |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -459,6 +458,7 @@
 | 1 | bug.0412 | candidate-flight verify fails when merge-queue rebuild mutates pr-{N}-{X} GHCR tag mid-flight | Reusable CI/CD Rails & Multi-Node Pipeline | proj.ci-cd-reusable |
 | 1 | story.0417 | UI standard: every error surface has a "Send to Cogni" button that captures context and opens a fix loop | Observability Hardening | proj.observability-hardening |
 | 1 | task.0422 | Poly data user-pnl-summary — agent's default wallet snapshot tool | Cogni Poly | proj.poly-prediction-bot |
+| 1 | spike.0424 | Research: top-0.1% patterns for in-app error-feedback widgets | Observability Hardening | proj.observability-hardening |
 | 2 | bug.0050 | Negative credit balance breaks /credits/summary — Zod rejects balanceCredits < 0 |  |  |
 | 2 | bug.0061 | UI balance display hides negative with $0 default | Payments & Billing Enhancements | proj.payments-enhancements |
 | 2 | task.0231 | Knowledge Data Plane — Doltgres Server, Schema, Adapter, Poly Seeds | Cogni Poly | proj.poly-prediction-bot |

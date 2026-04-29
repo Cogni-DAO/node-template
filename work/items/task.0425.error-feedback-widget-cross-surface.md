@@ -1,13 +1,13 @@
 ---
 id: task.0425
 type: task
-title: "Reusable 'Send to Cogni' widget across chat, poly trading, and every error surface"
-status: needs_design
+title: "Send-to-Cogni: shadcn-composed widget that posts a bug work item via the Doltgres work-items API"
+status: needs_implement
 priority: 1
 rank: 5
-estimate: 3
-summary: "Implement the reusable error-feedback widget recommended by spike.0424. Two concrete v1 surfaces: (1) operator's `ChatErrorBubble` gets an inline 'Send to Cogni' action so an LLM/tool failure can be reported in-conversation; (2) poly trading's close-order error path gets the same widget in its toast/inline error UI. Same Zod payload (`error-report.v1.contract`), same hook, just different variants. v0-of-v0's full-page button on `error.tsx` boundaries stays — this adds the inline + toast variants beside it."
-outcome: "A user hitting any of the three surfaces — full-page error boundary, chat error bubble, or poly trade close-order failure — gets a consistent 'Send to Cogni' affordance using a single shared component + hook. The payload shape is identical across surfaces (one row in `error_reports` looks the same regardless of where the click came from). Bespoke per-surface report buttons are explicitly out — if a new surface needs the widget, it imports the component, picks a variant, passes the error, done."
+estimate: 2
+summary: "Replace the v0-of-v0 substrate (custom `error_reports` table + custom `/api/v1/error-report` route + bespoke `<SendToCogniButton />`) with a shadcn-composed `<SendToCogniWidget />` (Popover + Form + Sonner — zero new deps) that POSTs a `bug.*` work item to `POST /api/v1/work/items` (the Doltgres-backed endpoint shipping in PR #1130 / task.0423-doltgres). Same UX, drastically less infra: no bespoke storage, no bespoke contract, no bespoke route. Wires into `(app)/error.tsx`, `(public)/error.tsx`, `ChatErrorBubble` (operator chat), and the poly close-order error UI."
+outcome: "A user hitting any error surface (route boundary, chat error bubble, poly trade close-order failure) clicks 'Send to Cogni', writes a one-liner, and sees a Sonner toast with the work-item id (e.g. `bug.5042`). That row is queryable via the unified `/api/v1/work/items` API, has a `dolt_commit` audit, and gets picked up by operator's existing triage flow. Zero new tables, zero new routes, zero new third-party deps. Per-surface bespoke report buttons are explicitly out."
 spec_refs:
   - docs/spec/observability.md
 assignees: derekg1729
@@ -17,125 +17,275 @@ branch:
 pr:
 reviewer:
 revision: 0
-blocked_by: [spike.0424, task.0426]
+blocked_by: [task.0423]
 deploy_verified: false
 created: 2026-04-29
 updated: 2026-04-29
-labels: [frontend, ux, observability, error-handling]
+labels: [frontend, ux, observability, error-handling, oss-first]
 external_refs:
   - work/items/spike.0424.error-feedback-widget-research.md
   - work/items/task.0426.send-to-cogni-error-intake-v0.md
   - work/items/story.0417.ui-send-to-cogni-error-button.md
+  - https://github.com/Cogni-DAO/node-template/pull/1130
   - nodes/operator/app/src/features/ai/components/ChatErrorBubble.tsx
 ---
 
-# Reusable error-feedback widget — chat, poly trading, and beyond
+# Send-to-Cogni: shadcn widget + Doltgres work-items API
 
 ## Problem
 
-`task.0426` shipped a full-page button that's wrong for the surfaces
-that actually matter:
+`task.0426` (formerly task.0423-send-to-cogni-v0-of-v0, PR #1121)
+shipped:
 
-- **Operator chat** (`ChatErrorBubble`) — full-page reset is hostile.
-- **Poly trading close-order failures** — error shows in toast or
-  inline form, not a route boundary.
+- a bespoke `error_reports` Postgres table,
+- a bespoke `/api/v1/error-report` route,
+- a bespoke `<SendToCogniButton />` (custom CSS, full-page only),
+- and a deliberate "task.0420 Temporal worker fills loki_window later"
+  punt.
 
-`spike.0424` will research how top teams (Sentry, Linear, Notion,
-Vercel, Chrome, GitHub) ship the inline / toast / modal variants of
-this widget and recommend a single reusable abstraction. This task
-implements that recommendation.
+In parallel, [PR #1130](https://github.com/Cogni-DAO/node-template/pull/1130)
+ships **`POST /api/v1/work/items`** — a Doltgres-backed,
+auth-required, `dolt_commit`-audited endpoint for creating any
+work-item type, including `bug`. That's exactly the system "an
+agent files a bug from a UI error" should write to.
 
-**Anti-pattern this task explicitly rejects:** a bespoke "report"
-button per surface, with slightly different payloads, slightly
-different submission paths, slightly different telemetry. Drift like
-that is exactly what story.0417 was created to prevent.
+Combined with the fact that **shadcn primitives already in operator
+(`Popover`, `Form`, `Textarea`, `Button`, `Sonner`) compose into a
+1-click feedback widget without a single new dependency**, the v0-of-v0
+substrate is now strictly worse than what's available. This task
+collapses it.
 
-## Scope
+## Design
 
-**In:**
+### Outcome
 
-- The shared widget (component + hook + variants) per `spike.0424`'s
-  recommendation.
-- Wire it into operator's `ChatErrorBubble`.
-- Wire it into poly's close-order error UI (exact location TBD —
-  spike.0424 surveys it).
-- Update operator's `(app)/error.tsx` and `(public)/error.tsx` to
-  use the shared widget instead of the inline component shipped in
-  task.0426.
-- Delete `nodes/operator/app/src/components/SendToCogniButton.tsx`
-  (the v0-of-v0 component) once the new shared one fully replaces it.
-- Same Zod payload (`error-report.v1.contract.ts`); no breaking change.
+Any user hitting an error surface — route boundary, chat error
+bubble, or a poly trade close-order failure — clicks one button,
+optionally types a sentence, and sees a Sonner toast confirming a
+new `bug.*` work item is filed and the operator will pick it up.
+Zero copy-paste from the user. Same widget on every surface, same
+work-item shape, no bespoke storage.
 
-**Out:**
+### Approach
 
-- Cross-node port to resy / node-template. Tracked in story.0417.
-- Backend changes (Temporal, `loki_window` pull). Tracked in
-  task.0420.
-- A new `packages/ui-*` package (unless `spike.0424` recommends it).
+**Solution**: a single shadcn-composed `<SendToCogniWidget />`
+(client component) with a `variant` prop:
 
-## Allowed Changes
+| Variant   | Use                              | Trigger                       | Surface           |
+| --------- | -------------------------------- | ----------------------------- | ----------------- |
+| `page`    | `error.tsx` route boundaries     | inline "Send to Cogni" button | full-page         |
+| `inline`  | `ChatErrorBubble`, form errors   | small button next to error    | inline next to UI |
+| `popover` | poly trade error toast, anywhere | icon button → Popover         | floating          |
 
-- New shared widget files at the path `spike.0424` picks (likely
-  `nodes/operator/app/src/components/error-feedback/` or, if the
-  spike recommends extraction, a new `packages/ui-*`).
+All three variants share one `useSendToCogni({ error, route, node })`
+hook that:
+
+1. Builds the work-item payload (see "Wire format" below).
+2. POSTs to `/api/v1/work/items` (PR #1130 endpoint).
+3. Renders a Sonner toast on success / inline error on fail.
+
+**Reuses (zero new deps):**
+
+- `Popover`, `Form`, `Textarea`, `Button`, `Sonner` — all already in
+  operator's shadcn install.
+- `POST /api/v1/work/items` — PR #1130's endpoint. Auth resolved by
+  the unified `getSessionUser` (Bearer or session). Server allocates
+  id ≥ 5000.
+- `WorkItemsCreateInput` Zod schema from `@cogni/node-contracts`
+  (PR #1130) — single source of truth for the wire format.
+- Pino structured logging — keep emitting the
+  `event="error_report.intake"` line (carries `digest` + `route` +
+  `build_sha` + `userId`) so an agent can still grep Loki for the
+  full error context the work-item title can't carry.
+- Existing `ChatErrorBubble`, both `error.tsx` files, poly trade
+  error UI — drop the widget in, no rewrites.
+
+**Rejected alternatives:**
+
+- **Sentry User Feedback widget.** Drop-in nice, but ties the
+  data plane to Sentry's hosted backend (or self-hosted GlitchTip,
+  which is its own infra project). Cogni's storage is Doltgres
+  work-items; bridging back would require a Sentry-→work-item
+  bridge. Cleanest cut: skip the third party.
+- **Feedback Fish / FeedbackFin / similar.** Same problem: hosted
+  backend, doesn't write into our work-items system, requires
+  a bridge.
+- **Build our own headless `<ErrorReport>` compound component
+  family** (the spike.0424 framing). Premature. shadcn primitives
+  - one wrapper component covers all three v1 variants in <100 LOC.
+- **Keep `error_reports` as a separate fire-and-forget log** while
+  also creating a work item. Two stores for the same thing — drift
+  by construction. Pino → Loki is the existing fire-and-forget path
+  and already covers the structured-log angle.
+- **Add a new route** like `/api/v1/error-report → bug-creator`
+  proxy. Pure indirection; the UI can post directly to
+  `/api/v1/work/items` with the same auth.
+
+### Wire format — error → work-item shape
+
+The widget builds this from the captured error + user note:
+
+```ts
+WorkItemsCreateInput = {
+  type: "bug",
+  title: `[${node}] ${errorName}: ${truncate(errorMessage, 200)}`,
+  summary: [
+    `**Route:** \`${route}\``,
+    `**Build SHA:** \`${buildSha}\``,
+    digest ? `**Digest:** \`${digest}\`` : null,
+    userNote ? `\n**User note:**\n\n${userNote}` : null,
+    errorStack ? `\n<details><summary>stack</summary>\n\n\`\`\`\n${truncate(errorStack, 8_000)}\n\`\`\`\n</details>` : null,
+    componentStack ? `\n<details><summary>componentStack</summary>\n\n\`\`\`\n${truncate(componentStack, 4_000)}\n\`\`\`\n</details>` : null,
+  ].filter(Boolean).join("\n\n"),
+  outcome: "Investigate the error captured above. Fix the underlying cause; close this bug when verified on candidate-a.",
+  status: "needs_triage",
+  node: <node>,
+  labels: ["error-report", "ux-feedback"],
+  priority: 2,
+};
+```
+
+Loki line stays — emitted server-side from a small wrapper around
+the work-items create handler (or kept in operator's existing log
+envelope), so agents can correlate by `digest`/`workItemId` for the
+deeper stack:
+
+```
+event="error_report.intake" workItemId="bug.5042" digest="..." build_sha="..." node="operator" userId="..."
+```
+
+### Invariants
+
+- [ ] CONTRACTS_ARE_SOT — uses `WorkItemsCreateInput` from
+      `@cogni/node-contracts`; no new contract introduced.
+- [ ] OSS_OVER_BESPOKE — no Sentry dep, no Feedback Fish dep, no
+      bespoke widget lib. shadcn primitives only.
+- [ ] SINGLE_SOURCE_OF_TRUTH — error reports live in Doltgres
+      `work_items` (one place), not split across `error_reports` +
+      `work_items`. v0-of-v0 substrate is deleted.
+- [ ] AUTH_REQUIRED — inherits `/api/v1/work/items` auth (session
+      OR Bearer key). No new auth surface.
+- [ ] DIGEST_IN_LOG — the structured Pino line on submit carries
+      `digest` so an agent can grep Loki for the original failing
+      log line. Title/summary alone are not the audit trail.
+- [ ] ZERO_NEW_DEPS — `package.json` unchanged. (`pnpm install
+    --frozen-lockfile` is a no-op for this PR.)
+- [ ] ZERO_USER_COPY_PASTE — clicking the widget produces a
+      tracking link in a Sonner toast; user never has to copy a
+      UUID anywhere.
+
+### Files
+
+**Create:**
+
+- `nodes/operator/app/src/components/send-to-cogni/SendToCogniWidget.tsx`
+  — the shadcn-composed widget. Three variants via `variant` prop;
+  one default export.
+- `nodes/operator/app/src/components/send-to-cogni/use-send-to-cogni.ts`
+  — the submission hook (build payload → POST → toast). ~50 LOC.
+- `nodes/operator/app/src/components/send-to-cogni/AGENTS.md` —
+  short pointer doc.
+- Component test for each variant, mocking `fetch` to assert the
+  payload shape matches `WorkItemsCreateInput`.
+
+**Modify:**
+
+- `nodes/operator/app/src/app/(app)/error.tsx` — replace
+  `<SendToCogniButton />` with `<SendToCogniWidget variant="page" />`.
+- `nodes/operator/app/src/app/(public)/error.tsx` — same.
 - `nodes/operator/app/src/features/ai/components/ChatErrorBubble.tsx`
-  — render the widget.
-- `nodes/poly/app/src/...` — poly's close-order error UI (exact files
-  TBD by spike).
-- Deletes: `nodes/operator/app/src/components/SendToCogniButton.tsx`
-  - the imports in both `error.tsx` files.
-- AGENTS.md updates in touched dirs.
-- Component tests for each variant.
+  — render `<SendToCogniWidget variant="inline" error={chatError} />`
+  alongside the existing reset action.
+- `nodes/poly/app/src/...` (poly close-order error path — exact
+  file determined during /implement; surveyed quickly: probably
+  `nodes/poly/app/src/features/trade/...` or wherever the
+  close-order toast lives) — render
+  `<SendToCogniWidget variant="popover" />` next to the error toast
+  action.
+
+**Delete (with the same PR — no shim):**
+
+- `nodes/operator/app/src/components/SendToCogniButton.tsx` (v0-of-v0).
+- `nodes/operator/app/src/app/api/v1/error-report/route.ts` (v0-of-v0).
+- `packages/node-contracts/src/error-report.v1.contract.ts` (v0-of-v0).
+- `nodes/operator/app/tests/contract/error-report.v1.contract.test.ts`
+  (v0-of-v0).
+
+**Schema cleanup (drop bespoke table):**
+
+- New migration
+  `nodes/operator/app/src/adapters/server/db/migrations/0029_drop_error_reports.sql`
+  → `DROP TABLE IF EXISTS error_reports;`
+- Remove `packages/db-schema/src/error-reports.ts` and its barrel
+  re-export.
+- Remove the spec section in `docs/spec/observability.md` that
+  documented the v0-of-v0 substrate; replace with a 5-line section
+  pointing to the work-items API.
+
+**Keep (still useful):**
+
+- `nodes/operator/app/src/app/(public)/dev/boom/page.tsx` — the
+  forced-error route is the cheapest way to drive the loop on
+  candidate-a. Stays.
 
 ## Plan
 
-Detailed plan filled in by `/design` once spike.0424 lands. Skeleton:
-
-- [ ] Re-read spike.0424 recommendation.
-- [ ] Implement shared widget (component + hook).
-- [ ] Replace task.0426's `SendToCogniButton` with the new component
-      in `(app)/error.tsx` + `(public)/error.tsx`. Delete the old
-      file.
-- [ ] Wire into `ChatErrorBubble`.
-- [ ] Wire into poly close-order error UI.
-- [ ] Component tests per variant; visual smoke on candidate-a per
-      surface.
+- [ ] **Land task.0426 (PR #1121) first** so the v0-of-v0 substrate
+      exists in main, then this task deletes it cleanly. (Alt:
+      Derek can choose to close PR #1121 unmerged and let this PR
+      ship the whole story; either is fine.)
+- [ ] Confirm PR #1130 (Doltgres work-items API) is merged.
+- [ ] Build `<SendToCogniWidget />` + `useSendToCogni` hook.
+- [ ] Wire all four surfaces. Delete v0-of-v0 substrate. Add drop
+      migration.
+- [ ] Component tests per variant; assert payload shape matches
+      `WorkItemsCreateInput`.
+- [ ] Flight to candidate-a; drive `/dev/boom` + chat error + poly
+      trade close-fail; confirm three new `bug.5xxx` work items
+      land in Doltgres + three Loki lines.
 
 ## Validation
 
 **Pre-merge:**
 
-- Component tests render all variants and exercise the submission
-  hook (mocked fetch).
+- Component tests render all three variants; clicking the submit
+  button triggers a fetch with a body that parses as
+  `WorkItemsCreateInput` (no extra fields, no missing required
+  fields). All variants produce identical payload shapes.
 - `pnpm check` green.
 
-**On candidate-a:**
+**On candidate-a (post-flight):**
 
-- `exercise:` Force errors on three surfaces:
-  1. `/dev/boom` (full-page, regression check vs task.0426).
+- `exercise:` Drive three surfaces:
+  1. `/dev/boom` (full-page; the v0-of-v0 dev route).
   2. Operator chat: send a request that triggers an `ai.tool_call`
-     failure (use a known-bad model id or graph name).
+     failure (use a known-bad model ref or graph name).
   3. Poly trading: attempt to close a non-existent / already-closed
      order.
-- Click "Send to Cogni" on each. Capture all 3 trackingIds.
-- `observability:` Loki query for
-  `{node=~"operator|poly"} | json | event="error_report.intake"`
-  returns 3 lines, one per click, all at the deployed SHA. DB shows
-  3 rows in `error_reports`, payload shape identical across rows.
+- After each, click "Send to Cogni" → confirm Sonner toast shows a
+  `bug.5xxx` id.
+- `observability:`
+  - `GET /api/v1/work/items?type=bug&node=operator,poly` returns
+    the three new rows at the deployed SHA.
+  - Loki:
+    `{node=~"operator|poly"} | json | event="error_report.intake"`
+    returns three lines, one per submission, each tagged with the
+    work-item id.
 
-`deploy_verified: true` only after all 3 surfaces produce identical-
-shaped reports on candidate-a.
+`deploy_verified: true` only after all three surfaces produce
+a `bug.5xxx` row + Loki line on candidate-a, all driven by the
+agent (or Derek with zero copy-paste).
 
 ## Review Checklist
 
-- [ ] **Work Item:** `task.0425` linked
-- [ ] **Spec:** spike.0424 recommendation followed verbatim (no
-      drift); `docs/spec/observability.md` updated to remove
-      "v0-of-v0 ships only the full-page button" caveat
-- [ ] **Tests:** component tests per variant; cross-surface
-      candidate-a validation evidence in PR comment
-- [ ] **No bespoke:** `SendToCogniButton.tsx` deleted; no
-      surface-specific report buttons added
+- [ ] **Work Item:** `task.0425` linked in PR body
+- [ ] **OSS_OVER_BESPOKE:** package.json unchanged; no new deps
+- [ ] **SINGLE_SOURCE_OF_TRUTH:** `error_reports` table dropped;
+      drop migration present
+- [ ] **No shim:** v0-of-v0 substrate (button, route, contract,
+      schema slice, test) deleted in the same PR — not deprecated,
+      not aliased
+- [ ] **Tests:** component tests per variant assert payload shape
 - [ ] **Reviewer:** assigned and approved
 
 ## PR / Links
@@ -145,5 +295,7 @@ shaped reports on candidate-a.
 ## Attribution
 
 - Story: derekg1729 (story.0417)
-- Spike: spike.0424
-- v0-of-v0: task.0426
+- Trigger: Derek's "what's the point... is there not shadcn feedback
+  components" pushback on PR #1121
+- Substrate this collapses: task.0426 (v0-of-v0)
+- Endpoint this leverages: PR #1130 / task.0423-doltgres

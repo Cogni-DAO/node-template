@@ -2,7 +2,7 @@
 id: spike.0424
 type: spike
 title: "Research: top-0.1% patterns for in-app error-feedback widgets"
-status: needs_research
+status: done
 priority: 1
 rank: 5
 estimate: 1
@@ -30,6 +30,29 @@ external_refs:
 ---
 
 # Research: top-0.1% error-feedback widget patterns
+
+> **Closed without research (2026-04-29).** Derek pushed back: "cogni
+> relies on OSS — this can't just be mapped to our doltgres incoming
+> work-item setup?"
+>
+> **Answer (no research needed):** Yes. Two collapses:
+>
+> 1. **Storage**: drop the bespoke `error_reports` table. The
+>    "Send to Cogni" intake writes a `bug.*` work item via the new
+>    `POST /api/v1/work/items` Doltgres endpoint shipping in
+>    [PR #1130](https://github.com/Cogni-DAO/node-template/pull/1130)
+>    (task.0423.doltgres-work-items-source-of-truth). Auto-`dolt_commit`
+>    audit, ID ≥ 5000 reserved per type, server-resolved auth — all
+>    free.
+> 2. **Widget**: no third-party feedback library is a clean fit
+>    (Sentry User Feedback ties us to Sentry's hosted backend;
+>    Feedback Fish et al. require their hosted service). The
+>    Cogni-native answer is **compose shadcn primitives** (`Popover`
+>    - `Form` + `Textarea` + `Button` + `Sonner` toast) — all
+>      already in operator. Zero new deps.
+>
+> Full prior-art matrix below is moot; design pushed directly into
+> `task.0425`. This spike is `done`.
 
 ## Problem
 
