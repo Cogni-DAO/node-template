@@ -44,7 +44,14 @@ export function WalletAnalysisSurface({
   headerActions,
 }: WalletAnalysisSurfaceProps): ReactElement {
   const [interval, setInterval] = useState<PolyWalletOverviewInterval>("ALL");
-  const { data, isLoading } = useWalletAnalysis(addr, enabled, interval);
+  // Distributions are heavy (extra Gamma resolution fan-out). Only fetch them
+  // for the full page variant — drawer / compact stay snapshot-sized.
+  const includeDistributions = variant === "page";
+  const { data, isLoading } = useWalletAnalysis(addr, enabled, {
+    interval,
+    includeDistributions,
+    distributionMode: "live",
+  });
 
   return (
     <WalletAnalysisView

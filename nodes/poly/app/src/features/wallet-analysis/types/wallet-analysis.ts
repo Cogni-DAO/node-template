@@ -148,6 +148,10 @@ export type WalletPnl = {
   history: readonly WalletPnlHistoryPoint[];
 };
 
+export type WalletDistributionsViewMode = "count" | "usdc";
+
+export type WalletDistributionsRangeMode = "live" | "historical";
+
 export type WalletAnalysisData = {
   address: string;
   identity: WalletIdentity;
@@ -157,6 +161,8 @@ export type WalletAnalysisData = {
   balanceHistory?: readonly WalletBalanceHistoryPoint[];
   pnl?: WalletPnl;
   positions?: readonly WalletPosition[];
+  /** Server-validated distributions slice — passed through to UI. */
+  distributions?: import("@cogni/poly-node-contracts").WalletAnalysisDistributions;
 };
 
 export type WalletAnalysisVariant = "page" | "drawer" | "compact";

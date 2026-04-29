@@ -25,11 +25,13 @@ import {
   computeWalletMetrics,
   type MarketResolutionInput,
   mapExecutionPositions,
+  summariseOrderFlow,
 } from "@cogni/poly-market-provider/analysis";
 import type {
   PolyWalletExecutionOutput,
   PolyWalletOverviewInterval,
   WalletAnalysisBalance,
+  WalletAnalysisDistributions,
   WalletAnalysisPnl,
   WalletAnalysisSnapshot,
   WalletAnalysisTrades,
@@ -204,6 +206,84 @@ export async function getSnapshotSlice(
     return {
       kind: "warn",
       warning: warning("snapshot", err),
+    };
+  }
+}
+
+/**
+ * Distributions slice — order-flow histograms (DCA depth, trade size, entry
+ * price, DCA window, hour-of-day, event clustering) with won/lost/pending
+ * outcome split. Reuses the `trades:${addr}` + `resolution:${cid}` cache
+ * entries populated by `getSnapshotSlice` so a request that includes both
+ * slices triggers exactly one upstream fan-out per (wallet, market).
+ *
+ * D1 ships `live` mode only; `historical` returns a `distributions_unavailable`
+ * warning until the persistence layer in D2 lands.
+ */
+export async function getDistributionsSlice(
+  addr: string,
+  mode: "live" | "historical"
+): Promise<SliceResult<WalletAnalysisDistributions>> {
+  if (mode === "historical") {
+    return {
+      kind: "warn",
+      warning: {
+        slice: "distributions",
+        code: "distributions_unavailable",
+        message:
+          "historical mode requires the poly_target_fills persistence layer (D2) which is not yet shipped",
+      },
+    };
+  }
+  try {
+    const trades = await coalesce(
+      `trades:${addr}`,
+      () =>
+        upstreamLimit(() =>
+          getDataApiClient().listUserActivity(addr, {
+            limit: TRADE_FETCH_LIMIT,
+          })
+        ),
+      SLICE_TTL_MS
+    );
+
+    const cids = [...new Set(trades.map((t) => t.conditionId))];
+    const resolutions = new Map<string, MarketResolutionInput>();
+    await Promise.all(
+      cids.map((cid) =>
+        coalesce(
+          `resolution:${cid}`,
+          () =>
+            upstreamLimit(() => getClobPublicClient().getMarketResolution(cid)),
+          SLICE_TTL_MS
+        ).then((r) => {
+          if (r) resolutions.set(cid, r);
+        })
+      )
+    );
+
+    const summary = summariseOrderFlow(trades, resolutions);
+    return {
+      kind: "ok",
+      value: {
+        mode,
+        range: summary.range,
+        dcaDepth: { buckets: [...summary.dcaDepth.buckets] },
+        tradeSize: { buckets: [...summary.tradeSize.buckets] },
+        entryPrice: { buckets: [...summary.entryPrice.buckets] },
+        dcaWindow: { buckets: [...summary.dcaWindow.buckets] },
+        hourOfDay: { buckets: [...summary.hourOfDay.buckets] },
+        eventClustering: { buckets: [...summary.eventClustering.buckets] },
+        topEvents: [...summary.topEvents],
+        pendingShare: summary.pendingShare,
+        quantiles: summary.quantiles,
+        computedAt: new Date().toISOString(),
+      },
+    };
+  } catch (err) {
+    return {
+      kind: "warn",
+      warning: warning("distributions", err),
     };
   }
 }

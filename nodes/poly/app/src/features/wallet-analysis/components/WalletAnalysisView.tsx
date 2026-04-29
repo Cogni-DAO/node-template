@@ -25,6 +25,7 @@ import type {
   WalletAnalysisVariant,
 } from "../types/wallet-analysis";
 import { BalanceBar } from "./BalanceBar";
+import { DistributionsBlock } from "./DistributionsBlock";
 import { EdgeHypothesis } from "./EdgeHypothesis";
 import { RecentTradesTable } from "./RecentTradesTable";
 import { StatGrid } from "./StatGrid";
@@ -38,6 +39,7 @@ export type WalletAnalysisLoadingState = {
   trades?: boolean | undefined;
   balance?: boolean | undefined;
   pnl?: boolean | undefined;
+  distributions?: boolean | undefined;
 };
 
 export type WalletAnalysisViewProps = {
@@ -183,6 +185,13 @@ function PageVariant({
           isLoading={isLoading?.trades}
           capturedAt={capturedAt}
         />
+
+        {(data.distributions || isLoading?.distributions) && (
+          <DistributionsBlock
+            data={data.distributions}
+            isLoading={isLoading?.distributions}
+          />
+        )}
 
         <EdgeHypothesis text={data.snapshot?.hypothesisMd} />
       </CardContent>
