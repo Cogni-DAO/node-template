@@ -45,6 +45,7 @@ export interface WorkItemCommandPort {
     parentId?: WorkItemId;
     labels?: string[];
     assignees?: SubjectRef[];
+    node?: string;
   }): Promise<WorkItem>;
 
   patch(input: {
@@ -59,11 +60,13 @@ export interface WorkItemCommandPort {
         | "estimate"
         | "priority"
         | "rank"
+        | "status"
         | "specRefs"
         | "labels"
         | "branch"
         | "pr"
         | "reviewer"
+        | "node"
       >
     >;
   }): Promise<WorkItem>;

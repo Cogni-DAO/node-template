@@ -94,6 +94,7 @@ export type WorkItem = {
   readonly outcome?: string;
   readonly projectId?: WorkItemId;
   readonly parentId?: WorkItemId;
+  readonly node: string;
   readonly assignees: readonly SubjectRef[];
   readonly externalRefs: readonly ExternalRef[];
   readonly actor: ActorKind;
@@ -123,6 +124,7 @@ export type WorkQuery = {
   readonly relatedTo?: WorkItemId;
   readonly text?: string;
   readonly actor?: ActorKind;
+  readonly node?: string | readonly string[];
   readonly limit?: number;
   readonly cursor?: string;
 };

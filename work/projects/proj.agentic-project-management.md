@@ -94,16 +94,19 @@ The port's `SubjectRef` must align with actor kinds so that when the `actors` ta
 | Governance runner uses port instead of filesystem scanning                       | Not Started | 2   | (create at P2 start) |
 | Read model / index for fast queries (derived from markdown)                      | Not Started | 2   | (create at P2 start) |
 
-### Sprint (P3) — Backend Migration + External Tracker Integration
+### Sprint (P3) — Doltgres Source-of-Truth + External Tracker Integration
 
-**Goal:** Swap markdown adapter for DB or external tracker. Port contract unchanged.
+**Goal:** Doltgres replaces markdown as the canonical work-item store. Markdown remains a deprecated local convenience. Port contract unchanged for consumers; only adapter + types extended (`node` column).
 
-| Deliverable                                               | Status      | Est | Work Item            |
-| --------------------------------------------------------- | ----------- | --- | -------------------- |
-| DB adapter (PostgreSQL + Drizzle, reusing existing infra) | Not Started | 3   | (create at P3 start) |
-| OpenProject adapter (REST API, user mapping)              | Not Started | 3   | (create at P3 start) |
-| Plane adapter (MCP server integration)                    | Not Started | 2   | (create at P3 start) |
-| Markdown export from DB (for git-tracked audit trail)     | Not Started | 1   | (create at P3 start) |
+| Deliverable                                                                                | Status      | Est | Work Item            |
+| ------------------------------------------------------------------------------------------ | ----------- | --- | -------------------- |
+| Doltgres work-item create/read/patch API — new items only (operator v0)                    | Not Started | 3   | task.0424            |
+| One-shot markdown → Doltgres importer + dashboard facade rewire (operator v1)              | Not Started | 2   | (create after 0423)  |
+| Transition state-machine + `expectedRevision` concurrency + relations/external-refs tables | Not Started | 3   | (create after 0423)  |
+| Propagate Doltgres work-item plane to other nodes (or keep operator-only) — TBD            | Not Started | 3   | (create after v1)    |
+| Obsidian-compatible export (markdown derived from Doltgres for git-tracked audit)          | Not Started | 2   | (create after v1)    |
+| OpenProject adapter (REST API, user mapping) — optional                                    | Not Started | 3   | (create at P3 start) |
+| Plane adapter (MCP server integration) — optional                                          | Not Started | 2   | (create at P3 start) |
 
 ## Port Design
 

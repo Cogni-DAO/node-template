@@ -111,6 +111,11 @@ USER nextjs
 # invoke `node migrate.mjs` directly. task.0370 step 1.
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/operator/app/src/adapters/server/db/migrations /app/nodes/operator/app/migrations
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate.mjs /app/nodes/operator/app/migrate.mjs
+# Doltgres migrate runner — task.0423: applies @cogni/operator-doltgres-schema
+# migrations against `knowledge_operator`, then stamps a dolt_commit so DDL
+# lands in dolt_log.
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/operator/app/src/adapters/server/db/doltgres-migrations /app/nodes/operator/app/doltgres-migrations
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/operator/app/src/adapters/server/db/migrate-doltgres.mjs /app/nodes/operator/app/migrate-doltgres.mjs
 
 EXPOSE 3000
 

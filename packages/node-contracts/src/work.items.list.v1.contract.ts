@@ -41,6 +41,7 @@ export const WorkItemDtoSchema = z.object({
   outcome: z.string().optional(),
   projectId: z.string().optional(),
   parentId: z.string().optional(),
+  node: z.string().optional(),
   assignees: z.array(SubjectRefSchema),
   externalRefs: z.array(ExternalRefSchema),
   actor: z.string().optional(),
@@ -70,6 +71,7 @@ export const workItemsListOperation = {
     text: z.string().optional(),
     actor: z.enum(["human", "ai", "either"]).optional(),
     projectId: z.string().optional(),
+    node: z.union([z.string(), z.array(z.string())]).optional(),
     limit: z.number().int().positive().max(500).optional(),
   }),
   output: z.object({

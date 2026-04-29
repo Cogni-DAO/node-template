@@ -37,6 +37,7 @@
     { "path": "./nodes/poly/packages/doltgres-schema" },
     { "path": "./nodes/poly/packages/market-provider" },
     { "path": "./nodes/poly/packages/node-contracts" },
-    { "path": "./nodes/poly/packages/wallet" }
+    { "path": "./nodes/poly/packages/wallet" },
+    { "path": "./nodes/operator/packages/doltgres-schema" }
   ]
 }

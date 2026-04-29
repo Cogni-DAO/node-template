@@ -59,3 +59,10 @@ export {
   type ScheduleWorkerPort,
   type UpdateScheduleInput,
 } from "@cogni/scheduler-core";
+
+export type {
+  WorkItemsCreateInput,
+  WorkItemsDoltgresPort,
+  WorkItemsPatchInput,
+  WorkItemsPatchSet,
+} from "./work-items-doltgres.port";
