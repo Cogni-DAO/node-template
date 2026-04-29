@@ -43,6 +43,7 @@
 | 0 | 1 | 2 | needs_closeout | task.0410 | Reviewer per-node routing — wire `extractOwningNode` into PrReviewWorkflow so PR webhooks load per-node `.cogni/rules/` | VCS Integration | proj.vcs-integration |
 | 0 | 1 | 1 | needs_implement | task.0412 | Poly CTF redeem pipeline — multi-tenant fan-out (purge single-funder kill switch) | Cogni Poly | proj.poly-copy-trading |
 | 0 | 1 | 1 | needs_merge | task.0418 | Surface pod-startup diagnostics on rollout failure + fix /logs anti-pattern |  |  |
+| 0 | 1 | 1 | needs_implement | bug.0419 | Polymarket V2 cutover — Enable Trading targets V1 USDC.e exchanges; V2 spends pUSD via CollateralOnramp.wrap | Cogni Poly | proj.poly-copy-trading |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -158,6 +159,7 @@
 | 1 | 5 | 1 | needs_merge | bug.0333 | Base audit — move envs-identical ConfigMap values out of overlay patches into base | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 5 | 1 | needs_implement | bug.0379 | core__poly_data_holders schema is wrong — real /holders response is grouped per outcome token | Cogni Poly | proj.poly-prediction-bot |
 | 1 | 5 | 2 | needs_merge | task.0404 | Poly bet sizer v0 — `min_bet` SizingPolicy variant | Poly | proj.poly-bet-sizer |
+| 1 | 5 | 2 | needs_implement | bug.0405 | Polymarket BUY GTC partial-fills land below min_order_size — produces structurally unsellable dust | Cogni Poly | proj.poly-copy-trading |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -262,6 +264,7 @@
 | 2 | 30 | 1 | needs_implement | bug.0168 | App container uses seccomp=unconfined for TigerBeetle io_uring — replace with targeted profile | AI Operator Wallet | proj.ai-operator-wallet |
 | 2 | 30 | 1 | needs_merge | bug.0339 | Tenant context missing from request-envelope logs — Loki can't slice by user/billing |  |  |
 | 2 | 30 | 5 | needs_triage | task.0356 | Poly — automated E2E suite: wallet onboarding + trading execution |  |  |
+| 2 | 30 | 3 | needs_triage | bug.0420 | Adapter error catches lose context — silent step failures + unstructured error envelopes need a cross-API standard | Observability Hardening | proj.observability-hardening |
 | 2 | 50 | 2 | needs_implement | task.0134 | EIP-4824 daoURI v0 — lightweight DAOstar metadata endpoint | Financial Ledger | proj.financial-ledger |
 | 2 | 50 | 2 | needs_merge | task.0324 | Per-node DB schema split (minimal — no new tooling) | Database Operations | proj.database-ops |
 | 2 | 50 | 3 | needs_triage | bug.0330 | poly /api/v1/chat/completions intermittently returns empty body on candidate-a | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -365,6 +368,7 @@
 | 0 | task.0381 | Single-node-scope CI gate — reject PRs that touch >1 node domain (operator owns repo infra) | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | bug.0383 | poly CTF redeem sweep loops on losing-outcome ERC1155 — bug.0376 fix-of-fix | Poly Web3 Security Hardening | proj.poly-web3-security-hardening |
 | 0 | task.0415 | Speed up `pnpm check:fast` — collapse to one turbo DAG, drop test serialization, cache docs/db checks |  |  |
+| 0 | bug.0418 | Polymarket CLOB rejects 100% of placeOrder calls with reason="order_version_mismatch" | Cogni Poly | proj.poly-copy-trading |
 | 0 | task.0419 | PrReviewWorkflowInput Zod schema + contract test — fix modelRef-shape regression class | VCS Integration | proj.vcs-integration |
 | 1 | task.0006 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0007 | Billing enforcement decorator at GraphExecutorPort level | Unified Graph Launch | proj.unified-graph-launch |

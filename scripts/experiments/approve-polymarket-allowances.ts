@@ -12,6 +12,7 @@
  */
 
 import path from "node:path";
+import { getContractConfig } from "@polymarket/clob-client-v2";
 import { PrivyClient } from "@privy-io/node";
 import { createViemAccount } from "@privy-io/node/viem";
 import { config } from "dotenv";
@@ -20,39 +21,49 @@ import {
   createPublicClient,
   createWalletClient,
   erc20Abi,
+  formatUnits,
   type Hex,
   http,
   maxUint256,
+  parseAbi,
 } from "viem";
 import { polygon } from "viem/chains";
 
 config({ path: path.resolve(__dirname, "../../.env.local") });
 
-// ---------------------------------------------------------------------------
-// Polygon-mainnet CLOB contract config — source: @polymarket/clob-client config.js
-// ---------------------------------------------------------------------------
-
+const POLYMARKET = getContractConfig(polygon.id);
 const USDC_E_POLYGON = "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as Address;
-const CTF_POLYGON = "0x4D97DCd97eC945f40cF65F87097ACe5EA0476045" as Address;
-const SPENDERS: Array<{ name: string; address: Address }> = [
-  { name: "Exchange", address: "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" },
-  {
-    name: "Neg-Risk Exchange",
-    address: "0xC5d563A36AE78145C45a50134d48A1215220f80a",
-  },
-  {
-    name: "Neg-Risk Adapter",
-    address: "0xd91E80cF2E7be2e162c6513ceD06f1dD0dA35296",
-  },
+const PUSD_POLYGON = POLYMARKET.collateral as Address;
+const CTF_POLYGON = POLYMARKET.conditionalTokens as Address;
+const COLLATERAL_ONRAMP_POLYGON =
+  "0x93070a847efEf7F70739046A929D47a521F5B8ee" as Address;
+
+const USDC_E_SPENDERS: Array<{ name: string; address: Address }> = [
+  { name: "Onramp", address: COLLATERAL_ONRAMP_POLYGON },
 ];
-// CTF (ERC-1155) operators — required for SELL.
+const PUSD_SPENDERS: Array<{ name: string; address: Address }> = [
+  { name: "Exchange (V2)", address: POLYMARKET.exchangeV2 as Address },
+  {
+    name: "Neg-Risk Exchange (V2)",
+    address: POLYMARKET.negRiskExchangeV2 as Address,
+  },
+  { name: "Neg-Risk Adapter", address: POLYMARKET.negRiskAdapter as Address },
+];
 const CTF_OPERATORS: Array<{ name: string; address: Address }> = [
-  { name: "Exchange", address: "0x4bFb41d5B3570DeFd03C39a9A4D8dE6Bd8B8982E" },
+  { name: "Exchange (V2)", address: POLYMARKET.exchangeV2 as Address },
   {
-    name: "Neg-Risk Exchange",
-    address: "0xC5d563A36AE78145C45a50134d48A1215220f80a",
+    name: "Neg-Risk Exchange (V2)",
+    address: POLYMARKET.negRiskExchangeV2 as Address,
   },
+  { name: "Neg-Risk Adapter", address: POLYMARKET.negRiskAdapter as Address },
 ];
+
+const COLLATERAL_ONRAMP_WRAP_ABI = parseAbi([
+  "function wrap(address asset, address to, uint256 amount)",
+]);
+const ERC20_BALANCEOF_ABI = parseAbi([
+  "function balanceOf(address owner) view returns (uint256)",
+]);
 const ERC1155_APPROVAL_ABI = [
   {
     type: "function",
@@ -127,32 +138,33 @@ async function main(): Promise<void> {
     transport: http(rpcUrl),
   });
 
-  // --- Per-spender: read allowance, approve if needed ---
-  for (const spender of SPENDERS) {
-    console.log(`\n[approve] --- ${spender.name} (${spender.address}) ---`);
-
+  async function approveErc20(
+    token: Address,
+    tokenLabel: string,
+    spender: { name: string; address: Address }
+  ): Promise<void> {
+    console.log(
+      `\n[approve] --- ${tokenLabel} → ${spender.name} (${spender.address}) ---`
+    );
     const current = await publicClient.readContract({
-      address: USDC_E_POLYGON,
+      address: token,
       abi: erc20Abi,
       functionName: "allowance",
       args: [expectedAddress, spender.address],
     });
     console.log(`[approve]   current allowance: ${current.toString()}`);
-
     if (current === maxUint256) {
       console.log("[approve]   already max — skipping");
-      continue;
+      return;
     }
-
     console.log("[approve]   submitting approve(spender, MaxUint256)...");
     const hash: Hex = await walletClient.writeContract({
-      address: USDC_E_POLYGON,
+      address: token,
       abi: erc20Abi,
       functionName: "approve",
       args: [spender.address, maxUint256],
     });
-    console.log(`[approve]   tx:      ${hash}`);
-
+    console.log(`[approve]   tx: ${hash}`);
     const receipt = await publicClient.waitForTransactionReceipt({
       hash,
       confirmations: 1,
@@ -161,13 +173,8 @@ async function main(): Promise<void> {
       console.error(`[approve]   tx reverted: ${hash}`);
       process.exit(1);
     }
-    console.log(`[approve]   block:   ${receipt.blockNumber}`);
-    console.log(`[approve]   gas:    ${receipt.gasUsed}`);
-
-    // Pin the read to the receipt's block — publicnode RPCs round-robin and a
-    // fresh read may hit a node that hasn't synced the mined block yet.
     const after = await publicClient.readContract({
-      address: USDC_E_POLYGON,
+      address: token,
       abi: erc20Abi,
       functionName: "allowance",
       args: [expectedAddress, spender.address],
@@ -182,7 +189,44 @@ async function main(): Promise<void> {
     console.log("[approve]   allowance now max ✓");
   }
 
-  console.log("\n[approve] PASS — all three spenders approved for max USDC.e");
+  for (const sp of USDC_E_SPENDERS)
+    await approveErc20(USDC_E_POLYGON, "USDC.e", sp);
+
+  console.log("\n[approve] --- Wrap USDC.e → pUSD ---");
+  const usdcEBalance = await publicClient.readContract({
+    address: USDC_E_POLYGON,
+    abi: ERC20_BALANCEOF_ABI,
+    functionName: "balanceOf",
+    args: [expectedAddress],
+  });
+  console.log(`[approve]   USDC.e balance: ${formatUnits(usdcEBalance, 6)}`);
+  if (usdcEBalance === 0n) {
+    console.log("[approve]   nothing to wrap — skipping");
+  } else {
+    console.log(`[approve]   submitting wrap(${usdcEBalance.toString()})...`);
+    const wrapHash: Hex = await walletClient.writeContract({
+      address: COLLATERAL_ONRAMP_POLYGON,
+      abi: COLLATERAL_ONRAMP_WRAP_ABI,
+      functionName: "wrap",
+      args: [USDC_E_POLYGON, expectedAddress, usdcEBalance],
+    });
+    console.log(`[approve]   tx: ${wrapHash}`);
+    const wrapReceipt = await publicClient.waitForTransactionReceipt({
+      hash: wrapHash,
+      confirmations: 1,
+    });
+    if (wrapReceipt.status !== "success") {
+      console.error(`[approve]   wrap tx reverted: ${wrapHash}`);
+      process.exit(1);
+    }
+    console.log("[approve]   wrap confirmed ✓");
+  }
+
+  for (const sp of PUSD_SPENDERS) await approveErc20(PUSD_POLYGON, "pUSD", sp);
+
+  console.log(
+    "\n[approve] PASS — all spenders approved for max (USDC.e + pUSD)"
+  );
 
   for (const op of CTF_OPERATORS) {
     console.log(`\n[approve] --- CTF operator ${op.name} (${op.address}) ---`);

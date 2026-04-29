@@ -29,7 +29,8 @@
       "includes": [
         "nodes/poly/app/src/**/*.{ts,tsx}",
         "!nodes/poly/app/src/bootstrap/capabilities/poly-trade.ts",
-        "!nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts"
+        "!nodes/poly/app/src/bootstrap/capabilities/poly-trade-executor.ts",
+        "!nodes/poly/app/src/adapters/server/wallet/privy-poly-trader-wallet.adapter.ts"
       ],
       "linter": {
         "rules": {
@@ -38,7 +39,8 @@
               "level": "error",
               "options": {
                 "paths": {
-                  "@polymarket/clob-client": "Import @polymarket/clob-client only from bootstrap/capabilities/poly-trade.ts or bootstrap/capabilities/poly-trade-executor.ts. All placement code must go through PolyTradeCapability or PolyTradeExecutor (task.0315 CP4.25, task.0318 Phase B3)."
+                  "@polymarket/clob-client": "Legacy V1 SDK — removed in bug.0418. Use @polymarket/clob-client-v2 from a legal importer.",
+                  "@polymarket/clob-client-v2": "Import only from poly-trade.ts, poly-trade-executor.ts, or privy-poly-trader-wallet.adapter.ts. Placement goes through PolyTradeCapability/Executor (task.0315 CP4.25)."
                 }
               }
             }

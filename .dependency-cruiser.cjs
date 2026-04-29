@@ -722,10 +722,11 @@ module.exports = {
     // Pure-policy boundary rules (PURE_POLICY_NO_IO)
     // packages/market-provider/src/policy/** is the pure decision layer for
     // redeem / close / exit policies. It must not import any I/O (viem,
-    // @polymarket/clob-client) or any app/bootstrap code. Bug.0384's predicate
+    // @polymarket/clob-client*) or any app/bootstrap code. Bug.0384's predicate
     // defect was made possible because the prior in-line decideRedeem was
     // entangled with viem-using code; the policy package exists so that class
-    // of bug is structurally impossible.
+    // of bug is structurally impossible. The path pattern below covers both
+    // the legacy and v2 SDK packages.
     // =========================================================================
     {
       name: "no-io-in-policy",
@@ -736,14 +737,15 @@ module.exports = {
       to: {
         path: [
           "^node_modules/viem",
-          "^node_modules/@polymarket/clob-client",
+          "^node_modules/@polymarket/clob-client/",
+          "^node_modules/@polymarket/clob-client-v2/",
           "^nodes/",
           "^services/",
         ],
       },
       comment:
         "PURE_POLICY_NO_IO — policy modules must not import viem, " +
-        "@polymarket/clob-client, app/bootstrap, or any node/service code. " +
+        "@polymarket/clob-client (any version), app/bootstrap, or any node/service code. " +
         "See docs/design/poly-positions.md § Capability A.",
     },
 

@@ -18,12 +18,15 @@ import {
   type ApiKeyCreds,
   Chain,
   ClobClient,
-  type ClobSigner,
   OrderType,
   Side,
-  SignatureType,
+  SignatureTypeV2,
   type TickSize,
-} from "@polymarket/clob-client";
+} from "@polymarket/clob-client-v2";
+
+type ClobSigner = NonNullable<
+  ConstructorParameters<typeof ClobClient>[0]["signer"]
+>;
 
 import type {
   GetOrderResult,
@@ -120,7 +123,7 @@ export interface PolymarketClobAdapterConfig {
   /** Chain id — defaults to Polygon mainnet (137). */
   chainId?: Chain;
   /** Signature type — defaults to EOA. Safe-proxy path is out of scope for P1. */
-  signatureType?: SignatureType;
+  signatureType?: SignatureTypeV2;
   /**
    * Structured-log sink. Defaults to a no-op; the node-app bootstrap should
    * pass a pino child logger bound with `{component: "poly-clob-adapter"}`.
@@ -178,14 +181,14 @@ export class PolymarketClobAdapter implements MarketProviderPort {
   constructor(config: PolymarketClobAdapterConfig) {
     this.funderAddress = config.funderAddress;
     this.chainId = config.chainId ?? Chain.POLYGON;
-    this.client = new ClobClient(
-      config.host ?? DEFAULT_CLOB_HOST,
-      this.chainId,
-      config.signer,
-      config.creds,
-      config.signatureType ?? SignatureType.EOA,
-      config.funderAddress
-    );
+    this.client = new ClobClient({
+      host: config.host ?? DEFAULT_CLOB_HOST,
+      chain: this.chainId,
+      signer: config.signer,
+      creds: config.creds,
+      signatureType: config.signatureType ?? SignatureTypeV2.EOA,
+      funderAddress: config.funderAddress,
+    });
     const baseLog = config.logger ?? noopLogger;
     this.log = baseLog.child({
       component: "poly-clob-adapter",
@@ -250,6 +253,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
     let tickSize: TickSize | undefined;
     let negRisk: boolean | undefined;
     let feeRateBps: number | undefined;
+    let orderTypeUsed: OrderType | undefined;
 
     try {
       // B1 — fetch per-market tickSize + negRisk + feeRateBps rather than hardcoding.
@@ -297,19 +301,37 @@ export class PolymarketClobAdapter implements MarketProviderPort {
 
       const postOnly = intent.attributes?.post_only === true;
 
-      const response: unknown = await this.client.createAndPostOrder(
-        {
-          tokenID: tokenId,
-          price: intent.limit_price,
-          size: shareSize,
-          side,
-          feeRateBps,
-        },
-        { tickSize, negRisk },
-        OrderType.GTC,
-        /* deferExec */ undefined,
-        /* postOnly */ postOnly || undefined
-      );
+      let response: unknown;
+      if (postOnly) {
+        orderTypeUsed = OrderType.GTC;
+        response = await this.client.createAndPostOrder(
+          {
+            tokenID: tokenId,
+            price: intent.limit_price,
+            size: shareSize,
+            side,
+            feeRateBps,
+          },
+          { tickSize, negRisk },
+          OrderType.GTC,
+          true,
+          false
+        );
+      } else {
+        orderTypeUsed = OrderType.FOK;
+        const marketAmount = intent.side === "BUY" ? effectiveUsdc : shareSize;
+        response = await this.client.createAndPostMarketOrder(
+          {
+            tokenID: tokenId,
+            price: intent.limit_price,
+            amount: marketAmount,
+            side,
+            feeRateBps,
+          },
+          { tickSize, negRisk },
+          OrderType.FOK
+        );
+      }
 
       const receipt = mapOrderResponseToReceipt(response, intent);
       const duration_ms = Date.now() - start;
@@ -342,6 +364,12 @@ export class PolymarketClobAdapter implements MarketProviderPort {
         err instanceof ClobRejectionError
           ? err.details
           : classifyClientError(err);
+      if (
+        orderTypeUsed === OrderType.FOK &&
+        details.error_code === POLY_CLOB_ERROR_CODES.emptyResponse
+      ) {
+        details.error_code = POLY_CLOB_ERROR_CODES.fokNoMatch;
+      }
       const result = err instanceof ClobRejectionError ? "rejected" : "error";
       this.metrics.incr(POLY_CLOB_METRICS.placeTotal, {
         result,
@@ -364,6 +392,8 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           http_status: details.http_status,
           response_keys: details.response_keys,
           reason: details.reason,
+          error_class: details.error_class,
+          stack_top: details.stack_top,
         },
         `placeOrder: ${result}`
       );
@@ -822,6 +852,15 @@ export const POLY_CLOB_ERROR_CODES = {
    * bug.0342 (dynamic scale-up-to-min).
    */
   belowMinOrderSize: "below_min_order_size",
+  /**
+   * FOK (Fill-Or-Kill) order could not be fully matched at submission. The
+   * order was rejected atomically — nothing settled. This is a CLEAN SKIP:
+   * the coordinator should mark the fill as `placement_failed` with no retry
+   * (next signal from the target re-enters the pipeline). Distinct from
+   * `belowMinOrderSize` (intent-shape problem) and `emptyResponse` (which
+   * could mean a CLOB-internal error). bug.0405 FILL_NEVER_BELOW_FLOOR.
+   */
+  fokNoMatch: "fok_no_match",
   emptyResponse: "empty_response",
   httpError: "http_error",
   unknown: "unknown",
@@ -837,6 +876,19 @@ export interface ClobFailureDetails {
   http_status?: number;
   /** Short operator-facing reason text, truncated. Never contains user content. */
   reason?: string;
+  /**
+   * JS error constructor name when an Error was thrown (`TypeError`, `AxiosError`,
+   * `ZodError`, `ClobRejectionError`, etc.). Always set when `classifyClientError`
+   * was the source — distinguishes "thrown JS error inside the SDK" from "CLOB
+   * returned a structured rejection body" without relying on `error_code`.
+   */
+  error_class?: string;
+  /**
+   * First stack frame of a thrown Error, truncated. Surfaces "where the throw
+   * happened" so operators can tell e.g. an SDK-internal `TypeError` from an
+   * adapter-side classification miss.
+   */
+  stack_top?: string;
 }
 
 export class ClobRejectionError extends Error {
@@ -930,6 +982,7 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
   const anyErr = err as {
     response?: { status?: unknown; data?: unknown };
     message?: unknown;
+    stack?: unknown;
   } | null;
   const http_status =
     typeof anyErr?.response?.status === "number"
@@ -937,37 +990,47 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
       : undefined;
   const message =
     typeof anyErr?.message === "string" ? anyErr.message : String(err);
+  const error_class =
+    err && typeof err === "object" && err.constructor?.name
+      ? err.constructor.name
+      : undefined;
+  const stack_top =
+    typeof anyErr?.stack === "string"
+      ? (anyErr.stack.split("\n")[1] ?? "").trim().slice(0, 200) || undefined
+      : undefined;
+  const enrich = <T extends ClobFailureDetails>(d: T): T => ({
+    ...d,
+    ...(error_class !== undefined ? { error_class } : {}),
+    ...(stack_top !== undefined ? { stack_top } : {}),
+  });
 
-  // HTTP status is the strongest signal when present — 401/403 = stale creds
-  // regardless of what the body looks like.
   if (http_status === 401 || http_status === 403) {
-    return {
+    return enrich({
       error_code: POLY_CLOB_ERROR_CODES.staleApiKey,
       response_keys: [],
       ...(http_status !== undefined ? { http_status } : {}),
       reason: message.slice(0, 128),
-    };
+    });
   }
 
-  // Body classification wins for other 4xx (e.g. 400 with "not enough balance").
   const data = anyErr?.response?.data;
   if (data && typeof data === "object" && Object.keys(data).length > 0) {
     const fromBody = classifyClobFailure(data);
-    return {
+    return enrich({
       ...fromBody,
       ...(http_status !== undefined ? { http_status } : {}),
-    };
+    });
   }
 
   const error_code = http_status
     ? POLY_CLOB_ERROR_CODES.httpError
     : classifyRejectionMessage(message);
-  return {
+  return enrich({
     error_code,
     response_keys: [],
     ...(http_status !== undefined ? { http_status } : {}),
     reason: message.slice(0, 128),
-  };
+  });
 }
 
 export function mapOrderResponseToReceipt(

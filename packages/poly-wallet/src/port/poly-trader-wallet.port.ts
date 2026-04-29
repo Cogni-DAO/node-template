@@ -109,7 +109,8 @@ export type AuthorizeIntentResult =
  */
 export type TradingApprovalStepKind =
   | "erc20_approve"
-  | "ctf_set_approval_for_all";
+  | "ctf_set_approval_for_all"
+  | "collateral_wrap";
 
 export type TradingApprovalStepState =
   /** Before run: target was already at MaxUint256 / approved. Written as-is. */
@@ -306,11 +307,12 @@ export interface PolyTraderWalletPort {
 
   /**
    * Idempotently drive the tenant's trading wallet to "ready to trade" by
-   * running the six Polymarket onboarding approvals:
-   *   - USDC.e `approve(MaxUint256)` on Exchange, Neg-Risk Exchange,
+   * running the V2 Polymarket onboarding ceremony (bug.0419):
+   *   - USDC.e `approve(MaxUint256)` on CollateralOnramp (enables wrap)
+   *   - `CollateralOnramp.wrap(balance)` to convert USDC.e → pUSD
+   *   - pUSD `approve(MaxUint256)` on V2 Exchange + V2 Neg-Risk Exchange +
    *     Neg-Risk Adapter (enables BUY)
-   *   - CTF `setApprovalForAll(true)` on Exchange + Neg-Risk Exchange +
-   *     Neg-Risk Adapter (enables SELL on neg_risk, including close)
+   *   - CTF `setApprovalForAll(true)` on the same three operators (enables SELL)
    *
    * On full success, stamps `poly_wallet_connections.trading_approvals_ready_at`
    * so subsequent calls no-op and `authorizeIntent`'s `APPROVALS_BEFORE_PLACE`
