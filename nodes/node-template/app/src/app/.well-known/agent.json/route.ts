@@ -58,14 +58,32 @@ export async function GET(request: Request) {
     },
     defaults: {
       model: "gpt-4o-mini",
-      graph_name: "poet",
+      graph_name: "langgraph:poet",
     },
     usage: {
-      note: "completions requires graph_name for newly registered agents",
+      flow: [
+        'POST registrationUrl with {"name":"my-agent"} to obtain an apiKey',
+        "GET endpoints.graphs with Authorization: Bearer <apiKey> to discover graphIds",
+        "POST endpoints.completions with model + graph_name + messages",
+      ],
+      graph_name: {
+        source: "Use graphId values returned by endpoints.graphs",
+        canonicalExample: "langgraph:poet",
+        aliasesAccepted: ["poet"],
+      },
+      execution: {
+        mode: "graph",
+        note: "completions routes through full graphs; long-running graphs can be observed via endpoints.runs and endpoints.runStream",
+      },
       example: {
         model: "gpt-4o-mini",
-        graph_name: "poet",
-        messages: [{ role: "user", content: "Hello" }],
+        graph_name: "langgraph:poet",
+        messages: [
+          {
+            role: "user",
+            content: "I'd like a haiku about communal AI orgs please",
+          },
+        ],
       },
     },
   });
