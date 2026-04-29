@@ -32,11 +32,6 @@ import {
   DoltgresKnowledgeStoreAdapter,
 } from "@cogni/knowledge-store/adapters/doltgres";
 import { parseMcpConfigFromEnv } from "@cogni/langgraph-graphs";
-import { noopMetrics as noopMetricsForExecutor } from "@cogni/poly-market-provider";
-import {
-  PolymarketDataApiClient,
-  PolymarketUserPnlClient,
-} from "@cogni/poly-market-provider/adapters/polymarket";
 import {
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
   EVENT_NAMES,
@@ -50,6 +45,11 @@ import {
 import { numberToPpm } from "@cogni/operator-wallet";
 import { PrivyOperatorWalletAdapter } from "@cogni/operator-wallet/adapters/privy";
 import { POLY_TOOL_BUNDLE } from "@cogni/poly-ai-tools";
+import { noopMetrics as noopMetricsForExecutor } from "@cogni/poly-market-provider";
+import {
+  PolymarketDataApiClient,
+  PolymarketUserPnlClient,
+} from "@cogni/poly-market-provider/adapters/polymarket";
 import type { ScheduleControlPort } from "@cogni/scheduler-core";
 import type { WorkItemQueryPort } from "@cogni/work-items";
 import { MarkdownWorkItemAdapter } from "@cogni/work-items/markdown";
