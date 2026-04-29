@@ -43,6 +43,9 @@ export type MakeColumnsOpts = {
       ) => void | Promise<void>)
     | undefined;
   pendingActionPositionId?: string | null;
+  /** Live ticker for the Resolves countdown cell. Pass `Date.now()` from a
+   * once-a-minute hook so cells re-render without re-fetching. */
+  nowMs: number;
 };
 
 const col = createColumnHelper<WalletPosition>();
@@ -86,7 +89,12 @@ function pnlClass(value: number): string {
 }
 
 export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
-  const { variant, onPositionAction, pendingActionPositionId = null } = opts;
+  const {
+    variant,
+    onPositionAction,
+    pendingActionPositionId = null,
+    nowMs,
+  } = opts;
   const isHistory = variant === "history";
 
   const columns: AnyCol[] = [
@@ -171,6 +179,31 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
       meta: {
         headerTitle: "Held",
         skeleton: <Skeleton className="ms-auto h-3.5 w-12" />,
+      },
+    }),
+
+    col.accessor((row) => row.resolvesAt ?? null, {
+      id: "resolves",
+      header: ({ column }) =>
+        rightHeader(
+          <DataGridColumnHeader column={column} title="Resolves" visibility />
+        ),
+      size: 130,
+      sortingFn: (a, b) => {
+        const av = a.getValue<string | null>("resolves");
+        const bv = b.getValue<string | null>("resolves");
+        const at = av ? Date.parse(av) : Number.POSITIVE_INFINITY;
+        const bt = bv ? Date.parse(bv) : Number.POSITIVE_INFINITY;
+        return at === bt ? 0 : at < bt ? -1 : 1;
+      },
+      cell: ({ row }) => (
+        <div className="text-right text-sm tabular-nums">
+          <ResolvesCell position={row.original} nowMs={nowMs} />
+        </div>
+      ),
+      meta: {
+        headerTitle: "Resolves",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-16" />,
       },
     }),
   ];
@@ -297,6 +330,95 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
   }
 
   return columns;
+}
+
+const HOUR_MS = 60 * 60 * 1000;
+const TWELVE_HOURS_MS = 12 * HOUR_MS;
+
+function formatRelativeFuture(deltaMs: number): string {
+  const totalMinutes = Math.max(0, Math.round(deltaMs / 60_000));
+  if (totalMinutes < 60) return `in ${totalMinutes}m`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours < 24) return `in ${hours}h ${minutes}m`;
+  const days = Math.floor(hours / 24);
+  const remHours = hours % 24;
+  return `in ${days}d ${remHours}h`;
+}
+
+function ResolvesCell({
+  position,
+  nowMs,
+}: {
+  position: WalletPosition;
+  nowMs: number;
+}): ReactElement {
+  const lifecycle = position.lifecycleState ?? null;
+  const resolvesMs = position.resolvesAt
+    ? Date.parse(position.resolvesAt)
+    : Number.NaN;
+  const haveResolve = Number.isFinite(resolvesMs);
+  const past = haveResolve && resolvesMs <= nowMs;
+
+  if (lifecycle === "redeemed") {
+    return <Pill tone="success">Redeemed</Pill>;
+  }
+  if (
+    lifecycle === "loser" ||
+    lifecycle === "dust" ||
+    lifecycle === "abandoned"
+  ) {
+    return <Pill tone="muted">No payout</Pill>;
+  }
+  if (
+    lifecycle === "redeem_pending" ||
+    lifecycle === "winner" ||
+    lifecycle === "resolving"
+  ) {
+    return <Pill tone="warning">Resolving…</Pill>;
+  }
+  if (position.status === "redeemable") {
+    return <Pill tone="success">Redeem ready</Pill>;
+  }
+
+  if (!haveResolve) {
+    return <span className="text-muted-foreground/60">—</span>;
+  }
+
+  if (past) {
+    return <Pill tone="warning">Awaiting</Pill>;
+  }
+
+  const deltaMs = resolvesMs - nowMs;
+  const tone =
+    deltaMs < HOUR_MS
+      ? "text-destructive"
+      : deltaMs < TWELVE_HOURS_MS
+        ? "text-warning"
+        : "text-muted-foreground";
+  return <span className={tone}>{formatRelativeFuture(deltaMs)}</span>;
+}
+
+function Pill({
+  tone,
+  children,
+}: {
+  tone: "success" | "warning" | "muted";
+  children: ReactNode;
+}): ReactElement {
+  const cls =
+    tone === "success"
+      ? "border-success/40 bg-success/10 text-success"
+      : tone === "warning"
+        ? "border-warning/40 bg-warning/10 text-warning"
+        : "border-border/60 bg-muted/40 text-muted-foreground";
+  return (
+    <span
+      className={`inline-flex items-center rounded border px-1.5 py-px text-xs ${cls}`}
+    >
+      {children}
+    </span>
+  );
 }
 
 function actionLabel(status: WalletPosition["status"]): string {

@@ -67,6 +67,7 @@ const DEFAULT_VISIBILITY: VisibilityState = {
   market: true,
   trace: true,
   heldMinutes: true,
+  resolves: true,
   currentValue: true,
   pnlUsd: true,
   pnlPct: true,
@@ -77,10 +78,21 @@ const HISTORY_VISIBILITY: VisibilityState = {
   market: true,
   trace: true,
   heldMinutes: true,
+  resolves: true,
   closedAt: true,
   pnlUsd: true,
   pnlPct: true,
 };
+
+/** Re-render every 60s so the Resolves countdown ticks without a refetch. */
+function useNowMinute(): number {
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
+  return nowMs;
+}
 
 export function PositionsTable({
   positions,
@@ -95,14 +107,17 @@ export function PositionsTable({
     [positions]
   );
 
+  const nowMs = useNowMinute();
+
   const columns = useMemo(
     () =>
       makeColumns({
         variant,
         ...(onPositionAction && { onPositionAction }),
         pendingActionPositionId,
+        nowMs,
       }),
-    [variant, onPositionAction, pendingActionPositionId]
+    [variant, onPositionAction, pendingActionPositionId, nowMs]
   );
 
   const variantVisibility =
