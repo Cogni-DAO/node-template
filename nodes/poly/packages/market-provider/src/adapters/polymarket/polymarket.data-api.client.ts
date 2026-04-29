@@ -217,7 +217,7 @@ export class PolymarketDataApiClient {
 
     if (params?.sinceTs !== undefined) {
       const since = params.sinceTs;
-      return trades.filter((t) => t.timestamp >= since);
+      return trades.filter((t) => t.timestamp > since);
     }
     return trades;
   }

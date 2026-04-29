@@ -180,6 +180,35 @@ describe("PolymarketDataApiClient.listUserActivity", () => {
     expect(trades[0]?.timestamp).toBe(3000);
   });
 
+  it("excludes the boundary timestamp from sinceTs (strict >, not >=) — bug.0426", async () => {
+    const body = [
+      {
+        proxyWallet: wallet,
+        side: "BUY",
+        asset: "a",
+        conditionId: "c",
+        size: 1,
+        price: 0.5,
+        timestamp: 1000,
+      },
+      {
+        proxyWallet: wallet,
+        side: "BUY",
+        asset: "a",
+        conditionId: "c",
+        size: 1,
+        price: 0.5,
+        timestamp: 1001,
+      },
+    ];
+    const fetchImpl = vi.fn().mockResolvedValue(jsonResponse(body));
+    const client = new PolymarketDataApiClient({ fetch: fetchImpl });
+
+    const trades = await client.listUserActivity(wallet, { sinceTs: 1000 });
+    expect(trades).toHaveLength(1);
+    expect(trades[0]?.timestamp).toBe(1001);
+  });
+
   it("rejects malformed wallet addresses", async () => {
     const fetchImpl = vi.fn();
     const client = new PolymarketDataApiClient({ fetch: fetchImpl });

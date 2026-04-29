@@ -96,6 +96,15 @@ export type MirrorTargetConfig = z.infer<typeof MirrorTargetConfigSchema>;
 export const RuntimeStateSchema = z.object({
   /** client_order_id values that already exist in poly_copy_trade_fills — idempotency gate. */
   already_placed_ids: z.array(z.string()),
+  /**
+   * Sum of `intent` `size_usdc` for non-failed rows for this tenant ×
+   * market. Drives the per-position cap check in `applySizingPolicy`.
+   * Intent-based, not filled-based — see `OrderLedger.cumulativeIntentForMarket`
+   * for the v0 rationale. Optional: when omitted (`undefined`), the
+   * per-position cap is skipped — preserves the SELL path and any caller
+   * that hasn't opted in.
+   */
+  cumulative_intent_usdc_for_market: z.number().optional(),
 });
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 
@@ -119,6 +128,13 @@ export const MirrorReasonSchema = z.enum([
    * bug.0342.
    */
   "below_market_min",
+  /**
+   * Tenant's existing committed exposure to this market plus the proposed
+   * intent's `size_usdc` would exceed `max_usdc_per_trade`. v0 reuses the
+   * per-trade cap field as a per-position bound (one knob, both checks).
+   * task.0424.
+   */
+  "position_cap_reached",
 ]);
 export type MirrorReason = z.infer<typeof MirrorReasonSchema>;
 
@@ -159,4 +175,4 @@ export interface PlanMirrorInput {
  */
 export type SizingResult =
   | { ok: true; size_usdc: number }
-  | { ok: false; reason: "below_market_min" };
+  | { ok: false; reason: "below_market_min" | "position_cap_reached" };
