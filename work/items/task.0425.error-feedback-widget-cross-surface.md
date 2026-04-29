@@ -17,14 +17,14 @@ branch:
 pr:
 reviewer:
 revision: 0
-blocked_by: [spike.0424, task.0423]
+blocked_by: [spike.0424, task.0426]
 deploy_verified: false
 created: 2026-04-29
 updated: 2026-04-29
 labels: [frontend, ux, observability, error-handling]
 external_refs:
   - work/items/spike.0424.error-feedback-widget-research.md
-  - work/items/task.0423.send-to-cogni-error-intake-v0.md
+  - work/items/task.0426.send-to-cogni-error-intake-v0.md
   - work/items/story.0417.ui-send-to-cogni-error-button.md
   - nodes/operator/app/src/features/ai/components/ChatErrorBubble.tsx
 ---
@@ -33,7 +33,7 @@ external_refs:
 
 ## Problem
 
-`task.0423` shipped a full-page button that's wrong for the surfaces
+`task.0426` shipped a full-page button that's wrong for the surfaces
 that actually matter:
 
 - **Operator chat** (`ChatErrorBubble`) — full-page reset is hostile.
@@ -61,7 +61,7 @@ that is exactly what story.0417 was created to prevent.
   spike.0424 surveys it).
 - Update operator's `(app)/error.tsx` and `(public)/error.tsx` to
   use the shared widget instead of the inline component shipped in
-  task.0423.
+  task.0426.
 - Delete `nodes/operator/app/src/components/SendToCogniButton.tsx`
   (the v0-of-v0 component) once the new shared one fully replaces it.
 - Same Zod payload (`error-report.v1.contract.ts`); no breaking change.
@@ -93,7 +93,7 @@ Detailed plan filled in by `/design` once spike.0424 lands. Skeleton:
 
 - [ ] Re-read spike.0424 recommendation.
 - [ ] Implement shared widget (component + hook).
-- [ ] Replace task.0423's `SendToCogniButton` with the new component
+- [ ] Replace task.0426's `SendToCogniButton` with the new component
       in `(app)/error.tsx` + `(public)/error.tsx`. Delete the old
       file.
 - [ ] Wire into `ChatErrorBubble`.
@@ -112,7 +112,7 @@ Detailed plan filled in by `/design` once spike.0424 lands. Skeleton:
 **On candidate-a:**
 
 - `exercise:` Force errors on three surfaces:
-  1. `/dev/boom` (full-page, regression check vs task.0423).
+  1. `/dev/boom` (full-page, regression check vs task.0426).
   2. Operator chat: send a request that triggers an `ai.tool_call`
      failure (use a known-bad model id or graph name).
   3. Poly trading: attempt to close a non-existent / already-closed
@@ -146,4 +146,4 @@ shaped reports on candidate-a.
 
 - Story: derekg1729 (story.0417)
 - Spike: spike.0424
-- v0-of-v0: task.0423
+- v0-of-v0: task.0426

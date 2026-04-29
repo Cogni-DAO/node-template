@@ -26,7 +26,7 @@
  *   - SERVER_STAMPS_USER_ID: user id comes from the resolved session,
  *     never from the client payload.
  * Side-effects: IO (DB insert, Pino log line, rate-limiter state).
- * Links: work/items/task.0423.send-to-cogni-error-intake-v0.md, contracts/error-report.v1.contract
+ * Links: work/items/task.0426.send-to-cogni-error-intake-v0.md, contracts/error-report.v1.contract
  * @public
  */
 
