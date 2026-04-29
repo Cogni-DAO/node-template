@@ -1,0 +1,27 @@
+// SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+// SPDX-FileCopyrightText: 2025 Cogni-DAO
+
+/**
+ * Module: `@cogni/operator-doltgres-schema/tsup.config`
+ * Purpose: Build configuration for @cogni/operator-doltgres-schema — operator's node-local Drizzle schema for the Doltgres knowledge plane (work items live here).
+ * Scope: Build tooling only; does not contain runtime code.
+ * Invariants: Output is ESM. Mirrors @cogni/poly-doltgres-schema shape — per-slice entry points so downstream importers can tree-shake via subpath imports.
+ * Side-effects: IO
+ * Links: docs/spec/packages-architecture.md, work/items/task.0423.doltgres-work-items-source-of-truth.md
+ * @internal
+ */
+
+import { defineConfig } from "tsup";
+
+export const tsupConfig = defineConfig({
+  entry: ["src/index.ts", "src/work-items.ts"],
+  format: ["esm"],
+  dts: false,
+  clean: false,
+  sourcemap: true,
+  platform: "node",
+  external: ["drizzle-orm"],
+});
+
+// biome-ignore lint/style/noDefaultExport: required by tsup
+export default tsupConfig;

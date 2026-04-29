@@ -133,6 +133,7 @@ export function rawToWorkItem(raw: Record<string, unknown>): WorkItem {
     outcome: raw.outcome != null ? String(raw.outcome) : undefined,
     projectId: raw.project ? toWorkItemId(String(raw.project)) : undefined,
     parentId: raw.parent ? toWorkItemId(String(raw.parent)) : undefined,
+    node: raw.node != null ? String(raw.node) : "shared",
     actor: raw.actor === "human" || raw.actor === "ai" ? raw.actor : "either",
     assignees: toAssignees(raw.assignees),
     externalRefs: toExternalRefs(raw.external_refs),
@@ -168,11 +169,13 @@ export function workItemFieldsToRaw(
       | "estimate"
       | "priority"
       | "rank"
+      | "status"
       | "specRefs"
       | "labels"
       | "branch"
       | "pr"
       | "reviewer"
+      | "node"
     >
   >
 ): Record<string, unknown> {
@@ -183,11 +186,13 @@ export function workItemFieldsToRaw(
   if (fields.estimate !== undefined) out.estimate = fields.estimate;
   if (fields.priority !== undefined) out.priority = fields.priority;
   if (fields.rank !== undefined) out.rank = fields.rank;
+  if (fields.status !== undefined) out.status = fields.status;
   if (fields.specRefs !== undefined) out.spec_refs = fields.specRefs;
   if (fields.labels !== undefined) out.labels = fields.labels;
   if (fields.branch !== undefined) out.branch = fields.branch;
   if (fields.pr !== undefined) out.pr = fields.pr;
   if (fields.reviewer !== undefined) out.reviewer = fields.reviewer;
+  if (fields.node !== undefined) out.node = fields.node;
   return out;
 }
 

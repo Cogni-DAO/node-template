@@ -24,8 +24,18 @@ At each phase: search the resource roots below for the relevant guides, specs, a
 ## Phase 1 — Implement
 
 1. Worktree off `main`. Read `CLAUDE.md` and the `AGENTS.md` files for every dir you'll touch.
-2. Find your work item in `work/items/` (or create one). Identify your **validation checklist** — the exact endpoint or behavior you will prove on candidate-a — before writing any code.
-3. Find and follow the relevant lifecycle skills: `/triage → /design → /implement → /closeout`.
+2. **Tie your work to exactly one work item. 1 work item ≈ 1 PR.** Prefer adopting an existing item over creating a new one (anti-sprawl).
+   - Already assigned? Use it.
+   - Looking for work? Browse `work/items/` / `work/projects/` (or `/work` UI) for `needs_implement` / `needs_design`.
+   - New request that fits nothing existing? Create via the operator API:
+     ```bash
+     curl -X POST https://test.cognidao.org/api/v1/work/items \
+       -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+       -d '{"type":"task","title":"<short>","node":"<node>","summary":"<why>"}'
+     # → { "id": "task.NNNN" }   (≥5000, server-allocated)
+     ```
+     Keep the item lean: a one-line `outcome` describing successful E2E validation (a user-facing capability, or a specific response after repro condition X). Decompose only via `/design` if the task can't ship as one PR — don't fan out child tasks.
+3. Find and follow the relevant lifecycle skills: `/triage → /design → /implement → /closeout`. PATCH the work item with `branch` + `pr` + `status` as you progress so `dolt_log` reflects state.
 4. `pnpm check:fast` must pass. Push branch. `gh pr create` with a conventional commit title.
 
 ## Phase 2 — Flight Request
@@ -43,10 +53,11 @@ At each phase: search the resource roots below for the relevant guides, specs, a
 12. Post a PR comment with: endpoint hit, response received, Loki line. This is the real gate.
 13. If validation fails: fix, push, repeat from Phase 1. Stale PRs with failed validation are closed.
 
-## Phase 4 — Ready for Review
+## Phase 4 — Merge + Close
 
 14. Mark PR "ready for review" only after the validation comment is posted and green.
 15. Cogni operator reviews and merges.
+16. **Only after merge to `main`:** PATCH `status: done` on the work item. Pre-merge → status stays `needs_merge`. Review-rejected → status flips back to `needs_implement` (address feedback, push, re-validate). _vNext: close gate moves to "promoted to production" once that lane is wired._
 
 ---
 

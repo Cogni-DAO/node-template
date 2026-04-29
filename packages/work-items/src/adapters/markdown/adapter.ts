@@ -224,6 +224,10 @@ function matchesQuery(item: WorkItem, query: WorkQuery): boolean {
   if (query.actor && item.actor !== query.actor && item.actor !== "either") {
     return false;
   }
+  if (query.node) {
+    const want = Array.isArray(query.node) ? query.node : [query.node];
+    if (!want.includes(item.node)) return false;
+  }
   if (query.text) {
     const t = query.text.toLowerCase();
     const searchable = `${item.title} ${item.summary ?? ""}`.toLowerCase();
@@ -315,6 +319,7 @@ export class MarkdownWorkItemAdapter
     parentId?: WorkItemId;
     labels?: string[];
     assignees?: SubjectRef[];
+    node?: string;
   }): Promise<WorkItem> {
     const { id, numStr } = await allocateNextId(this.workDir, input.type);
     const slug = slugify(input.title);
@@ -346,6 +351,7 @@ export class MarkdownWorkItemAdapter
       updated: today,
       labels: input.labels ?? [],
       external_refs: null,
+      node: input.node ?? "shared",
     };
 
     if (input.parentId) {
@@ -376,11 +382,13 @@ export class MarkdownWorkItemAdapter
         | "estimate"
         | "priority"
         | "rank"
+        | "status"
         | "specRefs"
         | "labels"
         | "branch"
         | "pr"
         | "reviewer"
+        | "node"
       >
     >;
   }): Promise<WorkItem> {

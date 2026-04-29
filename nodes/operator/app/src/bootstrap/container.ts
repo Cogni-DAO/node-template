@@ -94,6 +94,10 @@ import {
   OpenAiCompatibleModelProvider,
   PlatformModelProvider,
 } from "@/adapters/server/ai/providers";
+import {
+  DoltgresNotConfiguredError,
+  getDoltgresWorkItemsAdapter,
+} from "@/adapters/server/db/doltgres/client";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
 import { OpenRouterFundingAdapter } from "@/adapters/server/treasury/openrouter-funding.adapter";
@@ -146,6 +150,7 @@ import type {
   ExecutionRequestPort,
   GraphRunRepository,
   ScheduleUserPort,
+  WorkItemsDoltgresPort,
 } from "@/ports/server";
 import {
   getDaoTreasuryAddress,
@@ -215,6 +220,8 @@ export interface Container {
   attributionStore: AttributionStore;
   /** Work item queries — reads from markdown files via WorkItemQueryPort */
   workItemQuery: WorkItemQueryPort;
+  /** Doltgres-backed work-items API surface — task.0423 v0. Throws if DOLTGRES_URL is unset. */
+  doltgresWorkItems: WorkItemsDoltgresPort;
   /** Run event streaming — publish/subscribe via Redis Streams */
   runStream: RunStreamPort;
   /** Node-level event streaming — undefined when REDIS_URL not set */
@@ -598,6 +605,22 @@ function createContainer(): Container {
     log.warn("Knowledge store not configured (DOLTGRES_URL not set)");
   }
 
+  let doltgresWorkItems: WorkItemsDoltgresPort;
+  try {
+    doltgresWorkItems = getDoltgresWorkItemsAdapter();
+  } catch (e) {
+    if (!(e instanceof DoltgresNotConfiguredError)) throw e;
+    const notConfigured = () => {
+      throw new DoltgresNotConfiguredError();
+    };
+    doltgresWorkItems = {
+      get: notConfigured,
+      list: notConfigured,
+      create: notConfigured,
+      patch: notConfigured,
+    };
+  }
+
   // ToolSource with real implementations (per CAPABILITY_INJECTION)
   const toolBindings = createToolBindings({
     knowledgeCapability,
@@ -778,6 +801,7 @@ function createContainer(): Container {
     ),
     attributionStore: new DrizzleAttributionAdapter(serviceDb, getScopeId()),
     workItemQuery: workItemAdapter,
+    doltgresWorkItems,
     runStream,
     nodeStream,
     get webhookRegistrations() {
