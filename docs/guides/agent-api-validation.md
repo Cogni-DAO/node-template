@@ -45,6 +45,28 @@ curl -s -X POST $BASE/api/v1/chat/completions \
 > virtual key that doesn't exist for newly registered agents. Routing via a named graph uses
 > the platform key instead. This is a known gap — see shortcomings below.
 
+## Work items — the contribution ledger
+
+Every code change is tied to exactly one work item. **1 work item ≈ 1 PR.** Prefer adopting an existing item over creating one (anti-sprawl). Items stay lean — a one-line `outcome` describing successful E2E validation.
+
+```bash
+# Discover open work
+curl -H "Authorization: Bearer $API_KEY" \
+  "$BASE/api/v1/work/items?statuses=needs_implement,needs_design"
+
+# Create only when nothing fits (server allocates id ≥ 5000)
+curl -X POST $BASE/api/v1/work/items \
+  -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+  -d '{"type":"task","title":"<short>","node":"operator","summary":"<why>"}'
+
+# PATCH as you progress — every write audited in dolt_log
+curl -X PATCH $BASE/api/v1/work/items/$ID \
+  -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+  -d '{"set":{"branch":"feat/...","pr":"<url>","status":"needs_merge"}}'
+```
+
+**Lifecycle close gate:** PATCH `status=done` only after PR merges to `main`. Pre-merge stays `needs_merge`; rejected review flips back to `needs_implement`.
+
 ## Available graphs (vNext registry)
 
 Graphs are currently discoverable only via session auth (`GET /api/v1/ai/agents`). Machine agents

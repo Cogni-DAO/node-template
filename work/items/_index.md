@@ -53,7 +53,6 @@
 | 0 | 3 | 2 | needs_merge | task.0294 | Policy-gated release: kill auto-release PR conveyor belt | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 4 | 2 | needs_design | bug.0037 | Gateway proxy billing records $0 cost — x-litellm-response-cost header absent for streaming | Unified Graph Launch | proj.unified-graph-launch |
 | 0 | 5 | 3 | needs_design | bug.0056 | Thread switch aborts in-flight stream — credits consumed, response lost to user | Thread Persistence | proj.thread-persistence |
-| 0 | 5 | 3 | done | task.0428 | Doltgres work-item create/read/patch API — new items only (v0) | DAO Agentic Project Management | proj.agentic-project-management |
 | 0 | 6 | 2 | needs_implement | bug.0088 | OpenClaw gateway LLM calls missing billing headers — Discord + subagent calls unbilled |  |  |
 | 0 | 7 | 1 | needs_triage | bug.0067 | OpenClaw model allowlist blocks openrouter/auto — governance sessions.patch failures at 75% rate |  |  |
 | 0 | 7 | 2 | needs_design | task.0152 | Migrate /triage + /implement skills to use WorkItemPort | DAO Agentic Project Management | proj.agentic-project-management |
@@ -373,6 +372,7 @@
 | 0 | task.0415 | Speed up `pnpm check:fast` — collapse to one turbo DAG, drop test serialization, cache docs/db checks |  |  |
 | 0 | bug.0418 | Polymarket CLOB rejects 100% of placeOrder calls with reason="order_version_mismatch" | Cogni Poly | proj.poly-copy-trading |
 | 0 | task.0419 | PrReviewWorkflowInput Zod schema + contract test — fix modelRef-shape regression class | VCS Integration | proj.vcs-integration |
+| 0 | task.0428 | Doltgres work-item create/read/patch API — new items only (v0) | DAO Agentic Project Management | proj.agentic-project-management |
 | 1 | task.0006 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0007 | Billing enforcement decorator at GraphExecutorPort level | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0010 | OpenClaw gateway model selection — session-level override or agent-per-specialty | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
