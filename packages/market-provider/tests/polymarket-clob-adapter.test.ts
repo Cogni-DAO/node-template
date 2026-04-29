@@ -929,6 +929,44 @@ describe("PolymarketClobAdapter — observability", () => {
     expect(errLog?.obj.error_code).toBe(POLY_CLOB_ERROR_CODES.fokNoMatch);
   });
 
+  it("placeOrder reclassifies FOK success-with-zero-fill as fok_no_match (bug.0420)", async () => {
+    const { logger, calls } = makeRecordingLogger();
+    const metrics = createRecordingMetrics();
+    // Observed live 2026-04-29 (PR #1118 follow-up): CLOB can return
+    // `{success:true, orderID:"0x..", makingAmount:"0"}` when FOK accepts the
+    // order shape but no liquidity matches at limit_price. Without this
+    // reclassification the mirror logged outcome=placed for a fill that
+    // acquired zero shares.
+    const createAndPostMarketOrder = vi.fn().mockResolvedValue({
+      success: true,
+      orderID: "0x220cd5d9",
+      status: "matched",
+      makingAmount: "0",
+    });
+    const adapter = makeAdapter(
+      { createAndPostMarketOrder },
+      { logger, metrics }
+    );
+
+    await expect(adapter.placeOrder(BASE_INTENT)).rejects.toThrow(
+      /FOK matched zero shares/
+    );
+
+    const rejects = metrics.emissions.filter(
+      (e) =>
+        e.kind === "counter" &&
+        e.name === POLY_CLOB_METRICS.placeTotal &&
+        e.labels.result === "rejected"
+    );
+    expect(rejects).toHaveLength(1);
+    expect(rejects[0]?.labels.error_code).toBe(
+      POLY_CLOB_ERROR_CODES.fokNoMatch
+    );
+    const errLog = calls.find((c) => c.level === "error");
+    expect(errLog?.obj.error_code).toBe(POLY_CLOB_ERROR_CODES.fokNoMatch);
+    expect(errLog?.obj.reason).toBe("fok_zero_fill");
+  });
+
   it("placeOrder with missing token_id emits error metric and log before throwing", async () => {
     const { logger, calls } = makeRecordingLogger();
     const metrics = createRecordingMetrics();
