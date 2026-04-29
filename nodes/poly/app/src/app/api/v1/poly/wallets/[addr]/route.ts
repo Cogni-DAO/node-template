@@ -17,7 +17,7 @@ import {
   WalletAnalysisQuerySchema,
   type WalletAnalysisResponse,
   WalletAnalysisResponseSchema,
-} from "@cogni/node-contracts";
+} from "@cogni/poly-node-contracts";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";

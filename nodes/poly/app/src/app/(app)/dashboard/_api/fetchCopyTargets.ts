@@ -18,7 +18,7 @@ import type {
   PolyCopyTradeTargetCreateOutput,
   PolyCopyTradeTargetDeleteOutput,
   PolyCopyTradeTargetsOutput,
-} from "@cogni/node-contracts";
+} from "@cogni/poly-node-contracts";
 
 export type {
   PolyCopyTradeTarget,

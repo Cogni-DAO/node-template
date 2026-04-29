@@ -21,7 +21,7 @@ import type {
   PolyWalletGrantsGetOutput,
   PolyWalletGrantsPutInput,
   PolyWalletGrantsPutOutput,
-} from "@cogni/node-contracts";
+} from "@cogni/poly-node-contracts";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 

@@ -18,4 +18,4 @@ export {
   PolyResearchCandidateStatsSchema,
   type PolyResearchReport,
   PolyResearchReportSchema,
-} from "@cogni/node-contracts";
+} from "@cogni/poly-node-contracts";

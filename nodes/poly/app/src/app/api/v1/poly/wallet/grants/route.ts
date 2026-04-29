@@ -25,7 +25,7 @@ import {
   polyWalletGrantsErrorOutput,
   polyWalletGrantsGetOperation,
   polyWalletGrantsPutOperation,
-} from "@cogni/node-contracts";
+} from "@cogni/poly-node-contracts";
 import { NextResponse } from "next/server";
 import {
   getWalletGrantsFacade,

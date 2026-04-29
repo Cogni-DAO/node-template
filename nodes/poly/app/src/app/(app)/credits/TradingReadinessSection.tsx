@@ -30,7 +30,7 @@
 
 "use client";
 
-import type { PolyWalletEnableTradingOutput } from "@cogni/node-contracts";
+import type { PolyWalletEnableTradingOutput } from "@cogni/poly-node-contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CheckCircle2, Circle, Loader2, XCircle } from "lucide-react";
 import type { ReactElement } from "react";

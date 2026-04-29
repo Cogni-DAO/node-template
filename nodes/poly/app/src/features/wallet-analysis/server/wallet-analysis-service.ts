@@ -18,6 +18,15 @@
  * @public
  */
 
+import {
+  PolymarketClobPublicClient,
+  PolymarketDataApiClient,
+} from "@cogni/poly-market-provider/adapters/polymarket";
+import {
+  computeWalletMetrics,
+  type MarketResolutionInput,
+  mapExecutionPositions,
+} from "@cogni/poly-market-provider/analysis";
 import type {
   PolyWalletExecutionOutput,
   PolyWalletOverviewInterval,
@@ -30,17 +39,8 @@ import type {
   WalletExecutionLifecycleState,
   WalletExecutionPosition,
   WalletExecutionWarning,
-} from "@cogni/node-contracts";
-import { WALLET_EXECUTION_TERMINAL_LIFECYCLE_STATES } from "@cogni/node-contracts";
-import {
-  PolymarketClobPublicClient,
-  PolymarketDataApiClient,
-} from "@cogni/poly-market-provider/adapters/polymarket";
-import {
-  computeWalletMetrics,
-  type MarketResolutionInput,
-  mapExecutionPositions,
-} from "@cogni/poly-market-provider/analysis";
+} from "@cogni/poly-node-contracts";
+import { WALLET_EXECUTION_TERMINAL_LIFECYCLE_STATES } from "@cogni/poly-node-contracts";
 import pLimit from "p-limit";
 import { clearTtlCacheByPrefix, coalesce } from "./coalesce";
 import { getTradingWalletPnlHistory } from "./trading-wallet-overview-service";

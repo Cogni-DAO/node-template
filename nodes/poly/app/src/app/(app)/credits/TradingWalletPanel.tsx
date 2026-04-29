@@ -38,7 +38,7 @@
 import type {
   PolyWalletBalancesOutput,
   PolyWalletStatusOutput,
-} from "@cogni/node-contracts";
+} from "@cogni/poly-node-contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowRight, Info } from "lucide-react";
 import Link from "next/link";

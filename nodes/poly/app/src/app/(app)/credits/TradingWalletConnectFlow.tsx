@@ -27,7 +27,7 @@
 
 "use client";
 
-import type { PolyWalletConnectOutput } from "@cogni/node-contracts";
+import type { PolyWalletConnectOutput } from "@cogni/poly-node-contracts";
 import { Loader2 } from "lucide-react";
 import { type ReactElement, useEffect, useState } from "react";
 

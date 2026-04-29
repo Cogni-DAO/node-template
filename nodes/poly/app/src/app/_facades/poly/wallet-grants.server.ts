@@ -22,14 +22,14 @@
 
 import { withTenantScope } from "@cogni/db-client";
 import { toUserId, userActor } from "@cogni/ids";
+import type { SessionUser } from "@cogni/node-shared";
+import { polyWalletGrants } from "@cogni/poly-db-schema";
 import type {
   PolyWalletGrantsErrorCode,
   PolyWalletGrantsGetOutput,
   PolyWalletGrantsPutInput,
   PolyWalletGrantsPutOutput,
-} from "@cogni/node-contracts";
-import type { SessionUser } from "@cogni/node-shared";
-import { polyWalletGrants } from "@cogni/poly-db-schema";
+} from "@cogni/poly-node-contracts";
 import { and, desc, gt, isNull, or, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 

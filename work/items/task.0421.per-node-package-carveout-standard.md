@@ -83,20 +83,21 @@ The package is already named `@cogni/poly-wallet`; this batch is purely a folder
 - [x] Fixed two test files referencing `__dirname`-relative `../../../docs/research/fixtures/...` — added 2 levels for the deeper move (`../../../../../docs/...`)
 - [x] Fixed `nodes/poly/app/tests/unit/packages/market-provider/position-timelines.test.ts` relative imports — caught + repaired a double-prefix (`nodes/poly/nodes/poly/...`) introduced by overlapping seds
 - [x] `pnpm install` → `pnpm packages:build` green → `@cogni/poly-market-provider` 163 tests pass, `position-timelines` 3 tests pass, `@cogni/poly-app typecheck` clean, dep-cruiser config parses
-- [ ] Commit: `refactor(poly): rename @cogni/market-provider → @cogni/poly-market-provider, move under nodes/poly/packages/`
+- [x] Commit: `refactor(poly): rename @cogni/market-provider → @cogni/poly-market-provider (task.0421 batch 2)` — `d06a6daba`
 
-### Batch 3 — Carve out `@cogni/poly-node-contracts` (13 contracts, ~26 importers)
+### Batch 3 — Carve out `@cogni/poly-node-contracts` (13 contracts; symbol classifier built from actual exports, not just `Poly*` prefix)
 
-The 13 `poly.*.ts` contracts in shared `packages/node-contracts/src/` need their own node-scoped package so future poly contract changes don't trip the operator domain.
-
-- [ ] Scaffold `nodes/poly/packages/node-contracts/` mirroring `packages/node-contracts/` shape (`package.json` name `@cogni/poly-node-contracts`, `tsconfig.json`, `src/`, exports map, build wiring)
-- [ ] `git mv packages/node-contracts/src/poly.*.ts nodes/poly/packages/node-contracts/src/` (×13 files)
-- [ ] Update shared `packages/node-contracts/src/index.ts`: drop the 13 poly re-exports
-- [ ] Update `nodes/poly/packages/node-contracts/src/index.ts`: re-export the 13 contracts
-- [ ] Find-replace in poly importers: `from '@cogni/node-contracts'` (any line that imports a `poly*` symbol) → `from '@cogni/poly-node-contracts'`. Audit count: ~26 files.
-- [ ] Add `@cogni/poly-node-contracts` to `nodes/poly/app/package.json` deps
-- [ ] Update root `.dependency-cruiser.cjs` if it has rules on the poly contract paths
-- [ ] `pnpm install` → targeted: `pnpm --filter @cogni/poly-node-contracts test typecheck` + `pnpm --filter @cogni/node-contracts test typecheck` (shared still valid) + `pnpm --filter @cogni/poly-app typecheck`
+- [x] Scaffolded `nodes/poly/packages/node-contracts/` (`package.json`, `tsconfig.json`, `tsup.config.ts`, `src/index.ts`, `AGENTS.md` explaining the boundary)
+- [x] `git mv packages/node-contracts/src/poly.*.ts nodes/poly/packages/node-contracts/src/` (13 files)
+- [x] Shared `packages/node-contracts/src/index.ts`: dropped 13 poly re-exports, replaced with one-line breadcrumb comment
+- [x] New `nodes/poly/packages/node-contracts/src/index.ts`: re-exports the 13 contracts
+- [x] Wrote import-splitter (`/tmp/split_poly_imports_v2.py`) that builds the symbol allowlist from the moved files (96 symbols incl. `Poly*` AND `Wallet*` / `WALLET_*` exports the v1 prefix-match missed). 16 importer files split correctly.
+- [x] Caught one missed `export {…} from "@cogni/node-contracts"` re-export in `nodes/poly/graphs/src/graphs/poly-research/output-schema.ts` — splitter only handled `import` form. Fixed manually + added `@cogni/poly-node-contracts` to `nodes/poly/graphs/package.json` deps.
+- [x] `nodes/poly/app/package.json`: added `@cogni/poly-node-contracts` workspace dep
+- [x] `tsconfig.json`: registered `./nodes/poly/packages/node-contracts`
+- [x] `.dependency-cruiser.cjs`: no rules referenced poly contract paths — nothing to update
+- [x] Boundary audit clean: nothing outside `nodes/poly/**` imports `@cogni/poly-node-contracts`; shared `node-contracts` does NOT depend on poly-scoped pkg
+- [x] `pnpm install` → `pnpm packages:build` green (35 pkgs) → `@cogni/poly-node-contracts` typecheck clean → `@cogni/node-contracts` typecheck clean → `@cogni/poly-graphs` typecheck clean → `@cogni/poly-app` typecheck clean → poly-app unit suite 1129/1129 pass + 15 skipped + 1 contract test 6/6 pass
 - [ ] Commit: `refactor(poly): carve poly contracts into @cogni/poly-node-contracts under nodes/poly/packages/`
 
 ### Batch 4 — Script move + standard codification

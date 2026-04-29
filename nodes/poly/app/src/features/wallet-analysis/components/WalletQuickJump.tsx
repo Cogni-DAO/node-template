@@ -17,7 +17,7 @@
 
 "use client";
 
-import { PolyAddressSchema } from "@cogni/node-contracts";
+import { PolyAddressSchema } from "@cogni/poly-node-contracts";
 import { ArrowRight, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {

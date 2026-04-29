@@ -11,7 +11,7 @@
  * @internal
  */
 
-import { PolySyncHealthResponseSchema } from "@cogni/node-contracts";
+import { PolySyncHealthResponseSchema } from "@cogni/poly-node-contracts";
 import { describe, expect, it } from "vitest";
 
 describe("PolySyncHealthResponseSchema", () => {
