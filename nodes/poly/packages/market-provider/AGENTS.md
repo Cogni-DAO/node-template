@@ -9,13 +9,13 @@
 
 ## Purpose
 
-Standalone workspace package (`@cogni/market-provider`) providing a typed port for prediction market platforms (Polymarket, Kalshi). Covers the full provider lifecycle: read markets (Crawl) and submit orders (Run — Polymarket only). Adapters use constructor-injected credentials aligned with the tenant-connections spec. The CLOB adapter takes a viem `LocalAccount` (from `@privy-io/node/viem#createViemAccount`) via constructor — no custom signer port (see task.0315 CP3.1.5).
+Standalone workspace package (`@cogni/poly-market-provider`) providing a typed port for prediction market platforms (Polymarket, Kalshi). Covers the full provider lifecycle: read markets (Crawl) and submit orders (Run — Polymarket only). Adapters use constructor-injected credentials aligned with the tenant-connections spec. The CLOB adapter takes a viem `LocalAccount` (from `@privy-io/node/viem#createViemAccount`) via constructor — no custom signer port (see task.0315 CP3.1.5).
 
 ## Pointers
 
-- [task.0230](../../work/items/task.0230.market-data-package.md) — implementation work item
-- [Monitoring Engine Spec](../../docs/spec/monitoring-engine.md) — observation pipeline
-- [proj.poly-prediction-bot](../../work/projects/proj.poly-prediction-bot.md) — parent project
+- [task.0230](../../../../work/items/task.0230.market-data-package.md) — implementation work item
+- [Monitoring Engine Spec](../../../../docs/spec/monitoring-engine.md) — observation pipeline
+- [proj.poly-prediction-bot](../../../../work/projects/proj.poly-prediction-bot.md) — parent project
 
 ## Boundaries
 
@@ -39,7 +39,7 @@ Standalone workspace package (`@cogni/market-provider`) providing a typed port f
 
 ## Public Surface
 
-**Root barrel** (`@cogni/market-provider`):
+**Root barrel** (`@cogni/poly-market-provider`):
 
 - Types: `MarketProviderPort`, `MarketCredentials`, `MarketProviderConfig`, `NormalizedMarket`, `MarketProvider`, `ListMarketsParams`, `MarketOutcome`, `OrderIntent`, `OrderReceipt`, `OrderStatus`, `OrderSide`, `Fill`, `FillSource`, `GetOrderResult`
 - Schemas: `NormalizedMarketSchema`, `MarketProviderSchema`, `ListMarketsParamsSchema`, `MarketOutcomeSchema`, `OrderIntentSchema`, `OrderReceiptSchema`, `OrderStatusSchema`, `OrderSideSchema`, `FillSchema`, `FillSourceSchema`

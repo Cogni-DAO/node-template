@@ -2,7 +2,7 @@
 id: task.0421
 type: task
 title: "Per-node package carve-out standard — `nodes/<X>/packages/*` ownership rules + first carve-out (poly)"
-status: needs_design
+status: needs_merge
 priority: 1
 rank: 2
 estimate: 5
@@ -14,7 +14,7 @@ spec_refs:
 assignees: derekg1729
 credit:
 project: proj.cicd-services-gitops
-branch:
+branch: refactor/task-0421-poly-package-carveout
 pr:
 reviewer:
 revision: 0
