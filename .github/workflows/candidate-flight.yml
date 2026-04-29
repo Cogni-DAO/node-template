@@ -190,7 +190,7 @@ jobs:
         env: [candidate-a]
         node: ${{ fromJson(needs.decide.outputs.targets_json) }}
     concurrency:
-      group: flight-${{ matrix.env }}-${{ matrix.node }}
+      group: candidate-flight-pipeline-${{ matrix.env }}-${{ matrix.node }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
@@ -347,7 +347,7 @@ jobs:
         env: [candidate-a]
         node: ${{ fromJson(needs.decide.outputs.targets_json) }}
     concurrency:
-      group: verify-candidate-${{ matrix.env }}-${{ matrix.node }}
+      group: candidate-flight-pipeline-${{ matrix.env }}-${{ matrix.node }}
       cancel-in-progress: false
     runs-on: ubuntu-latest
     environment: candidate-a
