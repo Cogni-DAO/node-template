@@ -2,7 +2,7 @@
 id: task.0422
 type: task
 title: "Poly data user-pnl-summary — agent's default wallet snapshot tool"
-status: needs_merge
+status: done
 priority: 1
 rank: 5
 estimate: 2
@@ -15,8 +15,8 @@ credit:
 project: proj.poly-prediction-bot
 branch: feat/poly-wallet-summary-tool
 pr: https://github.com/Cogni-DAO/node-template/pull/1124
-reviewer:
-revision: 0
+reviewer: self-review-pass-after-inline-fixes
+revision: 1
 blocked_by: []
 deploy_verified: true
 created: 2026-04-28
@@ -92,3 +92,20 @@ curl -X POST https://poly-test.cognidao.org/api/v1/ai/chat \
 - Once PR #1120 merges → small PR collapsing the poly-internal `pnl-curve-metrics.ts` into a re-import from `@cogni/market-provider/analysis`.
 - Doltgres `poly_wallet_rankings` table (charter v0.5 → vNext) — file when re-running the screen weekly produces enough query patterns to justify a dedicated table.
 - Category-filtered `core__wallet_top_traders` extension — improves discovery sweeps now that the per-wallet snapshot tool is fast.
+
+## Review feedback (resolved)
+
+Inline fixes landed in commit `4af7846c7` after self-review:
+
+- **`effect: "read_only"` was wrong** — the tool writes to the knowledge store on cache-miss; corrected to `"state_change"` (per `packages/ai-core/src/tooling/types.ts`). Today's runtime ignores `effect` but future policy plumbing will read it.
+- **Header `EFFECT_READ_WRITE` invariant was non-existent** — aligned to `EFFECT_STATE_CHANGE`.
+- **Stale `task.0419` reference in module Links:** — the ID was consumed by an unrelated merged PR; updated to `task.0422`.
+- **Misleading `user` input description** — claimed wrong addresses return `degenerate=true`, but the Zod regex actually rejects pre-execute. Rewritten to describe the realistic EOA-vs-Safe-proxy failure mode (which IS observable end-to-end).
+
+Non-blocking observations deferred to follow-up PRs:
+
+- Cache-miss-write `try/catch` swallows errors silently (no log) — observability gap. Consider a `console.warn` or structured-log call on write failure.
+- Cache id `poly-wallet-summary:<wallet>` does not include `charterVersion`. A deploy that bumps the charter version with the same wallet ID can still serve a stale verdict for up to 24h. Mitigation: append `CHARTER_VERSION` to the cache id, or invalidate on version skew at read.
+- Cache read at L165–183 parses cached JSON and casts to the output type without re-validating through `PolyDataUserPnlSummaryOutputSchema.safeParse()`. A corrupted but JSON-valid row would leak through with the wrong shape.
+- No tests for the tool itself (only the pure reducer). Coverage gap on cache-hit / cache-miss / forceRefresh / fromCache paths.
+- `confidencePct: Math.round(confidence * 100)` could panic on NaN if `summarize()` ever regresses on numerical robustness. Guard with `Number.isFinite`.
