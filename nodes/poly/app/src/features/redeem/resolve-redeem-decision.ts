@@ -50,6 +50,26 @@ export interface ResolvedRedeemCandidate {
 }
 
 /**
+ * Stable ordering for `enqueue` of per-condition candidates: `redeem`
+ * decisions first, then anything else. The redeem-job table's unique key is
+ * `(funder, condition_id)` with `ON CONFLICT DO NOTHING`, so a sibling
+ * `skip:losing_outcome` candidate that races in first will lock the
+ * condition into `lifecycle=loser` and the winner's enqueue silently
+ * no-ops as `alreadyExisted`. Sorting redeems first makes the redeem row
+ * always claim the slot, regardless of `listUserPositions` iteration
+ * order (bug.0431).
+ */
+export function sortRedeemCandidatesForEnqueue(
+  candidates: ReadonlyArray<ResolvedRedeemCandidate>
+): ResolvedRedeemCandidate[] {
+  return [...candidates].sort((a, b) => {
+    const ra = a.decision.kind === "redeem" ? 0 : 1;
+    const rb = b.decision.kind === "redeem" ? 0 : 1;
+    return ra - rb;
+  });
+}
+
+/**
  * Look up funder's positions matching `conditionId`, run chain reads, and
  * compute a `decideRedeem` decision per matching position. Returns one
  * candidate per held outcome side (binary markets typically yield 1).
