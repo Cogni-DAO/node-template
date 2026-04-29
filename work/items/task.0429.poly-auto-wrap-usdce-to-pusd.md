@@ -173,3 +173,7 @@ After those three: contract + route + UI toggle.
 - Don't auto-enable. Surprising a user with on-chain transactions they didn't explicitly authorize is a trust-violation, even when the underlying allowance is already granted.
 - Log at INFO level on the happy path. This is not noise — operators will want to grep for "did auto-wrap fire today" without reaching for traces.
 - Consider rate-limiting at the adapter level (e.g. min 30s between wraps per tenant) to absorb flapping balances and avoid burning gas on dust drift; primary protection is the floor + single-flight.
+
+## PR / Links
+
+- Handoff: [handoff](../handoffs/task.0429.handoff.md)
