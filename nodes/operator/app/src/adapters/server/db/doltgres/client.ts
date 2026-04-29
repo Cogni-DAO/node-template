@@ -3,23 +3,20 @@
 
 /**
  * Module: `@adapters/server/db/doltgres/client`
- * Purpose: Lazy operator-Doltgres `Database` singleton — typed drizzle client over `knowledge_operator`.
- * Scope: Wraps `buildDoltgresClient` (postgres.js) + `drizzle()` with the operator-doltgres-schema. Mirrors `drizzle.client.ts` shape.
+ * Purpose: Lazy operator-Doltgres `Sql` singleton + adapter wiring for the work_items API.
+ * Scope: Builds a postgres.js client and a `DoltgresOperatorWorkItemAdapter`. Mirrors `drizzle.client.ts` shape.
  * Invariants: Single connection per process; lazy initialization; throws `DoltgresNotConfiguredError` when `DOLTGRES_URL` is unset.
  * Side-effects: IO (database connection on first access).
- * Links: docs/spec/work-items-port.md, work/items/task.0423.doltgres-work-items-source-of-truth.md
+ * Links: docs/spec/work-items-port.md, work/items/task.0424.doltgres-work-items-source-of-truth.md
  * @internal
  */
 
-import * as schema from "@cogni/operator-doltgres-schema";
-import { drizzle, type PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import postgres from "postgres";
+import { buildDoltgresClient } from "@cogni/knowledge-store/adapters/doltgres";
+import type { Sql } from "postgres";
 
 import { serverEnv } from "@/shared/env";
 
 import { DoltgresOperatorWorkItemAdapter } from "./work-items-adapter";
-
-export type DoltgresDb = PostgresJsDatabase<typeof schema>;
 
 export class DoltgresNotConfiguredError extends Error {
   constructor() {
@@ -30,34 +27,27 @@ export class DoltgresNotConfiguredError extends Error {
   }
 }
 
-let _db: DoltgresDb | null = null;
+let _sql: Sql | null = null;
 let _adapter: DoltgresOperatorWorkItemAdapter | null = null;
 
-function createDb(): DoltgresDb {
+function createSql(): Sql {
   const env = serverEnv();
   if (!env.DOLTGRES_URL) {
     throw new DoltgresNotConfiguredError();
   }
-  const sql = postgres(env.DOLTGRES_URL, {
-    max: 5,
-    idle_timeout: 30,
-    connect_timeout: 10,
-    fetch_types: false,
-    prepare: false,
-    connection: {
-      application_name: `cogni_work_items_${env.SERVICE_NAME ?? "app"}`,
-    },
+  return buildDoltgresClient({
+    connectionString: env.DOLTGRES_URL,
+    applicationName: `cogni_work_items_${env.SERVICE_NAME ?? "app"}`,
   });
-  return drizzle(sql, { schema });
 }
 
-export function getDoltgresDb(): DoltgresDb {
-  if (!_db) _db = createDb();
-  return _db;
+export function getDoltgresSql(): Sql {
+  if (!_sql) _sql = createSql();
+  return _sql;
 }
 
 export function getDoltgresWorkItemsAdapter(): DoltgresOperatorWorkItemAdapter {
   if (!_adapter)
-    _adapter = new DoltgresOperatorWorkItemAdapter(getDoltgresDb());
+    _adapter = new DoltgresOperatorWorkItemAdapter(getDoltgresSql());
   return _adapter;
 }

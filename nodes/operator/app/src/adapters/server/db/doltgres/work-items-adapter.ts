@@ -3,25 +3,20 @@
 
 /**
  * Module: `@adapters/server/db/doltgres/work-items-adapter`
- * Purpose: Operator-local Doltgres adapter for work_items — implements the v0 surface (Query + create + patch) for task.0423.
- * Scope: Reads/writes the `work_items` table in `knowledge_operator`. Auto-commits on every write per AUTO_COMMIT_ON_WRITE.
+ * Purpose: Operator-local Doltgres adapter for work_items — implements the v0 surface (Query + create + patch) for task.0424.
+ * Scope: Reads/writes `work_items` in `knowledge_operator`. Auto-commits on every write per AUTO_COMMIT_ON_WRITE.
  * Invariants:
- *   - DRIZZLE_NATIVE: Uses drizzle-orm tagged queries — Doltgres 0.56+ supports the extended wire protocol; no `sql.unsafe` workarounds.
+ *   - SQL_UNSAFE_TARGETED: All CRUD via sql.unsafe() with escapeValue() — postgres.js extended-protocol path raises `unhandled message "&{}"` on Doltgres 0.56.2 for parameterized SELECT/INSERT/UPDATE. Same workaround as `@cogni/knowledge-store` adapter. Removable when upstream closes the gap.
  *   - AUTO_COMMIT_ON_WRITE: Each create/patch issues `dolt_commit('-Am', ...)` before returning.
- *   - AUTHOR_ATTRIBUTED: dolt_commit messages embed an `authorTag` string the route derives from `getSessionUser`.
- *   - ID_RANGE_RESERVED: Allocator floor is 5000 per type; `max(MAX(numeric_suffix), 4999) + 1`.
+ *   - AUTHOR_ATTRIBUTED: dolt_commit messages embed an `authorTag` derived from `getSessionUser`.
+ *   - ID_RANGE_RESERVED: Allocator floor is 5000 per type.
  *   - PATCH_ALLOWLIST: Only fields enumerated in `WorkItemsPatchSet` are mutable.
  *   - OPERATOR_LOCAL_ADAPTER_V0: Lives here, NOT in packages/work-items/.
- * Side-effects: IO (database reads/writes; dolt_commit calls)
- * Links: docs/spec/work-items-port.md, work/items/task.0423.doltgres-work-items-source-of-truth.md
+ * Side-effects: IO (database reads/writes; dolt_commit calls).
+ * Links: docs/spec/work-items-port.md, work/items/task.0424.doltgres-work-items-source-of-truth.md
  * @public
  */
 
-import {
-  type NewWorkItemRow,
-  type WorkItemRow,
-  workItems,
-} from "@cogni/operator-doltgres-schema";
 import type {
   ActorKind,
   SubjectRef,
@@ -32,66 +27,104 @@ import type {
   WorkQuery,
 } from "@cogni/work-items";
 import { toWorkItemId } from "@cogni/work-items";
-import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import type { Sql } from "postgres";
 
 import type {
   WorkItemsCreateInput,
   WorkItemsDoltgresPort,
   WorkItemsPatchInput,
+  WorkItemsPatchSet,
 } from "@/ports/server";
-
-import type { DoltgresDb } from "./client";
 
 const ID_FLOOR = 5000;
 
-// ── Row mapping ──────────────────────────────────────
+function escapeValue(val: unknown): string {
+  if (val === null || val === undefined) return "NULL";
+  if (typeof val === "number") {
+    if (!Number.isFinite(val)) throw new Error("Non-finite number");
+    return String(val);
+  }
+  if (typeof val === "boolean") return val ? "TRUE" : "FALSE";
+  if (val instanceof Date) return `'${val.toISOString()}'`;
+  if (Array.isArray(val) || typeof val === "object") {
+    return `'${JSON.stringify(val).replace(/\0/g, "").replace(/'/g, "''")}'::jsonb`;
+  }
+  return `'${String(val).replace(/\0/g, "").replace(/'/g, "''")}'`;
+}
 
 function actorOf(v: unknown): ActorKind {
   return v === "human" || v === "ai" ? v : "either";
 }
 
 function jsonArrayOf<T>(v: unknown): readonly T[] {
-  return Array.isArray(v) ? (v as T[]) : [];
+  if (v === null || v === undefined) return [];
+  if (Array.isArray(v)) return v as T[];
+  if (typeof v === "string") {
+    try {
+      const parsed = JSON.parse(v);
+      return Array.isArray(parsed) ? (parsed as T[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
 }
 
-function rowToWorkItem(row: WorkItemRow): WorkItem {
-  return {
-    id: toWorkItemId(row.id),
-    type: row.type as WorkItemType,
-    title: row.title,
-    status: row.status as WorkItemStatus,
-    node: row.node,
-    actor: actorOf((row as { actor?: unknown }).actor),
+function workItemIdOrNullable(v: unknown): WorkItemId | undefined {
+  return v ? toWorkItemId(String(v)) : undefined;
+}
+
+function strOrNullable(v: unknown): string | undefined {
+  return v === null || v === undefined ? undefined : String(v);
+}
+
+function numOrNullable(v: unknown): number | undefined {
+  if (v === null || v === undefined) return undefined;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : undefined;
+}
+
+function rowToWorkItem(row: Record<string, unknown>): WorkItem {
+  const required = {
+    id: toWorkItemId(String(row.id)),
+    type: String(row.type) as WorkItemType,
+    title: String(row.title),
+    status: String(row.status) as WorkItemStatus,
+    node: String(row.node ?? "shared"),
+    actor: actorOf(row.actor),
     assignees: jsonArrayOf<SubjectRef>(row.assignees),
     externalRefs: jsonArrayOf<WorkItem["externalRefs"][number]>(
-      row.externalRefs
+      row.external_refs
     ),
     labels: jsonArrayOf<string>(row.labels),
-    specRefs: jsonArrayOf<string>(row.specRefs),
-    revision: row.revision,
-    deployVerified: row.deployVerified,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    ...(row.priority != null && { priority: row.priority }),
-    ...(row.rank != null && { rank: row.rank }),
-    ...(row.estimate != null && { estimate: row.estimate }),
-    ...(row.summary != null && { summary: row.summary }),
-    ...(row.outcome != null && { outcome: row.outcome }),
-    ...(row.projectId != null && { projectId: toWorkItemId(row.projectId) }),
-    ...(row.parentId != null && { parentId: toWorkItemId(row.parentId) }),
-    ...(row.branch != null && { branch: row.branch }),
-    ...(row.pr != null && { pr: row.pr }),
-    ...(row.reviewer != null && { reviewer: row.reviewer }),
-    ...(row.blockedBy != null && { blockedBy: toWorkItemId(row.blockedBy) }),
-    ...(row.claimedByRun != null && { claimedByRun: row.claimedByRun }),
-    ...(row.claimedAt != null && {
-      claimedAt: row.claimedAt.toISOString(),
-    }),
-    ...(row.lastCommand != null && { lastCommand: row.lastCommand }),
+    specRefs: jsonArrayOf<string>(row.spec_refs),
+    revision: Number(row.revision ?? 0),
+    deployVerified: Boolean(row.deploy_verified ?? false),
+    createdAt: row.created_at ? String(row.created_at) : "",
+    updatedAt: row.updated_at ? String(row.updated_at) : "",
   };
+  const out: Record<string, unknown> = { ...required };
+  const optional = {
+    priority: numOrNullable(row.priority),
+    rank: numOrNullable(row.rank),
+    estimate: numOrNullable(row.estimate),
+    summary: strOrNullable(row.summary),
+    outcome: strOrNullable(row.outcome),
+    projectId: workItemIdOrNullable(row.project_id),
+    parentId: workItemIdOrNullable(row.parent_id),
+    branch: strOrNullable(row.branch),
+    pr: strOrNullable(row.pr),
+    reviewer: strOrNullable(row.reviewer),
+    blockedBy: workItemIdOrNullable(row.blocked_by),
+    claimedByRun: strOrNullable(row.claimed_by_run),
+    claimedAt: strOrNullable(row.claimed_at),
+    lastCommand: strOrNullable(row.last_command),
+  };
+  for (const [k, v] of Object.entries(optional)) {
+    if (v !== undefined) out[k] = v;
+  }
+  return out as WorkItem;
 }
-
-// ── ID allocation ────────────────────────────────────
 
 function parseSuffix(id: string, type: WorkItemType): number | null {
   const prefix = `${type}.`;
@@ -100,106 +133,119 @@ function parseSuffix(id: string, type: WorkItemType): number | null {
   return /^\d+$/.test(tail) ? Number.parseInt(tail, 10) : null;
 }
 
-// ── Adapter ──────────────────────────────────────────
+const PATCH_COLUMNS: Record<keyof WorkItemsPatchSet, string> = {
+  title: "title",
+  summary: "summary",
+  outcome: "outcome",
+  status: "status",
+  priority: "priority",
+  rank: "rank",
+  estimate: "estimate",
+  labels: "labels",
+  specRefs: "spec_refs",
+  branch: "branch",
+  pr: "pr",
+  reviewer: "reviewer",
+  node: "node",
+};
 
 export class DoltgresOperatorWorkItemAdapter implements WorkItemsDoltgresPort {
-  constructor(private readonly db: DoltgresDb) {}
+  constructor(private readonly sql: Sql) {}
 
   async get(id: WorkItemId): Promise<WorkItem | null> {
-    const rows = await this.db
-      .select()
-      .from(workItems)
-      .where(eq(workItems.id, id as string))
-      .limit(1);
-    return rows[0] ? rowToWorkItem(rows[0]) : null;
+    const rows = await this.sql.unsafe(
+      `SELECT * FROM work_items WHERE id = ${escapeValue(id as string)} LIMIT 1`
+    );
+    return rows.length > 0
+      ? rowToWorkItem(rows[0] as Record<string, unknown>)
+      : null;
   }
 
   async list(
     query: WorkQuery = {}
   ): Promise<{ items: WorkItem[]; nextCursor?: string }> {
-    const conds = [];
+    const conds: string[] = [];
 
     if (query.ids?.length) {
-      conds.push(
-        inArray(
-          workItems.id,
-          query.ids.map((id) => id as string)
-        )
-      );
+      const ids = query.ids.map((id) => escapeValue(id as string)).join(", ");
+      conds.push(`id IN (${ids})`);
     }
     if (query.types?.length) {
-      conds.push(inArray(workItems.type, [...query.types]));
+      conds.push(`type IN (${query.types.map(escapeValue).join(", ")})`);
     }
     if (query.statuses?.length) {
-      conds.push(inArray(workItems.status, [...query.statuses]));
+      conds.push(`status IN (${query.statuses.map(escapeValue).join(", ")})`);
     }
     if (query.projectId) {
-      conds.push(eq(workItems.projectId, query.projectId as string));
+      conds.push(`project_id = ${escapeValue(query.projectId as string)}`);
     }
     if (query.node) {
-      const nodes = Array.isArray(query.node) ? [...query.node] : [query.node];
-      conds.push(inArray(workItems.node, nodes));
+      const nodes = Array.isArray(query.node) ? query.node : [query.node];
+      conds.push(`node IN (${nodes.map(escapeValue).join(", ")})`);
     }
     if (query.text) {
-      const pat = `%${query.text}%`;
+      const escaped = query.text.toLowerCase().replace(/[%_\\]/g, "\\$&");
+      const pat = escapeValue(`%${escaped}%`);
       conds.push(
-        or(ilike(workItems.title, pat), ilike(workItems.summary, pat))
+        `(LOWER(title) LIKE ${pat} OR LOWER(COALESCE(summary,'')) LIKE ${pat})`
       );
     }
 
+    const where = conds.length > 0 ? `WHERE ${conds.join(" AND ")}` : "";
     const limit = Math.min(query.limit ?? 100, 500);
 
-    const rows = await this.db
-      .select()
-      .from(workItems)
-      .where(conds.length > 0 ? and(...conds) : undefined)
-      .orderBy(desc(workItems.createdAt))
-      .limit(limit);
-
-    return { items: rows.map(rowToWorkItem) };
+    const rows = await this.sql.unsafe(
+      `SELECT * FROM work_items ${where} ORDER BY created_at DESC LIMIT ${limit}`
+    );
+    return {
+      items: rows.map((r) => rowToWorkItem(r as Record<string, unknown>)),
+    };
   }
 
   async create(
     input: WorkItemsCreateInput,
     authorTag: string
   ): Promise<WorkItem> {
-    const idRows = await this.db
-      .select({ id: workItems.id })
-      .from(workItems)
-      .where(eq(workItems.type, input.type));
-
+    const idRows = await this.sql.unsafe(
+      `SELECT id FROM work_items WHERE type = ${escapeValue(input.type)}`
+    );
     let maxSuffix = ID_FLOOR - 1;
-    for (const r of idRows) {
-      const suffix = parseSuffix(r.id, input.type);
+    for (const r of idRows as ReadonlyArray<Record<string, unknown>>) {
+      const suffix = parseSuffix(String(r.id), input.type);
       if (suffix !== null && suffix > maxSuffix) maxSuffix = suffix;
     }
     const allocatedId = `${input.type}.${String(maxSuffix + 1).padStart(4, "0")}`;
 
-    const values: NewWorkItemRow = {
-      id: allocatedId,
-      type: input.type,
-      title: input.title,
-      status: "needs_triage",
-      node: input.node ?? "shared",
-      ...(input.summary !== undefined && { summary: input.summary }),
-      ...(input.outcome !== undefined && { outcome: input.outcome }),
-      ...(input.projectId !== undefined && {
-        projectId: input.projectId as string,
-      }),
-      ...(input.parentId !== undefined && {
-        parentId: input.parentId as string,
-      }),
-      ...(input.assignees && { assignees: [...input.assignees] }),
-      ...(input.labels && { labels: [...input.labels] }),
-      ...(input.specRefs && { specRefs: [...input.specRefs] }),
+    const cols: string[] = ["id", "type", "title", "status", "node"];
+    const vals: string[] = [
+      escapeValue(allocatedId),
+      escapeValue(input.type),
+      escapeValue(input.title),
+      escapeValue("needs_triage"),
+      escapeValue(input.node ?? "shared"),
+    ];
+    const addCol = (name: string, value: unknown) => {
+      if (value === undefined) return;
+      cols.push(name);
+      vals.push(escapeValue(value));
     };
 
-    const inserted = await this.db.insert(workItems).values(values).returning();
-    const row = inserted[0];
+    addCol("summary", input.summary);
+    addCol("outcome", input.outcome);
+    addCol("project_id", input.projectId);
+    addCol("parent_id", input.parentId);
+    if (input.assignees) addCol("assignees", input.assignees);
+    if (input.labels) addCol("labels", input.labels);
+    if (input.specRefs) addCol("spec_refs", input.specRefs);
+
+    const inserted = await this.sql.unsafe(
+      `INSERT INTO work_items (${cols.join(", ")}) VALUES (${vals.join(", ")}) RETURNING *`
+    );
+    const row = inserted[0] as Record<string, unknown> | undefined;
     if (!row) throw new Error("INSERT returned no row");
 
-    await this.db.execute(
-      sql`SELECT dolt_commit('-Am', ${`task.0423: create ${allocatedId} by ${authorTag}`})`
+    await this.sql.unsafe(
+      `SELECT dolt_commit('-Am', ${escapeValue(`task.0424: create ${allocatedId} by ${authorTag}`)})`
     );
 
     return rowToWorkItem(row);
@@ -209,32 +255,28 @@ export class DoltgresOperatorWorkItemAdapter implements WorkItemsDoltgresPort {
     input: WorkItemsPatchInput,
     authorTag: string
   ): Promise<WorkItem | null> {
-    const set: Partial<NewWorkItemRow> = { updatedAt: new Date() };
-    const s = input.set;
-    if (s.title !== undefined) set.title = s.title;
-    if (s.summary !== undefined) set.summary = s.summary;
-    if (s.outcome !== undefined) set.outcome = s.outcome;
-    if (s.status !== undefined) set.status = s.status;
-    if (s.priority !== undefined) set.priority = s.priority;
-    if (s.rank !== undefined) set.rank = s.rank;
-    if (s.estimate !== undefined) set.estimate = s.estimate;
-    if (s.labels !== undefined) set.labels = [...s.labels];
-    if (s.specRefs !== undefined) set.specRefs = [...s.specRefs];
-    if (s.branch !== undefined) set.branch = s.branch;
-    if (s.pr !== undefined) set.pr = s.pr;
-    if (s.reviewer !== undefined) set.reviewer = s.reviewer;
-    if (s.node !== undefined) set.node = s.node;
+    const setClauses: string[] = [];
+    for (const [key, col] of Object.entries(PATCH_COLUMNS) as [
+      keyof WorkItemsPatchSet,
+      string,
+    ][]) {
+      const value = input.set[key];
+      if (value === undefined) continue;
+      setClauses.push(`${col} = ${escapeValue(value)}`);
+    }
+    if (setClauses.length === 0) {
+      return this.get(input.id);
+    }
+    setClauses.push("updated_at = NOW()");
 
-    const updated = await this.db
-      .update(workItems)
-      .set(set)
-      .where(eq(workItems.id, input.id as string))
-      .returning();
-    const row = updated[0];
+    const updated = await this.sql.unsafe(
+      `UPDATE work_items SET ${setClauses.join(", ")} WHERE id = ${escapeValue(input.id as string)} RETURNING *`
+    );
+    const row = updated[0] as Record<string, unknown> | undefined;
     if (!row) return null;
 
-    await this.db.execute(
-      sql`SELECT dolt_commit('-Am', ${`task.0423: patch ${input.id as string} by ${authorTag}`})`
+    await this.sql.unsafe(
+      `SELECT dolt_commit('-Am', ${escapeValue(`task.0424: patch ${input.id as string} by ${authorTag}`)})`
     );
 
     return rowToWorkItem(row);
