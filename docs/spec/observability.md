@@ -396,6 +396,42 @@ pnpm langfuse:trace
 
 ---
 
+## User-Reported Errors — "Send to Cogni" Intake
+
+**Status:** v0-of-v0 shipped (task.0426) — operator-only, inline persistence;
+**v1 (task.0420) adds Temporal worker + Loki window pull.**
+
+UI standard: any error surface (today: `(app)/error.tsx`,
+`(public)/error.tsx`; next: chat error bubbles, poly trade failures;
+eventually: toasts, form failures, fetch failures) renders the
+standard widget. One click POSTs to `/api/v1/error-report` (Zod
+contract: `error-report.v1.contract.ts`, **auth-required** — SIWE
+session OR agent Bearer key — per-IP rate-limited, hard byte caps).
+The smallest reusable widget shape for non-full-page surfaces is
+research-tracked in **spike.0424** and implemented in **task.0425**;
+v0-of-v0 ships only the full-page button on route boundaries.
+
+**Pipeline (v0-of-v0):**
+
+1. Click → `POST /api/v1/error-report` with the error context, the
+   route, and Next's `error.digest`.
+2. Route handler inserts a row into `error_reports` (Postgres,
+   SYSTEM_OWNED, no RLS) and emits a structured Pino line:
+   `{ event: "error_report.intake", trackingId, digest, route, build_sha, ... }`.
+3. Alloy ships the log line to Loki. Agents can join Loki ↔ DB ↔
+   deployed build via `digest` + `trackingId` + `build_sha`.
+
+**v1 additions (task.0420):** Temporal workflow `ErrorReportIngestWorkflow`
+takes ownership of the writes; one of its activities pulls the matching
+Loki window via a shared `LokiQueryPort` (in `packages/loki-query/`)
+and stores it on the row.
+
+**Drive the loop yourself:** hit `/dev/boom` on candidate-a, click "Send
+to Cogni", grep Loki for `event="error_report.intake"` at the deployed
+SHA. That's how you prove the loop works.
+
+---
+
 ## References
 
 - [Required Observability Spec](observability-requirements.md) - P0/P1 remediation plan for silent death detection
