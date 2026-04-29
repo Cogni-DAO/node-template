@@ -36,7 +36,10 @@ import { transition } from "@/core";
 import type { RedeemJobsPort } from "@/ports";
 
 import { decisionToEnqueueInput } from "./decision-to-enqueue-input";
-import { resolveRedeemCandidatesForCondition } from "./resolve-redeem-decision";
+import {
+  resolveRedeemCandidatesForCondition,
+  sortRedeemCandidatesForEnqueue,
+} from "./resolve-redeem-decision";
 
 interface LoggerLike {
   info: (obj: object, msg?: string) => void;
@@ -151,12 +154,14 @@ export class RedeemSubscriber {
       },
       "redeem-subscriber: condition resolved"
     );
-    const candidates = await resolveRedeemCandidatesForCondition({
-      funderAddress: this.deps.funderAddress,
-      conditionId,
-      publicClient: this.deps.publicClient,
-      dataApiClient: this.deps.dataApiClient,
-    });
+    const candidates = sortRedeemCandidatesForEnqueue(
+      await resolveRedeemCandidatesForCondition({
+        funderAddress: this.deps.funderAddress,
+        conditionId,
+        publicClient: this.deps.publicClient,
+        dataApiClient: this.deps.dataApiClient,
+      })
+    );
     for (const c of candidates) {
       this.deps.logger.info(
         {
