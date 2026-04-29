@@ -406,6 +406,7 @@ describe("PolymarketClobAdapter", () => {
     const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xresp",
       status: "matched",
+      makingAmount: "1",
     });
     const adapter = makeAdapter({
       createAndPostMarketOrder,
@@ -429,6 +430,7 @@ describe("PolymarketClobAdapter", () => {
     const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xfee",
       status: "matched",
+      makingAmount: "1",
     });
     const adapter = makeAdapter({ createAndPostMarketOrder, getFeeRateBps });
     await adapter.placeOrder(BASE_INTENT);
@@ -782,6 +784,7 @@ describe("PolymarketClobAdapter — observability", () => {
     const createAndPostMarketOrder = vi.fn().mockResolvedValue({
       orderID: "0xok",
       status: "matched",
+      makingAmount: "1",
     });
     const adapter = makeAdapter(
       { createAndPostMarketOrder },
