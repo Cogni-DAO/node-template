@@ -90,13 +90,11 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
         outcomeIndex: input.outcomeIndex,
         flavor: input.flavor,
         indexSet: input.indexSet,
+        collateralToken: input.collateralToken,
         expectedShares: input.expectedShares,
         expectedPayoutUsdc: input.expectedPayoutUsdc,
         lifecycleState: input.lifecycleState,
         ...(input.status !== undefined ? { status: input.status } : {}),
-        ...(input.collateralToken !== undefined
-          ? { collateralToken: input.collateralToken }
-          : {}),
       })
       .onConflictDoNothing({
         target: [polyRedeemJobs.funderAddress, polyRedeemJobs.conditionId],

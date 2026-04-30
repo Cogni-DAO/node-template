@@ -252,10 +252,7 @@ export class RedeemWorker {
     let txHash: `0x${string}`;
     try {
       if (args.kind === "ctf") {
-        // bug.0428: collateralToken comes from the job row, set at enqueue
-        // time by `inferCollateralTokenForPosition` (chain probe). Pre-fix
-        // this was hardcoded `POLYGON_USDC_E`, which silently zero-burned V2
-        // pUSD-collateralized positions.
+        // bug.0428: collateralToken from the job row (set at enqueue).
         txHash = await this.deps.walletClient.writeContract({
           address: POLYGON_CONDITIONAL_TOKENS,
           abi: polymarketCtfRedeemAbi,

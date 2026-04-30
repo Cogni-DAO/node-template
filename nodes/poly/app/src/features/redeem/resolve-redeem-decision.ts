@@ -50,9 +50,7 @@ export interface ResolvedRedeemCandidate {
   positionId: bigint;
   negativeRisk: boolean;
   decision: RedeemDecision;
-  /** Collateral that minted this position. Probed at enqueue time for
-   * vanilla CTF redeem decisions; defaults to USDC.e otherwise (neg-risk
-   * dispatch ignores it; skip decisions never reach dispatch). bug.0428. */
+  /** Collateral that minted this position; forwarded to `redeemPositions`. bug.0428. */
   collateralToken: `0x${string}`;
 }
 
@@ -161,9 +159,7 @@ export async function resolveRedeemCandidatesForCondition(deps: {
       negativeRisk: match.negativeRisk ?? false,
     });
 
-    // bug.0428: NegRisk dispatch ignores collateralToken; only vanilla CTF
-    // redeems need vintage. Probe only when the decision will actually
-    // dispatch as vanilla CTF.
+    // bug.0428: probe only for vanilla CTF redeems; NegRiskAdapter ignores collateralToken.
     const negativeRisk = match.negativeRisk ?? false;
     const collateralToken =
       decision.kind === "redeem" && !negativeRisk

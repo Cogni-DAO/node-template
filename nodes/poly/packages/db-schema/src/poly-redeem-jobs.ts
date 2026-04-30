@@ -60,11 +60,7 @@ export const polyRedeemJobs = pgTable(
     status: text("status").notNull().default("pending"),
     flavor: text("flavor").notNull(),
     indexSet: jsonb("index_set").notNull(),
-    /** ERC-20 address of the collateral that minted this position. Vanilla
-     * CTF `redeemPositions(collateralToken, …)` requires this exact value to
-     * burn shares; mismatch silently zero-burns. Default = USDC.e address
-     * (V1-legacy safe). Subscriber sets to pUSD when chain probe shows the
-     * funder's positionId hashes from pUSD instead. (bug.0428) */
+    /** Collateral that minted the position; default = USDC.e (V1 legacy). bug.0428. */
     collateralToken: text("collateral_token")
       .notNull()
       .default("0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174"),
