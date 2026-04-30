@@ -2,13 +2,14 @@
 id: bug.0438
 type: bug
 title: "Purge poly_copy_trade_config kill-switch table — never had a real use, permanently locked tenants out of copy-trade with no UI path back"
-status: needs_review
+status: needs_merge
 priority: 1
 rank: 9
 estimate: 1
 created: 2026-04-30
 updated: 2026-04-30
 branch: fix/poly-copy-trade-config-enable-flow
+pr: https://github.com/Cogni-DAO/node-template/pull/1165
 summary: "Migration 0029 backfills every tenant's `poly_copy_trade_config` with `enabled=false`. The targets POST route upserts `enabled=true` with `onConflictDoNothing()` — meaning the default-false row is never overwritten. There's no UI control to flip the kill-switch and the targets POST silently no-ops on the config side, so every non-system tenant is permanently locked out of copy-trade unless an admin runs an SQL `UPDATE` against the DB. Discovered live on prod 2026-04-30: Derek's bid `207795de-…` had `enabled=false` for 6 days while the UI showed 'copy-trade enabled' (UI's enable-state is wired to target-presence, not the kill-switch — so users get a silent lie). After landing #1149, prod's copy-trade reconciler tick fired every 30s with `active_targets=0` even though Derek had RN1 as a tracked target."
 outcome: "Drop the `poly_copy_trade_config` table entirely. Migration 0036 issues `DROP TABLE poly_copy_trade_config CASCADE`. The cross-tenant enumerator's `target × connection × grant` join becomes the sole gate to autonomous mirror placement — no separate kill-switch table, no `enabled` column to flip, no UI control to maintain. Per-tenant USDC caps already live on `poly_wallet_grants` (per_order_usdc_cap, daily_usdc_cap), where they belong. The act of POSTing a target IS the user's opt-in; DELETE on the target row (or revoking the grant/connection) is the only way to stop mirror placements. `kill_switch_off` skip reason removed from the planner; `enabled` field removed from the API contract response, the StateSnapshot type, the TargetConfig type, the FakeOrderLedger fixture, and the tests."
 assignees: []

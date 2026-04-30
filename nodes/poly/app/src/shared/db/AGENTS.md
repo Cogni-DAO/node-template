@@ -45,7 +45,7 @@ Per DATABASE_RLS_SPEC.md design decision 7: runtime app uses explicit DSNs, no U
 **Exports (barrel `@/shared/db`):**
 
 - Core platform tables from `@cogni/db-schema` (users, billingAccounts, schedules, etc.)
-- Poly-local tables from `@cogni/poly-db-schema` (workspace package at `nodes/poly/packages/db-schema`): `polyCopyTradeFills`, `polyCopyTradeConfig`, `polyCopyTradeDecisions`. Promoted out of this directory by task.0324 so cross-process importers (scheduler-worker, Temporal worker, future graphs) can consume them without reaching into app internals.
+- Poly-local tables from `@cogni/poly-db-schema` (workspace package at `nodes/poly/packages/db-schema`): `polyCopyTradeTargets`, `polyCopyTradeFills`, `polyCopyTradeDecisions`. Promoted out of this directory by task.0324 so cross-process importers (scheduler-worker, Temporal worker, future graphs) can consume them without reaching into app internals. (bug.0438 dropped `polyCopyTradeConfig`.)
 
 **Direct imports (not in barrel):**
 
