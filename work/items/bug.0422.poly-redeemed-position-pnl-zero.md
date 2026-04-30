@@ -26,7 +26,7 @@ labels: [poly, dashboard, data-quality]
 
 ## Symptoms
 
-Surfaced during validation of task.0424 (`Resolves` column experiment) on candidate-a. History tab rows with the green `Redeemed` lifecycle pill all show `$0.00` and `0.00%`. Examples: Bruins vs. Sabres, Will Cruzeiro EC win on 2026-04-28?, Saint-Malo, Mauthausen, Pistons O/U 214.5, Pistons O/U 213.5, Flyers vs. Penguins.
+Surfaced during validation of task.0426 (`Resolves` column experiment) on candidate-a. History tab rows with the green `Redeemed` lifecycle pill all show `$0.00` and `0.00%`. Examples: Bruins vs. Sabres, Will Cruzeiro EC win on 2026-04-28?, Saint-Malo, Mauthausen, Pistons O/U 214.5, Pistons O/U 213.5, Flyers vs. Penguins.
 
 ## Root cause (suspected)
 

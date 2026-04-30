@@ -1,5 +1,5 @@
 ---
-id: task.0424
+id: task.0426
 type: task
 title: "Add Resolves countdown column to poly PositionsTable (v0)"
 status: needs_implement
