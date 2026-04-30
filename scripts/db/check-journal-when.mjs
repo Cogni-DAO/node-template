@@ -33,7 +33,9 @@ const journals = globSync(
 );
 
 if (journals.length === 0) {
-  console.error("✗ check-journal-when: no journals found — glob misconfigured?");
+  console.error(
+    "✗ check-journal-when: no journals found — glob misconfigured?",
+  );
   process.exit(2);
 }
 
@@ -77,7 +79,9 @@ for (const rel of journals) {
 }
 
 if (violations > 0) {
-  console.error(`\n✗ ${violations} journal violation(s) across ${journals.length} file(s).`);
+  console.error(
+    `\n✗ ${violations} journal violation(s) across ${journals.length} file(s).`,
+  );
   process.exit(1);
 }
 
