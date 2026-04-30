@@ -114,7 +114,6 @@
 | 1 | 1 | 5 | needs_design | task.0411 | Split `@cogni/temporal-workflows` per-node — `nodes/<X>/packages/temporal-workflows` for node-owned workflows |  |  |
 | 1 | 1 | 1 | needs_closeout | task.0417 | Fresh-worktree bootstrap fixes — drop `.env.local` from `db:check`, detect orphan-missing dist in scoped build |  |  |
 | 1 | 1 | 2 | needs_implement | task.0423 | Port poly PositionsTable onto reui DataGrid (mirror wallets-table) | Premium Frontend UX | proj.premium-frontend-ux |
-| 1 | 5 | 5 | needs_implement | task.0429 | Poly auto-wrap consent loop — one click, perpetual cash recycling | Cogni Poly | proj.poly-copy-trading |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -165,7 +164,7 @@
 | 1 | 5 | 1 | needs_merge | task.0421 | Poly wallet research charter + first live screen + Dolt schema proposal | Cogni Poly | proj.poly-prediction-bot |
 | 1 | 5 | 2 | needs_review | task.0424 | Poly bet sizer — per-(tenant, market) position cap (reuse `max_usdc_per_trade` for v0) | Poly | proj.poly-bet-sizer |
 | 1 | 5 | 3 | needs_triage | bug.0428 | Redeem worker hardcodes USDC.e collateralToken — V2 vanilla CTF positions silently bleed or yield wrong token | Cogni Poly | proj.poly-copy-trading |
-| 1 | 5 | 5 | needs_design | task.0429 | Poly trading wallet — auto-wrap USDC.e → pUSD (kill the human-click-on-cycle requirement) | Cogni Poly | proj.poly-copy-trading |
+| 1 | 5 | 5 | needs_implement | task.0429 | Poly trading wallet — auto-wrap USDC.e → pUSD (kill the human-click-on-cycle requirement) | Cogni Poly | proj.poly-copy-trading |
 | 1 | 5 | 3 | needs_implement | bug.0430 | Per-position cap leaks because `error` ledger rows can actually fill on chain — `cumulativeIntentForMarket` reads $0 while wallet holds $25 | Poly | proj.poly-bet-sizer |
 | 1 | 5 | 3 | needs_implement | bug.0431 | Redeem policy misclassifies winning vanilla CTF positions as losers — $14.99 stranded on prod | Cogni Poly | proj.poly-copy-trading |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
