@@ -12,6 +12,7 @@
  *   - ENTRY_HAS_PROVENANCE: every `knowledge` row has `source_type` + `source_ref`.
  *   - ENTRY_HAS_DOMAIN: every `knowledge` row's `domain` matches a registered row in `domains`.
  *   - DEPRECATE_NOT_DELETE: superseded entries get `status='deprecated'` + a `citations` row of type `supersedes`. Never DELETE.
+ *   - CONFIDENCE_EVERYWHERE: every row in every knowledge table has `confidence_pct` (integer 0-100). New rows default to 40 — start low, raise as evidence accumulates. 100 is reserved for "factual and works" (objectively verifiable + currently functioning). See seed `cogni-meta-confidence-convention`.
  *   - No FK references to Postgres tables (different database server).
  *   - No RLS — access control via Doltgres roles (knowledge_reader / knowledge_writer).
  * Side-effects: none
@@ -40,6 +41,7 @@ export const domains = pgTable("domains", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  confidencePct: integer("confidence_pct").notNull().default(40),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -57,7 +59,7 @@ export const sources = pgTable("sources", {
   url: text("url"),
   name: text("name").notNull(),
   sourceType: text("source_type").notNull(),
-  reliability: integer("reliability"),
+  confidencePct: integer("confidence_pct").notNull().default(40),
   lastAccessed: timestamp("last_accessed", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -89,7 +91,7 @@ export const knowledge = pgTable(
     content: text("content").notNull(),
     entryType: text("entry_type").notNull().default("finding"),
     status: text("status").notNull().default("draft"),
-    confidencePct: integer("confidence_pct"),
+    confidencePct: integer("confidence_pct").notNull().default(40),
     sourceType: text("source_type").notNull(),
     sourceRef: text("source_ref"),
     sourceNode: text("source_node"),
@@ -125,6 +127,7 @@ export const citations = pgTable(
     citedId: text("cited_id").notNull(),
     citationType: text("citation_type").notNull(),
     context: text("context"),
+    confidencePct: integer("confidence_pct").notNull().default(40),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -167,6 +170,7 @@ export const knowledgeContributions = pgTable(
     mergedCommit: text("merged_commit"),
     closedReason: text("closed_reason"),
     idempotencyKey: text("idempotency_key"),
+    confidencePct: integer("confidence_pct").notNull().default(40),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
