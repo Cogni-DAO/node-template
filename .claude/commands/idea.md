@@ -1,61 +1,34 @@
-You are a **senior product manager** capturing a new feature idea as a story work item.
+You capture a feature idea as a `story` work item via the Cogni API. Be terse.
 
-Your audience: engineers who will triage, scope, and eventually implement this. Write enough context that someone unfamiliar with the idea can understand the _what_, _why_, and _who benefits_ without a conversation.
+**The through-line.** Every idea has a clear before/after. The summary names the *before* state ("today we cannot…"); the **outcome** field is a single sentence in the form *"success is when {human|AI|system} can {do X}"*. This sentence survives unchanged from intake → design → implement → review → deploy_verified. If you cannot write that sentence, the idea isn't ready — clarify before POSTing.
 
-Read these before starting:
+**Bootstrap first** (every lifecycle skill assumes this): read `AGENTS.md`, scan related projects in `work/projects/`, and `GET https://preview.cognidao.org/api/v1/work/items?node=<node>` for adjacent items. Don't duplicate.
 
-- [Item Template](work/_templates/item.md) — required structure and headings
-- [Work Items](work/items/) — individual item files are the source of truth
-- [Work README](work/README.md) — field reference and hard rules
-- [Content Boundaries](docs/spec/docs-work-system.md#content-boundaries) — what belongs in items vs specs vs projects
+## API call
 
-## Process
+```bash
+curl -X POST https://preview.cognidao.org/api/v1/work/items \
+  -H "authorization: Bearer $COGNI_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "type": "story",
+    "node": "<node-or-omit-for-shared>",
+    "title": "<one-line intent>",
+    "summary": "BEFORE: <what is broken or missing today>\nAFTER: <what world we want>",
+    "outcome": "Success is when <human|AI|system> can <observable verb + object>."
+  }'
+```
 
-1. **Understand the idea**: Read the user's input. Ask clarifying questions if the problem or value proposition is unclear. Identify which area of the codebase or product this touches.
-
-2. **Check for duplicates**: Quick scan of `work/items/` for existing items covering the same ground. If one exists, suggest updating it instead.
-
-3. **Assign ID**: Run `pnpm work:next-id` to get the next available number. New ID = `story.<next>` (zero-padded to 4 digits).
-
-4. **Create file from template**:
-
-   ```bash
-   cp work/_templates/item.md work/items/story.<num>.<slug>.md
-   ```
-
-   Then edit the copy:
-   - `id: story.<num>` — must match filename prefix
-   - `type: story`
-   - `status: needs_triage`
-   - `project:` — leave empty (routing happens in `/triage`)
-   - `created:` and `updated:` — today's date
-   - **Requirements**: Capture the user's intent. What problem does this solve? Who benefits? What does success look like? Be specific enough that an engineer can scope it.
-   - **Allowed Changes**: Leave broad — stories aren't scoped to files yet.
-   - **Plan**: High-level only — detailed planning happens in `/task`.
-   - **Validation**: How would someone verify the idea was implemented correctly?
-
-5. **Assess if a spike is needed**: If the design space is unknown — unclear how to build it, multiple plausible approaches, or unfamiliar technology — also create a `spike.*` item:
-
-   ```bash
-   cp work/_templates/item.md work/items/spike.<num>.<slug>.md
-   ```
-
-   - `type: spike`
-   - Link it to the story in the description
-   - Requirements = the research questions that need answering
-   - Suggest `/research spike.<num>` as the next step after triage
-
-6. **Finalize**:
-   - Run `pnpm check:docs` and fix any errors until clean.
-   - Commit all changes (work item file(s)) on the current branch.
-   - Push to remote.
-
-7. **Report**: Show file path(s) and ID(s). Next command: `/triage`.
+Response returns `{id, status: "needs_triage", ...}`. The id is server-allocated (`5000+` range).
 
 ## Rules
 
-- **ID_IMMUTABLE** — `story.<num>` never changes once assigned
-- **STORIES_CAPTURE_INTENT** — write for the reader who wasn't in the room. Link enough context.
-- **NO_OVER_PLANNING** — stories describe _what_ and _why_; decomposition into tasks happens later
+- **Be terse.** Stories describe _what_ and _why_, not _how_. Decomposition lands in `/task`.
+- **No file creation.** Do NOT add new `.md` files under `work/items/`. The API is source of truth.
+- **Spike if unknown.** If approach is unclear, `POST` a second item with `"type": "spike"` and link it via the story summary.
+
+## Next
+
+`/triage <id>` to route, or `/research <spike-id>` if a spike was created.
 
 #$IDEA
