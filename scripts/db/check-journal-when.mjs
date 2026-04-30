@@ -28,7 +28,7 @@ const journals = globSync(
     "nodes/*/app/src/adapters/server/db/migrations/meta/_journal.json",
     "nodes/*/app/src/adapters/server/db/doltgres-migrations/meta/_journal.json",
   ],
-  { cwd: repoRoot },
+  { cwd: repoRoot }
 );
 
 if (journals.length === 0) {
@@ -54,7 +54,7 @@ for (const rel of journals) {
           `  idx ${entry.idx} (${entry.tag}) when=${entry.when} ≤ idx ${prev.idx} (${prev.tag}) when=${prev.when}\n` +
           `  drizzle-orm sorts by \`when\`; out-of-order entries are silently skipped at runtime.\n` +
           `  Fix: bump idx ${entry.idx} to when=${prev.when + 1} (or a real future-safe Date.now()).\n` +
-          `  See docs/spec/databases.md §2.6.`,
+          `  See docs/spec/databases.md §2.6.`
       );
       violations++;
     }
@@ -69,7 +69,7 @@ for (const rel of journals) {
           `  idx ${entry.idx} (${entry.tag}) when=${entry.when} is in the future (now=${now}).\n` +
           `  Future-dated \`when\` poisons every later migration on this node. Subsequent\n` +
           `  auto-gen migrations must hand-bump \`when\` past ${entry.when} until the wall clock\n` +
-          `  catches up. Never future-date \`when\` in new migrations.`,
+          `  catches up. Never future-date \`when\` in new migrations.`
       );
       warnings++;
     }
@@ -85,4 +85,6 @@ if (violations > 0) {
 }
 
 const summary = `✓ ${journals.length} migration journal(s) — strict-monotonic \`when\` OK.`;
-console.log(warnings > 0 ? `${summary} (${warnings} future-date warning(s))` : summary);
+console.log(
+  warnings > 0 ? `${summary} (${warnings} future-date warning(s))` : summary
+);
