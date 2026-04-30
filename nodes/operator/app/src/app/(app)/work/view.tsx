@@ -21,6 +21,7 @@
 
 "use client";
 
+import type { WorkItemDto } from "@cogni/node-contracts";
 import { useQuery } from "@tanstack/react-query";
 import {
   type ColumnFiltersState,
@@ -34,7 +35,6 @@ import {
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
-import type { WorkItemDto } from "@cogni/node-contracts";
 import { Settings2 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
