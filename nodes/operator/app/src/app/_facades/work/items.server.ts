@@ -70,14 +70,6 @@ function toDto(item: WorkItem): WorkItemDto {
   };
 }
 
-function isDoltgresId(id: string): boolean {
-  const dot = id.lastIndexOf(".");
-  if (dot < 0) return false;
-  const tail = id.slice(dot + 1);
-  if (!/^\d+$/.test(tail)) return false;
-  return Number.parseInt(tail, 10) >= 5000;
-}
-
 function authorTagFromSession(user: {
   id: string;
   displayName: string | null;

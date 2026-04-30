@@ -29,14 +29,6 @@ export interface WorkItemsPatchInput {
   readonly set: WorkItemsPatchSet;
 }
 
-export interface WorkItemsBulkInsertResult {
-  readonly inserted: number;
-  readonly skipped: number;
-  readonly failed: number;
-  readonly failures: ReadonlyArray<{ id: string; error: string }>;
-  readonly doltCommitHash: string | null;
-}
-
 export interface WorkItemsDoltgresPort {
   get(id: WorkItemId): Promise<WorkItem | null>;
   list(query?: WorkQuery): Promise<{ items: WorkItem[]; nextCursor?: string }>;
@@ -45,8 +37,4 @@ export interface WorkItemsDoltgresPort {
     input: WorkItemsPatchInput,
     authorTag: string
   ): Promise<WorkItem | null>;
-  bulkInsert(
-    items: ReadonlyArray<WorkItem>,
-    authorTag: string
-  ): Promise<WorkItemsBulkInsertResult>;
 }

@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:external": "vitest run --config vitest.external.config.mts",
     "test:external:money": "vitest run --config vitest.external-money.config.mts",
-    "import:work-items": "tsx scripts/import-markdown-work-items.ts"
+    "import:work-items": "tsx scripts/import-work-items-via-api.ts"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.12.10",
