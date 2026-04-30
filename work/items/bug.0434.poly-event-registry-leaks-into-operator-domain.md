@@ -44,7 +44,7 @@ The aspirational architecture (node-local registry) and the implementation (cent
 - task.0429's first attempt added poly events to `@cogni/node-shared` → single-node-scope fail
 - Reverted to local const → /observability skill correctly flagged it as off-pattern
 - Re-added to shared → single-node-scope fails again, requires admin bypass
-- Mirror-pipeline events (POLY_MIRROR_*) and reconciler events (POLY_RECONCILER_*) hit the same shape every time someone adds a poly observability primitive
+- Mirror-pipeline events (`POLY_MIRROR_*`) and reconciler events (`POLY_RECONCILER_*`) hit the same shape every time someone adds a poly observability primitive
 
 The biome cascade chore PRs (#1152, #1153, #1155, #1157) document the same architectural class — single-node-scope is correct policy but the registry layout fights it.
 
