@@ -25,8 +25,24 @@
  * @public
  */
 
-import { EVENT_NAMES, type LoggerPort, type MetricsPort } from "@cogni/node-shared";
+import type { LoggerPort, MetricsPort } from "@cogni/node-shared";
 import type { PolyTraderWalletPort } from "@cogni/poly-wallet";
+
+/**
+ * Event names for the auto-wrap loop. Inline because the cross-node
+ * `EVENT_NAMES` registry lives in `@cogni/node-shared` (operator domain) and
+ * adding to it would put this PR in two node domains. The reconciler / mirror
+ * jobs use the registry; their event names migrated there during their own
+ * single-domain PRs and we'll do the same in a follow-up if the volume of
+ * `poly.auto_wrap.*` events grows.
+ */
+const POLY_AUTO_WRAP_EVENTS = {
+  SINGLETON_CLAIM: "poly.auto_wrap.singleton_claim",
+  STOPPED: "poly.auto_wrap.stopped",
+  TICK_COMPLETED: "poly.auto_wrap.tick.completed",
+  TICK_ERROR: "poly.auto_wrap.tick.error",
+  ROW_ERROR: "poly.auto_wrap.row.error",
+} as const;
 
 export const AUTO_WRAP_METRICS = {
   /** One per tick. Always increments, even when zero rows scanned. */
@@ -108,7 +124,7 @@ export async function runAutoWrapTick(
       });
       log.error(
         {
-          event: EVENT_NAMES.POLY_AUTO_WRAP_ROW_ERROR,
+          event: POLY_AUTO_WRAP_EVENTS.ROW_ERROR,
           billing_account_id: row.billingAccountId,
           err: err instanceof Error ? err.message : String(err),
         },
@@ -120,7 +136,7 @@ export async function runAutoWrapTick(
   deps.metrics.incr(AUTO_WRAP_METRICS.ticksTotal, {});
   log.info(
     {
-      event: EVENT_NAMES.POLY_AUTO_WRAP_TICK_COMPLETED,
+      event: POLY_AUTO_WRAP_EVENTS.TICK_COMPLETED,
       scanned: eligible.length,
       wrapped,
       skipped,
@@ -142,7 +158,7 @@ export function startAutoWrap(deps: AutoWrapJobDeps): AutoWrapJobHandle {
   const log = deps.logger.child({ component: "auto-wrap-job" });
   log.info(
     {
-      event: EVENT_NAMES.POLY_AUTO_WRAP_SINGLETON_CLAIM,
+      event: POLY_AUTO_WRAP_EVENTS.SINGLETON_CLAIM,
       poll_ms: AUTO_WRAP_POLL_MS,
     },
     "auto-wrap starting (SINGLE_WRITER — alert on duplicate pods running this)"
@@ -158,7 +174,7 @@ export function startAutoWrap(deps: AutoWrapJobDeps): AutoWrapJobHandle {
       deps.metrics.incr(AUTO_WRAP_METRICS.tickErrorsTotal, {});
       log.error(
         {
-          event: EVENT_NAMES.POLY_AUTO_WRAP_TICK_ERROR,
+          event: POLY_AUTO_WRAP_EVENTS.TICK_ERROR,
           err: err instanceof Error ? err.message : String(err),
         },
         "auto-wrap: tick threw (continuing)"
@@ -176,7 +192,7 @@ export function startAutoWrap(deps: AutoWrapJobDeps): AutoWrapJobHandle {
     stop() {
       clearInterval(intervalHandle);
       log.info(
-        { event: EVENT_NAMES.POLY_AUTO_WRAP_STOPPED },
+        { event: POLY_AUTO_WRAP_EVENTS.STOPPED },
         "auto-wrap stopped"
       );
     },
