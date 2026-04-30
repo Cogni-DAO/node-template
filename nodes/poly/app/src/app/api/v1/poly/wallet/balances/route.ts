@@ -78,6 +78,7 @@ export const GET = wrapRouteHandlerWithLogging(
         connected: false,
         address: null,
         usdc_e: null,
+        pusd: null,
         pol: null,
         errors: [],
       };

@@ -28,13 +28,13 @@ external_refs:
 
 PR #1149 / task.0429 candidate-a validation hit this wall repeatedly:
 
-| Question                                          | What we used                  | Why Grafana failed                                                                          |
-| ------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------- |
-| "USDC.e at funder right now?"                     | `curl polygon-rpc.com`        | No on-chain datasource. App logs `usdc_e: 10.58` but that's `USDC.e + pUSD` (separate bug). |
-| "Is poly_redeem_jobs row stuck?"                  | SSH → `psql` → SELECT         | No Postgres datasource. App logs an event _per_ row enqueue; aggregating 50+ rows over hours is hostile through Loki. |
-| "Does this user hold the winner side on chain?"   | Polygon RPC `balanceOf` + `payoutNumerators` | Same as above — chain reads have no Grafana surface. |
-| "What does Polymarket data-api show for them?"    | `curl data-api.polymarket.com` | Same — third-party data has no datasource. |
-| "Why is `usdc_available` dropping over time?"     | Loki time-series of overview logs | Possible but awkward; needs `| json | unwrap usdc_available` and the route only logs on user request, not periodically. |
+| Question                                        | What we used                                 | Why Grafana failed                                                                                                    |
+| ----------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------------------------------------------- |
+| "USDC.e at funder right now?"                   | `curl polygon-rpc.com`                       | No on-chain datasource. App logs `usdc_e: 10.58` but that's `USDC.e + pUSD` (separate bug).                           |
+| "Is poly_redeem_jobs row stuck?"                | SSH → `psql` → SELECT                        | No Postgres datasource. App logs an event _per_ row enqueue; aggregating 50+ rows over hours is hostile through Loki. |
+| "Does this user hold the winner side on chain?" | Polygon RPC `balanceOf` + `payoutNumerators` | Same as above — chain reads have no Grafana surface.                                                                  |
+| "What does Polymarket data-api show for them?"  | `curl data-api.polymarket.com`               | Same — third-party data has no datasource.                                                                            |
+| "Why is `usdc_available` dropping over time?"   | Loki time-series of overview logs            | Possible but awkward; needs `                                                                                         | json | unwrap usdc_available` and the route only logs on user request, not periodically. |
 
 Net: every triage session for a money-related symptom requires the agent to construct a curl pipeline + an SSH + a psql query. Each is one-off. Each has to be re-discovered next time. Each leaks shape across debug sessions.
 

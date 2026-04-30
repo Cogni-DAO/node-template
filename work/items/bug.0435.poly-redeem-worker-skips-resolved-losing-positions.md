@@ -74,7 +74,7 @@ Three options, in increasing scope:
 1. **Minimal** — change `decisionToEnqueueInput` to write losing-outcome rows with `status='pending'/lifecycle_state='loser'` so worker claims them. Worker, at claim time, re-reads chain and either:
    - submits `redeemPositions` with `[balance, 0]` index set (burns losing side), OR
    - writes `lifecycle_state='redeemed_zero'` ledger entry on confirm.
-   Risk: doubles worker load; need to confirm CTF accepts a redeem with 0-payout side correctly.
+     Risk: doubles worker load; need to confirm CTF accepts a redeem with 0-payout side correctly.
 2. **Sweep job** — separate "burn-losing-tokens" sweep distinct from the winner-payout worker. Runs once per resolved condition. Lower risk because it isolates the new path from the existing payout path.
 3. **Lazy / on-demand** — UI-side button per resolved-losing position that hits a new `/api/v1/poly/wallet/burn-losing/[conditionId]` route. User-driven, no autonomous sweep. Lowest risk + most user control, but doesn't auto-clean.
 
