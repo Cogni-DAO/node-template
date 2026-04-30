@@ -25,7 +25,10 @@
  * @public
  */
 
-import type { LoggerPort, MetricsPort } from "@cogni/node-shared";
+import type {
+  LoggerPort,
+  MetricsPort,
+} from "@cogni/poly-market-provider";
 import type { PolyTraderWalletPort } from "@cogni/poly-wallet";
 
 /**
