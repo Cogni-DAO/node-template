@@ -85,6 +85,7 @@ export function AutoWrapToggle({
   });
 
   const isPending = mutation.isPending;
+  const hasError = mutation.isError;
 
   return (
     <div className="rounded-md border border-border/40 bg-muted/30 px-3 py-2.5">
@@ -106,6 +107,11 @@ export function AutoWrapToggle({
             Polymarket BUYs spend pUSD. When on, we convert any USDC.e arriving
             here — from deposits, settlements, or transfers — every minute.
           </p>
+          {hasError ? (
+            <p className="mt-1.5 text-[11px] text-destructive">
+              Couldn't update — try again.
+            </p>
+          ) : null}
         </div>
         <button
           type="button"

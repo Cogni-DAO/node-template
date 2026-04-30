@@ -887,45 +887,55 @@ function createContainer(): Container {
       }
 
       // task.0429 — auto-wrap consent loop. One job process-wide, gated on
-      // the same Privy + AEAD configuration as the executor factory.
-      try {
-        const walletPortForAutoWrap = getPolyTraderWalletAdapter(log);
-        const { polyWalletConnections } = await import(
-          "@cogni/poly-db-schema"
+      // Privy + AEAD (executor factory existence) AND POLYGON_RPC_URL — the
+      // adapter's `wrapIdleUsdcE` needs RPC to read balances and submit txs.
+      // Without RPC, every tick would throw; cleaner to skip startup entirely.
+      if (!env.POLYGON_RPC_URL) {
+        log.info(
+          { reason: "polygon_rpc_unconfigured" },
+          "auto-wrap job not started (POLYGON_RPC_URL missing)"
         );
-        const { and, eq, isNotNull, isNull } = await import("drizzle-orm");
-        const { noopMetrics: noopMetricsForAutoWrap } = await import(
-          "@cogni/poly-market-provider"
-        );
-        _autoWrapHandle = startAutoWrap({
-          walletPort: walletPortForAutoWrap,
-          listEligible: async (limit) => {
-            const rows = await serviceDb
-              .select({
-                billingAccountId: polyWalletConnections.billingAccountId,
-              })
-              .from(polyWalletConnections)
-              .where(
-                and(
-                  isNull(polyWalletConnections.revokedAt),
-                  isNull(polyWalletConnections.autoWrapRevokedAt),
-                  isNotNull(polyWalletConnections.autoWrapConsentAt)
+      } else {
+        try {
+          const { polyWalletConnections } = await import(
+            "@cogni/poly-db-schema"
+          );
+          const { and, isNotNull, isNull } = await import("drizzle-orm");
+          const { noopMetrics: noopMetricsForAutoWrap } = await import(
+            "@cogni/poly-market-provider"
+          );
+          _autoWrapHandle = startAutoWrap({
+            walletPort: getPolyTraderWalletAdapter(log),
+            listEligible: async (limit) => {
+              const rows = await serviceDb
+                .select({
+                  billingAccountId: polyWalletConnections.billingAccountId,
+                })
+                .from(polyWalletConnections)
+                .where(
+                  and(
+                    isNull(polyWalletConnections.revokedAt),
+                    isNull(polyWalletConnections.autoWrapRevokedAt),
+                    isNotNull(polyWalletConnections.autoWrapConsentAt)
+                  )
                 )
-              )
-              .limit(limit);
-            return rows.map((r) => ({ billingAccountId: r.billingAccountId }));
-          },
-          logger: mirrorLogger,
-          metrics: noopMetricsForAutoWrap,
-        });
-      } catch (err: unknown) {
-        log.error(
-          {
-            errorCode: "auto_wrap_boot_failed",
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "auto-wrap job boot failed — continuing without auto-wrap"
-        );
+                .limit(limit);
+              return rows.map((r) => ({
+                billingAccountId: r.billingAccountId,
+              }));
+            },
+            logger: mirrorLogger,
+            metrics: noopMetricsForAutoWrap,
+          });
+        } catch (err: unknown) {
+          log.error(
+            {
+              errorCode: "auto_wrap_boot_failed",
+              err: err instanceof Error ? err.message : String(err),
+            },
+            "auto-wrap job boot failed — continuing without auto-wrap"
+          );
+        }
       }
     })();
   } else {
