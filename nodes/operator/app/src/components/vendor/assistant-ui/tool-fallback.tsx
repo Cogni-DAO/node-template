@@ -9,8 +9,8 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
-import { Button } from "@/components/vendor/shadcn/button";
-import { cn } from "@/shared/util/cn";
+import { Button } from "@cogni/node-ui-kit/shadcn/button";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 export const ToolFallback: ToolCallMessagePartComponent = ({
   toolName,

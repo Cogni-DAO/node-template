@@ -16,19 +16,19 @@ import {
   Avatar,
   AvatarFallback,
   AvatarImage,
-} from "@/components/vendor/shadcn/avatar";
+} from "@cogni/node-ui-kit/shadcn/avatar";
 import {
   Dialog,
   DialogContent,
   DialogTitle,
   DialogTrigger,
-} from "@/components/vendor/shadcn/dialog";
+} from "@cogni/node-ui-kit/shadcn/dialog";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/vendor/shadcn/tooltip";
-import { cn } from "@/shared/util/cn";
+} from "@cogni/node-ui-kit/shadcn/tooltip";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 const useFileSrc = (file: File | undefined) => {
   const [src, setSrc] = useState<string | undefined>(undefined);

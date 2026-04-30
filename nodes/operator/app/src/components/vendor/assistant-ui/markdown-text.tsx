@@ -14,7 +14,7 @@ import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 
 import { TooltipIconButton } from "@/components/vendor/assistant-ui/tooltip-icon-button";
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 const MarkdownTextImpl = () => {
   return (

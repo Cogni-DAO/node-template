@@ -2,13 +2,13 @@
 
 import { Slottable } from "@radix-ui/react-slot";
 import { type ComponentPropsWithRef, forwardRef } from "react";
-import { Button } from "@/components/vendor/shadcn/button";
+import { Button } from "@cogni/node-ui-kit/shadcn/button";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/vendor/shadcn/tooltip";
-import { cn } from "@/shared/util/cn";
+} from "@cogni/node-ui-kit/shadcn/tooltip";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 export type TooltipIconButtonProps = ComponentPropsWithRef<typeof Button> & {
   tooltip: string;
