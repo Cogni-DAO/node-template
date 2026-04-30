@@ -11,7 +11,7 @@
  *   - DISTRIBUTIONS_ARE_PURE_DERIVATIONS — bucket data is `f(trades, resolutions, range)`. Never authored.
  *   - Bucket edges are constants (not quantile-derived) so bar charts stay comparable across wallets.
  * Side-effects: none
- * Links: docs/design/wallet-analysis-components.md, work/items/task.0425.poly-wallet-orderflow-distributions-d1.md
+ * Links: docs/design/wallet-analysis-components.md, work/items/task.0431.poly-wallet-orderflow-distributions-d1.md
  * @public
  */
 

@@ -9,7 +9,7 @@
  *   - PENDING_IS_FIRST_CLASS — every per-fill chart renders three bands (won green / lost red / pending grey).
  *   - DISTRIBUTIONS_ARE_PURE_DERIVATIONS — the component never recomputes buckets; it renders what the server returned.
  * Side-effects: none
- * Links: docs/design/wallet-analysis-components.md (Checkpoint D), work/items/task.0425.poly-wallet-orderflow-distributions-d1.md
+ * Links: docs/design/wallet-analysis-components.md (Checkpoint D), work/items/task.0431.poly-wallet-orderflow-distributions-d1.md
  * @public
  */
 
@@ -36,19 +36,22 @@ export function DistributionsBlock({
   isLoading,
   isError,
 }: DistributionsBlockProps): ReactElement {
-  const [viewMode, setViewMode] = useState<WalletDistributionsViewMode>("count");
+  const [viewMode, setViewMode] =
+    useState<WalletDistributionsViewMode>("count");
 
   if (isLoading) {
     return (
       <Section title="Order-flow distributions">
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-40 animate-pulse rounded bg-muted"
-              aria-hidden
-            />
-          ))}
+          {Array.from({ length: 6 }, (_, i) => `dist-skeleton-${i}`).map(
+            (key) => (
+              <div
+                key={key}
+                className="h-40 animate-pulse rounded bg-muted"
+                aria-hidden
+              />
+            )
+          )}
         </div>
       </Section>
     );
@@ -83,12 +86,12 @@ export function DistributionsBlock({
             </>
           ) : null}
           {" · range "}
-          <span className="font-mono">{fmtRange(data.range.fromTs, data.range.toTs)}</span>
+          <span className="font-mono">
+            {fmtRange(data.range.fromTs, data.range.toTs)}
+          </span>
         </>
       }
-      toolbar={
-        <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
-      }
+      toolbar={<ViewModeToggle viewMode={viewMode} onChange={setViewMode} />}
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <ChartCard title="DCA depth — trades per (market, outcome)">
@@ -104,11 +107,7 @@ export function DistributionsBlock({
           <StackedBars histogram={data.dcaWindow} viewMode={viewMode} />
         </ChartCard>
         <ChartCard title="Hour-of-day (UTC)">
-          <StackedBars
-            histogram={data.hourOfDay}
-            viewMode={viewMode}
-            compact
-          />
+          <StackedBars histogram={data.hourOfDay} viewMode={viewMode} compact />
         </ChartCard>
         <ChartCard title="Event clustering — trades per parent event">
           <FlatBars histogram={data.eventClustering} viewMode={viewMode} />
@@ -217,10 +216,7 @@ function bucketTotal(
   bucket: Histogram["buckets"][number],
   viewMode: WalletDistributionsViewMode
 ): number {
-  const v =
-    viewMode === "count"
-      ? bucket.values.count
-      : bucket.values.usdc;
+  const v = viewMode === "count" ? bucket.values.count : bucket.values.usdc;
   return v.won + v.lost + v.pending;
 }
 
@@ -243,8 +239,7 @@ function StackedBars({
   return (
     <div className={cn("flex items-end gap-1", heightClass)}>
       {histogram.buckets.map((b, i) => {
-        const counts =
-          viewMode === "count" ? b.values.count : b.values.usdc;
+        const counts = viewMode === "count" ? b.values.count : b.values.usdc;
         const total = counts.won + counts.lost + counts.pending;
         const heightPct = total === 0 ? 2 : (total / scaleMax) * 100;
         const wonPct = total > 0 ? (counts.won / total) * 100 : 0;
@@ -262,10 +257,7 @@ function StackedBars({
               style={{ height: `${heightPct}%` }}
             >
               {wonPct > 0 ? (
-                <div
-                  className={COLORS.won}
-                  style={{ height: `${wonPct}%` }}
-                />
+                <div className={COLORS.won} style={{ height: `${wonPct}%` }} />
               ) : null}
               {lostPct > 0 ? (
                 <div

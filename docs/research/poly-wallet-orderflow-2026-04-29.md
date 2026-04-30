@@ -40,21 +40,21 @@ For the two top-ranked target wallets from the [2026-04-28 curve screen](poly-wa
 3. **Per-position lifecycle.** Group trades by `(conditionId, outcome)`. Classify each group as `closed-fully` (sells ≥ buys), `partial-close`, or `held-open / rode-to-resolution` (zero sells).
 4. **Distributions.** Six histograms per wallet — DCA depth, event clustering, trade-size USDC, entry price, DCA window (first→last trade gap), time-of-day.
 
-Source code: the two read-only probes that produced this data live as ad-hoc scripts in the local research worktree. Once `summariseOrderFlow` lands (task.0429), the same six distributions are computable on-demand via `GET /api/v1/poly/wallets/<addr>?include=distributions` for any 0x address. To reproduce against fresh data, hit the live route.
+Source code: the two read-only probes that produced this data live as ad-hoc scripts in the local research worktree. Once `summariseOrderFlow` lands (task.0431), the same six distributions are computable on-demand via `GET /api/v1/poly/wallets/<addr>?include=distributions` for any 0x address. To reproduce against fresh data, hit the live route.
 
 ## Headline finding — pure ride-to-resolution
 
-| metric | RN1 (#1) | swisstony (#2) |
-| --- | ---: | ---: |
-| `/trades` rows fetched | 1000 | 1000 |
-| BUY trades | **1000** | **1000** |
-| SELL trades | **0** | **0** |
-| BUY notional | $343k | $137k |
-| (cond, outcome) groups | 246 | 216 |
-| fully-closed via CLOB SELL | **0 (0.0%)** | **0 (0.0%)** |
-| held to resolution / open | **246 (100%)** | **216 (100%)** |
-| REDEEM events | 500+ | 500+ |
-| REDEEM USDC claimed | $2.28M | $580k |
+| metric                     |       RN1 (#1) | swisstony (#2) |
+| -------------------------- | -------------: | -------------: |
+| `/trades` rows fetched     |           1000 |           1000 |
+| BUY trades                 |       **1000** |       **1000** |
+| SELL trades                |          **0** |          **0** |
+| BUY notional               |          $343k |          $137k |
+| (cond, outcome) groups     |            246 |            216 |
+| fully-closed via CLOB SELL |   **0 (0.0%)** |   **0 (0.0%)** |
+| held to resolution / open  | **246 (100%)** | **216 (100%)** |
+| REDEEM events              |           500+ |           500+ |
+| REDEEM USDC claimed        |         $2.28M |          $580k |
 
 > Both `/trades` and `/activity?REDEEM` page-cap at 1000 / 500 respectively. Total all-time counts are larger; the style read still holds — zero SELLs in the recency window.
 
@@ -64,9 +64,9 @@ Source code: the two read-only probes that produced this data live as ad-hoc scr
 
 The "close" question splits cleanly in two:
 
-| their action | our path | mirrored? |
-| --- | --- | --- |
-| CLOB SELL fill | `wallet-watch` → `planMirrorFromFill` → `clob-executor` SELL | ✅ **Yes, automatically** — planner is side-agnostic; any observed SELL produces a mirror SELL intent. Empirically **never triggers** for these two targets. |
+| their action                    | our path                                                                                                                                                                               | mirrored?                                                                                                                                                                                            |
+| ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CLOB SELL fill                  | `wallet-watch` → `planMirrorFromFill` → `clob-executor` SELL                                                                                                                           | ✅ **Yes, automatically** — planner is side-agnostic; any observed SELL produces a mirror SELL intent. Empirically **never triggers** for these two targets.                                         |
 | Hold to resolution → REDEEM CTF | Independent `features/redeem` pipeline (subscribes to CTF / NegRiskAdapter `ConditionResolution` on-chain, multicalls Capability A `decideRedeem`, redeems funder's winning positions) | ✅ **Convergent, not mirrored** — we trigger off the same on-chain `ConditionResolution` event they do, not off their `/activity?REDEEM` rows. End state: both sides redeem at chain finality (N=5). |
 
 So no behavioural gap for these targets. We are aligned by construction:
@@ -246,16 +246,16 @@ Two clusters — late-evening US (00 UTC = 8pm ET, US sports primetime) and afte
 
 ## Style summary
 
-| dimension | RN1 | swisstony |
-| --- | --- | --- |
-| trade frequency | ~500/day | ~1000/day |
-| DCA depth (p90) | 9 entries / outcome | 11 entries / outcome |
-| event concentration (max) | 71 trades | **166 trades** |
-| trade size median | $28 | $26 |
-| trade size p90 | **$978** | $315 |
-| DCA window p90 | 121 min | 108 min — both **<4h** |
-| price preference | uniform 0.15–0.95 | concentrated 0.30–0.85 |
-| active hours UTC | 17–01 + 09–11 (broad) | 02–05 (single window) |
+| dimension                 | RN1                   | swisstony              |
+| ------------------------- | --------------------- | ---------------------- |
+| trade frequency           | ~500/day              | ~1000/day              |
+| DCA depth (p90)           | 9 entries / outcome   | 11 entries / outcome   |
+| event concentration (max) | 71 trades             | **166 trades**         |
+| trade size median         | $28                   | $26                    |
+| trade size p90            | **$978**              | $315                   |
+| DCA window p90            | 121 min               | 108 min — both **<4h** |
+| price preference          | uniform 0.15–0.95     | concentrated 0.30–0.85 |
+| active hours UTC          | 17–01 + 09–11 (broad) | 02–05 (single window)  |
 
 **Common pattern.** Intra-event DCA traders. Layer entries across <4hr around event start, multiple sub-markets per event (moneyline + spread + O/U), never hold multi-day, never close on CLOB → ride to resolution → redeem. Their alpha is **price discovery during the pre-event hours**, not direction-picking days in advance.
 
@@ -263,10 +263,10 @@ Two clusters — late-evening US (00 UTC = 8pm ET, US sports primetime) and afte
 
 The 1000-row `/trades` page covers **only ~1-2 days** for both wallets given their high frequency:
 
-| wallet | n trades | first | last | span |
-| --- | ---: | --- | --- | ---: |
-| RN1 | 1000 | 2026-04-28 | 2026-04-29 | ~2 days |
-| swisstony | 1000 | 2026-04-29 | 2026-04-29 | ~1 day |
+| wallet    | n trades | first      | last       |    span |
+| --------- | -------: | ---------- | ---------- | ------: |
+| RN1       |     1000 | 2026-04-28 | 2026-04-29 | ~2 days |
+| swisstony |     1000 | 2026-04-29 | 2026-04-29 |  ~1 day |
 
 This is a **right-now order-flow snapshot**, not a longitudinal portrait. The charter ranking ($7.68M / $6.56M cumulative over 9.8 / 8.7 months) is correctly built from the user-pnl curve API; per-trade distributions only resolve a 24-48h window.
 
@@ -287,7 +287,7 @@ This is a **right-now order-flow snapshot**, not a longitudinal portrait. The ch
 
 ## Pointers
 
-- Live API replacement (task.0429): `GET /api/v1/poly/wallets/<addr>?include=distributions` — same six distributions, on-demand for any 0x address.
+- Live API replacement (task.0431): `GET /api/v1/poly/wallets/<addr>?include=distributions` — same six distributions, on-demand for any 0x address.
 - Curve-shape screen (parent): [`poly-wallet-curve-screen-2026-04-28.md`](poly-wallet-curve-screen-2026-04-28.md)
 - Charter (methodology): [`work/charters/POLY_WALLET_RESEARCH.md`](../../work/charters/POLY_WALLET_RESEARCH.md)
 - Wallet deep-dive design: [`docs/design/wallet-analysis-components.md`](../design/wallet-analysis-components.md)

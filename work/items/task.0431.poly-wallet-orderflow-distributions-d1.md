@@ -1,5 +1,5 @@
 ---
-id: task.0429
+id: task.0431
 type: task
 title: "Poly wallet order-flow distributions D1 — pure module + on-demand UI with win/loss split"
 status: needs_merge
@@ -40,15 +40,15 @@ Pure module + on-demand UI. **Excludes** D2 (`poly_target_fills` + `poly_market_
 
 ## What ships
 
-| File | Role |
-| --- | --- |
-| `nodes/poly/packages/market-provider/src/analysis/order-flow-distributions.ts` | Pure `summariseOrderFlow(trades, resolutions, opts)` — mirrors `computeWalletMetrics` signature |
-| `nodes/poly/packages/market-provider/tests/order-flow-distributions.test.ts` | 13 unit tests including a JSON-roundtrip regression for the bucket-edge sentinel |
-| `nodes/poly/packages/node-contracts/src/poly.wallet-analysis.v1.contract.ts` | Add `distributions` slice + `WalletAnalysisDistributionsSchema` + `distributionMode` query param |
-| `nodes/poly/app/src/app/api/v1/poly/wallets/[addr]/route.ts` | Wire `distributions` slice |
+| File                                                                            | Role                                                                                                                                   |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `nodes/poly/packages/market-provider/src/analysis/order-flow-distributions.ts`  | Pure `summariseOrderFlow(trades, resolutions, opts)` — mirrors `computeWalletMetrics` signature                                        |
+| `nodes/poly/packages/market-provider/tests/order-flow-distributions.test.ts`    | 13 unit tests including a JSON-roundtrip regression for the bucket-edge sentinel                                                       |
+| `nodes/poly/packages/node-contracts/src/poly.wallet-analysis.v1.contract.ts`    | Add `distributions` slice + `WalletAnalysisDistributionsSchema` + `distributionMode` query param                                       |
+| `nodes/poly/app/src/app/api/v1/poly/wallets/[addr]/route.ts`                    | Wire `distributions` slice                                                                                                             |
 | `nodes/poly/app/src/features/wallet-analysis/server/wallet-analysis-service.ts` | `getDistributionsSlice` reusing `trades:${addr}` + `resolution:${cid}` coalesce keys (one upstream fan-out for snapshot+distributions) |
-| `nodes/poly/app/src/features/wallet-analysis/components/DistributionsBlock.tsx` | Lazy-loaded organism: toolbar + 6 chart molecules co-located, CSS-only stacked bars |
-| `useWalletAnalysis`, `WalletAnalysisSurface`, `WalletAnalysisView`, types | Wire `includeDistributions` opt-in (page variant only) |
+| `nodes/poly/app/src/features/wallet-analysis/components/DistributionsBlock.tsx` | Lazy-loaded organism: toolbar + 6 chart molecules co-located, CSS-only stacked bars                                                    |
+| `useWalletAnalysis`, `WalletAnalysisSurface`, `WalletAnalysisView`, types       | Wire `includeDistributions` opt-in (page variant only)                                                                                 |
 
 ## Invariants enforced (from design)
 
@@ -61,12 +61,14 @@ Pure module + on-demand UI. **Excludes** D2 (`poly_target_fills` + `poly_market_
 ## Validation
 
 exercise:
+
 1. Open `/poly/research/w/0x2005d16a84ceefa912d4e380cd32e7ff827875ea` while signed in on candidate-a.
 2. Confirm DistributionsBlock renders six stacked histograms with non-zero pending share caption and a count↔USDC toggle.
 3. Click USDC; bar heights re-scale, outcome bands stay aligned.
 4. `curl 'https://poly.<candidate-a>/api/v1/poly/wallets/0x2005…?include=snapshot,distributions'` returns one response with both slices and `distributions.range.n > 0`.
 
 observability:
+
 - Loki query `{app="poly", route="/api/v1/poly/wallets/[addr]"}` at the deployed SHA shows one log line per request including the user's reqId.
 
 ## Review Feedback

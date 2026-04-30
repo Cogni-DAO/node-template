@@ -126,19 +126,19 @@ Blocked on two decisions: where the Harvard-flagged dataset lives, what "admin" 
 
 Add a new **`distributions` slice** to the existing wallet-analysis surface. Two access modes share one component contract:
 
-| mode | source | range | freshness | use |
-| --- | --- | --- | --- | --- |
-| **on-demand** | live `/trades?user=…` paginated to budget cap | last ~24-48h for HF wallets (1000-row page cap) — up to ~10d if we paginate to the 10k API ceiling | 30s in-memory TTL | drawer / page first paint; any 0x address |
-| **pre-saved** | `poly_target_fills` Doltgres ledger | longitudinal (≥30 days, eventually all-time via on-chain backfill) | nightly delta + on-chain catch-up | rostered targets only; default view on `/research/w/[addr]` once persisted |
+| mode          | source                                        | range                                                                                              | freshness                         | use                                                                        |
+| ------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------- | -------------------------------------------------------------------------- |
+| **on-demand** | live `/trades?user=…` paginated to budget cap | last ~24-48h for HF wallets (1000-row page cap) — up to ~10d if we paginate to the 10k API ceiling | 30s in-memory TTL                 | drawer / page first paint; any 0x address                                  |
+| **pre-saved** | `poly_target_fills` Doltgres ledger           | longitudinal (≥30 days, eventually all-time via on-chain backfill)                                 | nightly delta + on-chain catch-up | rostered targets only; default view on `/research/w/[addr]` once persisted |
 
 Both modes feed the same `Distributions` shape; the UI toggles between them with a "live (24h) ↔ all-time" switch and renders the same six chart molecules.
 
 ### Data plane — extend the existing slice table
 
-| Slice           | Source                                                                          | Availability                                                          | Freshness | Mode      |
-| --------------- | ------------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------- | --------- |
+| Slice           | Source                                                                           | Availability                                                                      | Freshness | Mode      |
+| --------------- | -------------------------------------------------------------------------------- | --------------------------------------------------------------------------------- | --------- | --------- |
 | `distributions` | compute: `PolymarketDataApiClient.listUserTrades` paginated → pure `summarise()` | any addr (24-48h window for HF wallets; degrades to "insufficient" if <50 trades) | 30 s      | on-demand |
-| `distributions` | read: Doltgres `poly_target_fills` → pure `summarise()` → knowledge-store cache | rostered targets only; range param `[from, to]` honoured                 | 24 h      | pre-saved |
+| `distributions` | read: Doltgres `poly_target_fills` → pure `summarise()` → knowledge-store cache  | rostered targets only; range param `[from, to]` honoured                          | 24 h      | pre-saved |
 
 Both modes call the **same pure module**:
 
@@ -165,38 +165,61 @@ type OutcomeBuckets = {
   // Count-weighted: 1 per fill.
   count: { won: number; lost: number; pending: number };
   // Size-weighted: USDC notional summed per fill.
-  usdc:  { won: number; lost: number; pending: number };
+  usdc: { won: number; lost: number; pending: number };
 };
 
 type Histogram = {
   buckets: {
     lo: number;
     hi: number;
-    label: string;     // human-readable bucket label
+    label: string; // human-readable bucket label
     values: OutcomeBuckets;
   }[];
 };
 
 type FlatHistogram = {
   // For aggregations where outcome split is meaningless (e.g. eventClustering).
-  buckets: { lo: number; hi: number; label: string; count: number; usdc: number }[];
+  buckets: {
+    lo: number;
+    hi: number;
+    label: string;
+    count: number;
+    usdc: number;
+  }[];
 };
 
 {
-  range: { fromTs: number; toTs: number; n: number };
+  range: {
+    fromTs: number;
+    toTs: number;
+    n: number;
+  }
   // Win/loss-aware (per-fill or per-group with single outcome):
-  dcaDepth:        Histogram;       // (market, outcome) groups → trades
-  tradeSize:       Histogram;       // log USDC buckets
-  entryPrice:      Histogram;       // 9 probability bands
-  dcaWindow:       Histogram;       // first→last per group, time buckets
-  hourOfDay:       Histogram;       // 24 buckets, UTC
+  dcaDepth: Histogram; // (market, outcome) groups → trades
+  tradeSize: Histogram; // log USDC buckets
+  entryPrice: Histogram; // 9 probability bands
+  dcaWindow: Histogram; // first→last per group, time buckets
+  hourOfDay: Histogram; // 24 buckets, UTC
   // Outcome split is meaningless (multi-resolution events):
-  eventClustering: FlatHistogram;   // eventSlug → trades
-  topEvents:       { slug: string; title: string; tradeCount: number; usdcNotional: number }[];
+  eventClustering: FlatHistogram; // eventSlug → trades
+  topEvents: {
+    slug: string;
+    title: string;
+    tradeCount: number;
+    usdcNotional: number;
+  }
+  [];
   // Pending share is dominant in `live` mode — UI captions this from `range.n` + summed pending counts:
-  pendingShare:    { byCount: number; byUsdc: number };
+  pendingShare: {
+    byCount: number;
+    byUsdc: number;
+  }
   // Quantile sentinels for reference lines.
-  quantiles: { dcaDepth: Quantiles; tradeSize: Quantiles; dcaWindowMin: Quantiles };
+  quantiles: {
+    dcaDepth: Quantiles;
+    tradeSize: Quantiles;
+    dcaWindowMin: Quantiles;
+  }
 }
 
 type Quantiles = { p50: number; p90: number; max: number };
@@ -204,14 +227,14 @@ type Quantiles = { p50: number; p90: number; max: number };
 
 Per-chart split eligibility:
 
-| chart           | outcome split | size-weighted | rationale                                                 |
-| --------------- | ------------- | ------------- | --------------------------------------------------------- |
-| dcaDepth        | yes           | yes           | each (market,outcome) group has one resolution            |
-| tradeSize       | yes           | n/a (axis)    | per-fill                                                  |
-| entryPrice      | yes           | yes           | per-fill                                                  |
-| dcaWindow       | yes           | yes           | per-group (single outcome)                                |
-| hourOfDay       | yes           | yes           | per-fill                                                  |
-| eventClustering | **no**        | yes           | events span sub-markets that resolve independently        |
+| chart           | outcome split | size-weighted | rationale                                          |
+| --------------- | ------------- | ------------- | -------------------------------------------------- |
+| dcaDepth        | yes           | yes           | each (market,outcome) group has one resolution     |
+| tradeSize       | yes           | n/a (axis)    | per-fill                                           |
+| entryPrice      | yes           | yes           | per-fill                                           |
+| dcaWindow       | yes           | yes           | per-group (single outcome)                         |
+| hourOfDay       | yes           | yes           | per-fill                                           |
+| eventClustering | **no**        | yes           | events span sub-markets that resolve independently |
 
 The shape is **bucket counts + USDC sums, not raw rows** — drives ~6 KB on the wire instead of streaming raw trades.
 
@@ -303,17 +326,17 @@ WalletAnalysisView(address, variant, size)
 
 Each molecule receives `{ data: Histogram | FlatHistogram, mode: 'count'|'usdc', isLoading, error, quantiles }` and renders its own skeleton / empty / error. **No sub-molecule fetches on its own** — same rule as Checkpoint A. Stack ordering: `won` (green) bottom, `lost` (red) middle, `pending` (grey) top. The `DistributionsToolbar` controls both the range mode (live/historical) and the value mode (count/USDC) — one fetch shape powers both views.
 
-**Default state**: `live` + `count`, with USDC and historical as one-click toggles. Pending share caption sits above the charts: *"showing N fills, M (P %) on unresolved markets"*. In `live` mode for HF wallets the grey band will dominate — that is correct, not a bug.
+**Default state**: `live` + `count`, with USDC and historical as one-click toggles. Pending share caption sits above the charts: _"showing N fills, M (P %) on unresolved markets"_. In `live` mode for HF wallets the grey band will dominate — that is correct, not a bug.
 
 `recharts` is already a dep (`OperatorPnlCard`); no new chart library.
 
 ### Rollout — three checkpoints
 
-| Checkpoint                              | Scope                                                                                                                                                                                                                                                          | Gate                                                                                                                                                  |
-| --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **D1 · Pure module + on-demand UI**     | `order-flow-distributions.ts` pure fn + Zod contract extension + `distributions` slice in route (`live` mode only, paginated to first 1000 trades) + 6 molecules wired into `WalletAnalysisView` (lazy)                                                        | Any 0x address renders 6 charts on `/research/w/[addr]`; matches the script output for RN1 + swisstony to within ±1 row per bucket; 401 unauthed.    |
-| **D2 · Persistence + historical mode**  | Doltgres `poly_target_fills` table + nightly delta job + one-shot backfill script + `core__poly_data_user_orderflow_summary` tool + route `distributionMode=historical` branch + RangeToggle UI                                                                | Toggle live ↔ historical on a rostered target; historical view shows ≥7-day range; cache-hit ratio ≥80% on the second view of a given (wallet, range). |
-| **D3 · On-chain backfill** *(parked)*   | `getLogs` ingest on CTF + NegRiskAdapter; `source='on-chain'` rows; lifts the 10k API ceiling                                                                                                                                                                  | File when D2 has been live ≥4 weeks and we hit the API ceiling on ≥1 roster wallet.                                                                  |
+| Checkpoint                             | Scope                                                                                                                                                                                                   | Gate                                                                                                                                                    |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **D1 · Pure module + on-demand UI**    | `order-flow-distributions.ts` pure fn + Zod contract extension + `distributions` slice in route (`live` mode only, paginated to first 1000 trades) + 6 molecules wired into `WalletAnalysisView` (lazy) | Any 0x address renders 6 charts on `/research/w/[addr]`; matches the script output for RN1 + swisstony to within ±1 row per bucket; 401 unauthed.       |
+| **D2 · Persistence + historical mode** | Doltgres `poly_target_fills` table + nightly delta job + one-shot backfill script + `core__poly_data_user_orderflow_summary` tool + route `distributionMode=historical` branch + RangeToggle UI         | Toggle live ↔ historical on a rostered target; historical view shows ≥7-day range; cache-hit ratio ≥80% on the second view of a given (wallet, range). |
+| **D3 · On-chain backfill** _(parked)_  | `getLogs` ingest on CTF + NegRiskAdapter; `source='on-chain'` rows; lifts the 10k API ceiling                                                                                                           | File when D2 has been live ≥4 weeks and we hit the API ceiling on ≥1 roster wallet.                                                                     |
 
 ### Fixture format (preserve research data)
 
@@ -338,7 +361,7 @@ This pattern generalises: any future "save research" run that pulls live data wr
 - **TWO_PATHS_ONE_SHAPE** — on-demand and historical modes both produce the same `Distributions` Zod shape. Components never branch on mode.
 - **PERSIST_FILLS_AND_RESOLUTIONS_NOT_BUCKETS** — the Doltgres ledger stores raw fills (`poly_target_fills`) and shared resolutions (`poly_market_resolutions`) only. Bucket counts are recomputed from `(fills, resolutions, range)`; persisting derived buckets is duplication that drifts.
 - **RESOLUTIONS_FETCHED_ONCE_PER_REQUEST** — the route handler builds a single `Map<conditionId, MarketResolutionInput>` per request, shared by `snapshot` and `distributions` slices. No slice fetches resolutions independently. Mirrors the `p-limit(4)` invariant from Checkpoint B.
-- **RESOLUTION_TTL_BY_STATUS** — `closed=true` resolutions are immutable and cache permanently; `closed=false` markets cache 30 s max. The 24h knowledge-store TTL applies to the *summary*, not the resolution map.
+- **RESOLUTION_TTL_BY_STATUS** — `closed=true` resolutions are immutable and cache permanently; `closed=false` markets cache 30 s max. The 24h knowledge-store TTL applies to the _summary_, not the resolution map.
 - **API_CEILING_IS_DOCUMENTED** — `live` mode's 1-2 day window for HF wallets is a known limit; UI surfaces it as a "showing last N hours" caption, not silently.
 - **RANGE_AS_FIRST_CLASS_PARAM** — `from`/`to` query params, honoured by both modes; default `live` = last 1000 trades, default `historical` = last 30 days.
 - **PENDING_IS_FIRST_CLASS** — the `pending` outcome status is required everywhere `won`/`lost` appears. Two-state code paths are a bug; HF-wallet `live` mode is majority-pending by construction.

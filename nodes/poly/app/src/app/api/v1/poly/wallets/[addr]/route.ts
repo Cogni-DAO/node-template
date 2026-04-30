@@ -80,7 +80,9 @@ export const GET = wrapRouteHandlerWithLogging<{
         wantTrades ? getTradesSlice(addr) : null,
         wantBalance ? getBalanceSlice(addr) : null,
         wantPnl ? getPnlSlice(addr, interval) : null,
-        wantDistributions ? getDistributionsSlice(addr, distributionMode) : null,
+        wantDistributions
+          ? getDistributionsSlice(addr, distributionMode)
+          : null,
       ]);
 
     const response: WalletAnalysisResponse = {
