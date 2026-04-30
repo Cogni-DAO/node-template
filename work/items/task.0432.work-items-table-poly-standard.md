@@ -1,7 +1,7 @@
 ---
 id: task.0432
 type: task
-title: "Work Items table — port poly's HEADER_OWNS_CONTROLS standard to operator + node-template"
+title: "Work Items table — port poly's HEADER_OWNS_CONTROLS standard to operator (node-template follows in PR-B)"
 status: needs_implement
 priority: 2
 rank: 1
@@ -52,10 +52,13 @@ Faceted filter toolbar (`FacetedFilter.tsx`) is retained: status / type / projec
 
 ### Files
 
-**Modify**:
+**Modify (PR-A — this PR, operator only — single-node-scope CI gate)**:
 
 - `nodes/operator/app/src/app/(app)/work/_components/columns.tsx`
 - `nodes/operator/app/src/app/(app)/work/view.tsx`
+
+**PR-B (follow-up, node-template, byte-identical patch)**:
+
 - `nodes/node-template/app/src/app/(app)/work/_components/columns.tsx`
 - `nodes/node-template/app/src/app/(app)/work/view.tsx`
 

@@ -1,25 +1,10 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-/**
- * Module: `@app/(app)/work/_components/columns`
- * Purpose: TanStack column definitions for the work-items DataGrid.
- * Scope: Pure column descriptors + inline cells. No fetching, no router.
- * Invariants:
- *   - HEADER_OWNS_CONTROLS: every header renders via reui `DataGridColumnHeader`
- *     so sort + visibility live inside the column dropdown — same standard as
- *     poly `WalletsTable` / `PositionsTable`.
- *   - filterFn: "arrIncludesSome" on type/status/projectId so the multi-select
- *     facet toolbar in `view.tsx` can drive `columnFilters`.
- * @internal
- */
-
 "use client";
 
 import type { WorkItemDto } from "@cogni/node-contracts";
 import { createColumnHelper } from "@tanstack/react-table";
-
-import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 
 import { StatusPill, TypeIcon } from "./work-item-icons";
 
@@ -27,9 +12,7 @@ const col = createColumnHelper<WorkItemDto>();
 
 export const columns = [
   col.accessor("priority", {
-    header: ({ column }) => (
-      <DataGridColumnHeader column={column} title="Pri" visibility />
-    ),
+    header: "Pri",
     size: 60,
     cell: (info) => {
       const v = info.getValue();
@@ -50,9 +33,7 @@ export const columns = [
   }),
 
   col.accessor("type", {
-    header: ({ column }) => (
-      <DataGridColumnHeader column={column} title="Type" visibility />
-    ),
+    header: "Type",
     size: 55,
     cell: (info) => <TypeIcon type={info.getValue()} />,
     filterFn: "arrIncludesSome",
@@ -61,9 +42,7 @@ export const columns = [
 
   col.display({
     id: "item",
-    header: ({ column }) => (
-      <DataGridColumnHeader column={column} title="Item" visibility />
-    ),
+    header: "Item",
     minSize: 250,
     cell: ({ row }) => {
       const { id, title } = row.original;
@@ -78,9 +57,7 @@ export const columns = [
   }),
 
   col.accessor("status", {
-    header: ({ column }) => (
-      <DataGridColumnHeader column={column} title="Status" visibility />
-    ),
+    header: "Status",
     size: 150,
     cell: (info) => <StatusPill status={info.getValue()} />,
     filterFn: "arrIncludesSome",
@@ -88,9 +65,7 @@ export const columns = [
   }),
 
   col.accessor("projectId", {
-    header: ({ column }) => (
-      <DataGridColumnHeader column={column} title="Project" visibility />
-    ),
+    header: "Project",
     size: 140,
     cell: (info) => {
       const v = info.getValue();
@@ -106,9 +81,7 @@ export const columns = [
   }),
 
   col.accessor("updatedAt", {
-    header: ({ column }) => (
-      <DataGridColumnHeader column={column} title="Updated" visibility />
-    ),
+    header: "Updated",
     size: 110,
     cell: (info) => {
       const v = info.getValue() || info.row.original.createdAt;
@@ -126,15 +99,13 @@ export const columns = [
   }),
 
   col.accessor("estimate", {
-    header: ({ column }) => (
-      <DataGridColumnHeader column={column} title="Est" visibility />
-    ),
+    header: "Est",
     size: 55,
     cell: (info) => {
       const v = info.getValue();
       return (
         <span className="text-center text-muted-foreground text-xs">
-          {v ?? "—"}
+          {v ?? "\u2014"}
         </span>
       );
     },
