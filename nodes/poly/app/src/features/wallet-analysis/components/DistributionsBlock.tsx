@@ -493,7 +493,7 @@ function CoverageNotice({ gap }: { gap: CoverageGap }): ReactElement {
         }
       }}
       className={cn(
-        "flex w-full items-center justify-between gap-3 rounded-lg border border-dashed border-muted-foreground/40 bg-muted/20 px-4 py-3 text-left text-sm transition-colors",
+        "flex w-full items-center justify-between gap-3 rounded-lg border border-muted-foreground/40 border-dashed bg-muted/20 px-4 py-3 text-left text-sm transition-colors",
         "hover:border-muted-foreground/60 hover:bg-muted/30"
       )}
     >
