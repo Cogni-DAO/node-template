@@ -74,48 +74,69 @@ export function DistributionsBlock({
 
   return (
     <Section
-      title="Order-flow distributions"
+      title="Order-flow patterns"
       caption={
         <>
-          showing <span className="font-mono">{data.range.n}</span> fills,{" "}
-          <span className="font-mono">{pendingPct}%</span> on unresolved markets
+          <span className="font-mono">{data.range.n}</span> fills over{" "}
+          <span className="font-mono">{fmtRange(data.range.fromTs, data.range.toTs)}</span>
+          {" · "}
+          <span className="font-mono">{pendingPct}%</span> on markets that haven't resolved yet
           {viewMode === "usdc" ? (
             <>
               {" "}
               (<span className="font-mono">{pendingUsdcPct}%</span> of $)
             </>
           ) : null}
-          {" · range "}
-          <span className="font-mono">
-            {fmtRange(data.range.fromTs, data.range.toTs)}
-          </span>
         </>
       }
       toolbar={<ViewModeToggle viewMode={viewMode} onChange={setViewMode} />}
     >
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ChartCard title="DCA depth — trades per (market, outcome)">
+        <ChartCard
+          title="Entries per outcome"
+          subtitle="how many trades layered into the same (market, side)"
+        >
           <StackedBars histogram={data.dcaDepth} viewMode={viewMode} />
         </ChartCard>
-        <ChartCard title="Trade size — USDC notional">
+        <ChartCard
+          title="Trade size"
+          subtitle="USDC notional per fill"
+        >
           <StackedBars histogram={data.tradeSize} viewMode={viewMode} />
         </ChartCard>
-        <ChartCard title="Entry price — favorite vs longshot">
+        <ChartCard
+          title="Entry price"
+          subtitle="favorite (high) ↔ longshot (low)"
+        >
           <StackedBars histogram={data.entryPrice} viewMode={viewMode} />
         </ChartCard>
-        <ChartCard title="DCA window — first→last trade per group">
+        <ChartCard
+          title="Time across a position"
+          subtitle="span from first entry to last entry on one outcome"
+        >
           <StackedBars histogram={data.dcaWindow} viewMode={viewMode} />
         </ChartCard>
-        <ChartCard title="Hour-of-day (UTC)">
-          <StackedBars histogram={data.hourOfDay} viewMode={viewMode} compact />
+        <ChartCard
+          title="Hour of day (UTC)"
+          subtitle="when do they trade"
+        >
+          <StackedBars
+            histogram={data.hourOfDay}
+            viewMode={viewMode}
+            compact
+            sparseLabels={3}
+          />
         </ChartCard>
-        <ChartCard title="Event clustering — trades per parent event">
+        <ChartCard
+          title="Trades per event"
+          subtitle="how many bets across one game / match (no outcome split — sub-markets resolve independently)"
+        >
           <FlatBars histogram={data.eventClustering} viewMode={viewMode} />
           {data.topEvents.length > 0 ? (
             <ul className="mt-3 flex flex-col gap-1 text-xs">
               {data.topEvents.slice(0, 5).map((e) => (
                 <li key={e.slug} className="flex items-center gap-2">
-                  <span className="w-12 shrink-0 text-right font-mono text-muted-foreground">
+                  <span className="w-10 shrink-0 text-right font-mono text-muted-foreground">
                     {e.tradeCount}
                   </span>
                   <span className="truncate" title={e.title}>
@@ -163,16 +184,25 @@ function Section({
 
 function ChartCard({
   title,
+  subtitle,
   children,
 }: {
   title: string;
+  subtitle?: string;
   children: ReactNode;
 }): ReactElement {
   return (
-    <div className="flex flex-col gap-2 rounded border bg-card p-3">
-      <h4 className="font-medium text-muted-foreground text-xs uppercase tracking-wider">
-        {title}
-      </h4>
+    <div className="flex flex-col gap-3 rounded border bg-card p-3">
+      <div className="flex flex-col gap-0.5">
+        <h4 className="font-medium text-foreground text-xs uppercase tracking-wider">
+          {title}
+        </h4>
+        {subtitle ? (
+          <p className="text-[11px] text-muted-foreground leading-snug">
+            {subtitle}
+          </p>
+        ) : null}
+      </div>
       {children}
     </div>
   );
@@ -224,27 +254,39 @@ function StackedBars({
   histogram,
   viewMode,
   compact,
+  sparseLabels,
 }: {
   histogram: Histogram;
   viewMode: WalletDistributionsViewMode;
   compact?: boolean;
+  /** Show only every Nth bucket label. Useful for hour-of-day where 24 ticks won't fit. */
+  sparseLabels?: number;
 }): ReactElement {
   const max = histogram.buckets.reduce(
     (m, b) => Math.max(m, bucketTotal(b, viewMode)),
     0
   );
   const scaleMax = Math.max(max, 1);
-  const heightClass = compact ? "h-24" : "h-32";
-  const labelClamp = compact ? "max-w-[3ch]" : "max-w-[10ch]";
+  // Pixel heights match the established TradesPerDayChart pattern. Percentage
+  // heights inside `flex flex-col items-end` collapse to 0 because the parent
+  // sizes to content — same trap as `h-32` on the row.
+  const chartPx = compact ? 72 : 104;
   return (
-    <div className={cn("flex items-end gap-1", heightClass)}>
+    <div
+      className={cn("flex items-end gap-1", compact ? "h-24" : "h-32")}
+      style={{ minHeight: `${chartPx + 16}px` }}
+    >
       {histogram.buckets.map((b, i) => {
         const counts = viewMode === "count" ? b.values.count : b.values.usdc;
         const total = counts.won + counts.lost + counts.pending;
-        const heightPct = total === 0 ? 2 : (total / scaleMax) * 100;
-        const wonPct = total > 0 ? (counts.won / total) * 100 : 0;
-        const lostPct = total > 0 ? (counts.lost / total) * 100 : 0;
-        const pendingPct = total > 0 ? (counts.pending / total) * 100 : 0;
+        const totalPx =
+          total === 0 ? 4 : Math.max(8, Math.round((total / scaleMax) * chartPx));
+        const wonPx =
+          total > 0 ? Math.round((counts.won / total) * totalPx) : 0;
+        const lostPx =
+          total > 0 ? Math.round((counts.lost / total) * totalPx) : 0;
+        const pendingPx = totalPx - wonPx - lostPx;
+        const showLabel = !sparseLabels || i % sparseLabels === 0;
         const tooltip = `${b.label}: won ${fmtVal(counts.won, viewMode)} · lost ${fmtVal(counts.lost, viewMode)} · pending ${fmtVal(counts.pending, viewMode)}`;
         return (
           <div
@@ -254,28 +296,31 @@ function StackedBars({
           >
             <div
               className="flex w-full flex-col-reverse overflow-hidden rounded-t-sm bg-muted"
-              style={{ height: `${heightPct}%` }}
+              style={{ height: `${totalPx}px` }}
             >
-              {wonPct > 0 ? (
-                <div className={COLORS.won} style={{ height: `${wonPct}%` }} />
-              ) : null}
-              {lostPct > 0 ? (
+              {wonPx > 0 ? (
                 <div
-                  className={COLORS.lost}
-                  style={{ height: `${lostPct}%` }}
+                  className={COLORS.won}
+                  style={{ height: `${wonPx}px` }}
                 />
               ) : null}
-              {pendingPct > 0 ? (
+              {lostPx > 0 ? (
+                <div
+                  className={COLORS.lost}
+                  style={{ height: `${lostPx}px` }}
+                />
+              ) : null}
+              {pendingPx > 0 ? (
                 <div
                   className={COLORS.pending}
-                  style={{ height: `${pendingPct}%` }}
+                  style={{ height: `${pendingPx}px` }}
                 />
               ) : null}
             </div>
             <span
               className={cn(
-                "truncate font-mono text-[10px] text-muted-foreground leading-none",
-                labelClamp
+                "font-mono text-[10px] text-muted-foreground leading-none",
+                showLabel ? "" : "invisible"
               )}
             >
               {b.label}
@@ -299,11 +344,13 @@ function FlatBars({
     0
   );
   const scaleMax = Math.max(max, 1);
+  const chartPx = 104;
   return (
-    <div className="flex h-32 items-end gap-1">
+    <div className="flex h-32 items-end gap-1" style={{ minHeight: "120px" }}>
       {histogram.buckets.map((b, i) => {
         const v = viewMode === "count" ? b.count : b.usdc;
-        const heightPct = v === 0 ? 2 : (v / scaleMax) * 100;
+        const heightPx =
+          v === 0 ? 4 : Math.max(8, Math.round((v / scaleMax) * chartPx));
         return (
           <div
             key={`${b.label}-${i}`}
@@ -312,9 +359,9 @@ function FlatBars({
           >
             <div
               className="w-full rounded-t-sm bg-primary/70"
-              style={{ height: `${heightPct}%` }}
+              style={{ height: `${heightPx}px` }}
             />
-            <span className="truncate font-mono text-[10px] text-muted-foreground leading-none">
+            <span className="font-mono text-[10px] text-muted-foreground leading-none">
               {b.label}
             </span>
           </div>
