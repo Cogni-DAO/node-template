@@ -49,7 +49,7 @@ export function HeaderFilter<TData, TValue>({
   }
 
   return (
-    <div className="flex max-h-64 min-w-[160px] flex-col gap-0.5 overflow-y-auto">
+    <div className="flex max-h-64 min-w-40 flex-col gap-0.5 overflow-y-auto">
       {values.map((v) => {
         const isSelected = selected.has(v);
         return (
