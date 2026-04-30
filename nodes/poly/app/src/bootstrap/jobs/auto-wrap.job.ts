@@ -25,10 +25,7 @@
  * @public
  */
 
-import type {
-  LoggerPort,
-  MetricsPort,
-} from "@cogni/poly-market-provider";
+import type { LoggerPort, MetricsPort } from "@cogni/poly-market-provider";
 import type { PolyTraderWalletPort } from "@cogni/poly-wallet";
 
 /**
@@ -67,9 +64,9 @@ const AUTO_WRAP_ROW_LIMIT = 200;
  * Implementation backs onto the partial index
  * `poly_wallet_connections_auto_wrap_eligible_idx`.
  */
-export type ListEligibleAutoWrapConnections = (limit: number) => Promise<
-  readonly { readonly billingAccountId: string }[]
->;
+export type ListEligibleAutoWrapConnections = (
+  limit: number
+) => Promise<readonly { readonly billingAccountId: string }[]>;
 
 export interface AutoWrapJobDeps {
   walletPort: Pick<PolyTraderWalletPort, "wrapIdleUsdcE">;
@@ -194,10 +191,7 @@ export function startAutoWrap(deps: AutoWrapJobDeps): AutoWrapJobHandle {
   return {
     stop() {
       clearInterval(intervalHandle);
-      log.info(
-        { event: POLY_AUTO_WRAP_EVENTS.STOPPED },
-        "auto-wrap stopped"
-      );
+      log.info({ event: POLY_AUTO_WRAP_EVENTS.STOPPED }, "auto-wrap stopped");
     },
     getLastTickAt() {
       return lastTickAt;

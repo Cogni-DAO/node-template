@@ -397,8 +397,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
         tradingApprovalsReadyAt: polyWalletConnections.tradingApprovalsReadyAt,
         autoWrapConsentAt: polyWalletConnections.autoWrapConsentAt,
         autoWrapRevokedAt: polyWalletConnections.autoWrapRevokedAt,
-        autoWrapFloorUsdceE6dp:
-          polyWalletConnections.autoWrapFloorUsdceE6dp,
+        autoWrapFloorUsdceE6dp: polyWalletConnections.autoWrapFloorUsdceE6dp,
       })
       .from(polyWalletConnections)
       .where(
@@ -1799,17 +1798,14 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   // task.0429 — auto-wrap consent loop
   // ────────────────────────────────────────────────────────────────────────
 
-  async wrapIdleUsdcE(
-    billingAccountId: string
-  ): Promise<WrapIdleUsdcEResult> {
+  async wrapIdleUsdcE(billingAccountId: string): Promise<WrapIdleUsdcEResult> {
     const rows = await this.serviceDb
       .select({
         id: polyWalletConnections.id,
         billingAccountId: polyWalletConnections.billingAccountId,
         autoWrapConsentAt: polyWalletConnections.autoWrapConsentAt,
         autoWrapRevokedAt: polyWalletConnections.autoWrapRevokedAt,
-        autoWrapFloorUsdceE6dp:
-          polyWalletConnections.autoWrapFloorUsdceE6dp,
+        autoWrapFloorUsdceE6dp: polyWalletConnections.autoWrapFloorUsdceE6dp,
       })
       .from(polyWalletConnections)
       .where(
@@ -1856,7 +1852,9 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     }
     if (!this.polygonRpcUrl) {
       throw Object.assign(
-        new Error("wrapIdleUsdcE: POLYGON_RPC_URL is not configured on this pod"),
+        new Error(
+          "wrapIdleUsdcE: POLYGON_RPC_URL is not configured on this pod"
+        ),
         { code: "polygon_rpc_unconfigured" }
       );
     }

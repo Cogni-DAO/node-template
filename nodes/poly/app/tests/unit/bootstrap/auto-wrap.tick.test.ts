@@ -28,7 +28,9 @@ import {
 
 function makeLogger(): LoggerPort {
   const noop = () => {};
-  const logger: Partial<LoggerPort> & { child: (..._a: unknown[]) => LoggerPort } = {
+  const logger: Partial<LoggerPort> & {
+    child: (..._a: unknown[]) => LoggerPort;
+  } = {
     debug: noop,
     info: noop,
     warn: noop,
@@ -48,9 +50,10 @@ function makeMetrics(): MetricsPort & {
     },
     observeDurationMs: () => {},
     calls,
-  } as MetricsPort & typeof Object & {
-    calls: { name: string; labels: Record<string, string> }[];
-  };
+  } as MetricsPort &
+    typeof Object & {
+      calls: { name: string; labels: Record<string, string> }[];
+    };
 }
 
 function makeDeps(opts: {

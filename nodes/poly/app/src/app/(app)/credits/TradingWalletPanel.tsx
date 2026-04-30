@@ -172,9 +172,7 @@ export function TradingWalletPanel(): ReactElement {
           />
 
           {status.trading_ready ? (
-            <AutoWrapToggle
-              autoWrapConsentAt={status.auto_wrap_consent_at}
-            />
+            <AutoWrapToggle autoWrapConsentAt={status.auto_wrap_consent_at} />
           ) : null}
 
           {status.trading_ready ? <PolicyPanel /> : null}

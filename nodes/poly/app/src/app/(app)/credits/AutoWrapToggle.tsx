@@ -127,9 +127,7 @@ export function AutoWrapToggle({
             "rounded-full border transition-colors duration-150",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
             "disabled:opacity-60",
-            on
-              ? "border-primary/60 bg-primary"
-              : "border-border/60 bg-muted",
+            on ? "border-primary/60 bg-primary" : "border-border/60 bg-muted",
           ].join(" ")}
         >
           <span

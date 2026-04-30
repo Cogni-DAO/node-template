@@ -83,13 +83,13 @@ Pre-V2 there was no airlock — V1 exchanges spent USDC.e directly. V2 introduce
 
 ### What our app does with each token
 
-| Path                                    | Reads / writes                                                                                                                                                                       |
-| --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Display "trading balance" on Money page | Sum **USDC.e + pUSD** on-chain. Both are 1:1 USD; UI shows the total. (Code: `readPolygonBalances` in the privy adapter reads both and sums to the `usdcE` field name kept for now.) |
-| Enable Trading button                   | Wraps **all** USDC.e → pUSD on click. Steady state after one click: USDC.e ≈ 0, pUSD = wallet balance.                                                                               |
-| Mirror BUY                              | Spends **pUSD** via the V2 exchange. USDC.e is never touched at trade time.                                                                                                          |
+| Path                                    | Reads / writes                                                                                                                                                                                                                                            |
+| --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Display "trading balance" on Money page | Sum **USDC.e + pUSD** on-chain. Both are 1:1 USD; UI shows the total. (Code: `readPolygonBalances` in the privy adapter reads both and sums to the `usdcE` field name kept for now.)                                                                      |
+| Enable Trading button                   | Wraps **all** USDC.e → pUSD on click. Steady state after one click: USDC.e ≈ 0, pUSD = wallet balance.                                                                                                                                                    |
+| Mirror BUY                              | Spends **pUSD** via the V2 exchange. USDC.e is never touched at trade time.                                                                                                                                                                               |
 | New deposit lands as USDC.e             | If the user has flipped on **Auto-wrap** (task.0429), the 60s job converts it to pUSD on the next tick (≤ 90s end-to-end). Without auto-wrap, it sits until the next Enable Trading click. UI still shows the correct total because we sum both balances. |
-| V1 CTF redeem returns cash              | Pre-cutover positions redeem to USDC.e (`bug.0428` made this per-job correct). Same auto-wrap path picks them up. Post-cutover (V2) redeems land pUSD directly — no wrap needed.    |
+| V1 CTF redeem returns cash              | Pre-cutover positions redeem to USDC.e (`bug.0428` made this per-job correct). Same auto-wrap path picks them up. Post-cutover (V2) redeems land pUSD directly — no wrap needed.                                                                          |
 
 ### Contract addresses (Polygon mainnet, V2)
 
@@ -124,12 +124,12 @@ Idempotent: each step checks live state and skips when satisfied. Step 2 ("wrap"
 
 The Enable Trading ceremony runs **once** per wallet. After that, the seven non-wrap approvals are sticky on-chain. Step 2 ("wrap") is the only one that needs to fire again whenever new USDC.e arrives. Three of four cash-return channels deliver USDC.e:
 
-| Channel | Token landed |
-|---|---|
-| Money-page deposit (`task.0352`) | USDC.e |
-| V1 CTF redeem (pre-cutover positions) | USDC.e |
-| V2 CTF redeem (post-cutover) | pUSD |
-| External transfer to funder | USDC.e |
+| Channel                               | Token landed |
+| ------------------------------------- | ------------ |
+| Money-page deposit (`task.0352`)      | USDC.e       |
+| V1 CTF redeem (pre-cutover positions) | USDC.e       |
+| V2 CTF redeem (post-cutover)          | pUSD         |
+| External transfer to funder           | USDC.e       |
 
 Without intervention, three of these strand cash until the user clicks Enable Trading again. The auto-wrap loop closes that gap with a single user consent + a background job.
 
@@ -164,12 +164,12 @@ Read-then-act, not event-driven — there is no Transfer-log subscription. Every
 
 `PolyTraderWalletPort.wrapIdleUsdcE` returns a structured `{ outcome: "skipped", reason }` for every non-wrap path. The job propagates `reason` into a metric label so each branch is observable independently:
 
-| Reason | Meaning |
-|---|---|
-| `no_consent` | `auto_wrap_consent_at IS NULL` or revoked since (race-protection on the read path). |
-| `no_balance` | USDC.e balance is exactly 0. |
-| `below_floor` | Balance > 0 but < the floor — DUST_GUARD. |
-| `not_provisioned` | No active `poly_wallet_connections` row for the tenant. |
+| Reason            | Meaning                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| `no_consent`      | `auto_wrap_consent_at IS NULL` or revoked since (race-protection on the read path). |
+| `no_balance`      | USDC.e balance is exactly 0.                                                        |
+| `below_floor`     | Balance > 0 but < the floor — DUST_GUARD.                                           |
+| `not_provisioned` | No active `poly_wallet_connections` row for the tenant.                             |
 
 Throws (RPC unreachable, decryption error, Privy backend down) are caught at the job's per-row level and counted as `outcome: "errored"`; they never escape the interval.
 
