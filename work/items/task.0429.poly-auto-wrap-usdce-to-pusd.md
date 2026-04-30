@@ -2,10 +2,12 @@
 id: task.0429
 type: task
 title: "Poly trading wallet — auto-wrap USDC.e → pUSD (kill the human-click-on-cycle requirement)"
-status: needs_design
+status: needs_implement
 priority: 1
 rank: 5
 estimate: 5
+branch: feat/poly-auto-wrap-consent-loop
+pr: 1149
 summary: "After the V2 cutover the wallet's lifecycle has a fatal seam for unattended operation: V2 exchanges spend pUSD, but external deposits and V1 legacy CTF redeems arrive as USDC.e. The only path that wraps USDC.e → pUSD today is Step 2 of the 8-step Enable Trading ceremony, which fires once at button-click time and never again. Real-world consequence observed on production 2026-04-29 ~07:30Z: funder 0x95e407… had $46.66 USDC.e + $0.42 pUSD, and 154/154 mirror placements in the prior 30 min returned `errorCode: insufficient_balance` because pUSD ran dry. The current product cannot operate continuously without a human in the loop. Fix: server-side auto-wrap loop driven by an explicit one-time consent the user grants via the Money page (the on-chain `USDC.e.approve(CollateralOnramp, max)` already exists from Enable Trading, so the app technically can wrap any time — the missing pieces are user-visible permission, a wrap-when-USDC.e>floor loop, and observability)."
 outcome: "A user with `auto_wrap_consent: true` on their `poly_wallet_connections` row never has their wallet stall on `insufficient_balance` from USDC.e drift. Steady-state observed behavior on candidate-a: USDC.e balance polled every N minutes; whenever it crosses a floor (e.g. ≥ $1), `CollateralOnramp.wrap(USDC.e, funder, balance)` fires automatically and the funder's pUSD balance increases by the same amount. Mirror placements that would have failed `insufficient_balance` succeed instead. Audit trail (`poly.wallet.auto_wrap.{detected, submitted, confirmed, error}`) lets ops grep for any wrap that happened without explicit user trigger. Per-tenant. Idempotent. Off by default — the user grants consent via a clear Money page toggle and can revoke."
 spec_refs:
@@ -174,6 +176,46 @@ After those three: contract + route + UI toggle.
 - Log at INFO level on the happy path. This is not noise — operators will want to grep for "did auto-wrap fire today" without reaching for traces.
 - Consider rate-limiting at the adapter level (e.g. min 30s between wraps per tenant) to absorb flapping balances and avoid burning gas on dust drift; primary protection is the floor + single-flight.
 
+## Design — chosen approach (PR #1149)
+
+One toggle, perpetual loop. User flips **Auto-wrap USDC.e → pUSD** on the Money page once → the trader pod wraps idle USDC.e on a 60s scan whenever balance ≥ floor.
+
+```
+funder ──USDC.e──▶ [60s scan: consent + balance ≥ floor]
+                            │
+                            ▼
+                  CollateralOnramp.wrap(...)
+                            │
+                            ▼
+funder ──pUSD──▶ CLOB BUY ──▶ CTF position ──▶ resolves ──▶ redeem
+   ▲                                                          │
+   └──────────── USDC.e (V1) / pUSD (V2) ◀────────────────────┘
+```
+
+### Concrete additions
+
+- **Schema**: `auto_wrap_consent_at` + actor trio + `auto_wrap_floor_usdce_6dp` (NOT NULL DEFAULT 1_000_000) + `auto_wrap_revoked_at` on `poly_wallet_connections`. Migration `0035_poly_auto_wrap_consent_loop.sql`. CHECK constraints enforce the trio + positive floor; partial index for the job's hot scan.
+- **Port**: `wrapIdleUsdcE` (returns wrapped/skipped + structured reason), `setAutoWrapConsent`, `revokeAutoWrapConsent`. `getConnectionSummary` extended.
+- **Adapter**: reuses the same module-level pinned `COLLATERAL_ONRAMP_POLYGON` + `COLLATERAL_ONRAMP_WRAP_ABI` as `ensureTradingApprovals` (APPROVAL_TARGETS_PINNED / NO_GENERIC_SIGNING preserved by construction).
+- **Job** `auto-wrap.job.ts`: 60s `setInterval` + pure `runAutoWrapTick`, modeled on `order-reconciler.job.ts`. Single-flight via Privy + AEAD gate + POLYGON_RPC_URL gate; per-row try/catch (TICK_IS_SELF_HEALING).
+- **Routes**: `POST` / `DELETE /api/v1/poly/wallet/auto-wrap/consent` (Zod-first, SIWE-bound).
+- **UI**: `AutoWrapToggle.tsx` — single switch + status pill, optimistic React Query mutation, only mounted when `connected && trading_ready`.
+
+### Invariants
+
+- `AUTO_WRAP_ON_CONSENT` — job MAY wrap iff `auto_wrap_consent_at IS NOT NULL AND auto_wrap_revoked_at IS NULL AND revoked_at IS NULL`.
+- `DUST_GUARD` — skip when balance < floor (prevents gas-on-dust drain).
+- `CONSENT_REVOCABLE` — revoke is honored on the next tick; `auto_wrap_consent_at` preserved for forensics.
+- See also `docs/spec/poly-collateral-currency.md` for the V1↔V2↔CollateralOnramp lifecycle.
+
+### Skip outcomes (metric labels)
+
+`no_consent` | `no_balance` | `below_floor` | `not_provisioned`. Throws (RPC down, decryption error, Privy unreachable) caught at row level → counter++ + log; never escapes the interval.
+
 ## PR / Links
 
+- PR: https://github.com/Cogni-DAO/node-template/pull/1149
+- Branch: `feat/poly-auto-wrap-consent-loop`
+- Spec: `docs/spec/poly-collateral-currency.md` (extended in #1149 with the auto-wrap loop section + diagram + invariants)
+- Hard dep (merged): bug.0428 (PR #1145) — V2 redeems now land pUSD directly, so the auto-wrap job only services deposits + V1 redeems + transfers (steady state).
 - Handoff: [handoff](../handoffs/task.0429.handoff.md)

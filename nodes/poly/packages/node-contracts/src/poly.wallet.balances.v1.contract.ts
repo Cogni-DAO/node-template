@@ -29,6 +29,8 @@ export const polyWalletBalancesOperation = {
     address: walletAddressSchema.nullable(),
     /** USDC.e on Polygon, decimal form (not atomic). `null` on RPC failure. */
     usdc_e: z.number().nullable(),
+    /** pUSD on Polygon, decimal form. `null` on RPC failure. */
+    pusd: z.number().nullable(),
     /** Native POL on Polygon, decimal form. `null` on RPC failure. */
     pol: z.number().nullable(),
     errors: z.array(z.string()),

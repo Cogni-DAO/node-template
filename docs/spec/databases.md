@@ -195,21 +195,30 @@ See [Database RLS Spec](database-rls.md) for the dual-client architecture and st
 
 **Future: Atlas + GitOps migrations** — declarative schema, CRD-based Argo integration, destructive-change linting. Deferred to task.0325 with full spike intel preserved.
 
-### 2.6 Hand-Authored Migrations & Snapshot Chain Integrity
+### 2.6 Generating Migrations
 
-`drizzle-kit generate` cannot model RLS policies, triggers, `ALTER POLICY`, ARRAY DEFAULTs, custom functions, or other Postgres-specific DDL. When you need any of these, hand-author the `.sql` file — but you **must** also hand-author the matching snapshot, or `db:generate:<node>` will silently rot for the next dev.
+**Default: `pnpm db:generate:<node>`.** Edit the schema TS, then auto-gen. Hand-authoring is for things drizzle-kit can't model (RLS policies, triggers, custom functions) — not for plain column adds, CHECKs, or partial indexes. Two devs in a row (April 2026) hand-authored column adds, broke the chain, shipped silent no-ops to candidate-a.
 
-**The recipe (every hand-authored migration):**
+**Post-generate checklist (always):**
 
-1. Write `meta/NNNN_<tag>.sql` with your DDL.
-2. Append `{ "idx": NNNN, "tag": "NNNN_<tag>", ... }` to `meta/_journal.json` (mirror existing entry shape).
-3. Copy the prior snapshot: `cp meta/(N-1)_snapshot.json meta/NNNN_snapshot.json`.
-4. In the new snapshot file: regenerate `id` (any new UUID), set `prevId` to the prior snapshot's `id`, and edit the `tables` block to reflect the deltas your `.sql` applies (add/drop columns, indexes, FKs).
-5. Commit `.sql` + journal entry + snapshot together in a single commit.
+1. **Verify monotonic `when`.** Open `meta/_journal.json`; confirm your new entry's `when > max(prior when)`. If not, bump to `prior_max + 1`. The runtime migrator skips entries whose `when <=` the `created_at` of the last applied row, and `created_at` is the journal's `when`. **Future-dating any entry poisons every later migration on that node.** Poly's idx 30–33 are poisoned with 2026-05-04 timestamps today — every poly migration needs a manual `when` bump until that's normalized.
+2. **Inspect the SQL.** If you actually need RLS / triggers / custom functions, fall through to the hand-authored recipe below.
+3. `pnpm db:check` must be green before commit.
+4. Commit `.sql` + `_journal.json` + `NNNN_snapshot.json` together.
 
-**The gate:** `pnpm db:check` runs `drizzle-kit check` against every node config (operator + resy + poly Postgres + poly Doltgres). It catches missing snapshots, broken `prevId` chains, and self-referential snapshots. It is invoked automatically by `pnpm check` and `pnpm check:fast`.
+**Hand-authored recipe (only when drizzle-kit literally cannot emit it):**
 
-**Hard rule — do not paper over chain breaks:** never edit a _previously committed_ snapshot's `prevId` to silence a `drizzle-kit check` failure. The symptom you'd be hiding is real and gets worse the longer it's unaddressed. If `db:check` goes red, fix the chain — don't rewrite history.
+1. Write `NNNN_<tag>.sql`.
+2. Append journal entry with `when > max(prior when)`.
+3. `cp meta/(N-1)_snapshot.json meta/NNNN_snapshot.json`; regenerate `id`, set `prevId` to prior snapshot's `id`, edit `tables` to reflect your deltas.
+4. `pnpm db:check` green; commit all three files together.
+
+**Hard rules:**
+
+- Never future-date `when`. Never edit a committed snapshot's `prevId` to silence `db:check`.
+- `db:check` catches snapshot/`prevId` breakage **and** non-monotonic `when` (via `scripts/db/check-journal-when.mjs`). Pre-existing future-dated entries that already shipped are warning-only — the load-bearing guard is strict-monotonic ordering, which is what both April 2026 incidents tripped on.
+- Pushing schema with `--no-verify` skips `db:check`. Don't.
+- After flight, confirm `kubectl logs <pod> -c migrate` lists your new tag. Silent skip is exactly the failure mode this section prevents.
 
 ### 2.1 Local Development
 

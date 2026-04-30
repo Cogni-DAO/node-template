@@ -161,23 +161,24 @@ export const GET = wrapRouteHandlerWithLogging(
       });
     }
 
-    // `balances.usdcE` is the wallet's single on-chain USDC.e balance.
-    // Polymarket's CLOB does not escrow BUY-side USDC on-chain — open orders
-    // are software-level reservations against the wallet's allowance, so
-    // `lockedUsdc` is already part of `balances.usdcE`. The dashboard wants
-    // three non-overlapping buckets that sum to total portfolio value:
-    //   available = truly free USDC (on-chain total − locked)
-    //   locked    = USDC reserved by open BUY orders
-    //   positions = mark-to-market value of CTF share holdings
-    // Previously `usdc_available` aliased to `balances.usdcE` (total on-chain)
-    // and `usdc_total` summed all three, double-counting locked.
+    // `balances.usdcE` and `balances.pusd` are the wallet's two on-chain cash
+    // balances (USDC.e bridged + Polymarket V2 pUSD). Both are spendable from
+    // the dashboard's perspective: pUSD funds CLOB BUYs directly; USDC.e is
+    // wrapped to pUSD by the auto-wrap loop on a 60s tick when consent is on.
+    // Polymarket's CLOB does not escrow BUY-side USD on-chain — open orders
+    // are software-level reservations, so `lockedUsdc` is already part of the
+    // on-chain cash balance.
+    const cashOnChain =
+      balances.usdcE !== null && balances.pusd !== null
+        ? balances.usdcE + balances.pusd
+        : null;
     const usdcAvailable =
-      balances.usdcE !== null && lockedUsdc !== null
-        ? roundToCents(Math.max(0, balances.usdcE - lockedUsdc))
-        : balances.usdcE;
+      cashOnChain !== null && lockedUsdc !== null
+        ? roundToCents(Math.max(0, cashOnChain - lockedUsdc))
+        : cashOnChain;
     const total =
-      balances.usdcE !== null && positionsMtm !== null
-        ? roundToCents(balances.usdcE + positionsMtm)
+      cashOnChain !== null && positionsMtm !== null
+        ? roundToCents(cashOnChain + positionsMtm)
         : null;
     let pnlHistory: PolyWalletOverviewOutput["pnlHistory"] = [];
     try {

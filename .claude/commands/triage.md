@@ -1,67 +1,42 @@
-You are a **senior product manager** routing a work item to the right project context.
+You route a work item to its project context and next status via the Cogni API. You do not create tasks, specs, or projects — you route.
 
-Your job is lightweight: read the item, assess where it fits, set the linkage, and recommend the next command. You don't create tasks, specs, or projects — you route, and prioritize.
+**Bootstrap first**: read `AGENTS.md`, scan `work/projects/proj.*` for the right home, and `GET https://preview.cognidao.org/api/v1/work/items/<id>` to see current state.
 
-Read these before starting:
+## API calls
 
-- [Items Index](work/items/_index.md) — find the item
-- [Development Lifecycle](docs/spec/development-lifecycle.md) — workflow flows and when to create what
+```bash
+# Read current state
+curl https://preview.cognidao.org/api/v1/work/items/<id> \
+  -H "authorization: Bearer $COGNI_KEY"
 
-## Process
+# Route: set project + next status
+curl -X PATCH https://preview.cognidao.org/api/v1/work/items/<id> \
+  -H "authorization: Bearer $COGNI_KEY" \
+  -H 'content-type: application/json' \
+  -d '{
+    "set": {
+      "projectId": "proj.<parent-or-omit-if-standalone>",
+      "status": "<next-status-per-table-below>",
+      "branch": "<feat/<id>-slug>-if-implement"
+    }
+  }'
+```
 
-1. **Find the item**: Read the item the user references. If no specific item, check `_index.md` for unrouted items (empty `project:` field).
+## Routing table
 
-2. **Assess routing**:
-   - Scan `work/projects/` for a project whose roadmap covers this work.
-   - If a matching project exists → attach it.
-   - If no project fits but the work is multi-PR or novel → recommend creating one with `/project`.
-   - If the work is self-contained (single PR, clear scope) → leave `project:` empty. Standalone is fine.
-
-3. **Update the item** (type-dependent routing):
-
-   **Stories** (`type: story`):
-   - Stories are intake records. Set `status: done` — triage completes their lifecycle.
-   - If the story warrants implementation, create new `task.*` or `bug.*` items at appropriate status.
-   - Update `updated:` date.
-
-   **Spikes** (`type: spike`):
-   - Set `status: needs_research`.
-   - Set `project: proj.*` if applicable.
-   - Update `updated:` date.
-
-   **Tasks** (`type: task`):
-   - Set `project: proj.*` (or leave empty if standalone).
-   - Route to status based on complexity:
-     - Clear scope, no design needed → `needs_implement`. Set `branch:` field.
-     - Needs spec/design work → `needs_design`
-     - Unknown approach, needs investigation → `needs_research`
-   - Update `updated:` date.
-
-   **Bugs** (`type: bug`):
-   - Set `project: proj.*` (or leave empty if standalone).
-   - Route to status based on complexity:
-     - Simple fix, clear scope → `needs_implement`. Set `branch:` field.
-     - Needs design/investigation → `needs_design`
-     - Unknown root cause, needs investigation → `needs_research`
-   - Update `updated:` date.
-
-4. **Update `_index.md`**: Reflect new project linkage and status.
-
-5. **Finalize**:
-   - Run `pnpm check:docs` and fix any errors until clean.
-   - Commit all changes (work item file(s), `_index.md`) on the work item's branch (or current branch if no branch yet).
-   - Push to remote.
-
-6. **Report**: State what was routed and to which status. The next command is determined by the status:
-   - `needs_research` → `/research`
-   - `needs_design` → `/design`
-   - `needs_implement` → `/implement`
-   - `done` → no further action (stories)
+| type                    | route to status                  | next command                                  |
+| ----------------------- | -------------------------------- | --------------------------------------------- |
+| `story`                 | `done` (stories are intake-only) | (create `task.*` if implementation warranted) |
+| `spike`                 | `needs_research`                 | `/research`                                   |
+| `task` clear scope      | `needs_implement` (set `branch`) | `/implement`                                  |
+| `task` design first     | `needs_design`                   | `/design`                                     |
+| `task` unknown approach | `needs_research`                 | `/research`                                   |
+| `bug` simple fix        | `needs_implement` (set `branch`) | `/implement`                                  |
+| `bug` design first      | `needs_design`                   | `/design`                                     |
 
 ## Rules
 
-- **TRIAGE_OWNS_ROUTING** — only this command sets or changes `project:` on items
-- **ROUTE_DONT_CREATE** — triage routes. It does not create tasks, specs, or projects.
-- **INDEX_MUST_MATCH** — `_index.md` must reflect the updated state
+- **TRIAGE_OWNS_ROUTING.** Only this skill changes `projectId` on items.
+- **ROUTE_DONT_CREATE.** Triage does not POST new items.
 
 #$ITEM
