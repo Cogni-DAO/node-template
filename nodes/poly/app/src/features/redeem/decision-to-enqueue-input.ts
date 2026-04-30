@@ -70,6 +70,7 @@ export function decisionToEnqueueInput(
       ...base,
       flavor: c.negativeRisk ? "neg-risk-parent" : "binary",
       indexSet: [],
+      collateralToken: c.collateralToken,
       expectedShares: "0",
       expectedPayoutUsdc: "0",
       lifecycleState,
