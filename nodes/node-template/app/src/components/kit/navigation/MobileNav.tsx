@@ -14,11 +14,6 @@
 
 "use client";
 
-import { ExternalLink, Menu } from "lucide-react";
-import type { ReactElement } from "react";
-
-import { NavigationLink } from "@/components";
-import { SheetThemeToggle } from "@/components/kit/theme/SheetThemeToggle";
 import {
   Sheet,
   SheetContent,
@@ -26,6 +21,10 @@ import {
   SheetTrigger,
 } from "@cogni/node-ui-kit/shadcn/sheet";
 import { cn } from "@cogni/node-ui-kit/util/cn";
+import { ExternalLink, Menu } from "lucide-react";
+import type { ReactElement } from "react";
+import { NavigationLink } from "@/components";
+import { SheetThemeToggle } from "@/components/kit/theme/SheetThemeToggle";
 
 interface MobileNavProps {
   readonly className?: string;

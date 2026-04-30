@@ -20,11 +20,10 @@
 "use client";
 
 import type { WorkItemDto } from "@cogni/node-contracts";
-import { createColumnHelper } from "@tanstack/react-table";
+import { HeaderFilter } from "@cogni/node-ui-kit/header-filter";
 
 import { DataGridColumnHeader } from "@cogni/node-ui-kit/reui/data-grid/data-grid-column-header";
-
-import { HeaderFilter } from "@cogni/node-ui-kit/header-filter";
+import { createColumnHelper } from "@tanstack/react-table";
 import { StatusPill, TypeIcon } from "./work-item-icons";
 
 const col = createColumnHelper<WorkItemDto>();
