@@ -18,7 +18,7 @@ import { useEffect, useState } from "react";
 
 import { Badge } from "@/components/kit/data-display/Badge";
 import { Card } from "@/components/kit/layout/Card";
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 export interface RunCardData {
   id: string;

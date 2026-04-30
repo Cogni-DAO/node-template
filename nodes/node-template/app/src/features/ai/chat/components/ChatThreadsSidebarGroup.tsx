@@ -26,7 +26,7 @@ import {
   SidebarMenuSubButton,
   SidebarMenuSubItem,
 } from "@/components";
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 import { useDeleteThread, useThreads } from "../hooks/useThreads";
 import { useChatSidebarStore } from "./ChatSidebarContext";
 

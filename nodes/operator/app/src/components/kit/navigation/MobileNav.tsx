@@ -24,8 +24,8 @@ import {
   SheetContent,
   SheetTitle,
   SheetTrigger,
-} from "@/components/vendor/shadcn/sheet";
-import { cn } from "@/shared/util/cn";
+} from "@cogni/node-ui-kit/shadcn/sheet";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 interface MobileNavProps {
   readonly className?: string;

@@ -29,7 +29,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@/components/vendor/shadcn/dialog";
+} from "@cogni/node-ui-kit/shadcn/dialog";
 
 /** Provider metadata for rendering sign-in buttons */
 const OAUTH_PROVIDERS = [

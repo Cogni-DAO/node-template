@@ -49,7 +49,7 @@ import {
   buildGroupedChartData,
 } from "@/components/kit/data-display/activity-chart-utils";
 import type { RunCardData } from "@/components/kit/data-display/RunCard";
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 import { fetchActivity } from "../activity/_api/fetchActivity";
 import { WorkItemDetail } from "../work/_components/WorkItemDetail";
 import { StatusPill, TypeIcon } from "../work/_components/work-item-icons";

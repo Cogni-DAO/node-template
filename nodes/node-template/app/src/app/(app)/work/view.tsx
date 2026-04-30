@@ -42,10 +42,10 @@ import { Button, Input } from "@/components";
 import {
   DataGrid,
   DataGridContainer,
-} from "@/components/reui/data-grid/data-grid";
-import { DataGridColumnVisibility } from "@/components/reui/data-grid/data-grid-column-visibility";
-import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
-import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
+} from "@cogni/node-ui-kit/reui/data-grid/data-grid";
+import { DataGridColumnVisibility } from "@cogni/node-ui-kit/reui/data-grid/data-grid-column-visibility";
+import { DataGridPagination } from "@cogni/node-ui-kit/reui/data-grid/data-grid-pagination";
+import { DataGridTable } from "@cogni/node-ui-kit/reui/data-grid/data-grid-table";
 
 import { fetchWorkItems } from "./_api/fetchWorkItems";
 import { columns } from "./_components/columns";

@@ -21,7 +21,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/vendor/shadcn/card";
+} from "@cogni/node-ui-kit/shadcn/card";
 import {
   type ChartConfig,
   ChartContainer,
@@ -29,7 +29,7 @@ import {
   ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
-} from "@/components/vendor/shadcn/chart";
+} from "@cogni/node-ui-kit/shadcn/chart";
 
 export interface ActivityChartProps {
   title: string;

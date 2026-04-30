@@ -17,7 +17,7 @@
 import { motion } from "framer-motion";
 import type { ReactElement } from "react";
 
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 interface StatItem {
   value: string;

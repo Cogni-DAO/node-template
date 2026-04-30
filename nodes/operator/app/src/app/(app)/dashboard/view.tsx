@@ -54,7 +54,7 @@ import {
   StreamCard,
   useNodeStream,
 } from "@/features/node-stream";
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 import { fetchActivity } from "../activity/_api/fetchActivity";
 import { WorkItemDetail } from "../work/_components/WorkItemDetail";
 import { StatusPill, TypeIcon } from "../work/_components/work-item-icons";

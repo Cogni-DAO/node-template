@@ -22,7 +22,7 @@ import { useEffect, useState } from "react";
 import {
   ToggleGroup,
   ToggleGroupItem,
-} from "@/components/vendor/shadcn/toggle-group";
+} from "@cogni/node-ui-kit/shadcn/toggle-group";
 
 export function SheetThemeToggle(): ReactElement {
   const { theme, setTheme } = useTheme();

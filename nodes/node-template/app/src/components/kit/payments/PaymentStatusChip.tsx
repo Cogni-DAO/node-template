@@ -15,7 +15,7 @@
 import { ExternalLink, Loader2 } from "lucide-react";
 import type { ReactElement } from "react";
 
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 export interface PaymentStatusChipProps {
   /** Transaction hash */

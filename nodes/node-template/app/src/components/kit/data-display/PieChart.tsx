@@ -16,12 +16,12 @@
 import type { ReactElement, ReactNode } from "react";
 import { Label, Pie, PieChart as RechartsPie } from "recharts";
 
-import type { ChartConfig } from "@/components/vendor/shadcn/chart";
+import type { ChartConfig } from "@cogni/node-ui-kit/shadcn/chart";
 import {
   ChartContainer,
   ChartTooltip,
   ChartTooltipContent,
-} from "@/components/vendor/shadcn/chart";
+} from "@cogni/node-ui-kit/shadcn/chart";
 
 /**
  * Each datum needs a `name` key matching a key in `config` so CSS vars resolve.

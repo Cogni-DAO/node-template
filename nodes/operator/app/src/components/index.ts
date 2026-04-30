@@ -85,7 +85,7 @@ export {
 } from "./kit/typography/CodeHero";
 export { HeroActionWords } from "./kit/typography/HeroActionWords";
 export { Prompt } from "./kit/typography/Prompt";
-export { Checkbox } from "./vendor/shadcn/checkbox";
+export { Checkbox } from "@cogni/node-ui-kit/shadcn/checkbox";
 export {
   Dialog,
   DialogClose,
@@ -97,12 +97,12 @@ export {
   DialogPortal,
   DialogTitle,
   DialogTrigger,
-} from "./vendor/shadcn/dialog";
+} from "@cogni/node-ui-kit/shadcn/dialog";
 export {
   Popover,
   PopoverContent,
   PopoverTrigger,
-} from "./vendor/shadcn/popover";
+} from "@cogni/node-ui-kit/shadcn/popover";
 export {
   Select,
   SelectContent,
@@ -114,15 +114,15 @@ export {
   SelectSeparator,
   SelectTrigger,
   SelectValue,
-} from "./vendor/shadcn/select";
-export { Separator } from "./vendor/shadcn/separator";
+} from "@cogni/node-ui-kit/shadcn/select";
+export { Separator } from "@cogni/node-ui-kit/shadcn/separator";
 export {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from "./vendor/shadcn/sheet";
+} from "@cogni/node-ui-kit/shadcn/sheet";
 export {
   Sidebar,
   SidebarContent,
@@ -143,8 +143,8 @@ export {
   SidebarSeparator,
   SidebarTrigger,
   useSidebar,
-} from "./vendor/shadcn/sidebar";
-export { Skeleton } from "./vendor/shadcn/skeleton";
+} from "@cogni/node-ui-kit/shadcn/sidebar";
+export { Skeleton } from "@cogni/node-ui-kit/shadcn/skeleton";
 export {
   Table,
   TableBody,
@@ -154,10 +154,13 @@ export {
   TableHead,
   TableHeader,
   TableRow,
-} from "./vendor/shadcn/table";
-export { ToggleGroup, ToggleGroupItem } from "./vendor/shadcn/toggle-group";
+} from "@cogni/node-ui-kit/shadcn/table";
+export {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@cogni/node-ui-kit/shadcn/toggle-group";
 export {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "./vendor/shadcn/tooltip";
+} from "@cogni/node-ui-kit/shadcn/tooltip";

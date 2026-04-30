@@ -18,7 +18,7 @@ import type { VariantProps } from "class-variance-authority";
 import type { HTMLAttributes } from "react";
 import { forwardRef } from "react";
 
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 import { reveal } from "@/styles/ui";
 
 type DivNoClass = Omit<HTMLAttributes<HTMLDivElement>, "className">;

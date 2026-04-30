@@ -21,7 +21,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-} from "@/components/vendor/shadcn/dialog";
+} from "@cogni/node-ui-kit/shadcn/dialog";
 
 export interface PaymentFlowDialogProps {
   /** Dialog open state */

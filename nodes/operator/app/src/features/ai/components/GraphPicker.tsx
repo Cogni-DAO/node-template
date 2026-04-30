@@ -24,7 +24,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/kit/overlays/Dialog";
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 /**
  * Graph descriptor for UI display.

@@ -24,7 +24,7 @@ import { useDisconnect } from "wagmi";
 
 import { Avatar, AvatarFallback } from "@/components/kit/data-display/Avatar";
 import { EthereumIcon } from "@/components/kit/data-display/ProviderIcons";
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 /** Default avatar color when none is set */
 const DEFAULT_AVATAR_COLOR = "hsl(var(--primary))";

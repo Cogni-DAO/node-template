@@ -22,7 +22,7 @@ import { ConnectButton } from "@rainbow-me/rainbowkit";
 import type React from "react";
 import { useState } from "react";
 
-import { cn } from "@/shared/util/cn";
+import { cn } from "@cogni/node-ui-kit/util/cn";
 
 import { SignInDialog } from "./SignInDialog";
 

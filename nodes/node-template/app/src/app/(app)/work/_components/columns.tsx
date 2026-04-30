@@ -22,9 +22,9 @@
 import type { WorkItemDto } from "@cogni/node-contracts";
 import { createColumnHelper } from "@tanstack/react-table";
 
-import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
+import { DataGridColumnHeader } from "@cogni/node-ui-kit/reui/data-grid/data-grid-column-header";
 
-import { HeaderFilter } from "./HeaderFilter";
+import { HeaderFilter } from "@cogni/node-ui-kit/header-filter";
 import { StatusPill, TypeIcon } from "./work-item-icons";
 
 const col = createColumnHelper<WorkItemDto>();
