@@ -32,17 +32,27 @@ import { billingAccounts, users } from "@/shared/db/schema";
 const TENANT = "ba_test_auto_wrap_0429";
 const ADDRESS = "0xaaaa000000000000000000000000000000000429" as const;
 
+// Map suffix label → hex char so the wallet address keeps its `^0x[0-9a-f]{40}$`
+// shape (CHECK constraint `poly_wallet_connections_address_shape`). Each row
+// gets a distinct address to satisfy the partial unique (chain_id, address)
+// index when multiple rows are seeded in one test.
+const SUFFIX_HEX: Record<string, string> = {
+  "": "1",
+  _A: "a",
+  _B: "b",
+  _C: "c",
+};
+
 async function insertSeedRow(
   db: ReturnType<typeof getSeedDb>,
   overrides: { suffix?: string } = {}
 ): Promise<string> {
-  const billingAccountId = `${TENANT}${overrides.suffix ?? ""}`;
+  const suffix = overrides.suffix ?? "";
+  const billingAccountId = `${TENANT}${suffix}`;
   const userId = `user_${billingAccountId}`;
-  // FK chain: users → billing_accounts → poly_wallet_connections.
-  // Address suffix derived from suffix so concurrent test rows don't collide
-  // on the partial unique (chain_id, address) index.
-  const addressSuffix = (overrides.suffix ?? "").padStart(2, "0").slice(-2);
-  const address = `${ADDRESS.slice(0, 40)}${addressSuffix}` as `0x${string}`;
+  const hex = SUFFIX_HEX[suffix];
+  if (!hex) throw new Error(`unknown suffix ${suffix}`);
+  const address = `${ADDRESS.slice(0, 41)}${hex}` as `0x${string}`;
   await db
     .insert(users)
     .values({
@@ -110,25 +120,42 @@ describe("poly_wallet_connections — auto-wrap consent loop (task.0429)", () =>
 
   it("CHECK rejects a partial-set consent trio (CONSENT_TRIO_CHECK)", async () => {
     const id = await insertSeedRow(db);
-    await expect(
-      db
+    let caught: unknown;
+    try {
+      await db
         .update(polyWalletConnections)
         .set({
           // consent_at without actor — must fail the trio CHECK.
           autoWrapConsentAt: new Date(),
         })
-        .where(eq(polyWalletConnections.id, id))
-    ).rejects.toThrow(/auto_wrap_consent_trio/);
+        .where(eq(polyWalletConnections.id, id));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeDefined();
+    // Drizzle wraps postgres errors; constraint name lives on .cause.
+    const cause = (caught as { cause?: { constraint_name?: string } }).cause;
+    expect(cause?.constraint_name).toBe(
+      "poly_wallet_connections_auto_wrap_consent_trio"
+    );
   });
 
   it("CHECK rejects a non-positive floor (FLOOR_POSITIVE_CHECK)", async () => {
     const id = await insertSeedRow(db);
-    await expect(
-      db
+    let caught: unknown;
+    try {
+      await db
         .update(polyWalletConnections)
         .set({ autoWrapFloorUsdceE6dp: 0n })
-        .where(eq(polyWalletConnections.id, id))
-    ).rejects.toThrow(/auto_wrap_floor_positive/);
+        .where(eq(polyWalletConnections.id, id));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeDefined();
+    const cause = (caught as { cause?: { constraint_name?: string } }).cause;
+    expect(cause?.constraint_name).toBe(
+      "poly_wallet_connections_auto_wrap_floor_positive"
+    );
   });
 
   it("grant + revoke cycle keeps `auto_wrap_consent_at` for forensics (REVOKE_INDEPENDENT)", async () => {
