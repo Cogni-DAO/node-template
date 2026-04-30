@@ -5,7 +5,7 @@ title: "KNOWLEDGE Charter"
 state: Active
 summary: Compounding, versioned domain knowledge that makes every node provably smarter over time.
 created: 2026-04-02
-updated: 2026-04-02
+updated: 2026-04-29
 ---
 
 # KNOWLEDGE Charter
@@ -32,6 +32,89 @@ Doltgres is not a replacement for Postgres. Postgres owns all hot operational da
 Dolt is git for data. Doltgres is the Postgres-compatible flavor. Same wire protocol, same SQL, same Drizzle ORM — but with native `commit`, `log`, `diff`, `branch`, `merge`. Every write creates a versioned snapshot. You can pin an analysis to a knowledge commit hash and reproduce it exactly.
 
 Each node gets its own Doltgres database (`knowledge_operator`, `knowledge_poly`, etc.). Data sovereignty is structural — separate databases, not policy.
+
+## Health Scorecard
+
+> Living view of where the knowledge plane stands vs. the syntropy spec. Updated on every meaningful PR. 🟢 = shipped + exercised on candidate-a · 🟡 = shipped or in-flight, partial · 🔴 = not started or known-broken.
+
+### Infrastructure
+
+| Component                              | Status | Notes                                                                                                              |
+| -------------------------------------- | :----: | ------------------------------------------------------------------------------------------------------------------ |
+| Doltgres server on candidate-a         |   🟢   | Per-node DBs (`knowledge_poly`, `knowledge_operator`); EndpointSlice bridge from k8s → Compose (task.0311)         |
+| Per-node provisioning (`provision.sh`) |   🟢   | Iterates `COGNI_NODE_DBS`; idempotent; reader/writer roles (vestigial until 0.56 RBAC works)                       |
+| drizzle-kit migrator (k8s PreSync Job) |   🟢   | Poly + operator both wired (#894 / #1130). `stamp-commit.mjs` post-migrate captures DDL into `dolt_log`            |
+| `KnowledgeStorePort` + adapter         |   🟡   | Works; `sql.unsafe + escapeValue` everywhere. Internal-agents-only safe. Hardening required before x402 / external |
+| 3 AI tools (`search/read/write`)       |   🟢   | Wired into brain graph; recall-first protocol live in candidate-a                                                  |
+
+### Schema (syntropy seed bundle)
+
+| Table                     | Spec'd | Shipped on poly | Shipped on operator | Notes                                                              |
+| ------------------------- | :----: | :-------------: | :-----------------: | ------------------------------------------------------------------ |
+| `knowledge` (v0 — 10 col) |   ✓    |       🟢        |         🔴          | Operator never had it — gets full extended shape directly via PR-C |
+| `knowledge` (extended)    |   ✓    | 🟡 (PR-B #1142) |   🟡 (PR-C #1143)   | +`entry_type`, `status`, `source_node`, `updated_at`               |
+| `citations` (DAG)         |   ✓    | 🟡 (PR-B #1142) |   🟡 (PR-C #1143)   | Schema only — no app uses citation edges yet                       |
+| `domains`                 |   ✓    | 🟡 (PR-B #1142) |   🟡 (PR-C #1143)   | FK constraint deferred (Doltgres FK unverified); app-layer enforce |
+| `sources`                 |   ✓    | 🟡 (PR-B #1142) |   🟡 (PR-C #1143)   | Reliability scoring — schema only, no scorer yet                   |
+| `knowledge_contributions` |   ✓    | 🟡 (PR-B #1142) |   🟡 (PR-C #1143)   | Metadata for branch-per-contribution flow (PR-D wires the API)     |
+| `BASE_DOMAIN_SEEDS`       |   ✓    | 🟡 (PR-A #1141) |   🟡 (PR-A #1141)   | 5 base domains; not yet auto-applied post-migrate                  |
+
+### Agent + governance flows
+
+| Capability                                        | Status | Notes                                                                                             |
+| ------------------------------------------------- | :----: | ------------------------------------------------------------------------------------------------- |
+| Agent recall-first protocol                       |   🟢   | Brain prompt: `core__knowledge_search` before web search                                          |
+| Internal `core__knowledge_write` → main           |   🟢   | Auto-commits via capability layer                                                                 |
+| External-agent contribution (HTTP, branch-per-PR) |   🟡   | PR-D #1133 in design + package layer; needs PR-A/B/C to merge                                     |
+| Storage-expert role (curator agent)               |   🔴   | Not started; agents currently write directly                                                      |
+| Librarian role (retrieval agent w/ citations)     |   🔴   | Brain uses tools directly; no dedicated retrieval persona                                         |
+| Citation token format in agent output             |   🔴   | `knowledge:{node}:{id}#conf=X&v=Y` spec'd, no citation guard yet                                  |
+| Confidence recomputation (citation walk)          |   🔴   | Spec'd in syntropy; no implementation                                                             |
+| Promotion lifecycle (status field driven)         |   🔴   | Schema has `status` column; no agent automation moves entries through draft→candidate→established |
+| Awareness → knowledge promotion gate              |   🔴   | Spec'd; not built                                                                                 |
+
+### Sharing + federation
+
+| Capability                            | Status | Notes                                                                                                                                                                    |
+| ------------------------------------- | :----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Per-node sovereign DBs                |   🟢   | `DATA_SOVEREIGNTY` structural; one DB per node                                                                                                                           |
+| Fork-takes-knowledge                  |   🟢   | Standalone Dolt repo per DB with full commit history                                                                                                                     |
+| **Dolt remotes** (cross-node sharing) |   🔴   | **Not configured.** `dolt_push`/`dolt_pull` infrastructure missing. No DoltHub or self-hosted remote — required for cross-node knowledge flow / operator pull-down model |
+| External-contribution PR semantics    |   🟡   | Designed (PR-D) — Dolt branches mediate review; merges land via API                                                                                                      |
+| Operator → node base seed pull        |   🔴   | Spec describes it; current invariant `NODES_BOOT_EMPTY` consciously punts                                                                                                |
+| Postgres derived search index         |   🔴   | Per syntropy spec — `knowledge_search` table + embedding sync. Not built                                                                                                 |
+| Vector embeddings (BGE-M3 / voyage)   |   🔴   | Open question in syntropy spec — model unselected                                                                                                                        |
+| Hybrid FTS + vector retrieval (RRF)   |   🔴   | Defer until Postgres index exists                                                                                                                                        |
+| x402 paid librarian access            |   🔴   | vFuture. Spec'd, no implementation                                                                                                                                       |
+| Obsidian export                       |   🔴   | Charter goal; not started                                                                                                                                                |
+
+### Hardening
+
+| Concern                                        | Status | Notes                                                                                                       |
+| ---------------------------------------------- | :----: | ----------------------------------------------------------------------------------------------------------- |
+| `sql.unsafe` SQL-injection surface             |   🟡   | `escapeValue()` is hand-rolled; OK for internal agents. **Needs review before external-contribution lands** |
+| Doltgres FK enforcement                        |   🔴   | Unverified in 0.56; FKs not declared. App-layer is the only enforcement                                     |
+| Component tests against testcontainer Doltgres |   🟡   | Existing knowledge adapter has tests; new contribution adapter has zero (PR-D)                              |
+| Doltgres advisory locks (multi-replica safety) |   🔴   | Untested. Single-replica today. Required if operator scales out                                             |
+| Snapshot/journal hand-rolling (PR-C)           |   🟡   | drizzle-kit may regen on first run after merge — track follow-up                                            |
+| RBAC                                           |   🔴   | Doltgres 0.56 GRANT non-functional; runtime is superuser per `RUNTIME_URL_IS_SUPERUSER`                     |
+
+### Top three asks (where to push next)
+
+1. **🔴 → 🟡 Dolt remotes.** Stand up a self-hosted Dolt remote (or DoltHub repo) so nodes can `dolt_pull` operator base + `dolt_push` validated knowledge. Unblocks operator-curated seed flow + cross-node federation.
+2. **🟡 → 🟢 Adapter hardening before external contributions land.** PR-D's contribution API exposes the adapter to external agents. Fuzz-test `escapeValue()` (or migrate to Drizzle compile + reserved-conn execute) before that PR merges.
+3. **🔴 → 🟡 Postgres derived search index.** Even a manual one-off rebuild script + a `knowledge_search` table unlocks FTS / vector retrieval. Vector model selection is the gating decision.
+
+## Active PR Stack — task.0425 (external knowledge contribution API)
+
+| PR               | Branch / scope                                                |                                                           Status                                                            | Validation                                                                                                                    |
+| ---------------- | ------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------------------------------: | ----------------------------------------------------------------------------------------------------------------------------- |
+| **#1141 (PR-A)** | node-template — `feat/task-0425-pr-a-syntropy-seed-schema`    |                                               🟢 CI green; flight no-op pass                                                | TS only; no runtime to exercise. Validates via downstream PRs picking up the schema                                           |
+| **#1142 (PR-B)** | poly — `feat/task-0425-pr-b-poly-syntropy-migration`          |                            🟡 CI fail on `static` (pre-existing main lint debt; unrelated to PR)                            | Pending main rebase post-#1140; then candidate-flight-infra → migrator runs against `knowledge_poly`                          |
+| **#1143 (PR-C)** | operator — `feat/task-0425-pr-c-operator-knowledge-migration` | 🔴 CI fail on `static` + `build (operator)` (lockfile gap from new workspace dep + pre-existing market-provider rename ref) | Needs lockfile regen after rename ref fixed on main. Then candidate-flight-infra → migrator runs against `knowledge_operator` |
+| **#1133 (PR-D)** | operator — `feat/task-0425-knowledge-contribution-api`        |                                 🟡 design + package layer landed; rebases when A/B/C merge                                  | E2E validation: register agent → POST contribution → diff → admin merge → search confirms entry on `main`                     |
+
+**Sequence:** PR-A merges → PR-B + PR-C in parallel → PR-D rebases onto main, finishes routes/bootstrap, candidate-flights.
 
 ## Current State (v0)
 
