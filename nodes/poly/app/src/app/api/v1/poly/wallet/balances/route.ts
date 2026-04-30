@@ -59,6 +59,7 @@ export const GET = wrapRouteHandlerWithLogging(
           connected: false,
           address: null,
           usdc_e: null,
+          pusd: null,
           pol: null,
           errors: [],
         };
@@ -90,6 +91,7 @@ export const GET = wrapRouteHandlerWithLogging(
         billing_account_id: account.id,
         funder_address: balances.address,
         usdc_e: balances.usdcE,
+        pusd: balances.pusd,
         pol: balances.pol,
         error_count: balances.errors.length,
       },
@@ -101,6 +103,7 @@ export const GET = wrapRouteHandlerWithLogging(
       connected: true,
       address: balances.address,
       usdc_e: balances.usdcE,
+      pusd: balances.pusd,
       pol: balances.pol,
       errors: [...balances.errors],
     };

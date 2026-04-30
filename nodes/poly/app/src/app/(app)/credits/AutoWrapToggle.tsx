@@ -62,7 +62,6 @@ export function AutoWrapToggle({
 }: AutoWrapToggleProps): ReactElement {
   const queryClient = useQueryClient();
   const labelId = useId();
-  const descId = useId();
   const [optimisticOn, setOptimisticOn] = useState<boolean | null>(null);
 
   const serverOn = autoWrapConsentAt !== null;
@@ -89,36 +88,21 @@ export function AutoWrapToggle({
 
   return (
     <div className="rounded-md border border-border/40 bg-muted/30 px-3 py-2.5">
-      <div className="flex items-start gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span
-              id={labelId}
-              className="font-medium text-foreground text-sm leading-none"
-            >
-              Auto-wrap USDC.e&nbsp;→&nbsp;pUSD
-            </span>
-            <StatusPill on={on} pending={isPending} />
-          </div>
-          <p
-            id={descId}
-            className="mt-1.5 text-muted-foreground text-xs leading-snug"
-          >
-            Polymarket BUYs spend pUSD. When on, we convert any USDC.e arriving
-            here — from deposits, settlements, or transfers — every minute.
-          </p>
-          {hasError ? (
-            <p className="mt-1.5 text-destructive text-xs">
-              Couldn't update — try again.
-            </p>
-          ) : null}
-        </div>
+      <div className="flex items-center gap-3">
+        <span
+          id={labelId}
+          className="min-w-0 flex-1 font-medium text-foreground text-sm"
+        >
+          Auto-wrap USDC.e&nbsp;→&nbsp;pUSD
+        </span>
+        {hasError ? (
+          <span className="text-destructive text-xs">retry</span>
+        ) : null}
         <button
           type="button"
           role="switch"
           aria-checked={on}
           aria-labelledby={labelId}
-          aria-describedby={descId}
           aria-busy={isPending}
           disabled={isPending}
           onClick={() => mutation.mutate(!on)}
@@ -149,37 +133,6 @@ export function AutoWrapToggle({
         </button>
       </div>
     </div>
-  );
-}
-
-function StatusPill({
-  on,
-  pending,
-}: {
-  on: boolean;
-  pending: boolean;
-}): ReactElement {
-  if (pending) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-        <span className="h-1 w-1 animate-pulse rounded-full bg-muted-foreground/60" />
-        Updating
-      </span>
-    );
-  }
-  if (on) {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-success/10 px-1.5 py-0.5 font-medium text-success text-xs uppercase tracking-wider">
-        <span className="h-1 w-1 rounded-full bg-success" />
-        Active
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-muted px-1.5 py-0.5 font-medium text-muted-foreground text-xs uppercase tracking-wider">
-      <span className="h-1 w-1 rounded-full bg-muted-foreground/40" />
-      Off
-    </span>
   );
 }
 

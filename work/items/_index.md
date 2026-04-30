@@ -167,6 +167,7 @@
 | 1 | 5 | 5 | needs_implement | task.0429 | Poly trading wallet — auto-wrap USDC.e → pUSD (kill the human-click-on-cycle requirement) | Cogni Poly | proj.poly-copy-trading |
 | 1 | 5 | 3 | needs_review | bug.0430 | Per-position cap leaks because `error` ledger rows can actually fill on chain — `cumulativeIntentForMarket` reads $0 while wallet holds $25 | Poly | proj.poly-bet-sizer |
 | 1 | 5 | 3 | needs_implement | bug.0431 | Redeem policy misclassifies winning vanilla CTF positions as losers — $14.99 stranded on prod | Cogni Poly | proj.poly-copy-trading |
+| 1 | 5 | 3 | needs_triage | bug.0433 | Poly redeem-worker won't unstick `lifecycle_state=loser` rows that bug.0431's race wrote — Derek's 50 winning positions on candidate-a stranded | Cogni Poly | proj.poly-copy-trading |
 | 1 | 6 | 1 | needs_triage | bug.0036 | Chat route enqueues to closed assistant-stream controller — unhandled TypeError |  |  |
 | 1 | 6 | 1 | needs_triage | bug.0070 | OpenClaw CLI binary not executable as `openclaw` — agent CLI commands fail | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 6 | 2 | needs_design | task.0183 | Run list API: GET /api/v1/ai/runs — query graph_runs with filtering | Live Operations Dashboard | proj.live-dashboard |
@@ -174,6 +175,7 @@
 | 1 | 6 | 2 | needs_implement | bug.0345 | Polymarket neg-risk SELL close fails unless CTF setApprovalForAll also covers the Neg-Risk Adapter | Cogni Poly | proj.poly-copy-trading |
 | 1 | 6 | 3 | needs_implement | task.0347 | Poly wallet — minimal policy UI for grants caps | Poly | proj.poly-bet-sizer |
 | 1 | 6 | 1 | needs_implement | bug.0380 | core__poly_data_resolve_username silently returns empty — Gamma /public-search?profile=true does not serve profiles | Cogni Poly | proj.poly-prediction-bot |
+| 1 | 6 | 3 | needs_design | bug.0434 | Cross-node EVENT_NAMES registry forces operator-domain edits for every poly/resy/node-template log line — breaks single-node-scope by construction | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | 7 | 2 | needs_triage | bug.0051 | Gateway model routing has no E2E verification — spend/logs can't correlate gateway calls | OpenClaw Capabilities Integration | proj.openclaw-capabilities |
 | 1 | 7 | 5 | needs_merge | task.0189 | Dashboard P0→P1 bridge: thread linking, page consolidation, public Cogni Live, streaming status | Live Operations Dashboard | proj.live-dashboard |
 | 1 | 8 | 3 | needs_triage | bug.0004 | /activity dashboard cost column broken — charge_receipts needs linked telemetry | Payments & Billing Enhancements | proj.payments-enhancements |
@@ -250,7 +252,9 @@
 | 2 | 5 | 3 | needs_design | task.0346 | Poly wallet stats: Data-API-first windowed stats + batched endpoint | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 5 | 1 | needs_review | task.0369 | Drop --force from packages:build; reclaim 70s per local rebuild | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 6 | 5 | needs_design | task.0334 | Poly niche-research engine — skill-creator + research graph + Dolt store + EDO evidence | Cogni Poly | proj.poly-prediction-bot |
+| 2 | 7 | 3 | needs_triage | bug.0435 | Poly redeem-worker never burns resolved-losing positions, leaving them on /money UI as 'open' forever | Cogni Poly | proj.poly-copy-trading |
 | 2 | 8 | 1 | needs_design | task.0064 | OpenClaw preflight cost estimate 10x audit — real token consumption | Reliability & Uptime | proj.reliability |
+| 2 | 8 | 5 | needs_triage | bug.0436 | Grafana can't answer 'what does the wallet/chain/DB actually look like right now' for poly tenants — every debug session needs raw RPC + kubectl | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 9 | 2 | needs_design | task.0039 | Billing reconciler — LiteLLM spend/logs polling in scheduler worker | Unified Graph Launch | proj.unified-graph-launch |
 | 2 | 10 | 2 | needs_triage | task.0055 | Dedicated DB migrator role — separate DDL from runtime DML | Database Operations | proj.database-ops |
 | 2 | 10 | 2 | needs_design | bug.0198 | Single Privy app shared across preview and production — no env isolation | Reliability & Uptime | proj.reliability |

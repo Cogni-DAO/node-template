@@ -146,13 +146,21 @@ export function TradingWalletPanel(): ReactElement {
       ) : (
         <div className="flex flex-col gap-3">
           {/* Balances immediately above stub actions — compact, no semantic mix-up */}
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <div className="rounded-md bg-muted/40 px-3 py-2">
               <div className="text-muted-foreground text-xs uppercase tracking-wide">
                 USDC.e
               </div>
               <div className="font-semibold text-xl tabular-nums tracking-tight">
                 {formatDecimal(balances?.usdc_e ?? null, 2)}
+              </div>
+            </div>
+            <div className="rounded-md bg-muted/40 px-3 py-2">
+              <div className="text-muted-foreground text-xs uppercase tracking-wide">
+                pUSD
+              </div>
+              <div className="font-semibold text-xl tabular-nums tracking-tight">
+                {formatDecimal(balances?.pusd ?? null, 2)}
               </div>
             </div>
             <div className="rounded-md bg-muted/40 px-3 py-2">
@@ -166,9 +174,15 @@ export function TradingWalletPanel(): ReactElement {
           </div>
           <TradingReadinessSection
             tradingReady={status.trading_ready}
-            isFunded={(balances?.usdc_e ?? 0) > 0}
+            isFunded={
+              (balances?.usdc_e ?? 0) + (balances?.pusd ?? 0) > 0
+            }
             polBalance={balances?.pol ?? null}
-            usdcBalance={balances?.usdc_e ?? null}
+            usdcBalance={
+              balances?.usdc_e !== null && balances?.usdc_e !== undefined
+                ? balances.usdc_e + (balances.pusd ?? 0)
+                : null
+            }
           />
 
           {status.trading_ready ? (

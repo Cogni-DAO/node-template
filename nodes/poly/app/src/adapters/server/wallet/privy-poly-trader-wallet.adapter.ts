@@ -429,6 +429,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   async getBalances(billingAccountId: string): Promise<{
     address: `0x${string}`;
     usdcE: number | null;
+    pusd: number | null;
     pol: number | null;
     errors: readonly string[];
   } | null> {
@@ -436,17 +437,17 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
     if (!address) return null;
 
     const errors: string[] = [];
-    const [usdcE, pol] = await this.readPolygonBalances(address, errors);
-    return { address, usdcE, pol, errors };
+    const [usdcE, pusd, pol] = await this.readPolygonBalances(address, errors);
+    return { address, usdcE, pusd, pol, errors };
   }
 
   private async readPolygonBalances(
     addr: `0x${string}`,
     errors: string[]
-  ): Promise<[number | null, number | null]> {
+  ): Promise<[number | null, number | null, number | null]> {
     if (!this.polygonRpcUrl) {
       errors.push("polygon_rpc_unconfigured");
-      return [null, null];
+      return [null, null, null];
     }
     try {
       const client = createPublicClient({
@@ -470,12 +471,12 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       ]);
       const usdcE = Number(formatUnits(usdcERaw, USDC_DECIMALS));
       const pusd = Number(formatUnits(pusdRaw, USDC_DECIMALS));
-      return [usdcE + pusd, Number(formatUnits(polRaw, POL_DECIMALS))];
+      return [usdcE, pusd, Number(formatUnits(polRaw, POL_DECIMALS))];
     } catch (err) {
       errors.push(
         `polygon_rpc: ${err instanceof Error ? err.message : String(err)}`
       );
-      return [null, null];
+      return [null, null, null];
     }
   }
 

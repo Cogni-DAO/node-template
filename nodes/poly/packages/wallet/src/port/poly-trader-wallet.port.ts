@@ -246,6 +246,8 @@ export interface PolyTraderWalletPort {
     readonly address: `0x${string}`;
     /** Decimal USDC.e. `null` when the RPC read failed. */
     readonly usdcE: number | null;
+    /** Decimal pUSD (Polymarket V2 collateral). `null` when the RPC read failed. */
+    readonly pusd: number | null;
     /** Decimal native POL. `null` when the RPC read failed. */
     readonly pol: number | null;
     readonly errors: readonly string[];
