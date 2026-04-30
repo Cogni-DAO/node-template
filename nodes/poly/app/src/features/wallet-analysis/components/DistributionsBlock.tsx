@@ -314,7 +314,10 @@ function StackedBars({
                 <div className={COLORS.won} style={{ height: `${wonPx}px` }} />
               ) : null}
               {lostPx > 0 ? (
-                <div className={COLORS.lost} style={{ height: `${lostPx}px` }} />
+                <div
+                  className={COLORS.lost}
+                  style={{ height: `${lostPx}px` }}
+                />
               ) : null}
               {pendingPx > 0 ? (
                 <div
