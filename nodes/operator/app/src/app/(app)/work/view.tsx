@@ -292,30 +292,25 @@ export function WorkDashboardView() {
         )}
       </div>
 
-      {/* Loading / Error */}
-      {isLoading && (
-        <p className="py-8 text-center text-muted-foreground">
-          Loading work items...
-        </p>
-      )}
       {error && (
         <p className="py-8 text-center text-destructive">
           Failed to load work items.
         </p>
       )}
 
-      {/* Data Grid */}
-      {!isLoading && !error && (
+      {!error && (
         <DataGrid
           table={table}
           recordCount={items.length}
           isLoading={isLoading}
+          loadingMode="skeleton"
           onRowClick={(row) => setSelectedItem(row)}
           tableLayout={{
             headerSticky: true,
             headerBackground: true,
             rowBorder: true,
             dense: true,
+            columnsVisibility: true,
           }}
           tableClassNames={{
             bodyRow: "cursor-pointer",
