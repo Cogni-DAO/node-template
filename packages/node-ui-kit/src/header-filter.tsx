@@ -33,7 +33,7 @@ export function HeaderFilter<TData, TValue>({
   const selected = new Set((column.getFilterValue() as string[]) ?? []);
   const values = [...facets.keys()]
     .filter((v): v is string => typeof v === "string" && v.length > 0)
-    .sort();
+    .sort((a, b) => a.localeCompare(b));
 
   function toggle(value: string) {
     const next = new Set(selected);
