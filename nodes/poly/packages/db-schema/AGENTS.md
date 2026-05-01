@@ -74,7 +74,10 @@ Consumer imports:
 import { polyCopyTradeFills } from "@cogni/poly-db-schema/copy-trade";
 
 // Or the barrel, if you need multiple slices
-import { polyCopyTradeFills, polyCopyTradeTargets } from "@cogni/poly-db-schema";
+import {
+  polyCopyTradeFills,
+  polyCopyTradeTargets,
+} from "@cogni/poly-db-schema";
 ```
 
 drizzle-kit reads raw TS source via the config's schema glob (`nodes/poly/packages/db-schema/src/**/*.ts`), so migration generation does not require a pre-built `dist/`.
