@@ -55,7 +55,7 @@ function makePosition(asset: string): PolymarketUserPosition {
   return {
     proxyWallet: TARGET_WALLET,
     asset,
-    conditionId: "0x" + "0".repeat(63) + "1",
+    conditionId: `0x${"0".repeat(63)}1`,
     size: 1,
     avgPrice: 0.5,
     initialValue: 0.5,
