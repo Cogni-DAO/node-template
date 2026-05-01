@@ -49,7 +49,7 @@ Thin copy-trade slice — the pure `planMirrorFromFill()` policy that, given a n
 ## Invariants
 
 - **COPY_TRADE_ONLY_COORDINATES** — files in this slice MAY import `features/trading/` and `features/wallet-watch/`. They MUST NOT import each other's internals except through the public barrel.
-- **FAIL_CLOSED** — kill-switch disabled or unreadable → skip. Callers MUST NOT default to `enabled: true` on DB read failure.
+- **NO_KILL_SWITCH** (bug.0438) — copy-trade has no per-tenant kill-switch table. The cross-tenant enumerator's `target × connection × grant` join is the sole gate. Stopping mirror placement for a tenant is done via DELETE on the target row (or revoking the grant/connection).
 - **INTENT_BASED_CAPS** — caps count against intent submissions, not partial fills. **Enforced downstream** inside `PolyTraderWalletPort.authorizeIntent`, not here.
 - **IDEMPOTENT_BY_CLIENT_ID** — repeat decisions with the same `(target_id, fill_id)` are silently dropped via `already_placed_ids`.
 - **PLANNER_IS_PURE** — `planMirrorFromFill` has no I/O, no env reads, no clock reads, no grant reads. All runtime state handed in explicitly.
