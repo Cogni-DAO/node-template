@@ -44,6 +44,8 @@
 | 0 | 1 | 1 | needs_implement | task.0412 | Poly CTF redeem pipeline — multi-tenant fan-out (purge single-funder kill switch) | Cogni Poly | proj.poly-copy-trading |
 | 0 | 1 | 1 | needs_merge | task.0418 | Surface pod-startup diagnostics on rollout failure + fix /logs anti-pattern |  |  |
 | 0 | 1 | 1 | needs_implement | bug.0419 | Polymarket V2 cutover — Enable Trading targets V1 USDC.e exchanges; V2 spends pUSD via CollateralOnramp.wrap | Cogni Poly | proj.poly-copy-trading |
+| 0 | 1 | 1 | needs_implement | bug.0439 | TAVILY/KALSHI optional env vars reject empty strings — block pod readiness when k8s secret is unset | CI/CD Pipeline | proj.cicd-services-gitops |
+| 0 | 1 | 2 | needs_implement | bug.0441 | verify-deploy step-level `if:` is the silent-green primitive bug.0321 was supposed to kill | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_merge | task.0258 | Multi-node stack test infrastructure — per-node billing + data isolation tests | Operator Plane | proj.operator-plane |
 | 0 | 2 | 5 | needs_design | task.0260 | Monorepo CI pipeline — affected-scope testing + multi-node test lane | CI/CD Pipeline | proj.cicd-services-gitops |
 | 0 | 2 | 3 | needs_design | task.0277 | Deployment validation skill — verify system account, a2a connectivity, full health | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -115,6 +117,8 @@
 | 1 | 1 | 1 | needs_closeout | task.0417 | Fresh-worktree bootstrap fixes — drop `.env.local` from `db:check`, detect orphan-missing dist in scoped build |  |  |
 | 1 | 1 | 2 | needs_implement | task.0423 | Port poly PositionsTable onto reui DataGrid (mirror wallets-table) | Premium Frontend UX | proj.premium-frontend-ux |
 | 1 | 1 | 2 | needs_implement | task.0426 | Add Resolves countdown column to poly PositionsTable (v0) | Premium Frontend UX | proj.premium-frontend-ux |
+| 1 | 1 | 2 | needs_implement | bug.0440 | deploy-infra.sh writes empty-string values into k8s secrets — silent landmine for any new optional env | CI/CD Pipeline | proj.cicd-services-gitops |
+| 1 | 1 | 2 | needs_implement | bug.0442 | DoltgresOperatorWorkItemAdapter.list has no component test — broken SQL ships green | DAO Agentic Project Management | proj.agentic-project-management |
 | 1 | 2 | 2 | needs_triage | task.0114 | Work-item budget enrichment + budget allocation algorithm | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 1 | 2 | 5 | needs_implement | task.0122 | Operator: node registration lifecycle — discovery, repo-spec fetch, scope reconciliation | Node Formation & Launch | proj.node-formation-ui |
 | 1 | 2 | 2 | needs_design | task.0187 | AI-accessible production debugging — K8s + Argo CD API access | CI/CD Pipeline | proj.cicd-services-gitops |
@@ -388,6 +392,7 @@
 | 0 | bug.0418 | Polymarket CLOB rejects 100% of placeOrder calls with reason="order_version_mismatch" | Cogni Poly | proj.poly-copy-trading |
 | 0 | task.0419 | PrReviewWorkflowInput Zod schema + contract test — fix modelRef-shape regression class | VCS Integration | proj.vcs-integration |
 | 0 | task.0428 | Doltgres work-item create/read/patch API — new items only (v0) | DAO Agentic Project Management | proj.agentic-project-management |
+| 0 | bug.0443 | Admin-merge bypasses merge_group → flight-preview silently skips, promote-and-deploy reports success on no-op, scheduler-worker breaks aggregate-production | CI/CD Pipeline | proj.cicd-services-gitops |
 | 1 | task.0006 | Collapse GraphProvider into GraphExecutorPort — single execution interface + namespace routing | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0007 | Billing enforcement decorator at GraphExecutorPort level | Unified Graph Launch | proj.unified-graph-launch |
 | 1 | task.0010 | OpenClaw gateway model selection — session-level override or agent-per-specialty | OpenClaw Capabilities Integration | proj.openclaw-capabilities |

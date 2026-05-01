@@ -53,13 +53,20 @@ graph TD
     ER["StaleRevisionError, InvalidTransitionError"]
   end
 
+  subgraph "@cogni/work-items/notion (mirror)"
+    NM["NotionWorkItemMirror"]
+    DS["Notion view/edit pages"]
+  end
+
   subgraph "Storage"
     FS["work/items/*.md + work/projects/*.md"]
+    NT["Notion data source"]
   end
 
   S1 & S2 & S3 --> QP & CP
   MA -.implements.-> QP & CP
   MA --> FM --> FS
+  NM --> DS --> NT
   MA --> TR
   MA --> ER
 ```
@@ -130,6 +137,17 @@ The `MarkdownWorkItemAdapter` in `@cogni/work-items/markdown` implements both po
 - **Field mapping**: snake_case frontmatter ↔ camelCase TypeScript (e.g., `spec_refs` ↔ `specRefs`)
 - **Assignee compatibility**: plain string in frontmatter → `{ kind: "user", userId }` SubjectRef
 - **Error types**: `StaleRevisionError`, `InvalidTransitionError`
+
+### Notion Mirror (prototype)
+
+The `NotionWorkItemMirror` in `@cogni/work-items/notion` is not a storage adapter and does not implement the command/query ports. It is a view/edit projection for Cogni-owned work items:
+
+- **Source of truth:** Cogni/Dolt work items own identity, lifecycle state, and persistence.
+- **Exact IDs:** Notion pages are keyed by the exact `WorkItem.id` in `Cogni ID`; the mirror never allocates a separate ID range.
+- **Editable mirror fields:** `Name`, `Status`, `Node`, `Priority`, `Rank`, `Estimate`, `Summary`, `Outcome`, `Labels`, `Branch`, `PR`, and `Reviewer`.
+- **Sync metadata:** `Cogni Revision`, `Sync Hash`, `Sync State`, `Sync Error`, and `Last Synced At` let the operator sync job detect Notion edits and make conflicts visible.
+- **API shape:** official Notion data-source endpoints (`/v1/data_sources/{id}/query`, `/v1/pages`, `/v1/pages/{id}`) and API version header `2025-09-03`.
+- **Deployment model:** operator owns the Dolt patch/apply loop; the package mirror only performs Notion HTTP projection and delta extraction.
 
 ### Status Transition Table
 
@@ -212,6 +230,8 @@ Enable agents and scripts to manage work items through typed port interfaces ins
 | `packages/work-items/src/adapters/markdown/frontmatter.ts`      | Parse/serialize YAML frontmatter, compute SHA-256            |
 | `packages/work-items/src/adapters/markdown/errors.ts`           | `StaleRevisionError`, `InvalidTransitionError`               |
 | `packages/work-items/src/adapters/markdown/index.ts`            | Adapter barrel                                               |
+| `packages/work-items/src/adapters/notion/mirror.ts`             | `NotionWorkItemMirror` implementation                        |
+| `packages/work-items/src/adapters/notion/index.ts`              | Notion mirror barrel                                         |
 | `packages/work-items/tests/contract/work-item-port.contract.ts` | Portable contract test suite                                 |
 
 ## Acceptance Checks

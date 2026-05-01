@@ -18,6 +18,7 @@ import {
 import type { WorkItem, WorkItemQueryPort } from "@cogni/work-items";
 import { toWorkItemId } from "@cogni/work-items";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { WorkItemsDoltgresPort } from "@/ports/work-items-doltgres.port";
 
 // Mock the container
 vi.mock("@/bootstrap/container", () => ({
@@ -62,17 +63,36 @@ function createMockPort(): WorkItemQueryPort {
   return {
     list: vi.fn(),
     get: vi.fn(),
+    listRelations: vi.fn(),
+  };
+}
+
+function createNotConfiguredError(): Error {
+  return Object.assign(new Error("Doltgres is not configured"), {
+    name: "DoltgresNotConfiguredError",
+  });
+}
+
+function createMockDoltgresPort(): WorkItemsDoltgresPort {
+  return {
+    list: vi.fn().mockRejectedValue(createNotConfiguredError()),
+    get: vi.fn().mockRejectedValue(createNotConfiguredError()),
+    create: vi.fn(),
+    patch: vi.fn(),
   };
 }
 
 describe("app/_facades/work/items.server", () => {
   let mockPort: ReturnType<typeof createMockPort>;
+  let mockDoltgresPort: ReturnType<typeof createMockDoltgresPort>;
 
   beforeEach(() => {
     vi.resetAllMocks();
     mockPort = createMockPort();
+    mockDoltgresPort = createMockDoltgresPort();
     mockGetContainer.mockReturnValue({
       workItemQuery: mockPort,
+      doltgresWorkItems: mockDoltgresPort,
     } as never);
   });
 

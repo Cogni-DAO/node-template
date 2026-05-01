@@ -116,15 +116,17 @@ export async function listWorkItems(
 
   const mdResult = await container.workItemQuery.list(queryShared);
   const merged: WorkItem[] = [...mdResult.items];
+  let nextCursor = mdResult.nextCursor;
 
   try {
     const dgResult = await container.doltgresWorkItems.list(queryShared);
     merged.push(...dgResult.items);
+    nextCursor = dgResult.nextCursor ?? nextCursor;
   } catch (e) {
     if ((e as Error)?.name !== "DoltgresNotConfiguredError") throw e;
   }
 
-  return { items: merged.map(toDto) };
+  return { items: merged.map(toDto), ...(nextCursor && { nextCursor }) };
 }
 
 export async function getWorkItem(id: string): Promise<WorkItemDto | null> {
