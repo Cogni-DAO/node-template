@@ -104,7 +104,7 @@ function prettifyEventSlug(
     .split("-")
     .filter(Boolean)
     .map((w) =>
-      w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1)
+      w.length <= 3 ? w.toUpperCase() : (w[0] ?? "").toUpperCase() + w.slice(1)
     )
     .join(" ");
   if (!label) return null;
