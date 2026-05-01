@@ -38,6 +38,9 @@ patches:
       - op: add
         path: /data/NEXTAUTH_URL
         value: "https://poly-test.cognidao.org"
+      - op: add
+        path: /data/POLY_WALLET_WATCH_SOURCE
+        value: "websocket"
   - target:
       kind: Service
       name: node-app
