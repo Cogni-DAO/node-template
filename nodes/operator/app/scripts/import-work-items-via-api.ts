@@ -146,6 +146,7 @@ async function main(): Promise<number> {
   );
 
   let posted = 0;
+  let skipped = 0;
   let failed = 0;
 
   for (const item of items) {
@@ -158,9 +159,12 @@ async function main(): Promise<number> {
     if (status >= 200 && status < 300) {
       posted += 1;
       if (posted % 25 === 0) {
-        process.stdout.write(`[importer] progress ${posted}/${items.length}\n`);
+        process.stdout.write(
+          `[importer] progress posted=${posted} skipped=${skipped} failed=${failed} of ${items.length}\n`
+        );
       }
     } else if (status === 409) {
+      skipped += 1;
     } else {
       failed += 1;
       process.stdout.write(
@@ -170,7 +174,7 @@ async function main(): Promise<number> {
   }
 
   process.stdout.write(
-    `[importer] done. posted=${posted} failed=${failed} of ${items.length}\n`
+    `[importer] done. posted=${posted} skipped=${skipped} failed=${failed} of ${items.length}\n`
   );
   return failed > 0 ? 1 : 0;
 }
