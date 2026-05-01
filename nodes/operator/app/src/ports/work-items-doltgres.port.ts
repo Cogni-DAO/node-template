@@ -24,9 +24,9 @@ export type WorkItemsPatchSet = NonNullable<
   Parameters<WorkItemCommandPort["patch"]>[0]["set"]
 > & {
   readonly deployVerified?: boolean;
-  readonly projectId?: WorkItemId | null;
-  readonly parentId?: WorkItemId | null;
-  readonly blockedBy?: WorkItemId | null;
+  readonly projectId?: string | null;
+  readonly parentId?: string | null;
+  readonly blockedBy?: string | null;
 };
 
 export interface WorkItemsPatchInput {
