@@ -270,11 +270,11 @@ describe("DoltgresOperatorWorkItemAdapter.list keyset SQL", () => {
     const cursorQuery = queries.find((q) =>
       /COALESCE\(priority,999\)\s*>\s*\d+/.test(q)
     );
-    expect(cursorQuery).toBeDefined();
+    if (!cursorQuery) throw new Error("expected cursor query was not issued");
     // All four legs of the OR-chain present
-    expect(cursorQuery!).toMatch(/COALESCE\(priority,999\)\s*>\s*\d+/);
-    expect(cursorQuery!).toMatch(/COALESCE\(rank,999\)\s*>\s*\d+/);
-    expect(cursorQuery!).toMatch(/created_at\s*<\s*'/);
-    expect(cursorQuery!).toMatch(/AND id\s*>\s*'/);
+    expect(cursorQuery).toMatch(/COALESCE\(priority,999\)\s*>\s*\d+/);
+    expect(cursorQuery).toMatch(/COALESCE\(rank,999\)\s*>\s*\d+/);
+    expect(cursorQuery).toMatch(/created_at\s*<\s*'/);
+    expect(cursorQuery).toMatch(/AND id\s*>\s*'/);
   });
 });
