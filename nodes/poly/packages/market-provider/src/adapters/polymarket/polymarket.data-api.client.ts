@@ -211,6 +211,15 @@ export class PolymarketDataApiClient {
     const url = new URL("/trades", this.baseUrl);
     url.searchParams.set("user", wallet);
     url.searchParams.set("limit", String(params?.limit ?? 1000));
+    // Polymarket Data API defaults `takerOnly=true` server-side, hiding fills
+    // where the user was the MAKER (their resting limit got hit). For
+    // position-tracking — copy-trade mirror loop, audit, etc. — we want every
+    // fill that changed the user's CTF balance, regardless of which side they
+    // sat on. Always set the param explicitly; opt-in to taker-only.
+    url.searchParams.set(
+      "takerOnly",
+      params?.takerOnly === true ? "true" : "false"
+    );
 
     const json = await this.fetchJson(url);
     const trades = PolymarketUserTradesResponseSchema.parse(json);
