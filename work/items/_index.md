@@ -236,6 +236,7 @@
 | 2 | 0 | 2 | needs_triage | task.0109 | Expand GitHub adapter — PR comments, review comments, issue creation | Transparent Credit Payouts | proj.transparent-credit-payouts |
 | 2 | 1 | 1 | needs_triage | bug.0422 | Redeemed positions show $0.00 P/L in History card — cost basis lost | Cogni Poly | proj.poly-prediction-bot |
 | 2 | 1 | 1 | needs_implement | task.0432 | Work Items table — port poly's HEADER_OWNS_CONTROLS standard to operator (node-template follows in PR-B) |  |  |
+| 2 | 1 | 3 | needs_design | task.0433 | Extract @cogni/node-ui-kit baseline UI package, vendor into node-template |  |  |
 | 2 | 2 | 3 | needs_design | task.0238 | Agent avatars — Rive/Lottie animated characters on run cards and chat | Premium Frontend UX | proj.premium-frontend-ux |
 | 2 | 2 | 1 | needs_review | bug.0367 | verify-buildsha.sh hostname convention breaks production verify | CI/CD Pipeline | proj.cicd-services-gitops |
 | 2 | 2 | 2 | needs_review | bug.0368 | candidate-flight verify wait is ~4min of migrator image pull, not migration work | CI/CD Pipeline | proj.cicd-services-gitops |
