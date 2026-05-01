@@ -81,6 +81,7 @@ export function createPolymarketWsActivitySource(
   let pendingWakeup = true;
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
   let unsubscribeTrade: (() => void) | null = null;
+  let unsubscribeState: (() => void) | null = null;
   let stopped = false;
 
   function onTrade(event: WsTradeEvent) {
@@ -99,6 +100,11 @@ export function createPolymarketWsActivitySource(
   }
 
   unsubscribeTrade = deps.ws.onTrade(onTrade);
+  // Reconnect must trigger a drain: trades may have arrived while the socket
+  // was down, and the WS protocol does not replay missed frames.
+  unsubscribeState = deps.ws.onState((state) => {
+    if (state.phase === "connect") pendingWakeup = true;
+  });
 
   async function refreshAssets() {
     try {
@@ -255,6 +261,10 @@ export function createPolymarketWsActivitySource(
       if (unsubscribeTrade) {
         unsubscribeTrade();
         unsubscribeTrade = null;
+      }
+      if (unsubscribeState) {
+        unsubscribeState();
+        unsubscribeState = null;
       }
       for (const asset of ownedAssets) deps.ws.unsubscribeAsset(asset);
       ownedAssets.clear();
