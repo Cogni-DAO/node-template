@@ -113,6 +113,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             event: EVENT_NAMES.ADAPTER_ORDER_LEDGER_SNAPSHOT_ERROR,
             errorCode: "snapshot_fail_closed",
             target_id,
+            billing_account_id,
             err: err instanceof Error ? err.message : String(err),
           },
           "order-ledger snapshot failed; returning zeroes"
