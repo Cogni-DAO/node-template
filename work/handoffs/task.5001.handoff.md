@@ -51,16 +51,16 @@ last_commit: 06fc35170
 
 ## Pointers
 
-| File / Resource | Why it matters |
-| --- | --- |
-| [PR #1167](https://github.com/Cogni-DAO/node-template/pull/1167) | This branch's PR; full diff + CI history |
-| [PR #1164](https://github.com/Cogni-DAO/node-template/pull/1164) | Original task.5001; shipped + verified on candidate-a/preview/prod |
-| [`task.5001` (Cogni API)](https://preview.cognidao.org/api/v1/work/items/task.5001) | Design v3.1 lives in `summary` field; `status: done` per PR #1164 merge |
-| `nodes/poly/app/src/adapters/server/db/migrations/0037_poly_copy_trade_market_id.sql` | Race-safe DO-block migration |
-| `nodes/poly/app/src/features/trading/order-ledger.ts` | `cumulativeIntentForMarket` (FOK-only error inclusion) + `insertPending` (persist placement attr) |
-| `nodes/poly/packages/market-provider/src/adapters/polymarket/polymarket.data-api.client.ts` | `listUserTrades` — the takerOnly fix lives here. **VERIFY BEFORE MERGE.** |
-| `nodes/poly/app/tests/unit/features/trading/order-ledger-cumulative-intent.test.ts` | Updated regression test mirrors prod scenario (legacy errors don't block) |
-| `work/handoffs/archive/task.5001/2026-05-01T04-52-43.md` | Previous handoff (rebase + flight-validate state) — superseded |
-| `.claude/skills/database-expert/SKILL.md` § "Multi-step migrations must hold ACCESS EXCLUSIVE LOCK" | Doc-only; lives in operator-domain follow-up PR |
-| `.local/canary-vm-key`, `.local/preview-vm-key`, `.local/production-vm-key` | SSH keys for ad-hoc DB ops; `cogni_poly` DB in `cogni-runtime-postgres-1` container on each VM |
-| Polymarket profile lookup | `polymarket.com/@<slug>` page contains `"proxyWallet":"0x..."` in inline JSON; canonical wallet→slug map |
+| File / Resource                                                                                     | Why it matters                                                                                           |
+| --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [PR #1167](https://github.com/Cogni-DAO/node-template/pull/1167)                                    | This branch's PR; full diff + CI history                                                                 |
+| [PR #1164](https://github.com/Cogni-DAO/node-template/pull/1164)                                    | Original task.5001; shipped + verified on candidate-a/preview/prod                                       |
+| [`task.5001` (Cogni API)](https://preview.cognidao.org/api/v1/work/items/task.5001)                 | Design v3.1 lives in `summary` field; `status: done` per PR #1164 merge                                  |
+| `nodes/poly/app/src/adapters/server/db/migrations/0037_poly_copy_trade_market_id.sql`               | Race-safe DO-block migration                                                                             |
+| `nodes/poly/app/src/features/trading/order-ledger.ts`                                               | `cumulativeIntentForMarket` (FOK-only error inclusion) + `insertPending` (persist placement attr)        |
+| `nodes/poly/packages/market-provider/src/adapters/polymarket/polymarket.data-api.client.ts`         | `listUserTrades` — the takerOnly fix lives here. **VERIFY BEFORE MERGE.**                                |
+| `nodes/poly/app/tests/unit/features/trading/order-ledger-cumulative-intent.test.ts`                 | Updated regression test mirrors prod scenario (legacy errors don't block)                                |
+| `work/handoffs/archive/task.5001/2026-05-01T04-52-43.md`                                            | Previous handoff (rebase + flight-validate state) — superseded                                           |
+| `.claude/skills/database-expert/SKILL.md` § "Multi-step migrations must hold ACCESS EXCLUSIVE LOCK" | Doc-only; lives in operator-domain follow-up PR                                                          |
+| `.local/canary-vm-key`, `.local/preview-vm-key`, `.local/production-vm-key`                         | SSH keys for ad-hoc DB ops; `cogni_poly` DB in `cogni-runtime-postgres-1` container on each VM           |
+| Polymarket profile lookup                                                                           | `polymarket.com/@<slug>` page contains `"proxyWallet":"0x..."` in inline JSON; canonical wallet→slug map |
