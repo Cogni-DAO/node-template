@@ -157,7 +157,7 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
         const v = info.getValue();
         return (
           <div className="text-right text-muted-foreground text-sm tabular-nums">
-            {v ? <LocalDateTime iso={v} /> : "—"}
+            {v ? <ResolvesCountdown iso={v} /> : "—"}
           </div>
         );
       },
@@ -336,26 +336,36 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
   return columns;
 }
 
-function formatEndDateTime(iso: string): string {
-  const ms = Date.parse(iso);
-  if (!Number.isFinite(ms)) return iso;
-  return new Date(ms).toLocaleString(undefined, {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
+function formatTimeUntil(targetMs: number, nowMs: number): string {
+  const deltaMs = targetMs - nowMs;
+  if (deltaMs <= 0) return "now";
+  const totalMinutes = Math.floor(deltaMs / 60_000);
+  const days = Math.floor(totalMinutes / (60 * 24));
+  const hours = Math.floor((totalMinutes % (60 * 24)) / 60);
+  const minutes = totalMinutes % 60;
+  if (days >= 7) return `${days}d`;
+  if (days >= 1) return `${days}d ${hours}h`;
+  if (hours >= 1) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
 }
 
-// Render only after mount so SSR (likely UTC) doesn't bake in a server-TZ
-// string that then sticks through hydration. Pre-mount we emit the raw ISO
-// inside <time> so the markup is stable + machine-readable.
-function LocalDateTime({ iso }: { iso: string }): ReactElement {
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+// Countdown to resolution. TZ-agnostic by design — `targetMs - nowMs` is the
+// same delta in any timezone, so SSR/client mismatch collapses to a few-second
+// drift that's invisible at minute resolution. Ticks every 60s post-mount.
+function ResolvesCountdown({ iso }: { iso: string }): ReactElement {
+  const targetMs = Date.parse(iso);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    setNowMs(Date.now());
+    const id = window.setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => window.clearInterval(id);
+  }, []);
+  if (!Number.isFinite(targetMs)) {
+    return <span className="text-muted-foreground">—</span>;
+  }
   return (
     <time dateTime={iso} suppressHydrationWarning>
-      {mounted ? formatEndDateTime(iso) : ""}
+      {formatTimeUntil(targetMs, nowMs)}
     </time>
   );
 }
