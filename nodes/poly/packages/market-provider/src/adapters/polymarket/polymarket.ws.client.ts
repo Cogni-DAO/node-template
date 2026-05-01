@@ -8,7 +8,7 @@
  * Invariants:
  *   - PACKAGES_NO_ENV — endpoint and reconnect timings are constructor args.
  *   - WS_LOOSE_PARSE — unknown event_type is logged at debug, never throws.
- *   - HEARTBEAT_30S — the underlying CLOB WS expects client `PING` text frames every ~30s; missing pongs trigger reconnect.
+ *   - HEARTBEAT_10S — the underlying CLOB WS expects client `PING` text frames every 10s; missing pings trigger disconnect.
  * Side-effects: opens a single TCP/TLS WS to `wss://ws-subscriptions-clob.polymarket.com/ws/market`; logger emissions; setInterval/setTimeout for heartbeat + backoff.
  * Links: docs https://docs.polymarket.com/developers/CLOB/websocket/wss-overview ; task.0322
  * @public
@@ -41,7 +41,7 @@ export type WsTradeEvent = WsLastTradePrice;
 export interface PolymarketWsClientConfig {
   /** Override for tests / staging. Default: production market channel. */
   endpoint?: string;
-  /** Heartbeat ping interval (ms). Default 30 000. Set lower in tests. */
+  /** Heartbeat ping interval (ms). Default 10 000 per Polymarket docs. Set lower in tests. */
   heartbeatIntervalMs?: number;
   /** Initial reconnect delay (ms). Doubles each failure up to `maxReconnectDelayMs`. */
   initialReconnectDelayMs?: number;
@@ -80,7 +80,7 @@ export function createPolymarketWsClient(
   config: PolymarketWsClientConfig
 ): PolymarketWsClientHandle {
   const endpoint = config.endpoint ?? DEFAULT_ENDPOINT;
-  const heartbeatMs = config.heartbeatIntervalMs ?? 30_000;
+  const heartbeatMs = config.heartbeatIntervalMs ?? 10_000;
   const initialBackoff = config.initialReconnectDelayMs ?? 1_000;
   const maxBackoff = config.maxReconnectDelayMs ?? 30_000;
   // biome-ignore lint/suspicious/noExplicitAny: ctor injection for tests
@@ -116,7 +116,7 @@ export function createPolymarketWsClient(
     }
   }
 
-  function sendSubscribeFrame() {
+  function sendInitialSubscribeFrame() {
     if (!socket || socket.readyState !== 1 /* OPEN */) return;
     if (assets.size === 0) return;
     const frame = JSON.stringify({
@@ -128,6 +128,7 @@ export function createPolymarketWsClient(
       log.info(
         {
           event: "poly.wallet_watch.ws.subscribe",
+          phase: "initial",
           assets_count: assets.size,
         },
         "ws subscribe sent"
@@ -140,6 +141,39 @@ export function createPolymarketWsClient(
           err: err instanceof Error ? err.message : String(err),
         },
         "ws subscribe send failed"
+      );
+    }
+  }
+
+  function sendSubscriptionUpdate(
+    operation: "subscribe" | "unsubscribe",
+    assetIds: readonly string[]
+  ) {
+    if (!socket || socket.readyState !== 1 /* OPEN */) return;
+    if (assetIds.length === 0) return;
+    const frame = JSON.stringify({
+      assets_ids: assetIds,
+      operation,
+    });
+    try {
+      socket.send(frame);
+      log.info(
+        {
+          event: "poly.wallet_watch.ws.subscribe",
+          phase: operation,
+          assets_count: assets.size,
+          update_assets_count: assetIds.length,
+        },
+        "ws subscription update sent"
+      );
+    } catch (err) {
+      log.warn(
+        {
+          event: "poly.wallet_watch.ws.subscribe",
+          phase: `${operation}_failed`,
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "ws subscription update failed"
       );
     }
   }
@@ -226,7 +260,7 @@ export function createPolymarketWsClient(
         { event: "poly.wallet_watch.ws.connect", phase: "open" },
         "ws connected"
       );
-      sendSubscribeFrame();
+      sendInitialSubscribeFrame();
       heartbeat = setInterval(() => {
         try {
           if (socket && socket.readyState === 1) socket.send("PING");
@@ -277,11 +311,11 @@ export function createPolymarketWsClient(
     subscribeAsset(assetId) {
       if (assets.has(assetId)) return;
       assets.add(assetId);
-      sendSubscribeFrame();
+      sendSubscriptionUpdate("subscribe", [assetId]);
     },
     unsubscribeAsset(assetId) {
       if (!assets.delete(assetId)) return;
-      sendSubscribeFrame();
+      sendSubscriptionUpdate("unsubscribe", [assetId]);
     },
     listAssets() {
       return [...assets];

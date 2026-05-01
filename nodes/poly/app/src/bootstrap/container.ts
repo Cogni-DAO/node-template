@@ -881,50 +881,60 @@ function createContainer(): Container {
               return cachedExecutor;
             };
 
-            return startMirrorPoll({
-              target,
-              source,
-              ledger: orderLedger,
-              placeIntent: async (intent) => {
-                const executor = await getExecutor();
-                return executor.placeIntent(intent);
-              },
-              cancelOrder: async (orderId) => {
-                const executor = await getExecutor();
-                return executor.cancelOrder(orderId);
-              },
-              getMarketConstraints: async (tokenId) => {
-                const executor = await getExecutor();
-                return executor.getMarketConstraints(tokenId);
-              },
-              getTargetConditionPosition: async (params) => {
-                const positions = await dataApiClient.listUserPositions(
-                  params.targetWallet,
-                  {
-                    market: params.conditionId,
-                    sizeThreshold: 0,
-                  }
-                );
-                return targetConditionPositionFromDataApiPositions(
-                  params.conditionId,
-                  positions
-                );
-              },
-              closePosition: async (params) => {
-                const executor = await getExecutor();
-                return executor.closePosition(params);
-              },
-              getOperatorPositions: async () => {
-                const executor = await getExecutor();
-                const positions = await executor.listPositions();
-                return positions.map((p) => ({
-                  asset: p.asset,
-                  size: p.size,
-                }));
-              },
-              logger: mirrorLogger,
-              metrics: noopMetrics,
-            });
+            let stopPoll: (() => void) | null = null;
+            try {
+              stopPoll = startMirrorPoll({
+                target,
+                source,
+                ledger: orderLedger,
+                placeIntent: async (intent) => {
+                  const executor = await getExecutor();
+                  return executor.placeIntent(intent);
+                },
+                cancelOrder: async (orderId) => {
+                  const executor = await getExecutor();
+                  return executor.cancelOrder(orderId);
+                },
+                getMarketConstraints: async (tokenId) => {
+                  const executor = await getExecutor();
+                  return executor.getMarketConstraints(tokenId);
+                },
+                getTargetConditionPosition: async (params) => {
+                  const positions = await dataApiClient.listUserPositions(
+                    params.targetWallet,
+                    {
+                      market: params.conditionId,
+                      sizeThreshold: 0,
+                    }
+                  );
+                  return targetConditionPositionFromDataApiPositions(
+                    params.conditionId,
+                    positions
+                  );
+                },
+                closePosition: async (params) => {
+                  const executor = await getExecutor();
+                  return executor.closePosition(params);
+                },
+                getOperatorPositions: async () => {
+                  const executor = await getExecutor();
+                  const positions = await executor.listPositions();
+                  return positions.map((p) => ({
+                    asset: p.asset,
+                    size: p.size,
+                  }));
+                },
+                logger: mirrorLogger,
+                metrics: noopMetrics,
+              });
+            } catch (err) {
+              source.stop();
+              throw err;
+            }
+            return () => {
+              stopPoll?.();
+              source.stop();
+            };
           },
           logger: mirrorLogger,
         });

@@ -82,6 +82,7 @@ export function createPolymarketWsActivitySource(
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
   let unsubscribeTrade: (() => void) | null = null;
   let unsubscribeState: (() => void) | null = null;
+  let hasRefreshedAssets = false;
   let stopped = false;
 
   function onTrade(event: WsTradeEvent) {
@@ -112,16 +113,19 @@ export function createPolymarketWsActivitySource(
       const next = new Set<string>();
       for (const p of positions) if (p.asset) next.add(p.asset);
 
+      let assetsChanged = false;
       for (const asset of next) {
         if (!ownedAssets.has(asset)) {
           ownedAssets.add(asset);
           deps.ws.subscribeAsset(asset);
+          assetsChanged = true;
         }
       }
       for (const asset of [...ownedAssets]) {
         if (!next.has(asset)) {
           ownedAssets.delete(asset);
           deps.ws.unsubscribeAsset(asset);
+          assetsChanged = true;
         }
       }
       deps.metrics.incr(WALLET_WATCH_WS_METRICS.subscriptionsTotal, {});
@@ -132,9 +136,10 @@ export function createPolymarketWsActivitySource(
         },
         "ws assets reconciled"
       );
-      // First refresh primes the loop — make sure first `fetchSince` runs a Data-API
-      // drain even if no WS frame has arrived yet (covers the cold-start gap).
-      pendingWakeup = true;
+      // First refresh primes the loop, and later asset-set changes drain once to
+      // cover a newly-discovered asset that traded before we subscribed.
+      if (!hasRefreshedAssets || assetsChanged) pendingWakeup = true;
+      hasRefreshedAssets = true;
     } catch (err) {
       log.warn(
         {

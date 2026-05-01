@@ -22,7 +22,7 @@ import type {
   PolymarketWsClientHandle,
   WsTradeEvent,
 } from "@cogni/poly-market-provider/adapters/polymarket";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   createPolymarketWsActivitySource,
@@ -131,6 +131,10 @@ async function flushMicrotasks() {
 }
 
 describe("createPolymarketWsActivitySource", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("subscribes to assets discovered from listUserPositions", async () => {
     const ws = makeFakeWs();
     const source = createPolymarketWsActivitySource({
@@ -201,6 +205,41 @@ describe("createPolymarketWsActivitySource", () => {
     const { fills, newSince } = await source.fetchSince(100);
     expect(fills).toHaveLength(0);
     expect(newSince).toBe(100);
+    expect(drainCount).toBe(1);
+    source.stop();
+  });
+
+  it("unchanged scheduled asset refresh does not force a Data-API drain", async () => {
+    vi.useFakeTimers();
+    const ws = makeFakeWs();
+    let drainCount = 0;
+    const client = {
+      async listUserPositions() {
+        return [makePosition(ASSET_ID)];
+      },
+      async listUserActivity() {
+        drainCount += 1;
+        return [];
+      },
+    } as unknown as PolymarketDataApiClient;
+    const source = createPolymarketWsActivitySource({
+      client,
+      ws,
+      wallet: TARGET_WALLET,
+      logger: noopLogger,
+      metrics: createRecordingMetrics(),
+      refreshAssetsIntervalMs: 10,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await source.fetchSince(0);
+    expect(drainCount).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(10);
+    const { fills } = await source.fetchSince(0);
+
+    expect(fills).toHaveLength(0);
     expect(drainCount).toBe(1);
     source.stop();
   });
