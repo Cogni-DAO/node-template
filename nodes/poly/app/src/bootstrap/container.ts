@@ -793,9 +793,10 @@ function createContainer(): Container {
         // noopMetrics for v0 — real prom-client wiring folds into a follow-up
         // once the `poly_mirror_*` series has a Grafana dashboard to back it.
         const { noopMetrics } = await import("@cogni/poly-market-provider");
-        const { buildMirrorTargetConfig } = await import(
-          "@/bootstrap/jobs/copy-trade-mirror.job"
-        );
+        const {
+          buildMirrorTargetConfig,
+          targetConditionPositionFromDataApiPositions,
+        } = await import("@/bootstrap/jobs/copy-trade-mirror.job");
         const { startCopyTradeReconciler } = await import(
           "@/bootstrap/copy-trade-reconciler"
         );
@@ -878,6 +879,19 @@ function createContainer(): Container {
               getMarketConstraints: async (tokenId) => {
                 const executor = await getExecutor();
                 return executor.getMarketConstraints(tokenId);
+              },
+              getTargetConditionPosition: async (params) => {
+                const positions = await dataApiClient.listUserPositions(
+                  params.targetWallet,
+                  {
+                    market: params.conditionId,
+                    sizeThreshold: 0,
+                  }
+                );
+                return targetConditionPositionFromDataApiPositions(
+                  params.conditionId,
+                  positions
+                );
               },
               closePosition: async (params) => {
                 const executor = await getExecutor();

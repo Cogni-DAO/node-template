@@ -77,7 +77,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       min_shares: 1,
       min_usdc_notional: 1,
     });
-    expect(d).toEqual({ kind: "skip", reason: "below_target_percentile" });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "below_target_percentile",
+      position_branch: "new_entry",
+    });
   });
 
   it("mirrors accepted fills at min bet, not relative target size", () => {
@@ -132,7 +136,11 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       min_shares: 6,
       min_usdc_notional: 1,
     });
-    expect(d).toEqual({ kind: "skip", reason: "below_market_min" });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "below_market_min",
+      position_branch: "new_entry",
+    });
   });
 });
 

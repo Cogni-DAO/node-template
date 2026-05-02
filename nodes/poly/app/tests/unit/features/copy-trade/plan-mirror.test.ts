@@ -63,7 +63,11 @@ describe("planMirrorFromFill() — skip branches", () => {
       state: { ...CLEAN_STATE, already_placed_ids: [COID] },
       client_order_id: COID,
     });
-    expect(d).toEqual({ kind: "skip", reason: "already_placed" });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "already_placed",
+      position_branch: "new_entry",
+    });
   });
 });
 
@@ -136,6 +140,10 @@ describe("planMirrorFromFill() — idempotency round-trip", () => {
       client_order_id: coid,
       min_usdc_notional: 1.0,
     });
-    expect(second).toEqual({ kind: "skip", reason: "already_placed" });
+    expect(second).toEqual({
+      kind: "skip",
+      reason: "already_placed",
+      position_branch: "new_entry",
+    });
   });
 });
