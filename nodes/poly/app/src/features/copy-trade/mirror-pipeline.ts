@@ -34,6 +34,7 @@ import type { WalletActivitySource } from "@/features/wallet-watch";
 
 import { planMirrorFromFill } from "./plan-mirror";
 import type { MirrorReason, MirrorTargetConfig, SizingPolicy } from "./types";
+import { aggregatePositionRows } from "./types";
 
 type PlacementWire = "limit" | "market_fok";
 
@@ -238,12 +239,17 @@ async function processFill(
           fill.market_id
         );
 
+  const positions_by_condition = aggregatePositionRows(
+    snapshot.position_aggregates
+  );
+
   const plan = planMirrorFromFill({
     fill,
     config: deps.target,
     state: {
       already_placed_ids: snapshot.already_placed_ids,
       cumulative_intent_usdc_for_market,
+      position: positions_by_condition.get(fill.market_id),
     },
     client_order_id,
     min_shares,

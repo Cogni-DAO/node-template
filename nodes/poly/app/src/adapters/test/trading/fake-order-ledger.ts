@@ -31,6 +31,7 @@ import {
   type MarkPositionLifecycleByConditionIdInput,
   type OpenOrderRow,
   type OrderLedger,
+  type PositionIntentAggregate,
   type RecordDecisionInput,
   type StateSnapshot,
   type SyncHealthSummary,
@@ -42,6 +43,98 @@ export interface FakeOrderLedgerConfig {
   initial?: LedgerRow[];
   /** If set, `snapshotState` throws internally and the fake returns the fail-closed shape. */
   failConfigRead?: boolean;
+}
+
+/**
+ * Compute the generic per-(market_id, token_id) intent-aggregate rows for a
+ * target's fills, mirroring the SQL semantics of the Drizzle `snapshotState`.
+ * Pure + deterministic so unit tests don't need a Postgres testcontainer.
+ *
+ * Mirror-vocabulary overlay (`MirrorPositionView`) is the consumer's job —
+ * see `@/features/copy-trade/types::aggregatePositionRows`.
+ */
+function computeIntentAggregatesForTarget(
+  rows: LedgerRow[]
+): PositionIntentAggregate[] {
+  const activeStatuses: LedgerStatus[] = [
+    "pending",
+    "open",
+    "filled",
+    "partial",
+  ];
+  const activeLifecycles = new Set<LedgerPositionLifecycle | null>([
+    null,
+    "unresolved",
+    "open",
+    "closing",
+  ]);
+
+  type Bucket = {
+    token_id: string;
+    net_shares: number;
+    gross_usdc_in: number;
+    gross_shares_in: number;
+  };
+  const byCondition = new Map<string, Map<string, Bucket>>();
+
+  for (const r of rows) {
+    if (!activeStatuses.includes(r.status)) continue;
+    if (!activeLifecycles.has(r.position_lifecycle)) continue;
+    const attrs = r.attributes as Record<string, unknown> | null;
+    if (!attrs) continue;
+    if (typeof attrs.closed_at === "string" && attrs.closed_at.length > 0)
+      continue;
+    const tokenId =
+      typeof attrs.token_id === "string" ? attrs.token_id : undefined;
+    const conditionId =
+      typeof attrs.market_id === "string" ? attrs.market_id : undefined;
+    const sizeUsdc =
+      typeof attrs.size_usdc === "number" ? attrs.size_usdc : NaN;
+    const limitPrice =
+      typeof attrs.limit_price === "number" ? attrs.limit_price : NaN;
+    const side = typeof attrs.side === "string" ? attrs.side : undefined;
+    if (!tokenId || !conditionId) continue;
+    if (!Number.isFinite(sizeUsdc) || !Number.isFinite(limitPrice)) continue;
+    if (limitPrice === 0) continue;
+
+    const shares = sizeUsdc / limitPrice;
+    let bucketsForCondition = byCondition.get(conditionId);
+    if (!bucketsForCondition) {
+      bucketsForCondition = new Map();
+      byCondition.set(conditionId, bucketsForCondition);
+    }
+    let bucket = bucketsForCondition.get(tokenId);
+    if (!bucket) {
+      bucket = {
+        token_id: tokenId,
+        net_shares: 0,
+        gross_usdc_in: 0,
+        gross_shares_in: 0,
+      };
+      bucketsForCondition.set(tokenId, bucket);
+    }
+    if (side === "BUY") {
+      bucket.net_shares += shares;
+      bucket.gross_usdc_in += sizeUsdc;
+      bucket.gross_shares_in += shares;
+    } else if (side === "SELL") {
+      bucket.net_shares -= shares;
+    }
+  }
+
+  const out: PositionIntentAggregate[] = [];
+  for (const [conditionId, buckets] of byCondition) {
+    for (const bucket of buckets.values()) {
+      out.push({
+        market_id: conditionId,
+        token_id: bucket.token_id,
+        net_shares: bucket.net_shares,
+        gross_usdc_in: bucket.gross_usdc_in,
+        gross_shares_in: bucket.gross_shares_in,
+      });
+    }
+  }
+  return out;
 }
 
 export class FakeOrderLedger implements OrderLedger {
@@ -61,6 +154,7 @@ export class FakeOrderLedger implements OrderLedger {
         today_spent_usdc: 0,
         fills_last_hour: 0,
         already_placed_ids: [],
+        position_aggregates: [],
       };
     }
     const now = Date.now();
@@ -81,11 +175,13 @@ export class FakeOrderLedger implements OrderLedger {
       (r) => r.created_at >= oneHourAgo
     ).length;
     const already_placed_ids = myRows.map((r) => r.client_order_id);
+    const position_aggregates = computeIntentAggregatesForTarget(myRows);
 
     return {
       today_spent_usdc,
       fills_last_hour,
       already_placed_ids,
+      position_aggregates,
     };
   }
 

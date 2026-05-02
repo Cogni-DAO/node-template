@@ -147,6 +147,95 @@ export const MirrorTargetConfigSchema = z.object({
 export type MirrorTargetConfig = z.infer<typeof MirrorTargetConfigSchema>;
 
 /**
+ * Mirror's local-DB cache view of our own exposure on a single Polymarket
+ * `condition_id`. **Authority #4 only** (per `docs/design/poly-positions.md`).
+ * Used as a *signal* input for mirror policy decisions (hedge-followup,
+ * layering, SELL-routing pre-check). Never authority for "do we still hold
+ * shares on chain?" — that path goes through `getOperatorPositions` (#3 →
+ * #1) as today.
+ *
+ * Quantities are intent-based (computed from fills' `size_usdc / limit_price`)
+ * and include rows in `pending | open | filled | partial`. Excludes
+ * `canceled | error | closed` and lifecycles past `closing`. Fail-safe upward —
+ * follow-on sizing under-shoots rather than over-shoots.
+ *
+ * Single source of truth — trading-slice only emits generic
+ * `PositionIntentAggregate` rows; this type is the mirror-vocabulary overlay
+ * that copy-trade computes via `aggregatePositionRows()`.
+ */
+export const MirrorPositionViewSchema = z.object({
+  condition_id: z.string(),
+  our_token_id: z.string().optional(),
+  our_qty_shares: z.number(),
+  our_vwap_usdc: z.number().optional(),
+  opposite_token_id: z.string().optional(),
+  opposite_qty_shares: z.number(),
+});
+export type MirrorPositionView = z.infer<typeof MirrorPositionViewSchema>;
+
+/**
+ * Pure aggregator: collapse generic per-(market, token) intent aggregates
+ * into a `Map<condition_id, MirrorPositionView>` keyed by the fill's
+ * `condition_id` (== `market_id` in the trading vocabulary).
+ *
+ * For binary markets (≤2 token_ids per condition_id) we surface both
+ * `our_token_id` (larger long leg) and `opposite_token_id` (the other leg).
+ * For multi-outcome markets (>2 token_ids), `opposite_token_id` is left
+ * undefined — hedge predicate downstream no-ops, per
+ * HEDGE_PREDICATE_NOOPS_ON_UNKNOWN_OPPOSITE.
+ *
+ * Pure — no I/O. Designed to be called once per snapshot; output is read by
+ * the planner per-fill via `state.position`.
+ */
+export function aggregatePositionRows(
+  rows: Array<{
+    market_id: string;
+    token_id: string;
+    net_shares: number;
+    gross_usdc_in: number;
+    gross_shares_in: number;
+  }>
+): Map<string, MirrorPositionView> {
+  const byCondition = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const bucket = byCondition.get(row.market_id);
+    if (bucket) bucket.push(row);
+    else byCondition.set(row.market_id, [row]);
+  }
+
+  const out = new Map<string, MirrorPositionView>();
+  for (const [condition_id, group] of byCondition) {
+    const sorted = [...group].sort((a, b) => b.net_shares - a.net_shares);
+    const longLeg = sorted[0];
+    const otherLeg = group.length === 2 ? sorted[1] : undefined;
+    const longShares = longLeg ? longLeg.net_shares : 0;
+
+    if (longShares <= 0 && (!otherLeg || otherLeg.net_shares <= 0)) {
+      // No active exposure either leg — skip empty entry.
+      continue;
+    }
+
+    const view: MirrorPositionView = {
+      condition_id,
+      our_qty_shares: longShares > 0 ? longShares : 0,
+      opposite_qty_shares:
+        otherLeg && otherLeg.net_shares > 0 ? otherLeg.net_shares : 0,
+    };
+    if (longShares > 0 && longLeg?.token_id) {
+      view.our_token_id = longLeg.token_id;
+      if (longLeg.gross_shares_in > 0) {
+        view.our_vwap_usdc = longLeg.gross_usdc_in / longLeg.gross_shares_in;
+      }
+    }
+    if (group.length === 2 && otherLeg?.token_id) {
+      view.opposite_token_id = otherLeg.token_id;
+    }
+    out.set(condition_id, view);
+  }
+  return out;
+}
+
+/**
  * Snapshot of runtime state at plan-time. The pipeline computes this via a
  * SELECT over `poly_copy_trade_fills` and hands it to `planMirrorFromFill()`
  * — the pure function does NOT reach into the DB. Cap-window state has moved
@@ -165,6 +254,17 @@ export const RuntimeStateSchema = z.object({
    * that hasn't opted in.
    */
   cumulative_intent_usdc_for_market: z.number().optional(),
+  /**
+   * Mirror cache view for this fill's `condition_id`, derived from
+   * `poly_copy_trade_fills` at snapshot time. Undefined ⇒ no prior
+   * mirror exposure on this condition. Cache view, not authority — see
+   * `MirrorPositionViewSchema`.
+   *
+   * v0 surfaces the field but follow-on planner branches (hedge-followup,
+   * SELL-mirror, layering, bankroll sizer) land in subsequent PRs as
+   * predicates against this field.
+   */
+  position: MirrorPositionViewSchema.optional(),
 });
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 

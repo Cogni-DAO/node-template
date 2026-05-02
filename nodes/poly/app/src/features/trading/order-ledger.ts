@@ -51,6 +51,7 @@ import {
   type MarkPositionLifecycleByConditionIdInput,
   type OpenOrderRow,
   type OrderLedger,
+  type PositionIntentAggregate,
   type RecordDecisionInput,
   type StateSnapshot,
   type SyncHealthSummary,
@@ -83,6 +84,35 @@ const hasPositionLifecycleOrExecution = sql`(
   END > 0
 )`;
 
+/**
+ * Materialize the SQL GROUP BY result rows (numeric fields arrive as strings
+ * from postgres-js) into the typed `PositionIntentAggregate` shape consumed
+ * by the trading port. Filters rows whose `token_id` JSON-extract returned
+ * null. Pure — testable in isolation.
+ */
+function materializeIntentAggregates(
+  rows: Array<{
+    market_id: string;
+    token_id: string | null;
+    net_shares: string;
+    gross_usdc_in: string;
+    gross_shares_in: string;
+  }>
+): PositionIntentAggregate[] {
+  const out: PositionIntentAggregate[] = [];
+  for (const row of rows) {
+    if (row.token_id === null) continue;
+    out.push({
+      market_id: row.market_id,
+      token_id: row.token_id,
+      net_shares: Number(row.net_shares),
+      gross_usdc_in: Number(row.gross_usdc_in),
+      gross_shares_in: Number(row.gross_shares_in),
+    });
+  }
+  return out;
+}
+
 export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   const log = deps.logger.child({ component: "order-ledger" });
 
@@ -92,8 +122,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       billing_account_id: string
     ): Promise<StateSnapshot> {
       try {
-        // Three concurrent reads — one round-trip to postgres-js, three statements.
-        const [spendRows, rateRows, cidRows] = await Promise.all([
+        // Four concurrent reads — one round-trip to postgres-js, four statements.
+        const [spendRows, rateRows, cidRows, positionRows] = await Promise.all([
           // Caps are INTENT-based (CAPS_COUNT_INTENTS invariant): filter by
           // `created_at` (when we inserted the pending row) — NOT by
           // `observed_at` (the upstream fill time, which can be arbitrarily old
@@ -130,16 +160,66 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             .select({ cid: polyCopyTradeFills.clientOrderId })
             .from(polyCopyTradeFills)
             .where(eq(polyCopyTradeFills.targetId, target_id)),
+          // Generic per-(market_id, token_id) intent aggregation — net shares
+          // + gross USDC-in / shares-in. Intent-based, includes `pending` so
+          // within-tick fills see prior placements (per-fill snapshotState +
+          // INSERT_BEFORE_PLACE means the prior pending row is committed by
+          // the time the next fill snapshots). Mirror semantics overlay (e.g.
+          // `our_token_id` / `opposite_token_id`) is computed downstream in
+          // `@/features/copy-trade/types::aggregatePositionRows`.
+          deps.db
+            .select({
+              market_id: polyCopyTradeFills.marketId,
+              token_id: sql<
+                string | null
+              >`${polyCopyTradeFills.attributes}->>'token_id'`,
+              net_shares: sql<string>`COALESCE(SUM(
+                CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
+                       THEN  (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0)
+                     WHEN ${polyCopyTradeFills.attributes}->>'side' = 'SELL'
+                       THEN -((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0))
+                     ELSE 0 END
+              ), 0)`,
+              gross_usdc_in: sql<string>`COALESCE(SUM(
+                CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
+                       THEN (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric
+                     ELSE 0 END
+              ), 0)`,
+              gross_shares_in: sql<string>`COALESCE(SUM(
+                CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
+                       THEN (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0)
+                     ELSE 0 END
+              ), 0)`,
+            })
+            .from(polyCopyTradeFills)
+            .where(
+              and(
+                eq(polyCopyTradeFills.targetId, target_id),
+                inArray(polyCopyTradeFills.status, [
+                  "pending",
+                  "open",
+                  "filled",
+                  "partial",
+                ]),
+                activeRestingPosition
+              )
+            )
+            .groupBy(
+              polyCopyTradeFills.marketId,
+              sql`${polyCopyTradeFills.attributes}->>'token_id'`
+            ),
         ]);
 
         const today_spent_usdc = Number(spendRows[0]?.spent ?? 0);
         const fills_last_hour = Number(rateRows[0]?.n ?? 0);
         const already_placed_ids = cidRows.map((r) => r.cid);
+        const position_aggregates = materializeIntentAggregates(positionRows);
 
         return {
           today_spent_usdc,
           fills_last_hour,
           already_placed_ids,
+          position_aggregates,
         };
       } catch (err: unknown) {
         // FAIL_CLOSED — any error returns the fail-closed snapshot.
@@ -157,6 +237,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           today_spent_usdc: 0,
           fills_last_hour: 0,
           already_placed_ids: [],
+          position_aggregates: [],
         };
       }
     },

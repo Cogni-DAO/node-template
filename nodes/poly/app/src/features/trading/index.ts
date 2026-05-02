@@ -50,6 +50,7 @@ export {
   type ListRecentOptions,
   type OpenOrderRow,
   type OrderLedger,
+  type PositionIntentAggregate,
   type RecordDecisionInput,
   type StateSnapshot,
   type SyncHealthSummary,

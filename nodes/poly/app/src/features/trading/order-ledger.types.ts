@@ -70,6 +70,27 @@ export interface LedgerRow {
 }
 
 /**
+ * Generic per-(market_id, token_id) intent-aggregate row. Trading-vocabulary
+ * only — names "intent," "shares," "usdc." Consumers (copy-trade) overlay
+ * mirror-specific shape (`MirrorPositionView`) on top via their own aggregator.
+ *
+ * Quantities are intent-based (computed from `attributes.size_usdc /
+ * attributes.limit_price`) and include rows in `pending | open | filled |
+ * partial`, excluding `canceled | error | closed` and `position_lifecycle`
+ * past `closing`. TRADING_IS_GENERIC: this type knows nothing about mirrors.
+ */
+export interface PositionIntentAggregate {
+  market_id: string;
+  token_id: string;
+  /** BUY shares minus SELL shares on this `(market_id, token_id)`. */
+  net_shares: number;
+  /** Sum of `size_usdc` on BUY rows only. */
+  gross_usdc_in: number;
+  /** Sum of `size_usdc / limit_price` on BUY rows only. */
+  gross_shares_in: number;
+}
+
+/**
  * State snapshot the mirror-coordinator hands to `decide()`. Caller translates
  * into `RuntimeState`. The ledger owns the SELECTs; `decide()` stays pure.
  *
@@ -80,6 +101,13 @@ export interface StateSnapshot {
   today_spent_usdc: number;
   fills_last_hour: number;
   already_placed_ids: string[];
+  /**
+   * Per-(market_id, token_id) intent aggregates for the target's active fills.
+   * Empty array on fail-closed read OR when the target has no active fills.
+   * Generic shape — copy-trade's mirror-pipeline overlays mirror semantics
+   * on top via `aggregatePositionRows()` from `@/features/copy-trade`.
+   */
+  position_aggregates: PositionIntentAggregate[];
 }
 
 /** Bounded enum of cancel reasons. Stored on `attributes.reason`. */
