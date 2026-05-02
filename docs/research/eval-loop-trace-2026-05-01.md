@@ -2,8 +2,8 @@
 id: eval-loop-trace-2026-05-01
 type: research
 title: "Eval-loop baseline trace — bug.5004 + bug.5005 happy-path dispatch (2026-05-01)"
-status: active
-trust: observed
+status: draft
+trust: draft
 summary: "Manual coordinator trace of two parallel dev-agent dispatches (bug.5004 poly normalizer + bug.5005 operator PATCH allowlist) walking the contribute-to-cogni lifecycle. Produces the seed assertion corpus for task.5004 (autonomous eval loop). Six concrete drift points logged for the synthetic harness to assert against."
 read_when: Implementing task.5004 (synthetic eval harness); designing the qa-agent in task.0309; reviewing whether contribute-to-cogni / validate-candidate skills cover the happy-path lifecycle; debugging why an agent stalled mid-lifecycle.
 implements:
