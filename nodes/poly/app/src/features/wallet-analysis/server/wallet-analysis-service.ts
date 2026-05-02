@@ -51,6 +51,7 @@ const upstreamLimit = pLimit(4);
 /** Trades fetched per analysis request (`computeWalletMetrics` accepts up to ~500 per the Data API cap). */
 const TRADE_FETCH_LIMIT = 500;
 const EXECUTION_TRADE_FETCH_LIMIT = 10_000;
+const EXECUTION_POSITION_FETCH_LIMIT = 500;
 /** Max open/redeemable rows returned in live_positions. */
 const EXECUTION_OPEN_LIMIT = 18;
 /** Max closed rows returned in closed_positions. */
@@ -223,7 +224,12 @@ export async function getBalanceSlice(
   try {
     const positions = await coalesce(
       `positions:${addr}`,
-      () => upstreamLimit(() => getDataApiClient().listUserPositions(addr)),
+      () =>
+        upstreamLimit(() =>
+          getDataApiClient().listUserPositions(addr, {
+            limit: EXECUTION_POSITION_FETCH_LIMIT,
+          })
+        ),
       SLICE_TTL_MS
     );
     const positionsValue = positions.reduce(
@@ -289,27 +295,37 @@ export async function getExecutionSlice(
   opts: {
     /** Skip public CLOB price history for refresh paths that only need trade cadence. */
     includePriceHistory?: boolean;
+    /** Skip the expensive `/trades` read when the caller only needs current holdings. */
+    includeTrades?: boolean;
   } = {}
 ): Promise<PolyWalletExecutionOutput> {
   const capturedAt = new Date().toISOString();
   const warnings: WalletExecutionWarning[] = [];
+  const includeTrades = opts.includeTrades ?? true;
 
   const [positionsResult, tradesResult] = await Promise.allSettled([
     coalesce(
       `positions:${addr}`,
-      () => upstreamLimit(() => getDataApiClient().listUserPositions(addr)),
-      SLICE_TTL_MS
-    ),
-    coalesce(
-      `execution-trades:${addr}`,
       () =>
         upstreamLimit(() =>
-          getDataApiClient().listUserTrades(addr, {
-            limit: EXECUTION_TRADE_FETCH_LIMIT,
+          getDataApiClient().listUserPositions(addr, {
+            limit: EXECUTION_POSITION_FETCH_LIMIT,
           })
         ),
       SLICE_TTL_MS
     ),
+    includeTrades
+      ? coalesce(
+          `execution-trades:${addr}`,
+          () =>
+            upstreamLimit(() =>
+              getDataApiClient().listUserTrades(addr, {
+                limit: EXECUTION_TRADE_FETCH_LIMIT,
+              })
+            ),
+          SLICE_TTL_MS
+        )
+      : Promise.resolve([]),
   ]);
 
   const positions =

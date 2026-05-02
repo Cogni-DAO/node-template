@@ -35,7 +35,10 @@ import {
   invalidateWalletAnalysisCaches,
 } from "@/features/wallet-analysis/server/wallet-analysis-service";
 import { serverEnv } from "@/shared/env/server-env";
-import { hasPositionExposure } from "../_lib/ledger-positions";
+import {
+  DASHBOARD_LEDGER_POSITION_LIMIT,
+  hasPositionExposure,
+} from "../_lib/ledger-positions";
 
 export const dynamic = "force-dynamic";
 
@@ -152,7 +155,7 @@ export const POST = wrapRouteHandlerWithLogging(
       const rows = await container.orderLedger.listTenantPositions({
         billing_account_id: account.id,
         statuses: REFRESH_LEDGER_STATUSES,
-        limit: 500,
+        limit: DASHBOARD_LEDGER_POSITION_LIMIT,
       });
       ledgerRowsRead = rows.length;
 
@@ -262,6 +265,7 @@ export const POST = wrapRouteHandlerWithLogging(
     try {
       const execution = await getExecutionSlice(address, {
         includePriceHistory: false,
+        includeTrades: false,
       });
       executionCapturedAt = execution.capturedAt;
       warnings.push(...execution.warnings);
