@@ -220,6 +220,7 @@ describe("poly wallet dashboard DB read routes", () => {
         slug: "will-clob-stay-up",
         event_slug: "clob-health",
         event_title: "CLOB Health",
+        end_date: "2026-05-03T00:00:00.000Z",
         game_start_time: "2026-05-02T12:00:00.000Z",
         outcome: "YES",
         side: "BUY",
@@ -346,7 +347,7 @@ describe("poly wallet dashboard DB read routes", () => {
       eventTitle: "CLOB Health",
       marketSlug: "will-clob-stay-up",
       eventSlug: "clob-health",
-      resolvesAt: "2026-05-02T12:00:00.000Z",
+      resolvesAt: "2026-05-03T00:00:00.000Z",
       gameStartTime: "2026-05-02T12:00:00.000Z",
       outcome: "YES",
       currentValue: 10,
@@ -522,12 +523,21 @@ describe("poly wallet dashboard DB read routes", () => {
     const json = await response.json();
 
     expect(response.status).toBe(200);
-    expect(json.live_positions).toHaveLength(1);
-    expect(json.live_positions[0]).toMatchObject({
-      asset: "token-live",
-      status: "redeemable",
-      currentValue: 7,
-    });
+    expect(json.live_positions).toHaveLength(2);
+    expect(json.live_positions).toContainEqual(
+      expect.objectContaining({
+        asset: "token-1",
+        marketTitle: "Will CLOB stay up?",
+        currentValue: 10,
+      })
+    );
+    expect(json.live_positions).toContainEqual(
+      expect.objectContaining({
+        asset: "token-live",
+        status: "redeemable",
+        currentValue: 7,
+      })
+    );
     expect(
       json.live_positions.map((p: { asset: string }) => p.asset)
     ).not.toContain("token-loser");
@@ -536,8 +546,88 @@ describe("poly wallet dashboard DB read routes", () => {
       { day: "2026-05-02", n: 1 },
     ]);
     expect(mockGetExecutionSlice).toHaveBeenCalledWith(FUNDER, {
-      includePriceHistory: false,
       includeTrades: false,
+    });
+  });
+
+  it("execution overlays live fields onto DB rows without dropping extra DB-backed positions", async () => {
+    const olderRow = {
+      ...row,
+      fill_id: "data-api:fill-older",
+      client_order_id: "0xclient-older",
+      order_id: "0xorder-older",
+      observed_at: new Date(Date.now() - 2 * 60 * 60 * 1_000),
+      attributes: {
+        ...row.attributes,
+        token_id: "token-older",
+        title: "Older DB-backed row",
+        filled_size_usdc: 2,
+      },
+    };
+    mockListTenantPositions.mockResolvedValue([row, olderRow]);
+    mockGetExecutionSlice.mockResolvedValue({
+      address: FUNDER,
+      capturedAt: NOW.toISOString(),
+      dailyTradeCounts: [],
+      live_positions: [
+        {
+          positionId: "condition-live:token-1",
+          conditionId:
+            "0x1111111111111111111111111111111111111111111111111111111111111111",
+          asset: "token-1",
+          marketTitle: "Will CLOB stay up?",
+          marketSlug: "will-clob-stay-up",
+          eventSlug: "clob-health",
+          marketUrl:
+            "https://polymarket.com/event/clob-health/will-clob-stay-up",
+          outcome: "YES",
+          status: "open",
+          lifecycleState: null,
+          openedAt: NOW.toISOString(),
+          closedAt: null,
+          resolvesAt: "2026-05-03T00:00:00.000Z",
+          heldMinutes: 0,
+          entryPrice: 0.5,
+          currentPrice: 0.7,
+          size: 20,
+          currentValue: 14,
+          pnlUsd: 4,
+          pnlPct: 40,
+          timeline: [
+            { ts: "2026-05-02T02:59:00.000Z", price: 0.5, size: 20 },
+            { ts: "2026-05-02T03:00:00.000Z", price: 0.7, size: 20 },
+          ],
+          events: [],
+        },
+      ],
+      closed_positions: [],
+      warnings: [],
+    });
+    const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/poly/wallet/execution")
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.live_positions).toHaveLength(2);
+    expect(json.live_positions).toContainEqual(
+      expect.objectContaining({
+        asset: "token-older",
+        marketTitle: "Older DB-backed row",
+      })
+    );
+    expect(json.live_positions[0]).toMatchObject({
+      asset: "token-1",
+      currentPrice: 0.7,
+      currentValue: 14,
+      pnlUsd: 4,
+      heldMinutes: 1,
+      timeline: [
+        { ts: "2026-05-02T02:59:00.000Z", price: 0.5, size: 20 },
+        { ts: "2026-05-02T03:00:00.000Z", price: 0.7, size: 20 },
+      ],
     });
   });
 
@@ -680,7 +770,6 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(json.live_positions).toEqual([]);
     expect(json.closed_positions).toHaveLength(1);
     expect(mockGetExecutionSlice).toHaveBeenCalledWith(FUNDER, {
-      includePriceHistory: false,
       includeTrades: false,
     });
   });
