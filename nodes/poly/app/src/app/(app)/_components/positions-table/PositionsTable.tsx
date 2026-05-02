@@ -25,6 +25,7 @@
 
 import {
   getCoreRowModel,
+  getPaginationRowModel,
   getSortedRowModel,
   useReactTable,
   type VisibilityState,
@@ -36,6 +37,7 @@ import {
   DataGrid,
   DataGridContainer,
 } from "@/components/reui/data-grid/data-grid";
+import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import type { WalletPosition } from "@/features/wallet-analysis/types/wallet-analysis";
 
@@ -85,6 +87,7 @@ const HISTORY_VISIBILITY: VisibilityState = {
   pnlUsd: true,
   pnlPct: true,
 };
+const PAGE_SIZE = 25;
 
 export function PositionsTable({
   positions,
@@ -126,7 +129,11 @@ export function PositionsTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    initialState: {
+      pagination: { pageIndex: 0, pageSize: PAGE_SIZE },
+    },
     state: { columnVisibility },
     onColumnVisibilityChange: setColumnVisibility,
   });
@@ -149,6 +156,9 @@ export function PositionsTable({
       <DataGridContainer className="overflow-x-auto">
         <DataGridTable />
       </DataGridContainer>
+      {data.length > PAGE_SIZE ? (
+        <DataGridPagination sizes={[25, 50, 100]} />
+      ) : null}
     </DataGrid>
   );
 }

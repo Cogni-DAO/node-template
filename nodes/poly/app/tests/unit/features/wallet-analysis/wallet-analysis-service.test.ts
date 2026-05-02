@@ -247,4 +247,35 @@ describe("getExecutionSlice — live/closed split", () => {
     );
     expect(historyUrlsForClosed).toHaveLength(0);
   });
+
+  it("can return current positions without fetching trade history", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockImplementation(
+        async (url: string): Promise<{ ok: boolean; json: () => unknown }> => {
+          if (url.includes("/positions")) {
+            return { ok: true, json: () => [makePosition("open1")] };
+          }
+          throw new Error("trade history should not be fetched");
+        }
+      );
+    const dataApi = new PolymarketDataApiClient({ fetch: fetchMock });
+    const clobPublic = new PolymarketClobPublicClient({
+      fetch: vi.fn().mockResolvedValue({ ok: true, json: () => [] }),
+    });
+
+    __setClientsForTests({ dataApi, clobPublic });
+
+    const result = await getExecutionSlice(
+      "0xabcdef1234567890abcdef1234567890abcdef12",
+      { includePriceHistory: false, includeTrades: false }
+    );
+
+    expect(result.live_positions).toHaveLength(1);
+    expect(result.closed_positions).toHaveLength(0);
+    expect(result.dailyTradeCounts.every((point) => point.n === 0)).toBe(true);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("/positions");
+    expect(fetchMock.mock.calls[0]?.[0]).toContain("limit=500");
+  });
 });

@@ -262,7 +262,7 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(mockListTenantPositions).toHaveBeenCalledWith({
       billing_account_id: ACCOUNT.id,
       statuses: ALL_LEDGER_STATUSES,
-      limit: 500,
+      limit: 2_000,
     });
   });
 
@@ -330,7 +330,7 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(mockListTenantPositions).toHaveBeenCalledWith({
       billing_account_id: ACCOUNT.id,
       statuses: ["pending", "open", "filled", "partial", "canceled", "error"],
-      limit: 500,
+      limit: 2_000,
     });
   });
 
@@ -443,6 +443,10 @@ describe("poly wallet dashboard DB read routes", () => {
       ...EMPTY_14_DAY_COUNTS.slice(0, -1),
       { day: "2026-05-02", n: 1 },
     ]);
+    expect(mockGetExecutionSlice).toHaveBeenCalledWith(FUNDER, {
+      includePriceHistory: false,
+      includeTrades: false,
+    });
   });
 
   it("overview does not double-count unfilled resting BUY orders as position MTM", async () => {
@@ -585,6 +589,7 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(json.closed_positions).toHaveLength(1);
     expect(mockGetExecutionSlice).toHaveBeenCalledWith(FUNDER, {
       includePriceHistory: false,
+      includeTrades: false,
     });
   });
 
@@ -877,7 +882,7 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(mockListTenantPositions).toHaveBeenCalledWith({
       billing_account_id: ACCOUNT.id,
       statuses: ALL_LEDGER_STATUSES,
-      limit: 500,
+      limit: 2_000,
     });
     expect(mockGetOrder).toHaveBeenCalledWith("0xorder");
     expect(mockUpdateStatus).toHaveBeenCalledWith({

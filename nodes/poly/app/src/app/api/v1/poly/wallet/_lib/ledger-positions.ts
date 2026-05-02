@@ -44,7 +44,7 @@ export const DASHBOARD_LEDGER_POSITION_STATUSES = [
   "canceled",
   "error",
 ] as const;
-export const DASHBOARD_LEDGER_POSITION_LIMIT = 500;
+export const DASHBOARD_LEDGER_POSITION_LIMIT = 2_000;
 
 export interface LedgerPositionSummary {
   openOrders: number;

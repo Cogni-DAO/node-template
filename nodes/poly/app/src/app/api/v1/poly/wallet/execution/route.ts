@@ -147,11 +147,10 @@ export const GET = wrapRouteHandlerWithLogging(
       );
       dbLivePositions = positions
         .filter((position) => position.status !== "closed")
-        .filter((position) => position.currentValue > 0)
-        .slice(0, 100);
-      closedPositions = positions
-        .filter((position) => position.status === "closed")
-        .slice(0, 100);
+        .filter((position) => position.currentValue > 0);
+      closedPositions = positions.filter(
+        (position) => position.status === "closed"
+      );
     } catch (err) {
       warnings.push({
         code: "positions_read_model_unavailable",
@@ -162,10 +161,11 @@ export const GET = wrapRouteHandlerWithLogging(
     try {
       const currentExecution = await getExecutionSlice(address, {
         includePriceHistory: false,
+        includeTrades: false,
       });
-      livePositions = currentExecution.live_positions
-        .filter(hasActionableCurrentPosition)
-        .slice(0, 100);
+      livePositions = currentExecution.live_positions.filter(
+        hasActionableCurrentPosition
+      );
       warnings.push(...currentExecution.warnings);
     } catch (err) {
       warnings.push({
