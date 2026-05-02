@@ -15,7 +15,8 @@
  *   - NO_PER_TARGET_ENABLED: `poly_copy_trade_targets` has no per-row enable flag. Operators add/remove rows.
  *   - NO_KILL_SWITCH (bug.0438): copy-trade has no per-tenant kill-switch table. Active target row +
  *     active wallet connection + active grant is the gate; explicit user opt-in (POST a target) is the
- *     only signal. Per-tenant sizing/caps live on `poly_wallet_grants`, not on a separate config table.
+ *     only signal. Target rows own the mirror filter percentile and per-target max bet; grants still
+ *     enforce downstream tenant authorization/caps.
  * Side-effects: none (schema definitions only)
  * Links: docs/spec/poly-multi-tenant-auth.md, work/items/task.0318
  * @public
@@ -26,6 +27,8 @@ import {
   check,
   index,
   jsonb,
+  integer,
+  numeric,
   pgTable,
   primaryKey,
   text,
@@ -51,6 +54,17 @@ export const polyCopyTradeTargets = pgTable(
     createdByUserId: text("created_by_user_id").notNull(),
     /** 0x-prefixed 40-hex Polymarket EOA being followed. */
     targetWallet: text("target_wallet").notNull(),
+    /** Target-wallet percentile floor for copy sizing. */
+    mirrorFilterPercentile: integer("mirror_filter_percentile")
+      .notNull()
+      .default(75),
+    /** Per-target mirror max. Accepted p100-size fills map to this notional. */
+    mirrorMaxUsdcPerTrade: numeric("mirror_max_usdc_per_trade", {
+      precision: 10,
+      scale: 2,
+    })
+      .notNull()
+      .default("5.00"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -61,6 +75,14 @@ export const polyCopyTradeTargets = pgTable(
     check(
       "poly_copy_trade_targets_wallet_shape",
       sql`${table.targetWallet} ~ '^0x[a-fA-F0-9]{40}$'`
+    ),
+    check(
+      "poly_copy_trade_targets_filter_percentile_range",
+      sql`${table.mirrorFilterPercentile} >= 50 AND ${table.mirrorFilterPercentile} <= 99`
+    ),
+    check(
+      "poly_copy_trade_targets_max_bet_positive",
+      sql`${table.mirrorMaxUsdcPerTrade} > 0`
     ),
     // One active row per (tenant, wallet). Soft-deleted rows allowed to coexist
     // so a previously-disabled wallet can be re-added without violating uniqueness.

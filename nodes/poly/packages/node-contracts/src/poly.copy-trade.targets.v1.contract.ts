@@ -16,13 +16,29 @@
  *   - SOURCE_REFLECTS_PORT: the `source` field reflects which `CopyTradeTargetSource` impl
  *     produced the row (`"env"` for the local-dev fallback, `"db"` for production).
  * Side-effects: none
- * Notes: Phase B will add per-tenant caps/mode from `poly_wallet_grants`. For now those
- *        fields surface the operator-wide hardcoded scaffolding values.
+ * Notes: Target rows own the copy filter percentile and per-target max bet. Wallet grants
+ *        remain the downstream authorization/cap layer before placement.
  * Links: docs/spec/poly-multi-tenant-auth.md, work/items/task.0318
  * @public
  */
 
 import { z } from "zod";
+
+const MAX_MIRROR_USDC_PER_TRADE = 99_999_999.99;
+
+const mirrorMaxUsdcPerTradeSchema = z
+  .number()
+  .positive()
+  .finite()
+  .max(MAX_MIRROR_USDC_PER_TRADE)
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-9, {
+    message: "Expected a value with at most 2 decimal places",
+  });
+
+const targetPolicySchema = z.object({
+  mirror_filter_percentile: z.number().int().min(50).max(99),
+  mirror_max_usdc_per_trade: mirrorMaxUsdcPerTradeSchema,
+});
 
 const targetSchema = z.object({
   /**
@@ -36,8 +52,15 @@ const targetSchema = z.object({
   target_wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
   /** `"paper"` = shadow into paper_orders (P3); `"live"` = real Polymarket placement. */
   mode: z.enum(["paper", "live"]),
-  /** Fixed mirror notional per fill (USDC). Operator-wide scaffolding in Phase A. */
+  /** Effective max mirror notional per fill (USDC) for this target. */
   mirror_usdc: z.number().positive(),
+  /** Target fill percentile floor; fills below this target-wallet size percentile skip. */
+  mirror_filter_percentile: targetPolicySchema.shape.mirror_filter_percentile,
+  /** Target-specific max mirror notional; p100 target fills map to this value. */
+  mirror_max_usdc_per_trade:
+    targetPolicySchema.shape.mirror_max_usdc_per_trade,
+  /** Actual planner sizing policy for this wallet. Uncurated wallets use min_bet. */
+  sizing_policy_kind: z.enum(["min_bet", "target_percentile_scaled"]),
   /** Provenance: `"env"` for the local-dev fallback; `"db"` once `dbTargetSource` is wired. */
   source: z.enum(["env", "db"]),
 });
@@ -79,6 +102,17 @@ export const polyCopyTradeTargetDeleteOperation = {
   }),
 } as const;
 
+export const polyCopyTradeTargetUpdateOperation = {
+  id: "poly.copy-trade.targets.update.v1",
+  summary: "Update one tracked wallet's copy sizing policy",
+  description:
+    "Updates the caller-owned target row's percentile floor and max mirror notional. Tenant-scoped via RLS; path id selects the row.",
+  input: z.object({ id: z.string().uuid() }).merge(targetPolicySchema),
+  output: z.object({
+    target: targetSchema,
+  }),
+} as const;
+
 export type PolyCopyTradeTarget = z.infer<typeof targetSchema>;
 export type PolyCopyTradeTargetsOutput = z.infer<
   typeof polyCopyTradeTargetsOperation.output
@@ -91,4 +125,10 @@ export type PolyCopyTradeTargetCreateOutput = z.infer<
 >;
 export type PolyCopyTradeTargetDeleteOutput = z.infer<
   typeof polyCopyTradeTargetDeleteOperation.output
+>;
+export type PolyCopyTradeTargetUpdateInput = z.infer<
+  typeof polyCopyTradeTargetUpdateOperation.input
+>;
+export type PolyCopyTradeTargetUpdateOutput = z.infer<
+  typeof polyCopyTradeTargetUpdateOperation.output
 >;

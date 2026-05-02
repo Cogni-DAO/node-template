@@ -837,6 +837,8 @@ function createContainer(): Container {
               targetWallet,
               billingAccountId: enumeratedTarget.billingAccountId,
               createdByUserId: enumeratedTarget.createdByUserId,
+              mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
+              mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
             });
             const source = createPolymarketActivitySource({
               client: dataApiClient,

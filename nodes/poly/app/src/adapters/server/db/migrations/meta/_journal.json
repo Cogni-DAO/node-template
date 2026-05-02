@@ -267,6 +267,13 @@
       "when": 1778000200000,
       "tag": "0037_poly_copy_trade_market_id",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1778000300000,
+      "tag": "0038_poly_copy_trade_target_policy",
+      "breakpoints": true
     }
   ]
 }

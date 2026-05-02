@@ -11,7 +11,10 @@
 
 import { describe, expect, it } from "vitest";
 
-import { buildMirrorTargetConfig } from "@/bootstrap/jobs/copy-trade-mirror.job";
+import {
+  buildMirrorTargetConfig,
+  sizingPolicyKindForTargetWallet,
+} from "@/bootstrap/jobs/copy-trade-mirror.job";
 
 const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
 const CREATED_BY_USER_ID = "00000000-0000-4000-a000-000000000001";
@@ -28,41 +31,65 @@ function build(targetWallet: `0x${string}`) {
 }
 
 describe("buildMirrorTargetConfig() — sizing policy selection", () => {
-  it("uses target_percentile sizing for RN1", () => {
+  it("uses scaled target-percentile sizing for RN1", () => {
     const config = build(RN1);
+    expect(sizingPolicyKindForTargetWallet(RN1)).toBe(
+      "target_percentile_scaled"
+    );
     expect(config.sizing).toMatchObject({
-      kind: "target_percentile",
+      kind: "target_percentile_scaled",
       max_usdc_per_trade: 5,
       statistic: {
         wallet: RN1,
         label: "RN1",
         percentile: 75,
-        min_target_usdc: 64.11,
+        min_target_usdc: 117.65,
+        max_target_usdc: 2660.08,
       },
     });
   });
 
   it("matches curated wallets case-insensitively", () => {
     const config = build("0x2005D16A84CEEFA912D4E380CD32E7FF827875EA");
-    expect(config.sizing.kind).toBe("target_percentile");
+    expect(config.sizing.kind).toBe("target_percentile_scaled");
   });
 
-  it("uses target_percentile sizing for swisstony", () => {
+  it("uses scaled target-percentile sizing for swisstony", () => {
     const config = build(SWISSTONY);
     expect(config.sizing).toMatchObject({
-      kind: "target_percentile",
+      kind: "target_percentile_scaled",
       max_usdc_per_trade: 5,
       statistic: {
         wallet: SWISSTONY,
         label: "swisstony",
         percentile: 75,
-        min_target_usdc: 73.37,
+        min_target_usdc: 114.57,
+        max_target_usdc: 4811.89,
+      },
+    });
+  });
+
+  it("hydrates per-target slider fields into the policy", () => {
+    const config = buildMirrorTargetConfig({
+      targetWallet: SWISSTONY,
+      billingAccountId: BILLING_ACCOUNT_ID,
+      createdByUserId: CREATED_BY_USER_ID,
+      mirrorFilterPercentile: 90,
+      mirrorMaxUsdcPerTrade: 12,
+    });
+    expect(config.sizing).toMatchObject({
+      kind: "target_percentile_scaled",
+      max_usdc_per_trade: 12,
+      statistic: {
+        percentile: 90,
+        min_target_usdc: 321.62,
       },
     });
   });
 
   it("keeps min_bet sizing for uncurated wallets", () => {
     const config = build(UNKNOWN);
+    expect(sizingPolicyKindForTargetWallet(UNKNOWN)).toBe("min_bet");
     expect(config.sizing).toEqual({
       kind: "min_bet",
       max_usdc_per_trade: 5,

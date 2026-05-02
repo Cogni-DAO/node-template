@@ -89,6 +89,41 @@ function sizeFromPolicy(
         policy.max_usdc_per_trade
       );
     }
+    case "target_percentile_scaled": {
+      if (targetSizeUsdc < policy.statistic.min_target_usdc) {
+        return { ok: false, reason: "below_target_percentile" };
+      }
+      const floor = applyMarketFloors(
+        minUsdcNotional,
+        price,
+        minShares,
+        minUsdcNotional,
+        policy.max_usdc_per_trade
+      );
+      if (!floor.ok) return floor;
+      const denominator =
+        policy.statistic.max_target_usdc - policy.statistic.min_target_usdc;
+      const ratio =
+        denominator <= 0
+          ? 1
+          : Math.min(
+              1,
+              Math.max(
+                0,
+                (targetSizeUsdc - policy.statistic.min_target_usdc) /
+                  denominator
+              )
+            );
+      const desiredSizeUsdc =
+        floor.size_usdc + (policy.max_usdc_per_trade - floor.size_usdc) * ratio;
+      return applyMarketFloors(
+        desiredSizeUsdc,
+        price,
+        minShares,
+        minUsdcNotional,
+        policy.max_usdc_per_trade
+      );
+    }
   }
 }
 

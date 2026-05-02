@@ -56,6 +56,8 @@ export const WalletSizeStatisticSchema = z.object({
   sample_size: z.number().int().positive(),
   /** Target-wallet USDC-notional threshold; fills below this skip. */
   min_target_usdc: z.number().positive(),
+  /** Largest observed target-wallet USDC notional in the snapshot. */
+  max_target_usdc: z.number().positive(),
   /** Percentile slider that produced `min_target_usdc`, e.g. 75 = p75. */
   percentile: z.number().min(0).max(100),
 });
@@ -77,9 +79,26 @@ export type TargetPercentileSizingPolicy = z.infer<
   typeof TargetPercentileSizingPolicySchema
 >;
 
+/**
+ * Percentile-filtered relative sizing. Fills below `statistic.min_target_usdc`
+ * skip. Accepted fills map linearly from market min bet at pXX to
+ * `max_usdc_per_trade` at p100. This is intentionally a distinct policy from
+ * `target_percentile`; there is no silent fallback between min-bet and scaled
+ * sizing.
+ */
+export const TargetPercentileScaledSizingPolicySchema = z.object({
+  kind: z.literal("target_percentile_scaled"),
+  max_usdc_per_trade: z.number().positive(),
+  statistic: WalletSizeStatisticSchema,
+});
+export type TargetPercentileScaledSizingPolicy = z.infer<
+  typeof TargetPercentileScaledSizingPolicySchema
+>;
+
 export const SizingPolicySchema = z.discriminatedUnion("kind", [
   MinBetSizingPolicySchema,
   TargetPercentileSizingPolicySchema,
+  TargetPercentileScaledSizingPolicySchema,
 ]);
 export type SizingPolicy = z.infer<typeof SizingPolicySchema>;
 

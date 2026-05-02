@@ -36,15 +36,32 @@ describe("envTargetSource", () => {
   it("listForActor preserves caller order and synthesizes stable per-wallet ids", async () => {
     const src = envTargetSource([W1, W2]);
     await expect(src.listForActor(ANY_ACTOR)).resolves.toEqual([
-      { id: targetIdFromWallet(W1), targetWallet: W1 },
-      { id: targetIdFromWallet(W2), targetWallet: W2 },
+      {
+        id: targetIdFromWallet(W1),
+        targetWallet: W1,
+        mirrorFilterPercentile: 75,
+        mirrorMaxUsdcPerTrade: 5,
+      },
+      {
+        id: targetIdFromWallet(W2),
+        targetWallet: W2,
+        mirrorFilterPercentile: 75,
+        mirrorMaxUsdcPerTrade: 5,
+      },
     ]);
   });
 
   it("listForActor result is frozen — push throws", async () => {
     const src = envTargetSource([W1, W2]);
     const first = (await src.listForActor(ANY_ACTOR)) as UserTargetRow[];
-    expect(() => first.push({ id: "x", targetWallet: W1 })).toThrow();
+    expect(() =>
+      first.push({
+        id: "x",
+        targetWallet: W1,
+        mirrorFilterPercentile: 75,
+        mirrorMaxUsdcPerTrade: 5,
+      })
+    ).toThrow();
     const second = await src.listForActor(ANY_ACTOR);
     expect(second).toHaveLength(2);
   });
@@ -57,11 +74,15 @@ describe("envTargetSource", () => {
         billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         createdByUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
         targetWallet: W1,
+        mirrorFilterPercentile: 75,
+        mirrorMaxUsdcPerTrade: 5,
       },
       {
         billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
         createdByUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
         targetWallet: W2,
+        mirrorFilterPercentile: 75,
+        mirrorMaxUsdcPerTrade: 5,
       },
     ]);
   });

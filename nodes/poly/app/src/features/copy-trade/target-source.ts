@@ -9,8 +9,9 @@
  *          (BYPASSRLS via serviceDb — the ONE sanctioned cross-tenant read path).
  *          Per docs/spec/poly-multi-tenant-auth.md.
  * Scope: Two impls today — `envTargetSource` (local-dev fallback) and `dbTargetSource`
- *        (production, reads `poly_copy_trade_targets`). No caps, no per-target enable
- *        flag, no mode switches — those stay hardcoded in the job shim per SCAFFOLDING.
+ *        (production, reads `poly_copy_trade_targets`). Target rows carry the user-facing
+ *        mirror filter percentile and max bet. No per-target enable flag and no mode
+ *        switches — add/remove rows is the activation model.
  * Invariants:
  *   - TARGET_SOURCE_TENANT_SCOPED — `listForActor(userId)` returns only the rows whose
  *     `created_by_user_id` equals `userId` under appDb's RLS clamp. The cross-tenant
@@ -18,8 +19,7 @@
  *     under serviceDb and is the ONLY place that observes more than one tenant.
  *   - NO_KILL_SWITCH (bug.0438): the active-target × active-connection × active-grant
  *     join in `listAllActive` is the sole gate. There is no per-tenant kill-switch
- *     table; per-target sizing/caps live on `poly_wallet_grants`, not on a separate
- *     config row.
+ *     table; target policy fields live directly on the tracked target row.
  *   - ENV_IMPL_LOCAL_DEV_ONLY — `envTargetSource` is wired only when APP_ENV=test;
  *     production wires `dbTargetSource`.
  * Side-effects: dbTargetSource → DB I/O. envTargetSource → none.
@@ -53,6 +53,8 @@ export interface EnumeratedTarget {
   billingAccountId: string;
   createdByUserId: string;
   targetWallet: WalletAddress;
+  mirrorFilterPercentile: number;
+  mirrorMaxUsdcPerTrade: number;
 }
 
 /**
@@ -64,6 +66,8 @@ export interface EnumeratedTarget {
 export interface UserTargetRow {
   id: string;
   targetWallet: WalletAddress;
+  mirrorFilterPercentile: number;
+  mirrorMaxUsdcPerTrade: number;
 }
 
 export interface CopyTradeTargetSource {
@@ -111,6 +115,8 @@ export function envTargetSource(
     wallets.map((targetWallet) => ({
       id: targetIdFromWallet(targetWallet),
       targetWallet,
+      mirrorFilterPercentile: 75,
+      mirrorMaxUsdcPerTrade: 5,
     }))
   );
   const enumerated: readonly EnumeratedTarget[] = Object.freeze(
@@ -118,6 +124,8 @@ export function envTargetSource(
       billingAccountId: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
       createdByUserId: COGNI_SYSTEM_PRINCIPAL_USER_ID,
       targetWallet,
+      mirrorFilterPercentile: 75,
+      mirrorMaxUsdcPerTrade: 5,
     }))
   );
   return {
@@ -156,6 +164,10 @@ export function dbTargetSource(
           .select({
             id: polyCopyTradeTargets.id,
             target_wallet: polyCopyTradeTargets.targetWallet,
+            mirror_filter_percentile:
+              polyCopyTradeTargets.mirrorFilterPercentile,
+            mirror_max_usdc_per_trade:
+              polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           })
           .from(polyCopyTradeTargets)
           .where(isNull(polyCopyTradeTargets.disabledAt))
@@ -164,6 +176,8 @@ export function dbTargetSource(
       return rows.map((r) => ({
         id: r.id,
         targetWallet: r.target_wallet as WalletAddress,
+        mirrorFilterPercentile: r.mirror_filter_percentile,
+        mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
       }));
     },
 
@@ -181,6 +195,8 @@ export function dbTargetSource(
           billing_account_id: polyCopyTradeTargets.billingAccountId,
           created_by_user_id: polyCopyTradeTargets.createdByUserId,
           target_wallet: polyCopyTradeTargets.targetWallet,
+          mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
+          mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
         })
         .from(polyCopyTradeTargets)
         .innerJoin(
@@ -211,6 +227,8 @@ export function dbTargetSource(
         billingAccountId: r.billing_account_id,
         createdByUserId: r.created_by_user_id,
         targetWallet: r.target_wallet as WalletAddress,
+        mirrorFilterPercentile: r.mirror_filter_percentile,
+        mirrorMaxUsdcPerTrade: Number(r.mirror_max_usdc_per_trade),
       }));
     },
   };
