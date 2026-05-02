@@ -8,51 +8,69 @@ tags: [poly, copy-trading, mirror, position, primitive]
 implements: bug.5003
 ---
 
-# Poly Mirror — Position Projection
+# Poly Mirror — Position Projection (`MirrorPositionView`)
 
 ## Outcome
 
-`planMirrorFromFill()` can branch on **"do we have an open position on this `condition_id`, and on which token?"** without reading the DB and without breaking `PLAN_IS_PURE`. This unblocks SELL-mirror, hedge-followup (story.5000), and bankroll-fractional sizing — none of which can be implemented cleanly today because the planner has no concept of position.
+`planMirrorFromFill()` can branch on **"do we have an open mirror position on this `condition_id`, and on which token?"** without reading the DB and without breaking `PLAN_IS_PURE`. This unblocks SELL-mirror, hedge-followup (story.5000), bankroll-fractional sizing, and layering-aware filtering — none of which can be implemented cleanly today because the planner has no concept of position.
 
 ## Why now
 
 `docs/research/poly/mirror-divergence-2026-05-01.md` Findings D + E show every mirror gap traces to the same missing primitive: per-`condition_id` position state. We've stacked three sizing variants and a SELL branch onto a model that only knows "this fill is the first time we've seen this market." Stop adding policies; add the missing data.
 
+## Reconciliation with the canonical position model
+
+`docs/design/poly-positions.md` (Derek, 2026-04-26) defines the project-wide position model: **one identity, four authorities, seven states.** This design is **not** an alternate position model — it is a strictly-bounded *cache view* against authority **#4 Local DB**, used **only** as a *signal* input to mirror policy decisions.
+
+| Concern | Authority used | Type |
+|---|---|---|
+| **Mirror policy hint** ("did we already mirror this condition? on which side?") | #4 Local DB cache (this design) | `MirrorPositionView` (new) |
+| **Settlement / redeem authority** ("do we actually still own these shares on chain?") | #1 Polygon chain via `poly_redeem_jobs` flow | `OperatorPosition` + chain reads (existing, unchanged) |
+| **SELL routing pre-check** ("do we have non-zero balance to close?") | #3 Data API via `getOperatorPositions`, then #2 CLOB | `OperatorPosition` (existing, unchanged) |
+
+**Hard rule**: `MirrorPositionView` may inform *what to plan* (skip / hedge / layer / route to closePosition). It must **never** be used to decide *whether the wallet actually holds the shares* — that path stays as today, going through `getOperatorPositions` (#3 → #1). This design adds zero new authority writes; the existing 7-state lifecycle on `position_lifecycle` is read as a *filter* (only rows in the active phases contribute to the view), never reassigned here.
+
+The name is `MirrorPositionView` — not `Position` — to surface the cache-vs-truth distinction at every callsite.
+
 ## Scope
 
-**In:** Compute `Position` per `(target_id, condition_id)` from `poly_copy_trade_fills`, plumb into `RuntimeState`, surface via `OrderLedger.snapshotState`.
-**Out:** New sizing policies, exit-trigger logic, layering policy, hedge-followup decision logic. Those follow-on designs reduce to predicates on this primitive.
+**In:** Compute `MirrorPositionView` per `(target_id, condition_id)` from `poly_copy_trade_fills`, plumb into `RuntimeState`, surface via `OrderLedger.snapshotState`. Define the per-fill mutation rule that keeps the view consistent inside one tick.
+**Out:** New sizing policies, exit-trigger logic, layering policy, hedge-followup decision logic. Multi-outcome and neg-risk hedge math. Those follow-on designs each reduce to ≤2-line predicates on this primitive.
 
 ## Approach
 
-**One change in three small parts:**
+**One change in four small parts:**
 
-1. Extend `OrderLedger.snapshotState` (existing per-tick read) to also return `positions_by_condition: Map<condition_id, Position>` derived in SQL from `poly_copy_trade_fills`. Already-tenant-scoped, already-RLS-safe, already-fail-closed.
-2. Plumb the map into `RuntimeState`. Pipeline picks the entry for the fill's `condition_id` and passes it as a single optional field to the planner.
-3. `planMirrorFromFill` reads `state.position` synchronously. Pure.
+1. Extend `OrderLedger.snapshotState` (the existing per-tick read) to also return `positions_by_condition: Map<condition_id, MirrorPositionView>` derived in SQL from `poly_copy_trade_fills`. Same query batch, same fail-closed path.
+2. Plumb the map into the per-tick context. Pipeline picks the entry for the fill's `condition_id` and passes it as a single optional field on the planner's input.
+3. After each successful place inside the tick, the pipeline **mutates** its in-memory copy of the map so the next fill in the same tick sees the updated view (see "Within-tick semantics" below).
+4. `planMirrorFromFill` reads `state.position` synchronously. Pure.
 
-### `Position` shape
+### `MirrorPositionView` shape
 
 ```ts
-export const PositionSchema = z.object({
+export const MirrorPositionViewSchema = z.object({
   condition_id: z.string(),
-  /** Net long-share token we hold; undefined if both legs are zero. */
+  /** Token id with our larger net long exposure. Undefined ⇒ no exposure either side. */
   our_token_id: z.string().optional(),
-  /** Net shares (BUY − SELL accounting on `our_token_id`). */
+  /** Net shares on `our_token_id` (intent-based, see "Filled vs intent"). */
   our_qty_shares: z.number(),
-  /** Sum-of-USDC-in / sum-of-shares-in for `our_token_id`. */
+  /** Sum-of-USDC-in / sum-of-shares-in for `our_token_id`. Undefined when our_qty_shares == 0. */
   our_vwap_usdc: z.number().optional(),
-  /** The complementary token in this binary market. Always derivable from market metadata. */
+  /**
+   * The complementary token in this binary market, if known. Undefined for:
+   *   (a) markets we've only traded one side of and the market-meta lookup is unavailable, or
+   *   (b) multi-outcome / neg-risk markets where the binary "opposite" doesn't apply.
+   * Hedge-followup predicate must NO-OP when this is undefined.
+   */
   opposite_token_id: z.string().optional(),
-  /** Net shares we hold of `opposite_token_id` (usually 0; non-zero ⇒ we hedged earlier). */
+  /** Net shares on `opposite_token_id` (zero unless we've previously hedged). */
   opposite_qty_shares: z.number(),
-  /** Total USDC currently committed (open + filled, not canceled) on this condition. */
-  cumulative_intent_usdc: z.number(),
 });
-export type Position = z.infer<typeof PositionSchema>;
+export type MirrorPositionView = z.infer<typeof MirrorPositionViewSchema>;
 ```
 
-`our_token_id` is the larger-position leg; `opposite_token_id` is the other leg of the binary market. For non-binary markets (>2 outcomes) we represent only the side(s) we've actually traded — the projection is per `(condition_id, token_id)` underneath, with a binary helper view. Today's data is binary-only; multi-outcome surfaces unchanged.
+`cumulative_intent_usdc` is **not** on this type — it stays where it lives today on `RuntimeState.cumulative_intent_usdc_for_market`. One source of truth.
 
 ### Storage decision — derive on read, no new table
 
@@ -60,16 +78,36 @@ export type Position = z.infer<typeof PositionSchema>;
 |---|---|
 | **A. Derive in SQL inside `snapshotState` (CHOSEN)** | One extra `GROUP BY` on the same query path. No new table, no migration, no triggers. Fail-closed already wired. Per-tick cost is the cost of a SUM over the target's history (~hundreds of rows worst case; index on `target_id` exists). |
 | B. New materialized table + write-side maintenance | Adds invalidation surface, race on insert-vs-place, doubles the write path. Defer until SQL aggregation is measurably slow. |
-| C. In-memory cache outside the ledger | Breaks `FAIL_CLOSED_ON_SNAPSHOT_READ` semantics; first cold read after restart returns nothing. |
+| C. In-memory cache outside the ledger | Breaks `FAIL_CLOSED_ON_SNAPSHOT_READ`; first cold read after restart returns nothing. |
 
-**SQL sketch** (added to existing `Promise.all` in `snapshotState`):
+### Filled vs intent — explicit choice
+
+The schema today does **not** carry a `filled_size_usdc` column distinct from intent. We treat **intent shares as the position quantity for mirror-policy purposes**, and document the implication:
+
+- Computed via `(attributes->>'size_usdc')::numeric / NULLIF((attributes->>'limit_price')::numeric, 0)`.
+- Includes `status IN ('open','filled','partial')` rows; excludes `canceled` and `error`.
+- Effect: a resting `open` order is treated as fully exposed for follow-on sizing math. **This is intentionally fail-safe upward** — it means hedge-followup and same-side layering predicates will under-shoot rather than over-shoot follow-on orders. Caps stay tighter, not looser, than chain truth.
+- For *settlement* truth (e.g. SELL-routing's "can I actually close this?"), the SELL branch continues to read `getOperatorPositions` (#3 → #1), unchanged.
+
+If this conservative approximation later proves too tight (e.g. resting orders that never fill skew sizing), the fix is a `filled_size_usdc` column + a typed `Fill` boundary, not a richer aggregation here. Out of scope.
+
+### `opposite_token_id` resolution
+
+Two sources, in order:
+
+1. **Self-derivable**: if `poly_copy_trade_fills` has rows for this `condition_id` on a *second* `token_id` (i.e. we've traded both legs ourselves), the view emits both with no external lookup needed.
+2. **Market-meta lookup**: otherwise, look up the conditionId via the existing market-meta cache in `nodes/poly/packages/market-provider`. Cache hit → `opposite_token_id` populated. **Cache miss → leave `undefined`**, and the hedge-followup predicate no-ops by design. We never fail a tick on a missed lookup.
+
+For neg-risk / multi-outcome markets (>2 tokens), `opposite_token_id` is always `undefined` — the binary "opposite" concept doesn't apply and hedge-followup predicate no-ops. Flagged on the view via a boolean we'll add only if needed; the `undefined` already short-circuits.
+
+### SQL sketch — added to existing `Promise.all` in `snapshotState`
 
 ```sql
 SELECT
   market_id                                          AS condition_id,
   attributes->>'token_id'                            AS token_id,
   SUM(
-    CASE WHEN attributes->>'side' = 'BUY'  THEN (attributes->>'size_usdc')::numeric / NULLIF((attributes->>'limit_price')::numeric, 0)
+    CASE WHEN attributes->>'side' = 'BUY'  THEN  (attributes->>'size_usdc')::numeric / NULLIF((attributes->>'limit_price')::numeric, 0)
          WHEN attributes->>'side' = 'SELL' THEN -((attributes->>'size_usdc')::numeric / NULLIF((attributes->>'limit_price')::numeric, 0))
          ELSE 0 END
   )                                                  AS net_shares,
@@ -81,30 +119,39 @@ SELECT
   )                                                  AS gross_shares_in
 FROM poly_copy_trade_fills
 WHERE target_id = $1
-  AND status IN ('open','filled','partial')          -- exclude canceled/error from position math
+  AND status IN ('open','filled','partial')
   AND (position_lifecycle IS NULL OR position_lifecycle IN ('unresolved','open','closing'))
   AND attributes->>'closed_at' IS NULL
 GROUP BY market_id, attributes->>'token_id';
 ```
 
-Application code aggregates per-`condition_id`: collapses the (up to two) token_id rows into a single `Position`. `our_token_id` = the row with positive `net_shares`; `opposite_token_id` = the other token in the binary, looked up from market metadata cache (already on the fill's `attributes.token_id` companion if both legs traded; else fetched lazily via existing market-meta path — out of scope here).
+App-side aggregation collapses (up to two binary) `token_id` rows per `condition_id` into one `MirrorPositionView`. `our_token_id` = the row with the larger positive `net_shares`; `opposite_token_id` = the other row (or market-meta lookup, or undefined). VWAP = `gross_usdc_in / gross_shares_in` on the long leg.
 
-VWAP = `gross_usdc_in / gross_shares_in` on the long leg.
+### Within-tick semantics — explicit
+
+`snapshotState` runs **once at the top of each tick**. The resulting `positions_by_condition` is then **mutated in-place** as the tick processes fills:
+
+- Before processing fill `f` on `condition_id c`, the per-tick context's `positions_by_condition.get(c)` is the source of truth for the planner.
+- After a successful `place` for fill `f`, the pipeline updates `positions_by_condition.get(c)` (or inserts a new entry) reflecting the placed intent's `(token_id, side, size_usdc, price)`. Same arithmetic as the SQL aggregation, applied incrementally.
+- After a `skip`, no mutation.
+- The mutation lives entirely in the per-tick closure; it never escapes the tick. Next tick re-reads from DB.
+
+This addresses the "fill #1 places, fill #2 sees stale view" hole. The mutation rule is small (one helper) and lives in mirror-pipeline.ts adjacent to `processFill`. The planner remains pure — it sees only the snapshot it was handed.
 
 ### Plumbing into `RuntimeState`
 
-Add one optional field — keeps the existing schema additive, no migration to consumers:
+Additive; no breaking change to consumers.
 
 ```ts
 export const RuntimeStateSchema = z.object({
   already_placed_ids: z.array(z.string()),
   cumulative_intent_usdc_for_market: z.number().optional(),
-  /** NEW. Position on the condition_id of the fill being planned. Undefined ⇒ no prior exposure. */
-  position: PositionSchema.optional(),
+  /** NEW. Mirror position cache view for this fill's condition_id. Undefined ⇒ no prior exposure. */
+  position: MirrorPositionViewSchema.optional(),
 });
 ```
 
-`mirror-pipeline.ts:processFill` picks `snapshot.positions_by_condition.get(fill.market_id)` and assigns to `state.position`. No new I/O — `snapshotState` is already called once per tick.
+`mirror-pipeline.ts:processFill` picks `tickCtx.positions_by_condition.get(fill.market_id)` into `state.position`. No I/O added.
 
 ### `OrderLedger` surface change
 
@@ -113,12 +160,16 @@ export interface StateSnapshot {
   today_spent_usdc: number;
   fills_last_hour: number;
   already_placed_ids: string[];
-  /** NEW. Per-condition position map derived in the same query batch. */
-  positions_by_condition: Map<string, Position>;
+  /** NEW. Per-condition position view derived in the same query batch. */
+  positions_by_condition: Map<string, MirrorPositionView>;
 }
 ```
 
 Fail-closed path returns `positions_by_condition: new Map()` alongside the existing zeroes — preserves `FAIL_CLOSED_ON_SNAPSHOT_READ`.
+
+### Boundary placement
+
+`MirrorPositionView` is consumed only by mirror-pipeline + plan-mirror today. It lives next to existing copy-trade types in `nodes/poly/app/src/features/copy-trade/types.ts` (precedent: `OperatorPosition` is also defined in mirror-pipeline.ts as app-local). If a second runtime later reads it (Temporal activity, dashboard), promote to `nodes/poly/packages/...` then. Premature shared-package extraction is rejected per packages-architecture's "boundary placement is conditional on >1-runtime use."
 
 ## Backfill
 
@@ -126,44 +177,58 @@ None needed. `poly_copy_trade_fills` is already the source of truth; the project
 
 ## How follow-ons reduce to predicates on `state.position`
 
-Sketches only — full designs land in their own items.
+Sketches only — full designs land in their own items. Each follow-on is ≤2 lines on the planner.
 
 | Follow-on | Predicate on `state.position` | Action |
 |---|---|---|
-| **story.5000 hedge-followup** | `position && position.our_qty_shares > 0 && fill.attributes.token_id === position.opposite_token_id` | Bypass percentile filter; size ≤ `position.our_qty_shares × fill.price` |
-| **SELL-mirror (close-on-target-SELL)** | `position && position.our_token_id === fill.attributes.token_id && fill.side === 'SELL'` | Route to `closePosition` sized `min(target_close_pct × position.our_qty_shares, position.our_qty_shares)` |
-| **Bankroll-fractional sizer** | `position?.our_qty_shares ?? 0` is one input alongside our wallet balance | Size = `f(target_trade_$, target_bankroll, our_bankroll, existing_position)` |
-| **Layering-aware filter** | `position && fill.attributes.token_id === position.our_token_id && fill.side === 'BUY'` | Bypass percentile filter when scaling into a position we already mirrored on the primary leg |
+| **story.5000 hedge-followup** | `position?.our_qty_shares > 0 && fill.attributes.token_id === position.opposite_token_id` | Bypass percentile filter; size = `min(market_min_bet, position.our_qty_shares × fill.price, max_usdc_per_trade)` |
+| **SELL-mirror (close-on-target-SELL)** | `fill.side === 'SELL' && position?.our_token_id === fill.attributes.token_id` | Route to `closePosition` sized `min(target_close_pct × position.our_qty_shares, position.our_qty_shares)`. *Authority gate*: SELL execution still requires the live `getOperatorPositions` chain check. |
+| **Layering-aware filter** | `fill.side === 'BUY' && position?.our_token_id === fill.attributes.token_id` | Bypass percentile filter; same-side scale-in. |
+| **Bankroll-fractional sizer** | reads `position?.our_qty_shares` and `our_vwap_usdc` as inputs | Size = `f(target_$, target_bankroll, our_bankroll, position?.our_qty_shares ?? 0)` |
 
-Each is a 1–2-line predicate against `state.position`. Without this primitive, each is a new architecture.
+## Observability
+
+New invariant: **DECISION_LOG_NAMES_VIEW** — any `decisionsTotal` emission whose decision branched on `state.position` must include in the structured log:
+
+- `position_branch`: one of `none | hedge | layer | sell_close | new_entry`
+- `position_qty_shares`: `state.position?.our_qty_shares ?? 0`
+- `position_token_id`: `state.position?.our_token_id ?? null`
+
+This makes the new branches attributable in Loki without a Grafana refactor. The label cardinality stays bounded (`position_branch` is enum of 5).
 
 ## Invariants
 
 <!-- CODE REVIEW CRITERIA -->
 
 - [ ] **PLAN_IS_PURE preserved** — `planMirrorFromFill` reads `state.position` synchronously; no DB access added to the planner.
-- [ ] **POSITION_DERIVED_AT_SNAPSHOT** — `Position` is computed inside `OrderLedger.snapshotState` only. No second source of truth, no write-side maintenance, no cache layer.
-- [ ] **FAIL_CLOSED_ON_SNAPSHOT_READ** — DB error → `positions_by_condition: new Map()`, same warn log path as the existing zeroes branch.
-- [ ] **CAPS_LIVE_IN_GRANT untouched** — daily/hourly caps still resolve in `authorizeIntent` against `poly_wallet_grants`. The position primitive is a *signal* input, never a *cap*.
-- [ ] **POSITION_SHAPE_BINARY_FIRST** — `Position` exposes `our_token_id` / `opposite_token_id` for binary markets; multi-outcome markets store only the leg(s) actually traded and surface `opposite_token_id: undefined`.
-- [ ] **NO_NEW_TABLE** — schema migration not required. If a future perf measurement justifies materialization, it lands as its own design.
+- [ ] **POSITION_DERIVED_AT_SNAPSHOT** — `MirrorPositionView` is computed inside `OrderLedger.snapshotState` only. No second source of truth, no write-side maintenance, no cache layer.
+- [ ] **POSITION_VIEW_IS_CACHE_NOT_TRUTH** — view is *signal*, not authority. SELL execution + redeem flow still consult #1 chain / #3 Data API as today. Doc: docs/design/poly-positions.md.
+- [ ] **WITHIN_TICK_MUTATION** — `positions_by_condition` is mutated in-tick after each successful `place` so subsequent fills in the same tick see the update; mutation never escapes the tick.
+- [ ] **FAIL_CLOSED_ON_SNAPSHOT_READ** — DB error → `positions_by_condition: new Map()`, same warn log path.
+- [ ] **CAPS_LIVE_IN_GRANT untouched** — daily/hourly caps still resolve in `authorizeIntent` against `poly_wallet_grants`. The view is a *signal* input, never a *cap*.
+- [ ] **HEDGE_PREDICATE_NOOPS_ON_UNKNOWN_OPPOSITE** — when `opposite_token_id` is undefined (unknown / multi-outcome / neg-risk), hedge-followup predicate must NO-OP, not guess.
+- [ ] **DECISION_LOG_NAMES_VIEW** — any decision branched on `state.position` emits `position_branch` + `position_qty_shares` + `position_token_id` on the structured log.
+- [ ] **NO_NEW_TABLE** — schema migration not required.
 
 ## Files
 
-- **Modify** `nodes/poly/app/src/features/trading/order-ledger.types.ts` — add `Position` type, extend `StateSnapshot`.
-- **Modify** `nodes/poly/app/src/features/trading/order-ledger.ts` — extend `snapshotState` with the GROUP BY, aggregate to `Map<condition_id, Position>`, add to fail-closed return.
-- **Modify** `nodes/poly/app/src/features/copy-trade/types.ts` — add `PositionSchema`, extend `RuntimeStateSchema` with optional `position`.
-- **Modify** `nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts` — `processFill` picks `positions_by_condition.get(fill.market_id)` into `state.position`. No I/O added.
-- **Test** `nodes/poly/app/tests/unit/features/trading/order-ledger-position-snapshot.test.ts` — covers: empty history, single BUY, BUY-only same token, BUY then partial SELL, both legs (hedge), canceled rows excluded, multi-outcome (>2 tokens) graceful.
-- **Test** `nodes/poly/app/tests/unit/features/copy-trade/plan-mirror-position-state.test.ts` — covers: planner receives `position`, planner does not call DB, planner stays pure (deepEqual same input → same output across N runs).
+- **Modify** `nodes/poly/app/src/features/trading/order-ledger.types.ts` — add `MirrorPositionView` type, extend `StateSnapshot`.
+- **Modify** `nodes/poly/app/src/features/trading/order-ledger.ts` — extend `snapshotState` with the GROUP BY, aggregate to `Map<condition_id, MirrorPositionView>`, fail-closed return.
+- **Modify** `nodes/poly/app/src/features/copy-trade/types.ts` — add `MirrorPositionViewSchema`, extend `RuntimeStateSchema` with optional `position`.
+- **Modify** `nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts` — `processFill` picks view into `state.position`; new helper `applyPlacementToView()` mutates the per-tick map after a successful place.
+- **Test** `nodes/poly/app/tests/unit/features/trading/order-ledger-position-snapshot.test.ts` — empty history, single BUY, BUY-only same token, BUY then partial SELL, both legs (hedge), canceled rows excluded, multi-outcome (>2 tokens) graceful, fail-closed returns empty Map.
+- **Test** `nodes/poly/app/tests/unit/features/copy-trade/plan-mirror-position-state.test.ts` — planner receives `position`, planner is pure across N runs (deepEqual same input → same output), planner branches consume `position` without DB access.
+- **Test** `nodes/poly/app/tests/unit/features/copy-trade/mirror-pipeline-within-tick-mutation.test.ts` — fill #1 places on `c`, fill #2 on the same `c` sees mutated view; tick boundary resets.
 
 ## Rejected alternatives
 
-- **Materialized `poly_copy_trade_positions` table** — write-path complexity (insert/update on every fill, race against placement), invalidation surface, ALTER. Defer until measured.
-- **Compute `Position` inside `planMirrorFromFill`** — breaks `PLAN_IS_PURE`; planner becomes I/O-bound.
-- **Per-fill query for position (separate call from `snapshotState`)** — adds N round-trips per tick where today there's one. The aggregation is cheap inside the existing query batch.
-- **Live position from Polymarket Data-API (read upstream wallet state)** — bypasses our own ledger, reintroduces clock-skew between target observation and our exposure. We trust our fills.
+- **Materialized `poly_copy_trade_positions` table** — write-path complexity, race against placement, ALTER. Defer until measured.
+- **Compute view inside `planMirrorFromFill`** — breaks `PLAN_IS_PURE`.
+- **Per-fill query for position** — adds N round-trips per tick where today there's one.
+- **Live position from Polymarket Data-API** — bypasses our own ledger, reintroduces clock-skew between target observation and our exposure. Also miscategorizes the authority (#3 Data API isn't authority for write decisions per `poly-positions.md`).
+- **Promote to shared package now** — only one runtime consumes it. Conditional on packages-architecture rules; promote when a second runtime arrives.
+- **Replace `OperatorPosition`** — that type serves a different authority (chain truth for SELL-execution); merging it with the cache view would conflate authorities. Both stay.
 
 ## Next
 
-`/implement` — single PR, ~150–300 LOC including tests. No migration. No new package. Branch off `main`.
+`/implement` — single PR on `derek/poly-position-projection-design`, ~250–400 LOC including tests. No migration. No new package.
