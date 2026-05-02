@@ -29,6 +29,7 @@ import {
   type MarkPositionClosedByAssetInput,
   type MarkPositionLifecycleByAssetInput,
   type MarkPositionLifecycleByConditionIdInput,
+  type MirrorPositionView,
   type OpenOrderRow,
   type OrderLedger,
   type RecordDecisionInput,
@@ -42,6 +43,107 @@ export interface FakeOrderLedgerConfig {
   initial?: LedgerRow[];
   /** If set, `snapshotState` throws internally and the fake returns the fail-closed shape. */
   failConfigRead?: boolean;
+}
+
+/**
+ * Compute the per-`condition_id` `MirrorPositionView` map for a target's
+ * fills, mirroring the SQL semantics of the Drizzle `snapshotState`. Pure +
+ * deterministic so unit tests don't need a Postgres testcontainer.
+ */
+function computePositionsForTarget(
+  rows: LedgerRow[]
+): Map<string, MirrorPositionView> {
+  const activeStatuses: LedgerStatus[] = [
+    "pending",
+    "open",
+    "filled",
+    "partial",
+  ];
+  const activeLifecycles = new Set<LedgerPositionLifecycle | null>([
+    null,
+    "unresolved",
+    "open",
+    "closing",
+  ]);
+
+  type Bucket = {
+    token_id: string;
+    net_shares: number;
+    gross_usdc_in: number;
+    gross_shares_in: number;
+  };
+  const byCondition = new Map<string, Map<string, Bucket>>();
+
+  for (const r of rows) {
+    if (!activeStatuses.includes(r.status)) continue;
+    if (!activeLifecycles.has(r.position_lifecycle)) continue;
+    const attrs = r.attributes as Record<string, unknown> | null;
+    if (!attrs) continue;
+    if (typeof attrs.closed_at === "string" && attrs.closed_at.length > 0)
+      continue;
+    const tokenId =
+      typeof attrs.token_id === "string" ? attrs.token_id : undefined;
+    const conditionId =
+      typeof attrs.market_id === "string" ? attrs.market_id : undefined;
+    const sizeUsdc =
+      typeof attrs.size_usdc === "number" ? attrs.size_usdc : NaN;
+    const limitPrice =
+      typeof attrs.limit_price === "number" ? attrs.limit_price : NaN;
+    const side = typeof attrs.side === "string" ? attrs.side : undefined;
+    if (!tokenId || !conditionId) continue;
+    if (!Number.isFinite(sizeUsdc) || !Number.isFinite(limitPrice)) continue;
+    if (limitPrice === 0) continue;
+
+    const shares = sizeUsdc / limitPrice;
+    let bucketsForCondition = byCondition.get(conditionId);
+    if (!bucketsForCondition) {
+      bucketsForCondition = new Map();
+      byCondition.set(conditionId, bucketsForCondition);
+    }
+    let bucket = bucketsForCondition.get(tokenId);
+    if (!bucket) {
+      bucket = {
+        token_id: tokenId,
+        net_shares: 0,
+        gross_usdc_in: 0,
+        gross_shares_in: 0,
+      };
+      bucketsForCondition.set(tokenId, bucket);
+    }
+    if (side === "BUY") {
+      bucket.net_shares += shares;
+      bucket.gross_usdc_in += sizeUsdc;
+      bucket.gross_shares_in += shares;
+    } else if (side === "SELL") {
+      bucket.net_shares -= shares;
+    }
+  }
+
+  const out = new Map<string, MirrorPositionView>();
+  for (const [conditionId, buckets] of byCondition) {
+    const legs = [...buckets.values()].sort(
+      (a, b) => b.net_shares - a.net_shares
+    );
+    const longLeg = legs[0];
+    const otherLeg = legs.length === 2 ? legs[1] : undefined;
+    const view: MirrorPositionView = {
+      condition_id: conditionId,
+      our_qty_shares: longLeg && longLeg.net_shares > 0 ? longLeg.net_shares : 0,
+      opposite_qty_shares:
+        otherLeg && otherLeg.net_shares > 0 ? otherLeg.net_shares : 0,
+    };
+    if (longLeg && longLeg.net_shares > 0) {
+      view.our_token_id = longLeg.token_id;
+      if (longLeg.gross_shares_in > 0) {
+        view.our_vwap_usdc = longLeg.gross_usdc_in / longLeg.gross_shares_in;
+      }
+    }
+    if (legs.length === 2 && otherLeg) {
+      view.opposite_token_id = otherLeg.token_id;
+    }
+    out.set(conditionId, view);
+  }
+  return out;
 }
 
 export class FakeOrderLedger implements OrderLedger {
@@ -61,6 +163,7 @@ export class FakeOrderLedger implements OrderLedger {
         today_spent_usdc: 0,
         fills_last_hour: 0,
         already_placed_ids: [],
+        positions_by_condition: new Map(),
       };
     }
     const now = Date.now();
@@ -81,11 +184,13 @@ export class FakeOrderLedger implements OrderLedger {
       (r) => r.created_at >= oneHourAgo
     ).length;
     const already_placed_ids = myRows.map((r) => r.client_order_id);
+    const positions_by_condition = computePositionsForTarget(myRows);
 
     return {
       today_spent_usdc,
       fills_last_hour,
       already_placed_ids,
+      positions_by_condition,
     };
   }
 

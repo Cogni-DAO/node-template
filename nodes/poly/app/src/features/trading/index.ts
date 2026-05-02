@@ -48,6 +48,7 @@ export {
   type LedgerStatus,
   type ListOpenOrPendingOptions,
   type ListRecentOptions,
+  type MirrorPositionView,
   type OpenOrderRow,
   type OrderLedger,
   type RecordDecisionInput,

@@ -70,6 +70,41 @@ export interface LedgerRow {
 }
 
 /**
+ * Mirror's local-DB cache view of our own exposure on a single Polymarket
+ * `condition_id`, derived from `poly_copy_trade_fills` for one target.
+ *
+ * **This is authority #4 (local DB cache) per `docs/design/poly-positions.md`.**
+ * It is a *signal* input for mirror policy decisions (hedge-followup, layering,
+ * SELL-routing pre-check). It is **never** authority for "do we actually still
+ * own these shares on chain?" — that path goes through `getOperatorPositions`
+ * (#3 → #1) as today.
+ *
+ * Quantities are intent-based (computed from `attributes.size_usdc /
+ * attributes.limit_price`) and include rows in `pending | open | filled |
+ * partial`, excluding `canceled | error | closed` and `position_lifecycle`
+ * past `closing`. Choice is fail-safe upward — under-shoots follow-on sizing
+ * rather than over-shooting it.
+ */
+export interface MirrorPositionView {
+  condition_id: string;
+  /** Token id with our larger net long exposure. Undefined ⇒ no exposure either side. */
+  our_token_id?: string;
+  /** Net shares on `our_token_id` (intent-based). */
+  our_qty_shares: number;
+  /** Sum-of-USDC-in / sum-of-shares-in for `our_token_id`. Undefined when our_qty_shares == 0. */
+  our_vwap_usdc?: number;
+  /**
+   * Complementary token in this binary market, if known. Undefined for:
+   *   (a) markets we've only traded one side of and the market-meta lookup is unavailable, or
+   *   (b) multi-outcome / neg-risk markets where the binary "opposite" doesn't apply.
+   * Hedge-followup predicate must NO-OP when this is undefined.
+   */
+  opposite_token_id?: string;
+  /** Net shares on `opposite_token_id` (zero unless we've previously hedged). */
+  opposite_qty_shares: number;
+}
+
+/**
  * State snapshot the mirror-coordinator hands to `decide()`. Caller translates
  * into `RuntimeState`. The ledger owns the SELECTs; `decide()` stays pure.
  *
@@ -80,6 +115,12 @@ export interface StateSnapshot {
   today_spent_usdc: number;
   fills_last_hour: number;
   already_placed_ids: string[];
+  /**
+   * Mirror's per-`condition_id` cache view of our own exposure for this
+   * target. Empty Map on fail-closed read OR when the target has no fills.
+   * See `MirrorPositionView` for the authority + intent-vs-filled contract.
+   */
+  positions_by_condition: Map<string, MirrorPositionView>;
 }
 
 /** Bounded enum of cancel reasons. Stored on `attributes.reason`. */

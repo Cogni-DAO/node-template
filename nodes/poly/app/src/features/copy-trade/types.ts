@@ -147,6 +147,33 @@ export const MirrorTargetConfigSchema = z.object({
 export type MirrorTargetConfig = z.infer<typeof MirrorTargetConfigSchema>;
 
 /**
+ * Mirror's local-DB cache view of our own exposure on a single Polymarket
+ * `condition_id`. **Authority #4 only** (per `docs/design/poly-positions.md`).
+ * Used as a *signal* input for mirror policy decisions (hedge-followup,
+ * layering, SELL-routing pre-check). Never authority for "do we still hold
+ * shares on chain?" — that path goes through `getOperatorPositions` (#3 →
+ * #1) as today.
+ *
+ * Quantities are intent-based (computed from fills' `size_usdc / limit_price`)
+ * and include rows in `pending | open | filled | partial`. Excludes
+ * `canceled | error | closed` and lifecycles past `closing`. Fail-safe upward —
+ * follow-on sizing under-shoots rather than over-shoots.
+ *
+ * Mirror of `MirrorPositionView` in `@/features/trading/order-ledger.types`,
+ * re-declared in copy-trade-vocabulary to keep the planner free of any
+ * trading-port import surface.
+ */
+export const MirrorPositionViewSchema = z.object({
+  condition_id: z.string(),
+  our_token_id: z.string().optional(),
+  our_qty_shares: z.number(),
+  our_vwap_usdc: z.number().optional(),
+  opposite_token_id: z.string().optional(),
+  opposite_qty_shares: z.number(),
+});
+export type MirrorPositionView = z.infer<typeof MirrorPositionViewSchema>;
+
+/**
  * Snapshot of runtime state at plan-time. The pipeline computes this via a
  * SELECT over `poly_copy_trade_fills` and hands it to `planMirrorFromFill()`
  * — the pure function does NOT reach into the DB. Cap-window state has moved
@@ -165,6 +192,17 @@ export const RuntimeStateSchema = z.object({
    * that hasn't opted in.
    */
   cumulative_intent_usdc_for_market: z.number().optional(),
+  /**
+   * Mirror cache view for this fill's `condition_id`, derived from
+   * `poly_copy_trade_fills` at snapshot time. Undefined ⇒ no prior
+   * mirror exposure on this condition. Cache view, not authority — see
+   * `MirrorPositionViewSchema`.
+   *
+   * v0 surfaces the field but follow-on planner branches (hedge-followup,
+   * SELL-mirror, layering, bankroll sizer) land in subsequent PRs as
+   * predicates against this field.
+   */
+  position: MirrorPositionViewSchema.optional(),
 });
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 

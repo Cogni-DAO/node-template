@@ -49,6 +49,7 @@ import {
   type MarkPositionClosedByAssetInput,
   type MarkPositionLifecycleByAssetInput,
   type MarkPositionLifecycleByConditionIdInput,
+  type MirrorPositionView,
   type OpenOrderRow,
   type OrderLedger,
   type RecordDecisionInput,
@@ -83,6 +84,77 @@ const hasPositionLifecycleOrExecution = sql`(
   END > 0
 )`;
 
+/**
+ * Per-(condition_id, token_id) aggregation row produced by the SQL GROUP BY
+ * in `snapshotState`. App-side code collapses up to two binary-market rows
+ * per condition_id into a single `MirrorPositionView`.
+ */
+interface PositionAggregateRow {
+  market_id: string;
+  token_id: string | null;
+  net_shares: string;
+  gross_usdc_in: string;
+  gross_shares_in: string;
+}
+
+/**
+ * Collapse SQL-grouped rows into a `Map<condition_id, MirrorPositionView>`.
+ * Pure helper — testable without DB. For binary markets (≤2 token_ids per
+ * condition_id) we surface both `our_token_id` (larger long leg) and
+ * `opposite_token_id` (the other leg). For multi-outcome markets (>2
+ * token_ids), `opposite_token_id` is left undefined — hedge predicate
+ * downstream no-ops, per HEDGE_PREDICATE_NOOPS_ON_UNKNOWN_OPPOSITE.
+ */
+export function aggregatePositionRows(
+  rows: PositionAggregateRow[]
+): Map<string, MirrorPositionView> {
+  const byCondition = new Map<string, PositionAggregateRow[]>();
+  for (const row of rows) {
+    if (row.token_id === null) continue;
+    const bucket = byCondition.get(row.market_id);
+    if (bucket) bucket.push(row);
+    else byCondition.set(row.market_id, [row]);
+  }
+
+  const out = new Map<string, MirrorPositionView>();
+  for (const [condition_id, group] of byCondition) {
+    const sorted = [...group].sort(
+      (a, b) => Number(b.net_shares) - Number(a.net_shares)
+    );
+    const longLeg = sorted[0];
+    const otherLeg = group.length === 2 ? sorted[1] : undefined;
+
+    const longShares = longLeg ? Number(longLeg.net_shares) : 0;
+    const longGrossShares = longLeg ? Number(longLeg.gross_shares_in) : 0;
+    const longGrossUsdc = longLeg ? Number(longLeg.gross_usdc_in) : 0;
+
+    const view: MirrorPositionView = {
+      condition_id,
+      our_qty_shares: longShares > 0 ? longShares : 0,
+      opposite_qty_shares:
+        otherLeg && Number(otherLeg.net_shares) > 0
+          ? Number(otherLeg.net_shares)
+          : 0,
+    };
+
+    if (longShares > 0 && longLeg?.token_id) {
+      view.our_token_id = longLeg.token_id;
+      if (longGrossShares > 0) {
+        view.our_vwap_usdc = longGrossUsdc / longGrossShares;
+      }
+    }
+
+    // Binary markets only: when exactly two token_ids exist, the second leg
+    // is the structural "opposite". For multi-outcome we leave undefined.
+    if (group.length === 2 && otherLeg?.token_id) {
+      view.opposite_token_id = otherLeg.token_id;
+    }
+
+    out.set(condition_id, view);
+  }
+  return out;
+}
+
 export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   const log = deps.logger.child({ component: "order-ledger" });
 
@@ -92,8 +164,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       billing_account_id: string
     ): Promise<StateSnapshot> {
       try {
-        // Three concurrent reads — one round-trip to postgres-js, three statements.
-        const [spendRows, rateRows, cidRows] = await Promise.all([
+        // Four concurrent reads — one round-trip to postgres-js, four statements.
+        const [spendRows, rateRows, cidRows, positionRows] = await Promise.all([
           // Caps are INTENT-based (CAPS_COUNT_INTENTS invariant): filter by
           // `created_at` (when we inserted the pending row) — NOT by
           // `observed_at` (the upstream fill time, which can be arbitrarily old
@@ -130,16 +202,64 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             .select({ cid: polyCopyTradeFills.clientOrderId })
             .from(polyCopyTradeFills)
             .where(eq(polyCopyTradeFills.targetId, target_id)),
+          // MirrorPositionView aggregation — per (condition_id, token_id) net
+          // shares + gross USDC-in / shares-in for VWAP. Intent-based, includes
+          // `pending` so within-tick fills see prior placements (per-fill
+          // snapshotState + INSERT_BEFORE_PLACE means the prior pending row
+          // is committed by the time the next fill snapshots).
+          deps.db
+            .select({
+              market_id: polyCopyTradeFills.marketId,
+              token_id: sql<
+                string | null
+              >`${polyCopyTradeFills.attributes}->>'token_id'`,
+              net_shares: sql<string>`COALESCE(SUM(
+                CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
+                       THEN  (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0)
+                     WHEN ${polyCopyTradeFills.attributes}->>'side' = 'SELL'
+                       THEN -((${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0))
+                     ELSE 0 END
+              ), 0)`,
+              gross_usdc_in: sql<string>`COALESCE(SUM(
+                CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
+                       THEN (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric
+                     ELSE 0 END
+              ), 0)`,
+              gross_shares_in: sql<string>`COALESCE(SUM(
+                CASE WHEN ${polyCopyTradeFills.attributes}->>'side' = 'BUY'
+                       THEN (${polyCopyTradeFills.attributes}->>'size_usdc')::numeric / NULLIF((${polyCopyTradeFills.attributes}->>'limit_price')::numeric, 0)
+                     ELSE 0 END
+              ), 0)`,
+            })
+            .from(polyCopyTradeFills)
+            .where(
+              and(
+                eq(polyCopyTradeFills.targetId, target_id),
+                inArray(polyCopyTradeFills.status, [
+                  "pending",
+                  "open",
+                  "filled",
+                  "partial",
+                ]),
+                activeRestingPosition
+              )
+            )
+            .groupBy(
+              polyCopyTradeFills.marketId,
+              sql`${polyCopyTradeFills.attributes}->>'token_id'`
+            ),
         ]);
 
         const today_spent_usdc = Number(spendRows[0]?.spent ?? 0);
         const fills_last_hour = Number(rateRows[0]?.n ?? 0);
         const already_placed_ids = cidRows.map((r) => r.cid);
+        const positions_by_condition = aggregatePositionRows(positionRows);
 
         return {
           today_spent_usdc,
           fills_last_hour,
           already_placed_ids,
+          positions_by_condition,
         };
       } catch (err: unknown) {
         // FAIL_CLOSED — any error returns the fail-closed snapshot.
@@ -157,6 +277,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           today_spent_usdc: 0,
           fills_last_hour: 0,
           already_placed_ids: [],
+          positions_by_condition: new Map(),
         };
       }
     },

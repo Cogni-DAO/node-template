@@ -244,6 +244,7 @@ async function processFill(
     state: {
       already_placed_ids: snapshot.already_placed_ids,
       cumulative_intent_usdc_for_market,
+      position: snapshot.positions_by_condition.get(fill.market_id),
     },
     client_order_id,
     min_shares,

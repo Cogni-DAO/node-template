@@ -127,16 +127,15 @@ GROUP BY market_id, attributes->>'token_id';
 
 App-side aggregation collapses (up to two binary) `token_id` rows per `condition_id` into one `MirrorPositionView`. `our_token_id` = the row with the larger positive `net_shares`; `opposite_token_id` = the other row (or market-meta lookup, or undefined). VWAP = `gross_usdc_in / gross_shares_in` on the long leg.
 
-### Within-tick semantics — explicit
+### Within-tick semantics — automatic via per-fill `snapshotState`
 
-`snapshotState` runs **once at the top of each tick**. The resulting `positions_by_condition` is then **mutated in-place** as the tick processes fills:
+Reviewing `mirror-pipeline.ts:processFill` revealed `snapshotState` is already called **per fill**, not once per tick. Combined with `INSERT_BEFORE_PLACE` (the pending row is committed before the next fill is processed), the next fill's `snapshotState` reads a DB that already contains the prior fill's placement.
 
-- Before processing fill `f` on `condition_id c`, the per-tick context's `positions_by_condition.get(c)` is the source of truth for the planner.
-- After a successful `place` for fill `f`, the pipeline updates `positions_by_condition.get(c)` (or inserts a new entry) reflecting the placed intent's `(token_id, side, size_usdc, price)`. Same arithmetic as the SQL aggregation, applied incrementally.
-- After a `skip`, no mutation.
-- The mutation lives entirely in the per-tick closure; it never escapes the tick. Next tick re-reads from DB.
+To make this work, the position SQL filter includes `pending` rows alongside `open | filled | partial`. This is consistent with the "intent-based, fail-safe upward" choice above: a `pending` row represents committed intent we believe will fill.
 
-This addresses the "fill #1 places, fill #2 sees stale view" hole. The mutation rule is small (one helper) and lives in mirror-pipeline.ts adjacent to `processFill`. The planner remains pure — it sees only the snapshot it was handed.
+Result: no in-memory mutation logic needed. The planner sees a fresh DB-backed view on every fill. Trade-off: an extra `GROUP BY` per fill instead of once per tick — acceptable because `snapshotState` is already per-fill, and the GROUP BY runs against a `target_id`-indexed table with bounded fill history per target.
+
+If `snapshotState` is later promoted to once-per-tick for performance, in-tick mutation becomes necessary again. The invariant `WITHIN_TICK_FRESHNESS` below names the contract; the implementation can satisfy it either way.
 
 ### Plumbing into `RuntimeState`
 
@@ -203,7 +202,7 @@ This makes the new branches attributable in Loki without a Grafana refactor. The
 - [ ] **PLAN_IS_PURE preserved** — `planMirrorFromFill` reads `state.position` synchronously; no DB access added to the planner.
 - [ ] **POSITION_DERIVED_AT_SNAPSHOT** — `MirrorPositionView` is computed inside `OrderLedger.snapshotState` only. No second source of truth, no write-side maintenance, no cache layer.
 - [ ] **POSITION_VIEW_IS_CACHE_NOT_TRUTH** — view is *signal*, not authority. SELL execution + redeem flow still consult #1 chain / #3 Data API as today. Doc: docs/design/poly-positions.md.
-- [ ] **WITHIN_TICK_MUTATION** — `positions_by_condition` is mutated in-tick after each successful `place` so subsequent fills in the same tick see the update; mutation never escapes the tick.
+- [ ] **WITHIN_TICK_FRESHNESS** — fill `N+1` in the same tick sees fill `N`'s placement in `state.position`. Today this is satisfied automatically because `snapshotState` runs per-fill and the SQL filter includes `pending` rows; a future per-tick `snapshotState` would need explicit in-tick mutation to keep this invariant.
 - [ ] **FAIL_CLOSED_ON_SNAPSHOT_READ** — DB error → `positions_by_condition: new Map()`, same warn log path.
 - [ ] **CAPS_LIVE_IN_GRANT untouched** — daily/hourly caps still resolve in `authorizeIntent` against `poly_wallet_grants`. The view is a *signal* input, never a *cap*.
 - [ ] **HEDGE_PREDICATE_NOOPS_ON_UNKNOWN_OPPOSITE** — when `opposite_token_id` is undefined (unknown / multi-outcome / neg-risk), hedge-followup predicate must NO-OP, not guess.
