@@ -41,11 +41,13 @@ import {
   AlreadyRestingError,
   type InsertPendingInput,
   type LedgerCancelReason,
+  type LedgerPositionLifecycle,
   type LedgerRow,
   type ListOpenOrPendingOptions,
   type ListRecentOptions,
   type ListTenantPositionsOptions,
   type MarkPositionClosedByAssetInput,
+  type MarkPositionLifecycleByConditionIdInput,
   type OpenOrderRow,
   type OrderLedger,
   type RecordDecisionInput,
@@ -66,6 +68,10 @@ export interface OrderLedgerDeps {
 const PG_UNIQUE_VIOLATION = "23505";
 
 const DEFAULT_LIST_LIMIT = 50;
+const nonTerminalPositionLifecycle = sql`(${polyCopyTradeFills.positionLifecycle} IS NULL OR ${polyCopyTradeFills.positionLifecycle} NOT IN ('closed','redeemed','loser','dust','abandoned'))`;
+const activeRestingPositionLifecycle = sql`(${polyCopyTradeFills.positionLifecycle} IS NULL OR ${polyCopyTradeFills.positionLifecycle} IN ('unresolved','open','closing'))`;
+const notPositionTerminal = sql`${nonTerminalPositionLifecycle} AND ${polyCopyTradeFills.attributes}->>'closed_at' IS NULL`;
+const activeRestingPosition = sql`${activeRestingPositionLifecycle} AND ${polyCopyTradeFills.attributes}->>'closed_at' IS NULL`;
 
 export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
   const log = deps.logger.child({ component: "order-ledger" });
@@ -160,7 +166,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           .where(
             and(
               eq(polyCopyTradeFills.billingAccountId, billing_account_id),
-              sql`${polyCopyTradeFills.attributes}->>'market_id' = ${market_id}`,
+              eq(polyCopyTradeFills.marketId, market_id),
+              activeRestingPosition,
               // bug.0430: `error` rows count toward the cap ONLY when the
               // intent was a FOK market order. FOK has a real broadcast race
               // (CLOB returns error but on-chain CTF can still mint), so
@@ -275,6 +282,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             clientOrderId: input.intent.client_order_id,
             orderId: null,
             status: "pending",
+            positionLifecycle: null,
             attributes: attrs,
           })
           .onConflictDoNothing({
@@ -307,11 +315,20 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       const status: LedgerRow["status"] = mapReceiptStatus(
         params.receipt.status
       );
+      const positionLifecycle = lifecycleFromOrderUpdate(
+        status,
+        params.receipt.filled_size_usdc
+      );
       await deps.db
         .update(polyCopyTradeFills)
         .set({
           orderId: params.receipt.order_id,
           status,
+          ...(positionLifecycle !== null
+            ? {
+                positionLifecycle: preserveTerminalLifecycle(positionLifecycle),
+              }
+            : {}),
           updatedAt: new Date(),
           attributes: sql`COALESCE(${polyCopyTradeFills.attributes}, '{}'::jsonb) || ${JSON.stringify(
             {
@@ -408,6 +425,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         .where(
           and(
             sql`${polyCopyTradeFills.status} IN ('pending','open')`,
+            activeRestingPosition,
             sql`${polyCopyTradeFills.createdAt} < now() - make_interval(secs => ${olderThanMs} / 1000.0)`
           )
         )
@@ -421,6 +439,8 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         client_order_id: r.clientOrderId,
         order_id: r.orderId,
         status: r.status as LedgerRow["status"],
+        position_lifecycle:
+          (r.positionLifecycle as LedgerPositionLifecycle | null) ?? null,
         attributes: (r.attributes as Record<string, unknown> | null) ?? null,
         synced_at: r.syncedAt,
         created_at: r.createdAt,
@@ -438,12 +458,21 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       if (input.reason !== undefined) {
         patch.reason = input.reason;
       }
+      const positionLifecycle = lifecycleFromOrderUpdate(
+        input.status,
+        input.filled_size_usdc
+      );
 
       await deps.db
         .update(polyCopyTradeFills)
         .set({
           status: input.status,
           ...(input.order_id !== undefined ? { orderId: input.order_id } : {}),
+          ...(positionLifecycle !== null
+            ? {
+                positionLifecycle: preserveTerminalLifecycle(positionLifecycle),
+              }
+            : {}),
           updatedAt: new Date(),
           ...(Object.keys(patch).length > 0
             ? {
@@ -485,6 +514,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
       const rows = await deps.db
         .update(polyCopyTradeFills)
         .set({
+          positionLifecycle: "closed",
           updatedAt: input.closed_at,
           attributes: sql`COALESCE(${polyCopyTradeFills.attributes}, '{}'::jsonb) || ${JSON.stringify(
             {
@@ -499,6 +529,32 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           and(
             eq(polyCopyTradeFills.billingAccountId, input.billing_account_id),
             sql`${polyCopyTradeFills.attributes}->>'token_id' = ${input.token_id}`,
+            notPositionTerminal,
+            inArray(polyCopyTradeFills.status, ["open", "filled", "partial"])
+          )
+        )
+        .returning({ clientOrderId: polyCopyTradeFills.clientOrderId });
+      return rows.length;
+    },
+
+    async markPositionLifecycleByConditionId(
+      input: MarkPositionLifecycleByConditionIdInput
+    ): Promise<number> {
+      const normalizedMarketId = `prediction-market:polymarket:${input.condition_id}`;
+      const rows = await deps.db
+        .update(polyCopyTradeFills)
+        .set({
+          positionLifecycle: input.lifecycle,
+          updatedAt: input.updated_at,
+        })
+        .where(
+          and(
+            eq(polyCopyTradeFills.billingAccountId, input.billing_account_id),
+            or(
+              sql`${polyCopyTradeFills.attributes}->>'condition_id' = ${input.condition_id}`,
+              eq(polyCopyTradeFills.marketId, input.condition_id),
+              eq(polyCopyTradeFills.marketId, normalizedMarketId)
+            ),
             inArray(polyCopyTradeFills.status, ["open", "filled", "partial"])
           )
         )
@@ -520,6 +576,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
               eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
               eq(polyCopyTradeFills.targetId, args.target_id),
               eq(polyCopyTradeFills.marketId, args.market_id),
+              activeRestingPosition,
               inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
             )
           )
@@ -563,6 +620,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
             eq(polyCopyTradeFills.billingAccountId, args.billing_account_id),
             eq(polyCopyTradeFills.targetId, args.target_id),
             eq(polyCopyTradeFills.marketId, args.market_id),
+            activeRestingPosition,
             inArray(polyCopyTradeFills.status, ["pending", "open", "partial"])
           )
         );
@@ -594,6 +652,7 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         .where(
           and(
             inArray(polyCopyTradeFills.status, ["pending", "open", "partial"]),
+            activeRestingPosition,
             lt(
               polyCopyTradeFills.createdAt,
               sql`now() - make_interval(mins => ${args.max_age_minutes})`
@@ -664,6 +723,8 @@ function mapLedgerRow(r: typeof polyCopyTradeFills.$inferSelect): LedgerRow {
     order_id: r.orderId,
     // Schema CHECK enforces the set; cast is safe at the type boundary.
     status: r.status as LedgerRow["status"],
+    position_lifecycle:
+      (r.positionLifecycle as LedgerPositionLifecycle | null) ?? null,
     attributes: (r.attributes as Record<string, unknown> | null) ?? null,
     synced_at: r.syncedAt,
     created_at: r.createdAt,
@@ -693,4 +754,21 @@ function mapReceiptStatus(
       // it; surface it as live in the ledger until further state arrives.
       return "open";
   }
+}
+
+function lifecycleFromOrderUpdate(
+  status: LedgerRow["status"],
+  filledSizeUsdc: number | undefined
+): LedgerPositionLifecycle | null {
+  if (status === "filled" || status === "partial") return "open";
+  if (filledSizeUsdc !== undefined && filledSizeUsdc > 0) return "open";
+  return null;
+}
+
+function preserveTerminalLifecycle(next: LedgerPositionLifecycle) {
+  return sql`CASE
+    WHEN ${polyCopyTradeFills.positionLifecycle} IN ('closed','redeemed','loser','dust','abandoned')
+      THEN ${polyCopyTradeFills.positionLifecycle}
+    ELSE ${next}
+  END`;
 }
