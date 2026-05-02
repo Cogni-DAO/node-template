@@ -5,7 +5,7 @@
  * Module: `@contracts/poly.wallet.auto-wrap.v1.contract`
  * Purpose: Contract for granting and revoking the calling user's consent to
  *   the auto-wrap loop (task.0429). The loop wraps idle USDC.e at the funder
- *   address into spendable pUSD on a 60s scan cycle.
+ *   address into spendable pUSD on a 5-minute scan cycle.
  * Scope: `POST /api/v1/poly/wallet/auto-wrap/consent` (grant) and
  *   `DELETE /api/v1/poly/wallet/auto-wrap/consent` (revoke). Schema-only.
  * Invariants:
@@ -36,7 +36,7 @@ export const polyWalletAutoWrapConsentGrantOperation = {
   summary:
     "Grant consent to the auto-wrap loop for the calling user's trading wallet",
   description:
-    "Stamps `auto_wrap_consent_at = now()` on the active `poly_wallet_connections` row. The 60s auto-wrap job will then convert idle USDC.e at the funder address to pUSD whenever the balance crosses the floor. Idempotent: re-granting after a revoke clears `auto_wrap_revoked_at`.",
+    "Stamps `auto_wrap_consent_at = now()` on the active `poly_wallet_connections` row. The 5-minute auto-wrap job will then convert idle USDC.e at the funder address to pUSD whenever the balance crosses the floor. Idempotent: re-granting after a revoke clears `auto_wrap_revoked_at`.",
   input: z.object({
     /**
      * Optional override of the default 1.00 USDC.e floor. Atomic 6-dp string.

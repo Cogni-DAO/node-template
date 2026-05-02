@@ -4,8 +4,8 @@
 /**
  * Module: `@app/api/v1/poly/wallet/auto-wrap/consent`
  * Purpose: HTTP POST + DELETE — grant or revoke the calling user's consent to
- *   the auto-wrap loop (task.0429). The 60s job converts idle USDC.e at the
- *   funder address to spendable pUSD whenever the balance crosses the floor.
+ *   the auto-wrap loop (task.0429). POST also kicks one immediate best-effort
+ *   wrap attempt; the background job then rechecks every 5 minutes.
  * Scope: Wire-shape + auth boundary only. Domain logic lives behind
  *   `PolyTraderWalletPort.{setAutoWrapConsent, revokeAutoWrapConsent}`.
  * Invariants:
@@ -14,7 +14,7 @@
  *   - CONSENT_REVOCABLE: revoke is a single DB UPDATE; honored next tick.
  *   - DUST_GUARD: optional `floorUsdceAtomic` is validated > 0 by the Zod
  *     contract; the DB CHECK is the backstop.
- * Side-effects: IO (DB writes only). The auto-wrap job is fire-and-forget.
+ * Side-effects: IO (DB writes; POST starts one fire-and-forget wrap attempt).
  * Links: work/items/task.0429.poly-auto-wrap-consent-loop.md
  * @public
  */
@@ -98,6 +98,39 @@ export const POST = wrapRouteHandlerWithLogging(
       }
       throw err;
     }
+
+    void adapter
+      .wrapIdleUsdcE(account.id)
+      .then((result) => {
+        ctx.log.info(
+          {
+            billing_account_id: account.id,
+            outcome: result.outcome,
+            ...(result.outcome === "wrapped"
+              ? {
+                  tx_hash: result.txHash,
+                  amount_atomic: result.amountAtomic.toString(),
+                }
+              : {
+                  reason: result.reason,
+                  observed_balance_atomic:
+                    result.observedBalanceAtomic === null
+                      ? null
+                      : result.observedBalanceAtomic.toString(),
+                }),
+          },
+          "poly.auto_wrap.consent.immediate_trigger_complete"
+        );
+      })
+      .catch((err: unknown) => {
+        ctx.log.warn(
+          {
+            billing_account_id: account.id,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "poly.auto_wrap.consent.immediate_trigger_failed"
+        );
+      });
 
     const summary = await adapter.getConnectionSummary(account.id);
     if (!summary || summary.autoWrapConsentAt === null) {

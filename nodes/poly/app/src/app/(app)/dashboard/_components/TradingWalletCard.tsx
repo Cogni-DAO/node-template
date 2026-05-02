@@ -50,6 +50,8 @@ import { BalanceBar, WalletProfitLossCard } from "@/features/wallet-analysis";
 import { cn } from "@/shared/util/cn";
 import { fetchTradingWallet } from "../_api/fetchTradingWallet";
 
+const TRADING_WALLET_OVERVIEW_REFETCH_MS = 5 * 60_000;
+
 function formatDecimal(n: number | null, fractionDigits: number): string {
   if (n === null) return "—";
   return n.toLocaleString("en-US", {
@@ -81,9 +83,9 @@ export function TradingWalletCard(): ReactElement {
   const { data, isLoading, isError } = useQuery({
     queryKey: ["dashboard-trading-wallet", interval],
     queryFn: () => fetchTradingWallet(interval),
-    refetchInterval: 15_000,
-    staleTime: 10_000,
-    gcTime: 60_000,
+    refetchInterval: TRADING_WALLET_OVERVIEW_REFETCH_MS,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
     retry: 1,
   });
   // Shares the "poly-wallet-status" key with /credits, so navigating between

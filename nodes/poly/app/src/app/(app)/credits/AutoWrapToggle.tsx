@@ -4,9 +4,10 @@
 /**
  * Module: `@app/(app)/credits/AutoWrapToggle`
  * Purpose: Single-control consent toggle for the auto-wrap loop (task.0429).
- *   When ON, the 60s background job wraps any USDC.e at the funder address
- *   into pUSD — required because CLOB BUYs only spend pUSD. Closes the cash
- *   leak from deposits, V1 redeems, and external transfers.
+ *   When ON, POST triggers one immediate wrap attempt and the 5-minute
+ *   background job wraps any later USDC.e at the funder address into pUSD.
+ *   Required because CLOB BUYs only spend pUSD. Closes the cash leak from
+ *   deposits, V1 redeems, and external transfers.
  * Scope: Client component. Reads `auto_wrap_consent_at` from the existing
  *   `poly-wallet-status` query; writes via `POST` / `DELETE` on
  *   `/api/v1/poly/wallet/auto-wrap/consent` with optimistic update.
@@ -29,6 +30,11 @@ import { Loader2 } from "lucide-react";
 import { type ReactElement, useId, useState } from "react";
 
 const POLY_WALLET_STATUS_QUERY_KEY = ["poly-wallet-status"] as const;
+const POLY_WALLET_BALANCES_QUERY_KEY = ["poly-wallet-balances"] as const;
+const DASHBOARD_TRADING_WALLET_QUERY_KEY = [
+  "dashboard-trading-wallet",
+] as const;
+const AUTO_WRAP_REFRESH_DELAY_MS = 15_000;
 
 async function postConsent(): Promise<void> {
   const res = await fetch("/api/v1/poly/wallet/auto-wrap/consent", {
@@ -76,9 +82,25 @@ export function AutoWrapToggle({
       setOptimisticOn(next);
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: POLY_WALLET_STATUS_QUERY_KEY,
-      });
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: POLY_WALLET_STATUS_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: POLY_WALLET_BALANCES_QUERY_KEY,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: DASHBOARD_TRADING_WALLET_QUERY_KEY,
+        }),
+      ]);
+      setTimeout(() => {
+        void queryClient.invalidateQueries({
+          queryKey: POLY_WALLET_BALANCES_QUERY_KEY,
+        });
+        void queryClient.invalidateQueries({
+          queryKey: DASHBOARD_TRADING_WALLET_QUERY_KEY,
+        });
+      }, AUTO_WRAP_REFRESH_DELAY_MS);
       setOptimisticOn(null);
     },
   });

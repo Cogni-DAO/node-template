@@ -142,7 +142,7 @@ export const GET = wrapRouteHandlerWithLogging(
     // `balances.usdcE` and `balances.pusd` are the wallet's two on-chain cash
     // balances (USDC.e bridged + Polymarket V2 pUSD). Both are spendable from
     // the dashboard's perspective: pUSD funds CLOB BUYs directly; USDC.e is
-    // wrapped to pUSD by the auto-wrap loop on a 60s tick when consent is on.
+    // wrapped to pUSD by the auto-wrap loop when consent is on.
     // Open orders are software-level reservations, so DB-derived locked USDC is
     // already part of the on-chain cash balance.
     const cashOnChain =

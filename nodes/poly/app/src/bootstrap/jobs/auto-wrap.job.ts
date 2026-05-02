@@ -3,7 +3,7 @@
 
 /**
  * Module: `@bootstrap/jobs/auto-wrap.job`
- * Purpose: 60-second scan loop that wraps idle USDC.e at consenting tenants'
+ * Purpose: 5-minute scan loop that wraps idle USDC.e at consenting tenants'
  *   funder addresses into spendable pUSD. Closes the deposit / V1-redeem /
  *   transfer leaks where cash returns as USDC.e but only pUSD funds CLOB BUYs.
  * Scope: Wiring + cadence only. Exports the pure `runAutoWrapTick(deps)` for
@@ -52,7 +52,7 @@ export const AUTO_WRAP_METRICS = {
   tickErrorsTotal: "poly_auto_wrap_tick_errors_total",
 } as const;
 
-const AUTO_WRAP_POLL_MS = 60_000;
+const AUTO_WRAP_POLL_MS = 5 * 60_000;
 const AUTO_WRAP_ROW_LIMIT = 200;
 
 /**
@@ -175,7 +175,7 @@ export async function runAutoWrapTick(
 }
 
 /**
- * Start the 60s auto-wrap poll. Returns an `AutoWrapJobHandle` with `stop` +
+ * Start the 5-minute auto-wrap poll. Returns an `AutoWrapJobHandle` with `stop` +
  * `getLastTickAt`. Caller is responsible for ensuring exactly-one execution
  * (POLY_ROLE=trader + replicas=1).
  *
