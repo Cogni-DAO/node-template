@@ -106,6 +106,15 @@ Both items existed in Doltgres on preview (`https://preview.cognidao.org/api/v1/
 2. Add `not_a_bug` and `wont_fix` to the status enum so closing-as-misdiagnosis has a distinct terminal state from closing-as-shipped.
 3. (Cross-link: requires `proj.agent-identity-revocation` to record who wrote what.)
 
+### D9 — Stall detection / dead-agent cutoff
+**Trigger:** an agent stops PATCHing the work item but does not reach a terminal status (done | cancelled | blocked).
+**Expected:** harness watchdog fires after a configurable idle window (default 30 min) and either: (a) marks the item `blocked` with a stall-reason, (b) re-dispatches a fresh agent, or (c) escalates to coordinator with the last known state.
+**Observed 2026-05-01:** monitor for bug.5005/bug.5004 had only a success exit (`bug.5005=done`) and an 80-tick cap (~60 min). No assertion for *stall* — if Dev A had hung mid-implement, monitor would have run out the clock with no signal differentiating "in progress" from "abandoned." The eval loop must encode stall-detection as a first-class outcome equal to success/failure.
+**Fix surface:**
+1. Harness: per-stage timeout (e.g. `needs_implement` → 45 min idle → escalate). Idle = no PATCH on the work item AND no commit on the branch.
+2. Operator API: optional `heartbeat_at` column on `work_items` populated by the agent at safe-points so the watchdog can distinguish "agent alive, thinking long" from "agent dead."
+3. Test fixture: a synthetic agent that intentionally hangs mid-implement; assertion that the harness emits a stall event within the timeout window.
+
 ## Today's Result Summary (2026-05-01)
 
 - **bug.5005** — happy path complete. Real bug, real fix, validated end-to-end on candidate-a. Bootstrap moment: the fix flipped its own `deployVerified=true`. Awaiting human review/merge as of EOD.
