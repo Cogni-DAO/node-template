@@ -4,35 +4,72 @@
 /**
  * Module: `@app/api/v1/poly/wallet/refresh`
  * Purpose: HTTP POST — force a bounded refresh of the caller's Polymarket
- *   wallet data. Clears process caches and warms the non-CLOB execution slice.
- * Scope: Session-auth, tenant-scoped. Does not call private CLOB on the
- *   request path; order-state reconciliation remains background-owned.
- * Side-effects: IO (DB account lookup, Data API cache warm).
+ *   wallet data. Updates the DB ledger rows used by dashboard page-loads,
+ *   then clears process caches and warms the non-CLOB execution slice.
+ * Scope: Session-auth, tenant-scoped. This is an explicit mutation, not a
+ *   page-load dependency; bounded CLOB/Data-API reads are allowed here to
+ *   refresh the durable ledger read model.
+ * Side-effects: IO (DB account lookup/write, CLOB getOrder, Data API positions).
  * Links: bug.5001
  * @public
  */
 
 import { toUserId } from "@cogni/ids";
+import { noopMetrics, type OrderStatus } from "@cogni/poly-market-provider";
 import {
   type PolyWalletRefreshOutput,
   polyWalletRefreshOperation,
 } from "@cogni/poly-node-contracts";
 import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
+import { createPolyTradeExecutorFactory } from "@/bootstrap/capabilities/poly-trade-executor";
 import { getContainer } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import {
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
 } from "@/bootstrap/poly-trader-wallet";
+import type { LedgerRow, LedgerStatus } from "@/features/trading";
 import {
   getExecutionSlice,
   invalidateWalletAnalysisCaches,
 } from "@/features/wallet-analysis/server/wallet-analysis-service";
+import { serverEnv } from "@/shared/env/server-env";
+import { hasPositionExposure } from "../_lib/ledger-positions";
 
 export const dynamic = "force-dynamic";
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+const REFRESH_LEDGER_STATUSES = [
+  "pending",
+  "open",
+  "filled",
+  "partial",
+] satisfies LedgerStatus[];
+
+function mapReceiptStatus(s: OrderStatus): LedgerStatus {
+  switch (s) {
+    case "filled":
+      return "filled";
+    case "partial":
+      return "partial";
+    case "canceled":
+      return "canceled";
+    case "open":
+      return "open";
+    default:
+      return "open";
+  }
+}
+
+function readTokenId(row: LedgerRow): string | null {
+  const value = row.attributes?.token_id;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function roundToCents(value: number): number {
+  return Math.round(value * 100) / 100;
+}
 
 export const POST = wrapRouteHandlerWithLogging(
   {
@@ -94,6 +131,93 @@ export const POST = wrapRouteHandlerWithLogging(
 
     const warnings: PolyWalletRefreshOutput["warnings"] = [];
     let executionCapturedAt: string | null = null;
+    let ledgerRowsRead = 0;
+    let ledgerRowsUpdated = 0;
+
+    try {
+      const env = serverEnv();
+      const executorFactory = createPolyTradeExecutorFactory({
+        walletPort: adapter,
+        logger: ctx.log,
+        metrics: noopMetrics,
+        host: env.POLY_CLOB_HOST,
+        polygonRpcUrl: env.POLYGON_RPC_URL,
+      });
+      const executor = await executorFactory.getPolyTradeExecutorFor(
+        account.id
+      );
+      const rows = await container.orderLedger.listTenantPositions({
+        billing_account_id: account.id,
+        statuses: REFRESH_LEDGER_STATUSES,
+        limit: 500,
+      });
+      ledgerRowsRead = rows.length;
+
+      const syncedIds = new Set<string>();
+      for (const row of rows) {
+        if (
+          row.order_id === null ||
+          (row.status !== "pending" &&
+            row.status !== "open" &&
+            row.status !== "partial")
+        ) {
+          continue;
+        }
+        const result = await executor.getOrder(row.order_id);
+        syncedIds.add(row.client_order_id);
+        if ("found" in result) {
+          await container.orderLedger.updateStatus({
+            client_order_id: row.client_order_id,
+            status: mapReceiptStatus(result.found.status),
+            filled_size_usdc: result.found.filled_size_usdc,
+            order_id: result.found.order_id,
+          });
+          ledgerRowsUpdated += 1;
+        }
+      }
+
+      const positions = await executor.listPositions();
+      const currentValueByAsset = new Map(
+        positions
+          .filter((position) => position.size > 0)
+          .map((position) => [
+            position.asset,
+            roundToCents(position.currentValue),
+          ])
+      );
+
+      const exposureRows = rows.filter(hasPositionExposure);
+      for (const row of exposureRows) {
+        const tokenId = readTokenId(row);
+        if (tokenId === null) continue;
+        syncedIds.add(row.client_order_id);
+        const currentValue = currentValueByAsset.get(tokenId);
+        if (currentValue !== undefined && currentValue > 0) {
+          await container.orderLedger.updateStatus({
+            client_order_id: row.client_order_id,
+            status: row.status,
+            filled_size_usdc: currentValue,
+          });
+          ledgerRowsUpdated += 1;
+          continue;
+        }
+        ledgerRowsUpdated +=
+          await container.orderLedger.markPositionClosedByAsset({
+            billing_account_id: account.id,
+            token_id: tokenId,
+            reason: "refresh_no_position",
+            closed_at: new Date(),
+          });
+      }
+
+      await container.orderLedger.markSynced([...syncedIds]);
+    } catch (err) {
+      warnings.push({
+        code: "ledger_refresh_unavailable",
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
+
     try {
       const execution = await getExecutionSlice(address, {
         includePriceHistory: false,
@@ -112,6 +236,8 @@ export const POST = wrapRouteHandlerWithLogging(
         billing_account_id: account.id,
         funder_address: address,
         execution_captured_at: executionCapturedAt,
+        ledger_rows_read: ledgerRowsRead,
+        ledger_rows_updated: ledgerRowsUpdated,
         warning_count: warnings.length,
       },
       "poly.wallet.refresh"

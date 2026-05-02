@@ -83,7 +83,7 @@ export function toWalletExecutionPosition(
 
   return {
     positionId: row.order_id ?? row.client_order_id,
-    conditionId: readStr(row, "market_id") || row.fill_id,
+    conditionId: readConditionId(row),
     asset: readStr(row, "token_id") || row.client_order_id,
     marketTitle:
       readStr(row, "title") || readStr(row, "market_id") || "Polymarket",
@@ -142,7 +142,19 @@ export function summarizeDailyTradeCounts(
     .map(([day, n]) => ({ day, n }));
 }
 
+function readConditionId(row: LedgerRow): string {
+  const explicit = readNullableStr(row, "condition_id");
+  if (explicit !== null) return explicit;
+
+  const marketId = readNullableStr(row, "market_id");
+  if (marketId === null) return row.fill_id;
+
+  const prefix = "prediction-market:polymarket:";
+  return marketId.startsWith(prefix) ? marketId.slice(prefix.length) : marketId;
+}
+
 function rowCurrentValue(row: LedgerRow): number {
+  if (readNullableStr(row, "closed_at") !== null) return 0;
   const filled = readNum(row, "filled_size_usdc");
   if (filled > 0) return filled;
   if (row.status === "filled" || row.status === "partial") {

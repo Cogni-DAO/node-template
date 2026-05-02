@@ -235,6 +235,10 @@ function buildIntent(
     client_order_id,
     attributes: {
       token_id: tokenId,
+      condition_id:
+        typeof fill.attributes?.condition_id === "string"
+          ? fill.attributes.condition_id
+          : undefined,
       source_fill_id: fill.fill_id,
       target_wallet: fill.target_wallet,
       placement,

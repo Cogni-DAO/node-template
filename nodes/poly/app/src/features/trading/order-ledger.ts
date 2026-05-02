@@ -42,6 +42,7 @@ import {
   type InsertPendingInput,
   type LedgerCancelReason,
   type LedgerRow,
+  type MarkPositionClosedByAssetInput,
   type ListOpenOrPendingOptions,
   type ListRecentOptions,
   type ListTenantPositionsOptions,
@@ -218,6 +219,10 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         token_id:
           typeof input.intent.attributes?.token_id === "string"
             ? input.intent.attributes.token_id
+            : undefined,
+        condition_id:
+          typeof input.intent.attributes?.condition_id === "string"
+            ? input.intent.attributes.condition_id
             : undefined,
         target_wallet:
           typeof input.intent.attributes?.target_wallet === "string"
@@ -472,6 +477,33 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           )}::jsonb`,
         })
         .where(eq(polyCopyTradeFills.clientOrderId, params.client_order_id));
+    },
+
+    async markPositionClosedByAsset(
+      input: MarkPositionClosedByAssetInput
+    ): Promise<number> {
+      const rows = await deps.db
+        .update(polyCopyTradeFills)
+        .set({
+          updatedAt: input.closed_at,
+          attributes: sql`COALESCE(${polyCopyTradeFills.attributes}, '{}'::jsonb) || ${JSON.stringify(
+            {
+              closed_at: input.closed_at.toISOString(),
+              close_order_id: input.close_order_id,
+              close_client_order_id: input.close_client_order_id,
+              close_reason: input.reason,
+            }
+          )}::jsonb`,
+        })
+        .where(
+          and(
+            eq(polyCopyTradeFills.billingAccountId, input.billing_account_id),
+            sql`${polyCopyTradeFills.attributes}->>'token_id' = ${input.token_id}`,
+            inArray(polyCopyTradeFills.status, ["open", "filled", "partial"])
+          )
+        )
+        .returning({ clientOrderId: polyCopyTradeFills.clientOrderId });
+      return rows.length;
     },
 
     async hasOpenForMarket(args: {

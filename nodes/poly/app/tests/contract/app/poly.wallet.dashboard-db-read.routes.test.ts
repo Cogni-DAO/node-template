@@ -29,6 +29,15 @@ const mockGetPolyTraderWalletAdapter = vi.fn();
 const mockGetBalances = vi.fn();
 const mockGetAddress = vi.fn();
 const mockGetTradingWalletPnlHistory = vi.fn();
+const mockCreatePolyTradeExecutorFactory = vi.fn();
+const mockGetPolyTradeExecutorFor = vi.fn();
+const mockGetOrder = vi.fn();
+const mockListPositions = vi.fn();
+const mockUpdateStatus = vi.fn();
+const mockMarkPositionClosedByAsset = vi.fn();
+const mockMarkSynced = vi.fn();
+const mockGetExecutionSlice = vi.fn();
+const mockInvalidateWalletAnalysisCaches = vi.fn();
 
 vi.mock("@/bootstrap/http", () => ({
   wrapRouteHandlerWithLogging:
@@ -54,6 +63,9 @@ vi.mock("@/bootstrap/container", () => ({
     accountsForUser: mockAccountsForUser,
     orderLedger: {
       listTenantPositions: mockListTenantPositions,
+      updateStatus: mockUpdateStatus,
+      markPositionClosedByAsset: mockMarkPositionClosedByAsset,
+      markSynced: mockMarkSynced,
     },
     redeemPipelineFor: vi.fn(() => null),
   })),
@@ -64,12 +76,28 @@ vi.mock("@/bootstrap/poly-trader-wallet", () => ({
   WalletAdapterUnconfiguredError: class WalletAdapterUnconfiguredError extends Error {},
 }));
 
+vi.mock("@/bootstrap/capabilities/poly-trade-executor", () => ({
+  createPolyTradeExecutorFactory: mockCreatePolyTradeExecutorFactory,
+}));
+
 vi.mock(
   "@/features/wallet-analysis/server/trading-wallet-overview-service",
   () => ({
     getTradingWalletPnlHistory: mockGetTradingWalletPnlHistory,
   })
 );
+
+vi.mock("@/features/wallet-analysis/server/wallet-analysis-service", () => ({
+  getExecutionSlice: mockGetExecutionSlice,
+  invalidateWalletAnalysisCaches: mockInvalidateWalletAnalysisCaches,
+}));
+
+vi.mock("@/shared/env/server-env", () => ({
+  serverEnv: vi.fn(() => ({
+    POLY_CLOB_HOST: "https://clob.polymarket.com",
+    POLYGON_RPC_URL: "https://polygon.example",
+  })),
+}));
 
 vi.mock("@/app/_lib/auth/session", () => ({
   getSessionUser: vi.fn(),
@@ -98,6 +126,40 @@ describe("poly wallet dashboard DB read routes", () => {
       getBalances: mockGetBalances,
       getAddress: mockGetAddress,
     });
+    mockCreatePolyTradeExecutorFactory.mockReturnValue({
+      getPolyTradeExecutorFor: mockGetPolyTradeExecutorFor,
+    });
+    mockGetPolyTradeExecutorFor.mockResolvedValue({
+      getOrder: mockGetOrder,
+      listPositions: mockListPositions,
+    });
+    mockGetOrder.mockResolvedValue({
+      found: {
+        order_id: "0xorder",
+        client_order_id: "0xclient",
+        status: "partial",
+        filled_size_usdc: 10,
+        submitted_at: new Date().toISOString(),
+      },
+    });
+    mockListPositions.mockResolvedValue([
+      {
+        asset: "token-1",
+        size: 20,
+        currentValue: 10,
+      },
+    ]);
+    mockUpdateStatus.mockResolvedValue(undefined);
+    mockMarkPositionClosedByAsset.mockResolvedValue(1);
+    mockMarkSynced.mockResolvedValue(undefined);
+    mockGetExecutionSlice.mockResolvedValue({
+      address: FUNDER,
+      capturedAt: new Date().toISOString(),
+      dailyTradeCounts: [],
+      live_positions: [],
+      closed_positions: [],
+      warnings: [],
+    });
     syncedAt = new Date();
     row = {
       target_id: "target-1",
@@ -107,7 +169,10 @@ describe("poly wallet dashboard DB read routes", () => {
       order_id: "0xorder",
       status: "partial",
       attributes: {
-        market_id: "condition-1",
+        market_id:
+          "prediction-market:polymarket:0x1111111111111111111111111111111111111111111111111111111111111111",
+        condition_id:
+          "0x1111111111111111111111111111111111111111111111111111111111111111",
         token_id: "token-1",
         title: "Will CLOB stay up?",
         slug: "will-clob-stay-up",
@@ -167,6 +232,8 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(json.live_positions).toHaveLength(1);
     expect(json.live_positions[0]).toMatchObject({
       positionId: "0xorder",
+      conditionId:
+        "0x1111111111111111111111111111111111111111111111111111111111111111",
       asset: "token-1",
       marketTitle: "Will CLOB stay up?",
       eventTitle: "CLOB Health",
@@ -216,5 +283,68 @@ describe("poly wallet dashboard DB read routes", () => {
       usdc_total: 30,
       open_orders: 1,
     });
+  });
+
+  it("execution does not resurrect a DB-backed row stamped closed", async () => {
+    mockListTenantPositions.mockResolvedValue([
+      {
+        ...row,
+        status: "filled",
+        attributes: {
+          ...row.attributes,
+          closed_at: new Date().toISOString(),
+        },
+      },
+    ]);
+    const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/poly/wallet/execution")
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.live_positions).toEqual([]);
+    expect(mockGetExecutionSlice).toHaveBeenCalledWith(FUNDER, {
+      lifecycleByConditionId: expect.any(Map),
+      includePriceHistory: false,
+    });
+  });
+
+  it("refresh updates the ledger rows that dashboard page-loads read", async () => {
+    mockListPositions.mockResolvedValue([]);
+    const { POST } = await import("@/app/api/v1/poly/wallet/refresh/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/v1/poly/wallet/refresh", {
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      address: FUNDER,
+      warnings: [],
+    });
+    expect(mockListTenantPositions).toHaveBeenCalledWith({
+      billing_account_id: ACCOUNT.id,
+      statuses: ["pending", "open", "filled", "partial"],
+      limit: 500,
+    });
+    expect(mockGetOrder).toHaveBeenCalledWith("0xorder");
+    expect(mockUpdateStatus).toHaveBeenCalledWith({
+      client_order_id: "0xclient",
+      status: "partial",
+      filled_size_usdc: 10,
+      order_id: "0xorder",
+    });
+    expect(mockMarkPositionClosedByAsset).toHaveBeenCalledWith({
+      billing_account_id: ACCOUNT.id,
+      token_id: "token-1",
+      reason: "refresh_no_position",
+      closed_at: expect.any(Date),
+    });
+    expect(mockMarkSynced).toHaveBeenCalledWith(["0xclient"]);
+    expect(mockInvalidateWalletAnalysisCaches).toHaveBeenCalledWith(FUNDER);
   });
 });

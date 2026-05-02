@@ -19,6 +19,7 @@ import {
   type LedgerStatus,
   type ListOpenOrPendingOptions,
   type ListRecentOptions,
+  type MarkPositionClosedByAssetInput,
   type OpenOrderRow,
   type OrderLedger,
   type RecordDecisionInput,
@@ -138,6 +139,9 @@ export class FakeOrderLedger implements OrderLedger {
     if (typeof input.intent.attributes?.token_id === "string") {
       attrs.token_id = input.intent.attributes.token_id;
     }
+    if (typeof input.intent.attributes?.condition_id === "string") {
+      attrs.condition_id = input.intent.attributes.condition_id;
+    }
     if (typeof input.intent.attributes?.target_wallet === "string") {
       attrs.target_wallet = input.intent.attributes.target_wallet;
     }
@@ -202,6 +206,28 @@ export class FakeOrderLedger implements OrderLedger {
     row.status = "canceled";
     row.updated_at = new Date();
     row.attributes = { ...(row.attributes ?? {}), reason: params.reason };
+  }
+
+  async markPositionClosedByAsset(
+    input: MarkPositionClosedByAssetInput
+  ): Promise<number> {
+    let changed = 0;
+    for (const row of this.rows) {
+      const attrs = row.attributes as Record<string, unknown> | null;
+      if (row.billing_account_id !== input.billing_account_id) continue;
+      if (attrs?.token_id !== input.token_id) continue;
+      if (!["open", "filled", "partial"].includes(row.status)) continue;
+      row.updated_at = input.closed_at;
+      row.attributes = {
+        ...(row.attributes ?? {}),
+        closed_at: input.closed_at.toISOString(),
+        close_order_id: input.close_order_id,
+        close_client_order_id: input.close_client_order_id,
+        close_reason: input.reason,
+      };
+      changed += 1;
+    }
+    return changed;
   }
 
   async hasOpenForMarket(args: {

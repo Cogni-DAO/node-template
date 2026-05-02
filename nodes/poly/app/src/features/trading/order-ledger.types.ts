@@ -164,6 +164,16 @@ export interface UpdateStatusInput {
   reason?: string;
 }
 
+/** Input to clear ledger exposure after a token is no longer held. */
+export interface MarkPositionClosedByAssetInput {
+  billing_account_id: string;
+  token_id: string;
+  close_order_id?: string;
+  close_client_order_id?: string;
+  reason?: "manual_close" | "refresh_no_position";
+  closed_at: Date;
+}
+
 /**
  * Aggregate freshness stats returned by `syncHealthSummary`.
  * Used by GET /api/v1/poly/internal/sync-health.
@@ -245,6 +255,16 @@ export interface OrderLedger {
   }): Promise<void>;
 
   /**
+   * Clear DB-derived position exposure after a token is no longer held.
+   * Keeps historical rows but stamps `attributes.closed_at`, so dashboard
+   * page-loads do not resurrect a closed position before the next background
+   * reconciliation/drain.
+   */
+  markPositionClosedByAsset(
+    input: MarkPositionClosedByAssetInput
+  ): Promise<number>;
+
+  /**
    * Existence check on the partial unique index slot. True iff any row for
    * `(billing_account_id, target_id, market_id)` has `status IN
    * ('pending','open','partial')`. Fail-closed: returns `true` on DB error.
@@ -300,8 +320,8 @@ export interface OrderLedger {
    * Overwrite `status` (and optionally `filled_size_usdc` / `order_id`) on
    * the row identified by `client_order_id`. Touches `updated_at`.
    *
-   * Called only by the order reconciler — no other path should drive status
-   * after placement (mirror-coordinator owns `markOrderId` / `markError`).
+   * Called by the order reconciler and explicit user refresh — no page-load
+   * route should drive status after placement.
    */
   updateStatus(input: UpdateStatusInput): Promise<void>;
 
