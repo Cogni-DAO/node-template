@@ -28,7 +28,6 @@
  */
 
 import { toUserId } from "@cogni/ids";
-import { EVENT_NAMES, logEvent } from "@cogni/node-shared";
 import {
   PolyWalletExecutionOutputSchema,
   polyWalletExecutionOperation,
@@ -42,6 +41,7 @@ import {
   WalletAdapterUnconfiguredError,
 } from "@/bootstrap/poly-trader-wallet";
 import type { LedgerStatus } from "@/features/trading";
+import { EVENT_NAMES, logEvent } from "@/shared/observability";
 import {
   summarizeDailyTradeCounts,
   toWalletExecutionPosition,

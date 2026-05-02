@@ -18,7 +18,6 @@
  */
 
 import { toUserId } from "@cogni/ids";
-import { EVENT_NAMES, logEvent } from "@cogni/node-shared";
 import {
   PolyWalletOverviewIntervalSchema,
   type PolyWalletOverviewOutput,
@@ -34,6 +33,7 @@ import {
 } from "@/bootstrap/poly-trader-wallet";
 import type { LedgerStatus } from "@/features/trading";
 import { getTradingWalletPnlHistory } from "@/features/wallet-analysis/server/trading-wallet-overview-service";
+import { EVENT_NAMES, logEvent } from "@/shared/observability";
 import { summarizeLedgerPositions } from "../_lib/ledger-positions";
 
 export const dynamic = "force-dynamic";
