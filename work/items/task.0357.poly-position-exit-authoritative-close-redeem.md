@@ -2,7 +2,7 @@
 id: task.0357
 type: task
 title: "Poly position exits — authoritative close/redeem semantics + live approval readiness"
-status: needs_closeout
+status: needs_merge
 priority: 1
 rank: 2
 estimate: 3
@@ -18,7 +18,7 @@ assignees: []
 credit:
 project: proj.poly-copy-trading
 branch: derekg1729/fix-position-close
-pr:
+pr: https://github.com/Cogni-DAO/node-template/pull/1201
 reviewer:
 revision: 0
 blocked_by:
