@@ -57,51 +57,129 @@ const WARMUP_BACKLOG_SEC = 60;
  * by `authorizeIntent`.
  */
 const MIRROR_POLL_MS = 30_000;
-/**
- * Per-intent spend ceiling on the `min_bet` policy. The mirror bets the
- * market's `minUsdcNotional` (clamped to share-floor) up to this cap; markets
- * above it skip at `plan-mirror` with `below_market_min`. Sized at $5 because
- * top-volume Polymarket markets require 5 shares min, and 5 shares × max_price
- * (1.0) = $5 worst case. Should match the operator wallet's grant
- * `perOrderUsdcCap` so cap-exceed cases are not duplicated as
- * `placement_failed` decisions at the `authorizeIntent` boundary. bug.0342.
- */
-const MIRROR_MAX_USDC_PER_TRADE = 5;
-const CONVICTION_FILTER_PERCENTILE = 75;
+const DEFAULT_MIRROR_MAX_USDC_PER_TRADE = 5;
+const DEFAULT_CONVICTION_FILTER_PERCENTILE = 75;
 const RN1_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 const SWISSTONY_WALLET = "0x204f72f35326db932158cba6adff0b9a1da95e14";
-const TOP_TARGET_SIZE_STATS: Record<string, WalletSizeStatistic> = {
+
+interface WalletSizeSnapshot {
+  wallet: `0x${string}`;
+  label: string;
+  captured_at: string;
+  sample_size: number;
+  percentiles: Record<number, number>;
+}
+
+const TOP_TARGET_SIZE_SNAPSHOTS: Record<string, WalletSizeSnapshot> = {
   [RN1_WALLET]: {
     wallet: RN1_WALLET,
     label: "RN1",
-    captured_at: "2026-05-02T00:49:15Z",
+    captured_at: "2026-05-02T01:51:56Z",
     sample_size: 1000,
-    percentile: CONVICTION_FILTER_PERCENTILE,
-    min_target_usdc: 64.11,
+    percentiles: {
+      50: 16.52,
+      60: 33.78,
+      70: 75.07,
+      75: 117.65,
+      80: 175.51,
+      85: 302.19,
+      90: 427.81,
+      95: 702.3,
+      100: 2660.08,
+    },
   },
   [SWISSTONY_WALLET]: {
     wallet: SWISSTONY_WALLET,
     label: "swisstony",
-    captured_at: "2026-05-02T00:49:15Z",
+    captured_at: "2026-05-02T01:51:56Z",
     sample_size: 1000,
-    percentile: CONVICTION_FILTER_PERCENTILE,
-    min_target_usdc: 73.37,
+    percentiles: {
+      50: 19.77,
+      60: 32.43,
+      70: 69.6,
+      75: 114.57,
+      80: 166.7,
+      85: 232.36,
+      90: 321.62,
+      95: 805.05,
+      100: 4811.89,
+    },
   },
 };
 
-function buildSizingPolicy(targetWallet: `0x${string}`): SizingPolicy {
-  const statistic = TOP_TARGET_SIZE_STATS[targetWallet.toLowerCase()];
-  if (!statistic) {
+function interpolatePercentile(
+  percentiles: Record<number, number>,
+  percentile: number
+): number {
+  const points = Object.keys(percentiles)
+    .map(Number)
+    .sort((a, b) => a - b);
+  const exact = percentiles[percentile];
+  if (exact !== undefined) return exact;
+  const lower = [...points].reverse().find((p) => p < percentile);
+  const upper = points.find((p) => p > percentile);
+  if (lower === undefined || upper === undefined) {
+    throw new Error(`percentile ${percentile} outside snapshot range`);
+  }
+  const lowerValue = percentiles[lower];
+  const upperValue = percentiles[upper];
+  if (lowerValue === undefined || upperValue === undefined) {
+    throw new Error("percentile snapshot is sparse");
+  }
+  const t = (percentile - lower) / (upper - lower);
+  return Number((lowerValue + (upperValue - lowerValue) * t).toFixed(2));
+}
+
+function buildWalletStatistic(
+  snapshot: WalletSizeSnapshot,
+  percentile: number
+): WalletSizeStatistic {
+  const maxTargetUsdc = snapshot.percentiles[100];
+  if (maxTargetUsdc === undefined) {
+    throw new Error(`missing p100 for ${snapshot.wallet}`);
+  }
+  return {
+    wallet: snapshot.wallet,
+    label: snapshot.label,
+    captured_at: snapshot.captured_at,
+    sample_size: snapshot.sample_size,
+    percentile,
+    min_target_usdc: interpolatePercentile(snapshot.percentiles, percentile),
+    max_target_usdc: maxTargetUsdc,
+  };
+}
+
+function buildSizingPolicy(params: {
+  targetWallet: `0x${string}`;
+  mirrorFilterPercentile: number;
+  mirrorMaxUsdcPerTrade: number;
+}): SizingPolicy {
+  const snapshot = snapshotForTargetWallet(params.targetWallet);
+  if (!snapshot) {
     return {
       kind: "min_bet",
-      max_usdc_per_trade: MIRROR_MAX_USDC_PER_TRADE,
+      max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
     };
   }
   return {
-    kind: "target_percentile",
-    max_usdc_per_trade: MIRROR_MAX_USDC_PER_TRADE,
-    statistic,
+    kind: "target_percentile_scaled",
+    max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
+    statistic: buildWalletStatistic(snapshot, params.mirrorFilterPercentile),
   };
+}
+
+function snapshotForTargetWallet(
+  targetWallet: `0x${string}`
+): WalletSizeSnapshot | undefined {
+  return TOP_TARGET_SIZE_SNAPSHOTS[targetWallet.toLowerCase()];
+}
+
+export function sizingPolicyKindForTargetWallet(
+  targetWallet: `0x${string}`
+): "min_bet" | "target_percentile_scaled" {
+  return snapshotForTargetWallet(targetWallet)
+    ? "target_percentile_scaled"
+    : "min_bet";
 }
 
 /**
@@ -116,14 +194,24 @@ export function buildMirrorTargetConfig(params: {
   targetWallet: `0x${string}`;
   billingAccountId: string;
   createdByUserId: string;
+  mirrorFilterPercentile?: number;
+  mirrorMaxUsdcPerTrade?: number;
 }): MirrorTargetConfig {
+  const mirrorFilterPercentile =
+    params.mirrorFilterPercentile ?? DEFAULT_CONVICTION_FILTER_PERCENTILE;
+  const mirrorMaxUsdcPerTrade =
+    params.mirrorMaxUsdcPerTrade ?? DEFAULT_MIRROR_MAX_USDC_PER_TRADE;
   return {
     target_id: targetIdFromWallet(params.targetWallet),
     target_wallet: params.targetWallet,
     billing_account_id: params.billingAccountId,
     created_by_user_id: params.createdByUserId,
     mode: "live", // paper adapter body lands in P3; v0 only places live
-    sizing: buildSizingPolicy(params.targetWallet),
+    sizing: buildSizingPolicy({
+      targetWallet: params.targetWallet,
+      mirrorFilterPercentile,
+      mirrorMaxUsdcPerTrade,
+    }),
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
     // Persistence to a per-target column is deferred to task.0347.
     placement: { kind: "mirror_limit" },

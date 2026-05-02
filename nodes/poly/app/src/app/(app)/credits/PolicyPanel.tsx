@@ -17,6 +17,8 @@
 "use client";
 
 import type {
+  PolyCopyTradeTargetsOutput,
+  PolyCopyTradeTargetUpdateOutput,
   PolyWalletGrantsErrorOutput,
   PolyWalletGrantsGetOutput,
   PolyWalletGrantsPutInput,
@@ -26,8 +28,10 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 
 import { PolicyControls } from "@/components/kit/policy/PolicyControls";
+import { TargetCopyPolicyControls } from "@/components/kit/policy/TargetCopyPolicyControls";
 
 export const POLY_WALLET_GRANTS_QUERY_KEY = ["poly-wallet-grants"] as const;
+const COPY_TARGETS_QUERY_KEY = ["poly-copy-targets-policy"] as const;
 
 async function fetchGrants(): Promise<PolyWalletGrantsGetOutput> {
   const res = await fetch("/api/v1/poly/wallet/grants", {
@@ -64,11 +68,46 @@ async function putGrants(
   return (await res.json()) as PolyWalletGrantsPutOutput;
 }
 
+async function fetchCopyTargets(): Promise<PolyCopyTradeTargetsOutput> {
+  const res = await fetch("/api/v1/poly/copy-trade/targets", {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`copy targets read failed: ${res.status}`);
+  return (await res.json()) as PolyCopyTradeTargetsOutput;
+}
+
+async function patchCopyTargetPolicy(
+  targetId: string,
+  input: {
+    mirror_filter_percentile: number;
+    mirror_max_usdc_per_trade: number;
+  }
+): Promise<PolyCopyTradeTargetUpdateOutput> {
+  const res = await fetch(
+    `/api/v1/poly/copy-trade/targets/${encodeURIComponent(targetId)}`,
+    {
+      method: "PATCH",
+      credentials: "include",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(input),
+    }
+  );
+  if (!res.ok) throw new Error(`copy target write failed: ${res.status}`);
+  return (await res.json()) as PolyCopyTradeTargetUpdateOutput;
+}
+
 export function PolicyPanel(): ReactElement | null {
   const queryClient = useQueryClient();
   const grantsQuery = useQuery({
     queryKey: POLY_WALLET_GRANTS_QUERY_KEY,
     queryFn: fetchGrants,
+    staleTime: 10_000,
+    gcTime: 60_000,
+  });
+  const targetsQuery = useQuery({
+    queryKey: COPY_TARGETS_QUERY_KEY,
+    queryFn: fetchCopyTargets,
+    enabled: Boolean(grantsQuery.data?.connected && grantsQuery.data.grant),
     staleTime: 10_000,
     gcTime: 60_000,
   });
@@ -81,19 +120,46 @@ export function PolicyPanel(): ReactElement | null {
       });
     },
   });
+  const targetPolicyMutation = useMutation({
+    mutationFn: ({
+      targetId,
+      next,
+    }: {
+      targetId: string;
+      next: {
+        mirror_filter_percentile: number;
+        mirror_max_usdc_per_trade: number;
+      };
+    }) => patchCopyTargetPolicy(targetId, next),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: COPY_TARGETS_QUERY_KEY,
+      });
+    },
+  });
 
   const data = grantsQuery.data;
   if (!data || !data.connected || !data.grant) return null;
 
   return (
-    <PolicyControls
-      values={{
-        per_order_usdc_cap: data.grant.per_order_usdc_cap,
-        daily_usdc_cap: data.grant.daily_usdc_cap,
-      }}
-      onSave={async (next) => {
-        await mutation.mutateAsync(next);
-      }}
-    />
+    <div className="flex flex-col gap-3">
+      <PolicyControls
+        values={{
+          per_order_usdc_cap: data.grant.per_order_usdc_cap,
+          daily_usdc_cap: data.grant.daily_usdc_cap,
+        }}
+        onSave={async (next) => {
+          await mutation.mutateAsync(next);
+        }}
+      />
+      {targetsQuery.data ? (
+        <TargetCopyPolicyControls
+          targets={targetsQuery.data.targets}
+          onSave={async (targetId, next) => {
+            await targetPolicyMutation.mutateAsync({ targetId, next });
+          }}
+        />
+      ) : null}
+    </div>
   );
 }

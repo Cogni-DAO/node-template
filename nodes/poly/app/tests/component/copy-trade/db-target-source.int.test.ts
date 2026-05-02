@@ -125,6 +125,8 @@ describe("dbTargetSource (component, RLS)", () => {
         billingAccountId: tenantA.billingAccountId,
         createdByUserId: tenantA.userId,
         targetWallet: TARGET_A,
+        mirrorFilterPercentile: 88,
+        mirrorMaxUsdcPerTrade: "14.50",
       },
       {
         billingAccountId: tenantA.billingAccountId,
@@ -139,6 +141,8 @@ describe("dbTargetSource (component, RLS)", () => {
         billingAccountId: tenantB.billingAccountId,
         createdByUserId: tenantB.userId,
         targetWallet: TARGET_B,
+        mirrorFilterPercentile: 92,
+        mirrorMaxUsdcPerTrade: "21.25",
       },
       {
         billingAccountId: tenantB.billingAccountId,
@@ -213,6 +217,15 @@ describe("dbTargetSource (component, RLS)", () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
     );
     expect(aShared?.id).not.toEqual(bShared?.id);
+
+    expect(aRows.find((r) => r.targetWallet === TARGET_A)).toMatchObject({
+      mirrorFilterPercentile: 88,
+      mirrorMaxUsdcPerTrade: 14.5,
+    });
+    expect(bRows.find((r) => r.targetWallet === TARGET_B)).toMatchObject({
+      mirrorFilterPercentile: 92,
+      mirrorMaxUsdcPerTrade: 21.25,
+    });
   });
 
   it("listAllActive enumerates both tenants with correct attribution", async () => {
@@ -241,6 +254,14 @@ describe("dbTargetSource (component, RLS)", () => {
     // Attribution carries created_by_user_id alongside billing.
     for (const r of aRows) expect(r.createdByUserId).toBe(tenantA.userId);
     for (const r of bRows) expect(r.createdByUserId).toBe(tenantB.userId);
+    expect(aRows.find((r) => r.targetWallet === TARGET_A)).toMatchObject({
+      mirrorFilterPercentile: 88,
+      mirrorMaxUsdcPerTrade: 14.5,
+    });
+    expect(bRows.find((r) => r.targetWallet === TARGET_B)).toMatchObject({
+      mirrorFilterPercentile: 92,
+      mirrorMaxUsdcPerTrade: 21.25,
+    });
   });
 
   it("listAllActive drops tenants whose wallet_grant is revoked (Stage 3 join)", async () => {

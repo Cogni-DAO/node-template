@@ -45,6 +45,7 @@ const CONFIG: MirrorTargetConfig = {
       sample_size: 1000,
       percentile: 75,
       min_target_usdc: 64.11,
+      max_target_usdc: 2000,
     },
   },
   placement: { kind: "mirror_limit" },
@@ -132,5 +133,66 @@ describe("planMirrorFromFill() — sizing policy: kind=target_percentile", () =>
       min_usdc_notional: 1,
     });
     expect(d).toEqual({ kind: "skip", reason: "below_market_min" });
+  });
+});
+
+describe("planMirrorFromFill() — sizing policy: kind=target_percentile_scaled", () => {
+  const scaledConfig: MirrorTargetConfig = {
+    ...CONFIG,
+    sizing: {
+      kind: "target_percentile_scaled",
+      max_usdc_per_trade: 9,
+      statistic: {
+        wallet: TARGET_WALLET,
+        label: "RN1",
+        captured_at: "2026-05-02T01:51:56Z",
+        sample_size: 1000,
+        percentile: 75,
+        min_target_usdc: 100,
+        max_target_usdc: 500,
+      },
+    },
+  };
+
+  it("maps the selected percentile threshold to the market min bet", () => {
+    const fill = makeFill(100);
+    const d = planMirrorFromFill({
+      fill,
+      config: scaledConfig,
+      state: CLEAN_STATE,
+      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    if (d.kind !== "place") throw new Error("expected place");
+    expect(d.intent.size_usdc).toBe(1);
+  });
+
+  it("maps p100-or-larger target fills to the configured max bet", () => {
+    const fill = makeFill(500);
+    const d = planMirrorFromFill({
+      fill,
+      config: scaledConfig,
+      state: CLEAN_STATE,
+      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    if (d.kind !== "place") throw new Error("expected place");
+    expect(d.intent.size_usdc).toBe(9);
+  });
+
+  it("linearly scales between the selected threshold and p100", () => {
+    const fill = makeFill(300);
+    const d = planMirrorFromFill({
+      fill,
+      config: scaledConfig,
+      state: CLEAN_STATE,
+      client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
+      min_shares: 1,
+      min_usdc_notional: 1,
+    });
+    if (d.kind !== "place") throw new Error("expected place");
+    expect(d.intent.size_usdc).toBe(5);
   });
 });

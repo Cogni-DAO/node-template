@@ -23,8 +23,8 @@
  *     enumerator's active-target × active-connection × active-grant join is the
  *     only gate to autonomous mirror placement.
  * Side-effects: IO (Postgres reads + writes via appDb).
- * Notes: DELETE lives in `[id]/route.ts`. Phase B replaces the operator-wide
- *        scaffolding caps with per-tenant grants from `poly_wallet_grants`.
+ * Notes: DELETE/PATCH live in `[id]/route.ts`. Wallet grants remain downstream
+ *        authorization/cap enforcement; target rows own the user-facing copy policy.
  * Links: docs/spec/poly-multi-tenant-auth.md, work/items/task.0318
  * @public
  */
@@ -43,33 +43,41 @@ import { NextResponse } from "next/server";
 import { getSessionUser } from "@/app/_lib/auth/session";
 import { getContainer, resolveAppDb } from "@/bootstrap/container";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
-import { buildMirrorTargetConfig } from "@/bootstrap/jobs/copy-trade-mirror.job";
+import {
+  buildMirrorTargetConfig,
+  sizingPolicyKindForTargetWallet,
+} from "@/bootstrap/jobs/copy-trade-mirror.job";
 
 export const dynamic = "force-dynamic";
 
 /**
- * Hardcoded scaffolding caps the dashboard surfaces alongside each tracked
- * wallet. Operator-wide in Phase A — Phase B sources these per-tenant from
- * `poly_wallet_grants`. `id` is the DB row PK from `poly_copy_trade_targets`,
- * exposed as the contract's `target_id` so DELETE can find it.
+ * `id` is the DB row PK from `poly_copy_trade_targets`, exposed as the
+ * contract's `target_id` so DELETE/PATCH can find it.
  */
 function buildTargetView(params: {
   id: string;
   targetWallet: `0x${string}`;
   billingAccountId: string;
   createdByUserId: string;
+  mirrorFilterPercentile: number;
+  mirrorMaxUsdcPerTrade: number;
   source: "env" | "db";
 }): PolyCopyTradeTarget {
   const config = buildMirrorTargetConfig({
     targetWallet: params.targetWallet,
     billingAccountId: params.billingAccountId,
     createdByUserId: params.createdByUserId,
+    mirrorFilterPercentile: params.mirrorFilterPercentile,
+    mirrorMaxUsdcPerTrade: params.mirrorMaxUsdcPerTrade,
   });
   return {
     target_id: params.id,
     target_wallet: params.targetWallet,
     mode: config.mode,
     mirror_usdc: config.sizing.max_usdc_per_trade,
+    mirror_filter_percentile: params.mirrorFilterPercentile,
+    mirror_max_usdc_per_trade: params.mirrorMaxUsdcPerTrade,
+    sizing_policy_kind: sizingPolicyKindForTargetWallet(params.targetWallet),
     source: params.source,
   };
 }
@@ -107,6 +115,8 @@ export const GET = wrapRouteHandlerWithLogging(
         targetWallet: row.targetWallet,
         billingAccountId: account.id,
         createdByUserId: sessionUser.id,
+        mirrorFilterPercentile: row.mirrorFilterPercentile,
+        mirrorMaxUsdcPerTrade: row.mirrorMaxUsdcPerTrade,
         source: "db",
       })
     );
@@ -172,6 +182,8 @@ export const POST = wrapRouteHandlerWithLogging(
           id: polyCopyTradeTargets.id,
           billing_account_id: polyCopyTradeTargets.billingAccountId,
           created_by_user_id: polyCopyTradeTargets.createdByUserId,
+          mirror_filter_percentile: polyCopyTradeTargets.mirrorFilterPercentile,
+          mirror_max_usdc_per_trade: polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
         })
     );
 
@@ -184,6 +196,10 @@ export const POST = wrapRouteHandlerWithLogging(
             id: polyCopyTradeTargets.id,
             billing_account_id: polyCopyTradeTargets.billingAccountId,
             created_by_user_id: polyCopyTradeTargets.createdByUserId,
+            mirror_filter_percentile:
+              polyCopyTradeTargets.mirrorFilterPercentile,
+            mirror_max_usdc_per_trade:
+              polyCopyTradeTargets.mirrorMaxUsdcPerTrade,
           })
           .from(polyCopyTradeTargets)
           .where(
@@ -224,6 +240,8 @@ export const POST = wrapRouteHandlerWithLogging(
       targetWallet,
       billingAccountId: account.id,
       createdByUserId: sessionUser.id,
+      mirrorFilterPercentile: inserted.mirror_filter_percentile,
+      mirrorMaxUsdcPerTrade: Number(inserted.mirror_max_usdc_per_trade),
       source: "db",
     });
 

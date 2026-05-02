@@ -35,7 +35,10 @@ vi.mock("@/app/_lib/auth/session", () => ({
 }));
 
 import { getSessionUser } from "@/app/_lib/auth/session";
-import { DELETE as deleteTarget } from "@/app/api/v1/poly/copy-trade/targets/[id]/route";
+import {
+  DELETE as deleteTarget,
+  PATCH as patchTarget,
+} from "@/app/api/v1/poly/copy-trade/targets/[id]/route";
 import {
   POST as createTarget,
   GET as listTargets,
@@ -121,13 +124,68 @@ describe("poly.copy_trade.targets — HTTP round-trip (component)", () => {
     const listRes = await listTargets(listReq);
     expect(listRes.status).toBe(200);
     const listed = (await listRes.json()) as {
-      targets: { target_id: string; target_wallet: string }[];
+      targets: {
+        target_id: string;
+        target_wallet: string;
+        mirror_filter_percentile: number;
+        mirror_max_usdc_per_trade: number;
+        sizing_policy_kind: "min_bet" | "target_percentile_scaled";
+      }[];
     };
     const found = listed.targets.find(
       (t) => t.target_wallet.toLowerCase() === TARGET_WALLET.toLowerCase()
     );
     expect(found).toBeDefined();
     expect(found?.target_id).toBe(targetRowId);
+    expect(found?.mirror_filter_percentile).toBe(75);
+    expect(found?.mirror_max_usdc_per_trade).toBe(5);
+    expect(found?.sizing_policy_kind).toBe("min_bet");
+
+    // ── PATCH invalid max policy rejects before DB write ─────────────────
+    for (const invalidMax of [1_000_000_000, 12.345]) {
+      const invalidPatchReq = new NextRequest(
+        `http://localhost/api/v1/poly/copy-trade/targets/${targetRowId}`,
+        {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            mirror_filter_percentile: 90,
+            mirror_max_usdc_per_trade: invalidMax,
+          }),
+        }
+      );
+      const invalidPatchRes = await patchTarget(invalidPatchReq, {
+        params: Promise.resolve({ id: targetRowId }),
+      });
+      expect(invalidPatchRes.status).toBe(400);
+    }
+
+    // ── PATCH target policy ──────────────────────────────────────────────
+    const patchReq = new NextRequest(
+      `http://localhost/api/v1/poly/copy-trade/targets/${targetRowId}`,
+      {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          mirror_filter_percentile: 90,
+          mirror_max_usdc_per_trade: 12,
+        }),
+      }
+    );
+    const patchRes = await patchTarget(patchReq, {
+      params: Promise.resolve({ id: targetRowId }),
+    });
+    expect(patchRes.status).toBe(200);
+    const patched = (await patchRes.json()) as {
+      target: {
+        mirror_filter_percentile: number;
+        mirror_max_usdc_per_trade: number;
+        sizing_policy_kind: "min_bet" | "target_percentile_scaled";
+      };
+    };
+    expect(patched.target.mirror_filter_percentile).toBe(90);
+    expect(patched.target.mirror_max_usdc_per_trade).toBe(12);
+    expect(patched.target.sizing_policy_kind).toBe("min_bet");
 
     // ── DELETE the value GET surfaced ─────────────────────────────────────
     const delReq = new NextRequest(
