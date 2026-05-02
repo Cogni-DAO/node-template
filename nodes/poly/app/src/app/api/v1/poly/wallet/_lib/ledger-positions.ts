@@ -84,15 +84,14 @@ export function summarizeLedgerPositions(
 
 export function toWalletExecutionPosition(
   row: LedgerRow,
-  capturedAt: Date,
-  lifecycleOverride: WalletExecutionLifecycleState | null = null
+  capturedAt: Date
 ): WalletExecutionPosition {
   const observed = row.observed_at.toISOString();
   const captured = capturedAt.toISOString();
   const price = readLedgerNumber(row, "limit_price");
-  const lifecycleState =
-    lifecycleOverride ??
-    (readLedgerPositionLifecycle(row) as WalletExecutionLifecycleState | null);
+  const lifecycleState = readLedgerPositionLifecycle(
+    row
+  ) as WalletExecutionLifecycleState | null;
   const status = deriveExecutionStatus(row, lifecycleState);
   const closedAt = readLedgerNullableString(row, "closed_at");
   const executedValue = ledgerExecutedUsdc(row);

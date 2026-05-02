@@ -46,15 +46,19 @@ const mockMarkPositionClosedByAsset = vi.fn();
 const mockMarkSynced = vi.fn();
 const mockGetExecutionSlice = vi.fn();
 const mockInvalidateWalletAnalysisCaches = vi.fn();
-const mockRedeemPipelineFor = vi.fn();
-const mockListRedeemJobsForFunder = vi.fn();
 
 vi.mock("@/bootstrap/http", () => ({
   wrapRouteHandlerWithLogging:
-    (_config: unknown, handler: (...args: unknown[]) => unknown) =>
-    async (request: Request) =>
-      handler(
+    (config: unknown, handler: (...args: unknown[]) => unknown) =>
+    async (request: Request) => {
+      const routeId =
+        typeof config === "object" && config !== null && "routeId" in config
+          ? String(config.routeId)
+          : "test.route";
+      return handler(
         {
+          reqId: "req-test",
+          routeId,
           log: {
             info: vi.fn(),
             warn: vi.fn(),
@@ -65,7 +69,8 @@ vi.mock("@/bootstrap/http", () => ({
         },
         request,
         SESSION_USER
-      ),
+      );
+    },
 }));
 
 vi.mock("@/bootstrap/container", () => ({
@@ -77,7 +82,6 @@ vi.mock("@/bootstrap/container", () => ({
       markPositionClosedByAsset: mockMarkPositionClosedByAsset,
       markSynced: mockMarkSynced,
     },
-    redeemPipelineFor: mockRedeemPipelineFor,
   })),
 }));
 
@@ -170,8 +174,6 @@ describe("poly wallet dashboard DB read routes", () => {
       closed_positions: [],
       warnings: [],
     });
-    mockRedeemPipelineFor.mockReturnValue(null);
-    mockListRedeemJobsForFunder.mockResolvedValue([]);
     syncedAt = new Date();
     row = {
       target_id: "target-1",
@@ -409,37 +411,6 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(mockGetExecutionSlice).not.toHaveBeenCalled();
   });
 
-  it("execution marks DB-backed winner lifecycle rows redeemable", async () => {
-    mockRedeemPipelineFor.mockReturnValue({
-      funderAddress: FUNDER,
-      redeemJobs: {
-        listForFunder: mockListRedeemJobsForFunder,
-      },
-    });
-    mockListRedeemJobsForFunder.mockResolvedValue([
-      {
-        conditionId:
-          "0x1111111111111111111111111111111111111111111111111111111111111111",
-        lifecycleState: "winner",
-      },
-    ]);
-    const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
-
-    const response = await GET(
-      new Request("http://localhost/api/v1/poly/wallet/execution")
-    );
-    const json = await response.json();
-
-    expect(response.status).toBe(200);
-    expect(json.live_positions).toHaveLength(1);
-    expect(json.live_positions[0]).toMatchObject({
-      status: "redeemable",
-      lifecycleState: "winner",
-    });
-    expect(json.closed_positions).toEqual([]);
-    expect(mockListRedeemJobsForFunder).toHaveBeenCalledWith(FUNDER);
-  });
-
   it("execution marks typed winner lifecycle rows redeemable", async () => {
     mockListTenantPositions.mockResolvedValue([
       {
@@ -469,18 +440,16 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(json.closed_positions).toEqual([]);
   });
 
-  it("execution moves terminal lifecycle rows to closed history", async () => {
-    mockRedeemPipelineFor.mockReturnValue({
-      funderAddress: FUNDER,
-      redeemJobs: {
-        listForFunder: mockListRedeemJobsForFunder,
-      },
-    });
-    mockListRedeemJobsForFunder.mockResolvedValue([
+  it("execution moves terminal ledger lifecycle rows to closed history", async () => {
+    mockListTenantPositions.mockResolvedValue([
       {
-        conditionId:
-          "0x1111111111111111111111111111111111111111111111111111111111111111",
-        lifecycleState: "redeemed",
+        ...row,
+        status: "filled",
+        position_lifecycle: "redeemed",
+        attributes: {
+          ...row.attributes,
+          filled_size_usdc: 10,
+        },
       },
     ]);
     const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
@@ -497,6 +466,46 @@ describe("poly wallet dashboard DB read routes", () => {
       status: "closed",
       lifecycleState: "redeemed",
       currentValue: 0,
+    });
+  });
+
+  it("execution keeps sibling outcome assets independent by ledger lifecycle", async () => {
+    mockListTenantPositions.mockResolvedValue([
+      {
+        ...row,
+        status: "filled",
+        position_lifecycle: "redeemed",
+      },
+      {
+        ...row,
+        fill_id: "data-api:fill-2",
+        client_order_id: "0xclient-2",
+        order_id: "0xorder-2",
+        attributes: {
+          ...row.attributes,
+          token_id: "token-2",
+          outcome: "NO",
+        },
+      },
+    ]);
+    const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/poly/wallet/execution")
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.closed_positions).toHaveLength(1);
+    expect(json.closed_positions[0]).toMatchObject({
+      asset: "token-1",
+      lifecycleState: "redeemed",
+    });
+    expect(json.live_positions).toHaveLength(1);
+    expect(json.live_positions[0]).toMatchObject({
+      asset: "token-2",
+      lifecycleState: "open",
+      status: "open",
     });
   });
 
