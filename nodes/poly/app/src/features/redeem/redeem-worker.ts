@@ -4,11 +4,13 @@
 /**
  * Module: `features/redeem/redeem-worker`
  * Purpose: In-process worker for the event-driven CTF redeem pipeline (task.0388).
- *   Two responsibilities, one tick interval:
+ *   Two responsibilities, two cadences:
  *     1. Drain `pending` rows: dispatch CTF or NegRiskAdapter per `decision.flavor`,
  *        decode the receipt for funder-burn presence (persisted as observational
  *        only), transition to `submitted`.
- *     2. Reap stale `submitted` rows past N=5 finality. Batch-fetches
+ *     2. Reap stale `submitted` rows past N=5 finality on a slower idle
+ *        interval, with a short fast-confirmation burst after this worker
+ *        submits a tx. Batch-fetches
  *        `PayoutRedemption(redeemer=funder)` logs per flavor (CTF vs
  *        NegRiskAdapter) and falls back to `balanceOf` per condition that
  *        didn't match. Dispatches `reaper_chain_evidence` to
@@ -110,8 +112,12 @@ export interface RedeemWorkerDeps {
   logger: LoggerLike;
   /** N=5 hard-pinned for v0.2 (FINALITY_IS_FIXED_N). */
   finalityBlocks: bigint;
-  /** Tick cadence in ms. Worker submits + reaps each tick. */
+  /** Pending-job drain cadence in ms. */
   tickIntervalMs: number;
+  /** Stale-submitted reaper cadence in ms. Defaults to `tickIntervalMs`. */
+  reaperIntervalMs?: number;
+  /** Fast reaper window after a successful submit. Defaults to 60s. */
+  reaperBurstMs?: number;
 }
 
 /**
@@ -169,6 +175,8 @@ function funderAddressTopic(addr: `0x${string}`): `0x${string}` {
  */
 export class RedeemWorker {
   private timer: NodeJS.Timeout | null = null;
+  private lastReaperAtMs = 0;
+  private reaperBurstUntilMs = 0;
   private tickInFlight = false;
 
   constructor(private readonly deps: RedeemWorkerDeps) {}
@@ -191,31 +199,51 @@ export class RedeemWorker {
     }
   }
 
-  /** Single tick: drain one pending row + reap any stale submitted rows. */
+  /** Single tick: drain one pending row + maybe reap stale submitted rows. */
   async tick(): Promise<void> {
+    let submitted = false;
     try {
-      await this.drainOnePending();
+      submitted = await this.drainOnePending();
     } catch (err) {
       this.deps.logger.error(
         { event: "poly.ctf.redeem.worker_drain_error", err: String(err) },
         "redeem-worker drain loop error"
       );
     }
-    try {
-      await this.reapStale();
-    } catch (err) {
-      this.deps.logger.error(
-        { event: "poly.ctf.redeem.worker_reap_error", err: String(err) },
-        "redeem-worker reaper loop error"
-      );
+    if (submitted) this.startReaperBurst();
+    if (this.shouldRunReaper()) {
+      try {
+        await this.reapStale();
+      } catch (err) {
+        this.deps.logger.error(
+          { event: "poly.ctf.redeem.worker_reap_error", err: String(err) },
+          "redeem-worker reaper loop error"
+        );
+      }
     }
   }
 
-  private async drainOnePending(): Promise<void> {
+  private startReaperBurst(): void {
+    this.reaperBurstUntilMs = Date.now() + (this.deps.reaperBurstMs ?? 60_000);
+  }
+
+  private shouldRunReaper(): boolean {
+    const now = Date.now();
+    if (now < this.reaperBurstUntilMs) {
+      this.lastReaperAtMs = now;
+      return true;
+    }
+    const interval = this.deps.reaperIntervalMs ?? this.deps.tickIntervalMs;
+    if (now - this.lastReaperAtMs < interval) return false;
+    this.lastReaperAtMs = now;
+    return true;
+  }
+
+  private async drainOnePending(): Promise<boolean> {
     const job = await this.deps.redeemJobs.claimNextPending(
       this.deps.funderAddress
     );
-    if (job === null) return;
+    if (job === null) return false;
 
     const args = await buildSubmitArgs(job, {
       funderAddress: this.deps.funderAddress,
@@ -246,7 +274,7 @@ export class RedeemWorker {
         },
         "redeem-worker: malformed dispatch"
       );
-      return;
+      return false;
     }
 
     let txHash: `0x${string}`;
@@ -302,7 +330,7 @@ export class RedeemWorker {
         },
         "redeem-worker: tx submission failed"
       );
-      return;
+      return false;
     }
 
     // Wait for receipt + read its block + decode burn presence.
@@ -334,6 +362,7 @@ export class RedeemWorker {
       },
       "redeem-worker: tx submitted"
     );
+    return true;
   }
 
   private async reapStale(): Promise<void> {

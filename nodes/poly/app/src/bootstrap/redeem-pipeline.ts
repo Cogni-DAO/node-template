@@ -55,6 +55,9 @@ import {
 } from "@/features/redeem";
 import type { RedeemJobsPort } from "@/ports";
 
+const REDEEM_POLL_INTERVAL_MS = 10 * 60 * 1000;
+const REDEEM_WORKER_DRAIN_INTERVAL_MS = 5_000;
+
 export interface RedeemPipelineHandles {
   redeemJobs: RedeemJobsPort;
   funderAddress: `0x${string}`;
@@ -69,7 +72,7 @@ export interface StartRedeemPipelineDeps {
   log: Logger;
   /** Hard-pinned N=5 (~12.5s) post-Heimdall-v2; see task.0388 § FINALITY_IS_FIXED_N. */
   finalityBlocks?: bigint;
-  /** Worker tick cadence; one job claim + one reaper pass per tick. */
+  /** Worker pending-job drain cadence. Reaper cadence stays tied to RPC polling. */
   tickIntervalMs?: number;
   /**
    * Catch-up floor for first deploy (ignored once a cursor row exists).
@@ -158,6 +161,7 @@ async function startOneTenantPipeline(
 
   const publicClient = createPublicClient({
     chain: polygon,
+    pollingInterval: REDEEM_POLL_INTERVAL_MS,
     transport: http(deps.polygonRpcUrl),
   });
   const walletClient = createWalletClient({
@@ -186,7 +190,8 @@ async function startOneTenantPipeline(
     account,
     logger: log,
     finalityBlocks: deps.finalityBlocks ?? 5n,
-    tickIntervalMs: deps.tickIntervalMs ?? 5_000,
+    tickIntervalMs: deps.tickIntervalMs ?? REDEEM_WORKER_DRAIN_INTERVAL_MS,
+    reaperIntervalMs: REDEEM_POLL_INTERVAL_MS,
   });
 
   const initialFromBlock =

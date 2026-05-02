@@ -82,6 +82,7 @@ const stubBtn =
   "w-full cursor-not-allowed rounded-md border border-border/60 bg-muted/50 px-3 py-2 font-medium text-muted-foreground text-sm";
 
 const POLY_WALLET_STATUS_QUERY_KEY = ["poly-wallet-status"] as const;
+const POLY_WALLET_BALANCES_REFETCH_MS = 5 * 60_000;
 
 export function TradingWalletPanel(): ReactElement {
   const queryClient = useQueryClient();
@@ -102,9 +103,9 @@ export function TradingWalletPanel(): ReactElement {
     queryKey: ["poly-wallet-balances"],
     queryFn: fetchWalletBalances,
     enabled: connected,
-    refetchInterval: 20_000,
-    staleTime: 10_000,
-    gcTime: 60_000,
+    refetchInterval: POLY_WALLET_BALANCES_REFETCH_MS,
+    staleTime: 60_000,
+    gcTime: 5 * 60_000,
     retry: 1,
   });
 
