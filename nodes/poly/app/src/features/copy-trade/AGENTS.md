@@ -42,7 +42,7 @@ Thin copy-trade slice — the pure `planMirrorFromFill()` policy that, given a n
 ## Public Surface
 
 - **Exports (pure):** `planMirrorFromFill()` — the stable-boundary planner function. No cap checks; emits `{kind: "place", intent}` or `{kind: "skip", reason}`. Threads `MirrorTargetConfig.placement` into `intent.attributes.placement`.
-- **Exports (types):** `MirrorTargetConfig` (carries `billing_account_id` + `created_by_user_id` + `sizing` + `placement`), `RuntimeState`, `MirrorPlan`, `MirrorReason`, `PlanMirrorInput`, `SizingPolicy` (only `min_bet`), `PlacementPolicy` (`mirror_limit` | `market_fok`).
+- **Exports (types):** `MirrorTargetConfig` (carries `billing_account_id` + `created_by_user_id` + `sizing` + `placement`), `RuntimeState`, `MirrorPlan`, `MirrorReason`, `PlanMirrorInput`, `SizingPolicy` (`min_bet` | `target_percentile`), `PlacementPolicy` (`mirror_limit` | `market_fok`).
 - **Exports (pipeline):** `runMirrorTick(deps)` — orchestrates wallet-watch → `planMirrorFromFill` → `PolyTradeExecutorFactory.getFor(tenant).placeIntent`. BUY path runs the `hasOpenForMarket` dedupe gate; SELL path runs a cancel pre-step over `findOpenForMarket` before the position-close. `MirrorPipelineDeps.cancelOrder` is optional in tests, required in production.
 - **Exports (target source):** `CopyTradeTargetSource` port + `EnumeratedTarget` shape, `envTargetSource(wallets)` (local-dev), `dbTargetSource({appDb, serviceDb})` (production). Two methods: `listForActor(actorId)` (RLS-clamped) + `listAllActive()` (the ONE sanctioned BYPASSRLS read; grant-aware join against `poly_wallet_connections` + `poly_wallet_grants`).
 

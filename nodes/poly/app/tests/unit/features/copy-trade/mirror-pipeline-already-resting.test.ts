@@ -37,6 +37,11 @@ const TARGET_WALLET = "0xAAaaaaaAAaAaAaAAaAaaaAaaAaaAAaAaAaaAAaaa" as const;
 const MARKET_ID =
   "prediction-market:polymarket:0x302f5a4e8b475db09ef63f2df542ce3330599c3c4b4aa58173208a60229e1374";
 
+const MARKET_CONSTRAINTS = async () => ({
+  minShares: 1,
+  minUsdcNotional: 1,
+});
+
 const TARGET: MirrorTargetConfig = {
   target_id: TARGET_ID,
   target_wallet: TARGET_WALLET,
@@ -102,6 +107,7 @@ describe("runMirrorTick — already_resting", () => {
       ledger,
       placeIntent,
       target: TARGET,
+      getMarketConstraints: MARKET_CONSTRAINTS,
       getCursor: () => cursor,
       setCursor: (n) => {
         cursor = n;
@@ -155,6 +161,7 @@ describe("runMirrorTick — already_resting", () => {
       ledger,
       placeIntent,
       target: TARGET,
+      getMarketConstraints: MARKET_CONSTRAINTS,
       getCursor: () => cursor,
       setCursor: (n) => {
         cursor = n;

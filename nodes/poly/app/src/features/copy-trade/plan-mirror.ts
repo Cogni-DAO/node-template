@@ -11,7 +11,7 @@
  *   - CAPS_LIVE_IN_GRANT — daily / hourly USDC caps are enforced downstream by `PolyTraderWalletPort.authorizeIntent` against the tenant's `poly_wallet_grants` row. `planMirrorFromFill` is intentionally unaware of caps so a single cap decision lives in one place (the authorize boundary).
  *   - NO_KILL_SWITCH (bug.0438): there is no per-tenant kill-switch gate. The active-target / active-grant chain in the cross-tenant enumerator is the only gate; an explicit POST of a target IS the user's opt-in.
  * Side-effects: none
- * Links: docs/spec/poly-multi-tenant-auth.md, work/items/task.0318
+ * Links: docs/spec/poly-multi-tenant-auth.md, work/items/task.0318, work/items/task.5005
  * @public
  */
 
@@ -27,9 +27,9 @@ import type {
 
 /**
  * Apply a sizing policy to derive the notional USDC to submit for a mirrored
- * fill. Share-space math: compute `targetShares` directly, then project back
- * to USDC only for accounting. Avoids the float round-trip `min × price /
- * price = min − ε` that re-triggered CLOB's sub-min rejection.
+ * fill. Market-floor math stays in share-space, then projects back to USDC
+ * only for accounting. Avoids the float round-trip `min × price / price =
+ * min − ε` that re-triggered CLOB's sub-min rejection.
  *
  * Invariant SHARE_SPACE_MATH — returned `size_usdc`, when divided by `price`,
  * yields shares ≥ `minShares` (or `minShares === undefined` → share-space
@@ -38,11 +38,18 @@ import type {
 export function applySizingPolicy(
   policy: SizingPolicy,
   price: number,
+  targetSizeUsdc: number,
   minShares: number | undefined,
   minUsdcNotional: number | undefined,
   cumulativeIntentForMarket?: number
 ): SizingResult {
-  const sized = sizeFromPolicy(policy, price, minShares, minUsdcNotional);
+  const sized = sizeFromPolicy(
+    policy,
+    price,
+    targetSizeUsdc,
+    minShares,
+    minUsdcNotional
+  );
   if (!sized.ok) return sized;
   if (
     cumulativeIntentForMarket !== undefined &&
@@ -56,29 +63,63 @@ export function applySizingPolicy(
 function sizeFromPolicy(
   policy: SizingPolicy,
   price: number,
+  targetSizeUsdc: number,
   minShares: number | undefined,
   minUsdcNotional: number | undefined
 ): SizingResult {
   switch (policy.kind) {
     case "min_bet": {
-      // Fail closed when market constraints are unknown — without
-      // minUsdcNotional we have no defensible "min" to bet.
-      if (minUsdcNotional === undefined) {
-        return { ok: false, reason: "below_market_min" };
+      return applyMarketFloors(
+        minUsdcNotional,
+        price,
+        minShares,
+        minUsdcNotional,
+        policy.max_usdc_per_trade
+      );
+    }
+    case "target_percentile": {
+      if (targetSizeUsdc < policy.statistic.min_target_usdc) {
+        return { ok: false, reason: "below_target_percentile" };
       }
-      const sharesForUsdcFloor = minUsdcNotional / price;
-      const floorShares = Math.max(minShares ?? 0, sharesForUsdcFloor);
-      const rawUsdc = floorShares * price;
-      // The share×price round-trip (e.g. `1/0.09 * 0.09 = 0.9999…`) can leave
-      // floorShares×price a hair below minUsdcNotional. Clamp up so the
-      // adapter's own USDC-floor re-check doesn't bounce. bug.0342.
-      const size_usdc = rawUsdc < minUsdcNotional ? minUsdcNotional : rawUsdc;
-      if (size_usdc > policy.max_usdc_per_trade) {
-        return { ok: false, reason: "below_market_min" };
-      }
-      return { ok: true, size_usdc };
+      return applyMarketFloors(
+        minUsdcNotional,
+        price,
+        minShares,
+        minUsdcNotional,
+        policy.max_usdc_per_trade
+      );
     }
   }
+}
+
+function applyMarketFloors(
+  desiredSizeUsdc: number | undefined,
+  price: number,
+  minShares: number | undefined,
+  minUsdcNotional: number | undefined,
+  maxUsdcPerTrade: number
+): SizingResult {
+  // Fail closed when market constraints are unknown — without minUsdcNotional
+  // we have no defensible "min" to bet.
+  if (desiredSizeUsdc === undefined || minUsdcNotional === undefined) {
+    return { ok: false, reason: "below_market_min" };
+  }
+  const sharesForUsdcFloor = minUsdcNotional / price;
+  const floorShares = Math.max(minShares ?? 0, sharesForUsdcFloor);
+  const rawFloorUsdc = floorShares * price;
+  // The share×price round-trip (e.g. `1/0.09 * 0.09 = 0.9999…`) can leave
+  // floorShares×price a hair below minUsdcNotional. Clamp up so the adapter's
+  // own USDC-floor re-check doesn't bounce. bug.0342.
+  const floorUsdc =
+    rawFloorUsdc < minUsdcNotional ? minUsdcNotional : rawFloorUsdc;
+  const size_usdc = Math.min(
+    Math.max(desiredSizeUsdc, floorUsdc),
+    maxUsdcPerTrade
+  );
+  if (size_usdc < floorUsdc) {
+    return { ok: false, reason: "below_market_min" };
+  }
+  return { ok: true, size_usdc };
 }
 
 /**
@@ -111,6 +152,7 @@ export function planMirrorFromFill(input: PlanMirrorInput): MirrorPlan {
   const sizing = applySizingPolicy(
     config.sizing,
     fill.price,
+    fill.size_usdc,
     min_shares,
     min_usdc_notional,
     state.cumulative_intent_usdc_for_market
@@ -135,8 +177,7 @@ export function planMirrorFromFill(input: PlanMirrorInput): MirrorPlan {
 
 /**
  * Build a canonical `OrderIntent` from the fill + target config.
- * Mirror size is a FIXED `mirror_usdc` notional, not proportional to the
- * target's size — keeps caps deterministic and the math auditable.
+ * Mirror size is the selected sizing-policy output, never an adapter concern.
  */
 function buildIntent(
   fill: PlanMirrorInput["fill"],
