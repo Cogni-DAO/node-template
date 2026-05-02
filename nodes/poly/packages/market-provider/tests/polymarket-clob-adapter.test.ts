@@ -25,6 +25,8 @@ import {
   POLY_CLOB_ERROR_CODES,
   POLY_CLOB_METRICS,
   PolymarketClobAdapter,
+  sanitizeClobDiagnosticText,
+  withSuppressedClobSdkDiagnostics,
 } from "../src/adapters/polymarket/polymarket.clob.adapter.js";
 import type { OrderIntent } from "../src/domain/order.js";
 import {
@@ -74,6 +76,139 @@ describe("coerceNegRiskApiValue (bug.0329)", () => {
     expect(coerceNegRiskApiValue("0")).toBe(false);
     expect(coerceNegRiskApiValue("true")).toBe(true);
     expect(coerceNegRiskApiValue("false")).toBe(false);
+  });
+});
+
+describe("CLOB diagnostic suppression", () => {
+  it("redacts Polymarket auth fields from diagnostic strings", () => {
+    const raw =
+      '{"headers":{"POLY_SIGNATURE":"sig_live","POLY_API_KEY":"key_live","POLY_PASSPHRASE":"pass_live","authorization":"Bearer token_live"}}';
+
+    const safe = sanitizeClobDiagnosticText(raw);
+
+    expect(safe).not.toContain("sig_live");
+    expect(safe).not.toContain("key_live");
+    expect(safe).not.toContain("pass_live");
+    expect(safe).not.toContain("token_live");
+    expect(safe).toContain("[REDACTED]");
+  });
+
+  it("drops clob-client console diagnostics instead of emitting sanitized dumps", async () => {
+    const original = console.error;
+    const spy = vi.fn();
+    console.error = spy;
+    try {
+      await withSuppressedClobSdkDiagnostics(async () => {
+        console.error(
+          "[CLOB Client] request error",
+          JSON.stringify({
+            status: 400,
+            config: {
+              headers: {
+                POLY_SIGNATURE: "sig_live",
+                POLY_API_KEY: "key_live",
+                POLY_PASSPHRASE: "pass_live",
+              },
+            },
+          })
+        );
+      });
+    } finally {
+      console.error = original;
+    }
+
+    const emitted = JSON.stringify(spy.mock.calls);
+    expect(spy).not.toHaveBeenCalled();
+    expect(emitted).not.toContain("sig_live");
+    expect(emitted).not.toContain("key_live");
+    expect(emitted).not.toContain("pass_live");
+    expect(emitted).not.toContain("config");
+  });
+
+  it("drops clob-client warn/log/stdout/stderr diagnostics", async () => {
+    const originalWarn = console.warn;
+    const originalLog = console.log;
+    const originalStdoutWrite = process.stdout.write;
+    const originalStderrWrite = process.stderr.write;
+    const warnSpy = vi.fn();
+    const logSpy = vi.fn();
+    const stdoutSpy = vi.fn(() => true);
+    const stderrSpy = vi.fn(() => true);
+    console.warn = warnSpy;
+    console.log = logSpy;
+    process.stdout.write = stdoutSpy as typeof process.stdout.write;
+    process.stderr.write = stderrSpy as typeof process.stderr.write;
+    try {
+      await withSuppressedClobSdkDiagnostics(async () => {
+        console.warn("[CLOB Client] request error", {
+          config: { headers: { POLY_API_KEY: "key_live" } },
+        });
+        console.log("[CLOB Client-v2] request error", {
+          body: "<html>cloudflare</html>",
+        });
+        process.stdout.write(
+          '[CLOB Client] request error {"config":{"headers":{"POLY_SIGNATURE":"sig_live"}}}'
+        );
+        process.stderr.write(
+          '[CLOB Client-v2] request error {"body":"<html>cloudflare</html>"}'
+        );
+      });
+    } finally {
+      console.warn = originalWarn;
+      console.log = originalLog;
+      process.stdout.write = originalStdoutWrite;
+      process.stderr.write = originalStderrWrite;
+    }
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(stdoutSpy).not.toHaveBeenCalled();
+    expect(stderrSpy).not.toHaveBeenCalled();
+  });
+
+  it("drops delayed clob-client diagnostics after the awaited SDK call returns", async () => {
+    const original = console.error;
+    const spy = vi.fn();
+    console.error = spy;
+    try {
+      await withSuppressedClobSdkDiagnostics(async () => {
+        setTimeout(() => {
+          console.error("[CLOB Client] request error", {
+            config: {
+              headers: {
+                POLY_SIGNATURE: "sig_live",
+                POLY_API_KEY: "key_live",
+              },
+            },
+            body: "<html>cloudflare</html>",
+          });
+        }, 0);
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      console.error = original;
+    }
+
+    const emitted = JSON.stringify(spy.mock.calls);
+    expect(spy).not.toHaveBeenCalled();
+    expect(emitted).not.toContain("sig_live");
+    expect(emitted).not.toContain("key_live");
+    expect(emitted).not.toContain("cloudflare");
+  });
+
+  it("classifies thrown request-config errors without leaking auth headers", () => {
+    const details = classifyClientError(
+      new Error(
+        'Request failed with config {"headers":{"POLY_SIGNATURE":"sig_live","POLY_API_KEY":"key_live","POLY_PASSPHRASE":"pass_live"}}'
+      )
+    );
+
+    const emitted = JSON.stringify(details);
+    expect(emitted).not.toContain("sig_live");
+    expect(emitted).not.toContain("key_live");
+    expect(emitted).not.toContain("pass_live");
+    expect(emitted).not.toContain("headers");
+    expect(details.reason).toBe(POLY_CLOB_ERROR_CODES.invalidSignature);
   });
 });
 
@@ -196,7 +331,7 @@ describe("classifyClobFailure (bug.0335 diagnostics)", () => {
       errorMsg: "not enough balance",
     });
     expect(details.error_code).toBe(POLY_CLOB_ERROR_CODES.insufficientBalance);
-    expect(details.reason).toBe("not enough balance");
+    expect(details.reason).toBe(POLY_CLOB_ERROR_CODES.insufficientBalance);
   });
 
   it("maps an 'allowance' errorMsg → insufficient_allowance", () => {
@@ -215,11 +350,11 @@ describe("classifyClobFailure (bug.0335 diagnostics)", () => {
     expect(details.response_keys).toEqual(["error"]);
   });
 
-  it("truncates reason to 128 chars", () => {
+  it("uses a stable reason code for unclassified provider text", () => {
     const details = classifyClobFailure({
       errorMsg: "x".repeat(500),
     });
-    expect(details.reason?.length).toBe(128);
+    expect(details.reason).toBe(POLY_CLOB_ERROR_CODES.unknown);
   });
 
   // Live signatures from candidate-a 2026-04-21 — bug.0342 surface.
@@ -606,7 +741,7 @@ describe("PolymarketClobAdapter", () => {
     expect(metrics.emissions).toContainEqual({
       kind: "counter",
       name: POLY_CLOB_METRICS.listOpenOrdersUnavailableTotal,
-      labels: { reason: "service not ready" },
+      labels: { reason: POLY_CLOB_ERROR_CODES.unknown },
     });
   });
 
@@ -929,7 +1064,7 @@ describe("PolymarketClobAdapter — observability", () => {
       phase: "rejected",
       client_order_id: BASE_INTENT.client_order_id,
       error_code: POLY_CLOB_ERROR_CODES.unknown,
-      reason: expect.stringContaining("fee rate for the market"),
+      reason: POLY_CLOB_ERROR_CODES.unknown,
     });
     expect(typeof errLog?.obj.duration_ms).toBe("number");
   });
@@ -957,7 +1092,7 @@ describe("PolymarketClobAdapter — observability", () => {
     expect(errs[0]?.labels.error_code).toBe(POLY_CLOB_ERROR_CODES.unknown);
     const errLog = calls.find((c) => c.level === "error");
     expect(errLog?.obj.phase).toBe("error");
-    expect(String(errLog?.obj.reason)).toContain("ECONNRESET");
+    expect(errLog?.obj.reason).toBe(POLY_CLOB_ERROR_CODES.unknown);
   });
 
   it("placeOrder reclassifies FOK empty-response rejects as fok_no_match (bug.0405)", async () => {
@@ -1074,10 +1209,10 @@ describe("PolymarketClobAdapter — observability", () => {
   it("cancelOrder error path increments cancel_total{result=error}", async () => {
     const { logger } = makeRecordingLogger();
     const metrics = createRecordingMetrics();
-    const cancelOrder = vi.fn().mockRejectedValue(new Error("not found"));
+    const cancelOrder = vi.fn().mockRejectedValue(new Error("ECONNRESET"));
     const adapter = makeAdapter({ cancelOrder }, { logger, metrics });
 
-    await expect(adapter.cancelOrder("0xabc")).rejects.toThrow(/not found/);
+    await expect(adapter.cancelOrder("0xabc")).rejects.toThrow(/ECONNRESET/);
     const errCounter = metrics.emissions.find(
       (e) =>
         e.kind === "counter" &&

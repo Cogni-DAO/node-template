@@ -22,6 +22,7 @@ export {
   classifyClobFailure,
   coerceNegRiskApiValue,
   extractClobPlacedOrderId,
+  installClobSdkDiagnosticSuppression,
   mapOpenOrderToReceipt,
   mapOrderResponseToReceipt,
   normalizePolymarketStatus,
@@ -30,6 +31,9 @@ export {
   type PolyClobErrorCode,
   PolymarketClobAdapter,
   type PolymarketClobAdapterConfig,
+  sanitizeClobDiagnosticText,
+  withSanitizedClobSdkConsoleErrors,
+  withSuppressedClobSdkDiagnostics,
 } from "./polymarket.clob.adapter.js";
 export {
   type ClobMarketResolutionConfig,

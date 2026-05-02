@@ -64,14 +64,114 @@ export const POLY_CLOB_METRICS = {
     "poly_clob_list_open_orders_unavailable_total",
 } as const;
 
-/**
- * Truncate an error message before logging — CLOB rejection bodies can include
- * long signature / domain dumps, and we don't want to blow up a log line.
- */
-function truncErr(e: unknown, max = 512): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  return msg.length > max ? `${msg.slice(0, max)}…` : msg;
+const CLOB_REDACTED = "[REDACTED]";
+const CLOB_SECRET_FIELD_PATTERN =
+  /(["']?(?:POLY_SIGNATURE|POLY_API_KEY|POLY_PASSPHRASE|authorization|cookie|set-cookie|api[_-]?key|apiKey|passphrase|secret|token)["']?\s*[:=]\s*)(["'])?[^"',}\]]+(\2)?/gi;
+const CLOB_SDK_DIAGNOSTIC_MARKERS = [
+  "[CLOB Client]",
+  "[CLOB Client-v2]",
+] as const;
+
+export function sanitizeClobDiagnosticText(text: string): string {
+  return text.replace(
+    CLOB_SECRET_FIELD_PATTERN,
+    (_match, prefix: string) => `${prefix}${CLOB_REDACTED}`
+  );
 }
+
+function isClobSdkDiagnosticValue(value: unknown): boolean {
+  if (typeof value === "string") {
+    return CLOB_SDK_DIAGNOSTIC_MARKERS.some((marker) =>
+      value.includes(marker)
+    );
+  }
+  if (Buffer.isBuffer(value)) {
+    return CLOB_SDK_DIAGNOSTIC_MARKERS.some((marker) =>
+      value.includes(marker)
+    );
+  }
+  return false;
+}
+
+function isClobSdkDiagnostic(args: readonly unknown[]): boolean {
+  return args.some(isClobSdkDiagnosticValue);
+}
+
+function invokeWriteCallback(args: readonly unknown[]): void {
+  for (let index = args.length - 1; index >= 0; index -= 1) {
+    const candidate = args[index];
+    if (typeof candidate === "function") {
+      candidate();
+      return;
+    }
+  }
+}
+
+let consoleErrorTarget: typeof console.error = console.error;
+let consoleWarnTarget: typeof console.warn = console.warn;
+let consoleLogTarget: typeof console.log = console.log;
+let stdoutWriteTarget: typeof process.stdout.write = process.stdout.write;
+let stderrWriteTarget: typeof process.stderr.write = process.stderr.write;
+
+const suppressedConsoleError = (...args: unknown[]) => {
+  if (isClobSdkDiagnostic(args)) return;
+  consoleErrorTarget(...args);
+};
+const suppressedConsoleWarn = (...args: unknown[]) => {
+  if (isClobSdkDiagnostic(args)) return;
+  consoleWarnTarget(...args);
+};
+const suppressedConsoleLog = (...args: unknown[]) => {
+  if (isClobSdkDiagnostic(args)) return;
+  consoleLogTarget(...args);
+};
+const suppressedStdoutWrite = ((...args: unknown[]) => {
+  if (isClobSdkDiagnostic(args)) {
+    invokeWriteCallback(args);
+    return true;
+  }
+  return stdoutWriteTarget.apply(process.stdout, args as never) ?? true;
+}) as typeof process.stdout.write;
+const suppressedStderrWrite = ((...args: unknown[]) => {
+  if (isClobSdkDiagnostic(args)) {
+    invokeWriteCallback(args);
+    return true;
+  }
+  return stderrWriteTarget.apply(process.stderr, args as never) ?? true;
+}) as typeof process.stderr.write;
+
+export function installClobSdkDiagnosticSuppression(): void {
+  if (console.error !== suppressedConsoleError) {
+    consoleErrorTarget = console.error;
+    console.error = suppressedConsoleError;
+  }
+  if (console.warn !== suppressedConsoleWarn) {
+    consoleWarnTarget = console.warn;
+    console.warn = suppressedConsoleWarn;
+  }
+  if (console.log !== suppressedConsoleLog) {
+    consoleLogTarget = console.log;
+    console.log = suppressedConsoleLog;
+  }
+  if (process.stdout.write !== suppressedStdoutWrite) {
+    stdoutWriteTarget = process.stdout.write;
+    process.stdout.write = suppressedStdoutWrite;
+  }
+  if (process.stderr.write !== suppressedStderrWrite) {
+    stderrWriteTarget = process.stderr.write;
+    process.stderr.write = suppressedStderrWrite;
+  }
+}
+
+export async function withSuppressedClobSdkDiagnostics<T>(
+  fn: () => Promise<T>
+): Promise<T> {
+  installClobSdkDiagnosticSuppression();
+  return await fn();
+}
+
+export const withSanitizedClobSdkConsoleErrors =
+  withSuppressedClobSdkDiagnostics;
 
 function makeBelowMarketMinError(message: string): Error {
   const err = new Error(message);
@@ -109,7 +209,7 @@ export class ClobServiceUnavailableError extends Error {
 }
 
 function listOpenOrdersUnavailableReason(value: unknown): string {
-  if (value instanceof Error) return truncErr(value, 128);
+  if (value instanceof Error) return classifyClientError(value).error_code;
   if (value === null) return "null_response";
   if (value === undefined) return "undefined_response";
   if (typeof value !== "object") return `non_object:${typeof value}`;
@@ -117,10 +217,10 @@ function listOpenOrdersUnavailableReason(value: unknown): string {
   for (const key of ["error", "message", "reason", "code", "status"]) {
     const candidate = r[key];
     if (typeof candidate === "string" && candidate.length > 0) {
-      return candidate.slice(0, 128);
+      return classifyRejectionMessage(candidate);
     }
   }
-  return `unexpected_shape:[${Object.keys(r).join(",")}]`;
+  return "unexpected_shape";
 }
 
 /**
@@ -235,6 +335,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
   private readonly chainId: Chain;
 
   constructor(config: PolymarketClobAdapterConfig) {
+    installClobSdkDiagnosticSuppression();
     this.funderAddress = config.funderAddress;
     this.chainId = config.chainId ?? Chain.POLYGON;
     this.client = new ClobClient({
@@ -266,7 +367,8 @@ export class PolymarketClobAdapter implements MarketProviderPort {
   async placeOrder(intent: OrderIntent): Promise<OrderReceipt> {
     const start = Date.now();
     const tokenId = readStringAttribute(intent, "token_id");
-    const placement = readPolyPlacement(intent);
+    const postOnly = intent.attributes?.post_only === true;
+    const placement = postOnly ? "limit" : readPolyPlacement(intent);
     const baseFields = {
       event: "poly.clob.place",
       market_id: intent.market_id,
@@ -326,12 +428,14 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       // Polymarket rejects sub-min orders with an empty `{}` body — the adapter
       // MUST pre-check before signing. The share-space guard below runs
       // regardless of whether the coordinator already scaled the intent.
-      const preflight = await Promise.all([
-        this.client.getTickSize(tokenId),
-        this.client.getNegRisk(tokenId),
-        this.client.getFeeRateBps(tokenId),
-        this.client.getOrderBook(tokenId),
-      ]);
+      const preflight = await withSuppressedClobSdkDiagnostics(() =>
+        Promise.all([
+          this.client.getTickSize(tokenId),
+          this.client.getNegRisk(tokenId),
+          this.client.getFeeRateBps(tokenId),
+          this.client.getOrderBook(tokenId),
+        ])
+      );
       [tickSize, negRisk, feeRateBps] = preflight;
       negRisk = coerceNegRiskApiValue(negRisk);
       const orderBook = preflight[3];
@@ -366,32 +470,36 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       let response: unknown;
       if (placement === "limit") {
         orderTypeUsed = OrderType.GTC;
-        response = await this.client.createAndPostOrder(
-          {
-            tokenID: tokenId,
-            price: intent.limit_price,
-            size: shareSize,
-            side,
-            feeRateBps,
-          },
-          { tickSize, negRisk },
-          OrderType.GTC,
-          false,
-          false
+        response = await withSuppressedClobSdkDiagnostics(() =>
+          this.client.createAndPostOrder(
+            {
+              tokenID: tokenId,
+              price: intent.limit_price,
+              size: shareSize,
+              side,
+              feeRateBps,
+            },
+            { tickSize, negRisk },
+            OrderType.GTC,
+            postOnly,
+            false
+          )
         );
       } else {
         orderTypeUsed = OrderType.FOK;
         const marketAmount = intent.side === "BUY" ? effectiveUsdc : shareSize;
-        response = await this.client.createAndPostMarketOrder(
-          {
-            tokenID: tokenId,
-            price: intent.limit_price,
-            amount: marketAmount,
-            side,
-            feeRateBps,
-          },
-          { tickSize, negRisk },
-          OrderType.FOK
+        response = await withSuppressedClobSdkDiagnostics(() =>
+          this.client.createAndPostMarketOrder(
+            {
+              tokenID: tokenId,
+              price: intent.limit_price,
+              amount: marketAmount,
+              side,
+              feeRateBps,
+            },
+            { tickSize, negRisk },
+            OrderType.FOK
+          )
         );
       }
 
@@ -406,9 +514,10 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           "PolymarketClobAdapter.placeOrder: FOK matched zero shares (no liquidity at limit_price).",
           {
             error_code: POLY_CLOB_ERROR_CODES.fokNoMatch,
-            response_keys: Object.keys(
-              (response as Record<string, unknown>) ?? {}
-            ),
+              response_keys:
+                response && typeof response === "object"
+                  ? Object.keys(response)
+                  : [],
             reason: "fok_zero_fill",
           }
         );
@@ -506,12 +615,14 @@ export class PolymarketClobAdapter implements MarketProviderPort {
     let feeRateBps: number | undefined;
 
     try {
-      const preflight = await Promise.all([
-        this.client.getTickSize(params.tokenId),
-        this.client.getNegRisk(params.tokenId),
-        this.client.getFeeRateBps(params.tokenId),
-        this.client.getOrderBook(params.tokenId),
-      ]);
+      const preflight = await withSuppressedClobSdkDiagnostics(() =>
+        Promise.all([
+          this.client.getTickSize(params.tokenId),
+          this.client.getNegRisk(params.tokenId),
+          this.client.getFeeRateBps(params.tokenId),
+          this.client.getOrderBook(params.tokenId),
+        ])
+      );
       [tickSize, negRisk, feeRateBps] = preflight;
       negRisk = coerceNegRiskApiValue(negRisk);
       const orderBook = preflight[3];
@@ -522,15 +633,17 @@ export class PolymarketClobAdapter implements MarketProviderPort {
         );
       }
 
-      const response: unknown = await this.client.createAndPostMarketOrder(
-        {
-          tokenID: params.tokenId,
-          amount: params.shares,
-          side: Side.SELL,
-          feeRateBps,
-        },
-        { tickSize, negRisk },
-        params.orderType ?? OrderType.FAK
+      const response: unknown = await withSuppressedClobSdkDiagnostics(() =>
+        this.client.createAndPostMarketOrder(
+          {
+            tokenID: params.tokenId,
+            amount: params.shares,
+            side: Side.SELL,
+            feeRateBps,
+          },
+          { tickSize, negRisk },
+          params.orderType ?? OrderType.FAK
+        )
       );
 
       const receipt = mapOrderResponseToReceipt(response, {
@@ -607,7 +720,9 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       "cancelOrder: start"
     );
     try {
-      await this.client.cancelOrder({ orderID: orderId });
+      await withSuppressedClobSdkDiagnostics(() =>
+        this.client.cancelOrder({ orderID: orderId })
+      );
       const duration_ms = Date.now() - start;
       this.metrics.incr(POLY_CLOB_METRICS.cancelTotal, { result: "ok" });
       this.metrics.observeDurationMs(
@@ -649,7 +764,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
             phase: "not_found",
             duration_ms,
             order_id: orderId,
-            error: truncErr(err),
+            error_code: "not_found",
           },
           "cancelOrder: not_found (idempotent)"
         );
@@ -667,7 +782,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           phase: "error",
           duration_ms,
           order_id: orderId,
-          error: truncErr(err),
+          error_code: classifyClientError(err).error_code,
         },
         "cancelOrder: error"
       );
@@ -682,7 +797,9 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       "getOrder: start"
     );
     try {
-      const open = await this.client.getOrder(orderId);
+      const open = await withSuppressedClobSdkDiagnostics(() =>
+        this.client.getOrder(orderId)
+      );
       // GETORDER_NEVER_NULL (task.0328 CP1): a null / empty body from the CLOB
       // means the order is not found — return the discriminant rather than null.
       if (!open || !open.id) {
@@ -752,7 +869,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
             phase: "not_found",
             duration_ms,
             order_id: orderId,
-            error: truncErr(err),
+            error_code: "not_found",
           },
           "getOrder: not_found (CLOB 404)"
         );
@@ -771,7 +888,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           phase: "error",
           duration_ms,
           order_id: orderId,
-          error: truncErr(err),
+          error_code: classifyClientError(err).error_code,
         },
         "getOrder: error"
       );
@@ -797,7 +914,9 @@ export class PolymarketClobAdapter implements MarketProviderPort {
       "listOpenOrders: start"
     );
     try {
-      const open = await this.client.getOpenOrders(apiParams);
+      const open = await withSuppressedClobSdkDiagnostics(() =>
+        this.client.getOpenOrders(apiParams)
+      );
       const parsed = ClobListOpenOrdersResponseSchema.safeParse(open);
       if (!parsed.success || !Array.isArray(parsed.data)) {
         return this.handleListOpenOrdersUnavailable(start, {
@@ -832,11 +951,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
     } catch (err) {
       return this.handleListOpenOrdersUnavailable(start, {
         source: "throw",
-        reason: listOpenOrdersUnavailableReason(
-          err instanceof Error
-            ? new ClobServiceUnavailableError(truncErr(err, 128))
-            : err
-        ),
+          reason: listOpenOrdersUnavailableReason(err),
         error_class:
           err && typeof err === "object" && err.constructor?.name
             ? err.constructor.name
@@ -890,7 +1005,9 @@ export class PolymarketClobAdapter implements MarketProviderPort {
   async getMarketConstraints(tokenId: string): Promise<MarketConstraints> {
     const start = Date.now();
     try {
-      const book = await this.client.getOrderBook(tokenId);
+      const book = await withSuppressedClobSdkDiagnostics(() =>
+        this.client.getOrderBook(tokenId)
+      );
       const minShares = Number(book.min_order_size);
       if (!Number.isFinite(minShares) || minShares <= 0) {
         throw new Error(
@@ -927,7 +1044,7 @@ export class PolymarketClobAdapter implements MarketProviderPort {
           phase: "error",
           duration_ms,
           token_id: tokenId,
-          error: truncErr(err),
+          error_code: classifyClientError(err).error_code,
         },
         "getMarketConstraints: error"
       );
@@ -1119,7 +1236,7 @@ export function classifyClobFailure(response: unknown): ClobFailureDetails {
     ? classifyRejectionMessage(errorText)
     : POLY_CLOB_ERROR_CODES.emptyResponse;
   const reason = errorText
-    ? errorText.slice(0, 128)
+    ? error_code
     : `empty_error_fields:[${response_keys.join(",")}]`;
   return { error_code, response_keys, reason };
 }
@@ -1160,7 +1277,7 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
       error_code: POLY_CLOB_ERROR_CODES.staleApiKey,
       response_keys: [],
       ...(http_status !== undefined ? { http_status } : {}),
-      reason: message.slice(0, 128),
+      reason: "unauthorized_or_forbidden",
     });
   }
 
@@ -1180,7 +1297,7 @@ export function classifyClientError(err: unknown): ClobFailureDetails {
     error_code,
     response_keys: [],
     ...(http_status !== undefined ? { http_status } : {}),
-    reason: message.slice(0, 128),
+    reason: error_code,
   });
 }
 
