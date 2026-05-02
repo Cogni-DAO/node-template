@@ -244,6 +244,40 @@ describe("poly wallet position action routes", () => {
     });
   });
 
+  it("close route marks sub-floor positions as dust instead of returning close_failed", async () => {
+    const belowMarketMin = new Error("share balance below market floor");
+    (belowMarketMin as { code?: string }).code = "BELOW_MARKET_MIN";
+    mockGetPolyTradeExecutorFor.mockResolvedValue({
+      exitPosition: vi.fn().mockRejectedValue(belowMarketMin),
+    });
+
+    const { POST } = await import(
+      "@/app/api/v1/poly/wallet/positions/close/route"
+    );
+    const response = await POST(
+      makeJsonRequest("http://localhost/api/v1/poly/wallet/positions/close", {
+        token_id: "token-1",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({
+      order_id: "",
+      status: "dust",
+      client_order_id: "",
+      filled_size_usdc: 0,
+    });
+    expect(mockMarkPositionLifecycleByAsset).toHaveBeenCalledWith({
+      billing_account_id: ACCOUNT.id,
+      token_id: "token-1",
+      lifecycle: "dust",
+      updated_at: expect.any(Date),
+    });
+    expect(mockInvalidateWalletAnalysisCaches).toHaveBeenCalledWith(
+      "0xAbCdEf0000000000000000000000000000000001"
+    );
+  });
+
   it("rejects invalid JSON bodies before touching the executor", async () => {
     const { POST: closePost } = await import(
       "@/app/api/v1/poly/wallet/positions/close/route"
