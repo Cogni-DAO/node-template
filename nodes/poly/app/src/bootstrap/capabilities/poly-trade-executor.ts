@@ -616,70 +616,33 @@ async function buildExecutor(
     });
 
     const marketExitAdapter = adapter as typeof adapter & MarketExitAdapter;
-    let totalFilledUsdc = 0;
-    let lastReceipt: OrderReceipt | null = null;
-
-    for (let attempt = 0; attempt < 4; attempt += 1) {
-      const positions = await dataApiClient.listUserPositions(funderAddress);
-      const position = positions.find((p) => p.asset === params.tokenId);
-      if (!position || position.size <= 0) {
-        if (!lastReceipt) {
-          throw new PolyTradeExecutorError(
-            "no_position_to_close",
-            `poly-trade-executor: no open position for tokenId=${params.tokenId} on wallet=${funderAddress}`
-          );
-        }
-        return {
-          ...lastReceipt,
-          filled_size_usdc: totalFilledUsdc,
-        };
-      }
-
-      deps.logger.info(
-        {
-          event: "poly.exit.place.tenant",
-          billing_account_id: billingAccountId,
-          token_id: params.tokenId,
-          shares: position.size,
-          client_order_id: params.client_order_id,
-          attempt: attempt + 1,
-        },
-        "poly-trade-executor: market exit authorized → placeOrder"
+    const positions = await dataApiClient.listUserPositions(funderAddress);
+    const position = positions.find((p) => p.asset === params.tokenId);
+    if (!position || position.size <= 0) {
+      throw new PolyTradeExecutorError(
+        "no_position_to_close",
+        `poly-trade-executor: no open position for tokenId=${params.tokenId} on wallet=${funderAddress}`
       );
-
-      const receipt = await marketExitAdapter.sellPositionAtMarket({
-        tokenId: params.tokenId,
-        shares: position.size,
-        client_order_id: params.client_order_id,
-        orderType: "FAK",
-      });
-      totalFilledUsdc += receipt.filled_size_usdc;
-      lastReceipt = receipt;
-      if (receipt.status === "pending" || receipt.status === "open") {
-        return {
-          ...receipt,
-          filled_size_usdc: totalFilledUsdc,
-        };
-      }
-
-      const refreshedPositions =
-        await dataApiClient.listUserPositions(funderAddress);
-      const remaining = refreshedPositions.find(
-        (p) => p.asset === params.tokenId
-      );
-      if (!remaining || remaining.size <= 0) {
-        return {
-          ...receipt,
-          filled_size_usdc: totalFilledUsdc,
-        };
-      }
-      if (remaining.size >= position.size) {
-      }
     }
 
-    throw new Error(
-      `poly-trade-executor: market exit incomplete after retries for tokenId=${params.tokenId}`
+    deps.logger.info(
+      {
+        event: "poly.exit.place.tenant",
+        billing_account_id: billingAccountId,
+        token_id: params.tokenId,
+        shares: position.size,
+        client_order_id: params.client_order_id,
+        attempt: 1,
+      },
+      "poly-trade-executor: market exit authorized → placeOrder"
     );
+
+    return marketExitAdapter.sellPositionAtMarket({
+      tokenId: params.tokenId,
+      shares: position.size,
+      client_order_id: params.client_order_id,
+      orderType: "FAK",
+    });
   }
 
   async function cancelOrder(orderId: string): Promise<void> {

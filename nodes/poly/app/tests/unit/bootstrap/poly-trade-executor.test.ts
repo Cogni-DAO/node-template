@@ -145,18 +145,16 @@ describe("createPolyTradeExecutorFactory", () => {
   });
 
   it("exitPosition sells the wallet's full share balance via market order without grant-cap authorization", async () => {
-    listUserPositions
-      .mockResolvedValueOnce([
-        {
-          asset: "token-1",
-          size: 5,
-          curPrice: 0.25,
-          conditionId: CONDITION_ID,
-          outcome: "YES",
-          redeemable: false,
-        },
-      ])
-      .mockResolvedValueOnce([]);
+    listUserPositions.mockResolvedValue([
+      {
+        asset: "token-1",
+        size: 5,
+        curPrice: 0.25,
+        conditionId: CONDITION_ID,
+        outcome: "YES",
+        redeemable: false,
+      },
+    ]);
     const receipt: OrderReceipt = {
       order_id: "0xexit",
       client_order_id: "0xclient",
@@ -188,6 +186,8 @@ describe("createPolyTradeExecutorFactory", () => {
       client_order_id: "0xclient",
       orderType: "FAK",
     });
+    expect(sellPositionAtMarket).toHaveBeenCalledTimes(1);
+    expect(listUserPositions).toHaveBeenCalledTimes(1);
     expect(walletPort.authorizeIntent).not.toHaveBeenCalled();
   });
 

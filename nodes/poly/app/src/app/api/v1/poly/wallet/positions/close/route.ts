@@ -107,35 +107,6 @@ export const POST = wrapRouteHandlerWithLogging(
       });
 
       try {
-        const closedRows =
-          await container.orderLedger.markPositionClosedByAsset({
-            billing_account_id: account.id,
-            token_id: parsed.data.token_id,
-            close_order_id: receipt.order_id,
-            close_client_order_id: receipt.client_order_id,
-            reason: "manual_close",
-            closed_at: new Date(),
-          });
-        ctx.log.info(
-          {
-            billing_account_id: account.id,
-            token_id: parsed.data.token_id,
-            closed_rows: closedRows,
-          },
-          "poly.wallet.positions.close.ledger_updated"
-        );
-      } catch (err) {
-        ctx.log.warn(
-          {
-            billing_account_id: account.id,
-            token_id: parsed.data.token_id,
-            err: err instanceof Error ? err.message : String(err),
-          },
-          "poly.wallet.positions.close.ledger_update_failed"
-        );
-      }
-
-      try {
         const address = await adapter.getAddress(account.id);
         if (address) invalidateWalletAnalysisCaches(address);
       } catch (err) {

@@ -187,14 +187,7 @@ describe("poly wallet position action routes", () => {
       tokenId: "token-1",
       client_order_id: expect.stringMatching(/^0x[a-f0-9]{64}$/),
     });
-    expect(mockMarkPositionClosedByAsset).toHaveBeenCalledWith({
-      billing_account_id: ACCOUNT.id,
-      token_id: "token-1",
-      close_order_id: "0xclose",
-      close_client_order_id: "0xclient",
-      reason: "manual_close",
-      closed_at: expect.any(Date),
-    });
+    expect(mockMarkPositionClosedByAsset).not.toHaveBeenCalled();
     expect(mockGetAddress).toHaveBeenCalledWith(ACCOUNT.id);
     expect(mockInvalidateWalletAnalysisCaches).toHaveBeenCalledWith(
       "0xAbCdEf0000000000000000000000000000000001"
