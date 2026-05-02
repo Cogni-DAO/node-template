@@ -32,11 +32,11 @@ import { z } from "zod";
  * `authorizeIntent` against the tenant's `poly_wallet_grants` row
  * (`CAPS_LIVE_IN_GRANT`); this policy intentionally does not read grant state.
  *
- * Discriminated union retained (single `kind: "min_bet"` variant today) so
- * future policies (proportional, percentile, allocation) plug in by adding a
- * new `kind` without touching the adapter or the port. Legacy `kind: "fixed"`
- * was deleted in task.5001 — no persisted rows existed (sizing config is
- * default-in-code; persistence deferred to task.0347).
+ * Discriminated union retained so future policies (allocation, bankroll-aware
+ * fractional Kelly) plug in by adding a new `kind` without touching the
+ * adapter or the port. Legacy `kind: "fixed"` was deleted in task.5001 — no
+ * persisted rows existed (sizing config is default-in-code; persistence
+ * deferred to task.0347).
  */
 export const MinBetSizingPolicySchema = z.object({
   kind: z.literal("min_bet"),
@@ -45,8 +45,41 @@ export const MinBetSizingPolicySchema = z.object({
 });
 export type MinBetSizingPolicy = z.infer<typeof MinBetSizingPolicySchema>;
 
+export const WalletSizeStatisticSchema = z.object({
+  /** 0x-prefixed 40-hex wallet the snapshot was computed from. */
+  wallet: z.string().regex(/^0x[a-fA-F0-9]{40}$/),
+  /** Human label for audit logs and config diffs. */
+  label: z.string().min(1),
+  /** UTC ISO timestamp for the Data-API sample window. */
+  captured_at: z.string().min(1),
+  /** Number of target fills in the snapshot. */
+  sample_size: z.number().int().positive(),
+  /** Target-wallet USDC-notional threshold; fills below this skip. */
+  min_target_usdc: z.number().positive(),
+  /** Percentile slider that produced `min_target_usdc`, e.g. 75 = p75. */
+  percentile: z.number().min(0).max(100),
+});
+export type WalletSizeStatistic = z.infer<typeof WalletSizeStatisticSchema>;
+
+/**
+ * Filter-low-bets policy for conviction-aware copy trading. A target fill must
+ * be at or above the configured wallet-stat percentile before we mirror it.
+ * Accepted fills use the same min-bet sizing as `kind: "min_bet"`; relative
+ * sizing is a future policy, not an implicit fallback here. Tenant
+ * daily/hourly caps still live downstream in `authorizeIntent`.
+ */
+export const TargetPercentileSizingPolicySchema = z.object({
+  kind: z.literal("target_percentile"),
+  max_usdc_per_trade: z.number().positive(),
+  statistic: WalletSizeStatisticSchema,
+});
+export type TargetPercentileSizingPolicy = z.infer<
+  typeof TargetPercentileSizingPolicySchema
+>;
+
 export const SizingPolicySchema = z.discriminatedUnion("kind", [
   MinBetSizingPolicySchema,
+  TargetPercentileSizingPolicySchema,
 ]);
 export type SizingPolicy = z.infer<typeof SizingPolicySchema>;
 
@@ -148,6 +181,11 @@ export const MirrorReasonSchema = z.enum([
    * task.0424.
    */
   "position_cap_reached",
+  /**
+   * Target fill is below the configured wallet-stat percentile threshold, so
+   * the mirror treats it as low-conviction noise and does not place.
+   */
+  "below_target_percentile",
 ]);
 export type MirrorReason = z.infer<typeof MirrorReasonSchema>;
 
@@ -188,4 +226,10 @@ export interface PlanMirrorInput {
  */
 export type SizingResult =
   | { ok: true; size_usdc: number }
-  | { ok: false; reason: "below_market_min" | "position_cap_reached" };
+  | {
+      ok: false;
+      reason:
+        | "below_market_min"
+        | "position_cap_reached"
+        | "below_target_percentile";
+    };

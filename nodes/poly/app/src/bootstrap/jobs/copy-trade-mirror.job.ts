@@ -33,7 +33,11 @@ import {
   runMirrorTick,
 } from "@/features/copy-trade/mirror-pipeline";
 import { targetIdFromWallet } from "@/features/copy-trade/target-id";
-import type { MirrorTargetConfig } from "@/features/copy-trade/types";
+import type {
+  MirrorTargetConfig,
+  SizingPolicy,
+  WalletSizeStatistic,
+} from "@/features/copy-trade/types";
 import type { OrderLedger } from "@/features/trading";
 import type { WalletActivitySource } from "@/features/wallet-watch";
 
@@ -63,6 +67,42 @@ const MIRROR_POLL_MS = 30_000;
  * `placement_failed` decisions at the `authorizeIntent` boundary. bug.0342.
  */
 const MIRROR_MAX_USDC_PER_TRADE = 5;
+const CONVICTION_FILTER_PERCENTILE = 75;
+const RN1_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
+const SWISSTONY_WALLET = "0x204f72f35326db932158cba6adff0b9a1da95e14";
+const TOP_TARGET_SIZE_STATS: Record<string, WalletSizeStatistic> = {
+  [RN1_WALLET]: {
+    wallet: RN1_WALLET,
+    label: "RN1",
+    captured_at: "2026-05-02T00:49:15Z",
+    sample_size: 1000,
+    percentile: CONVICTION_FILTER_PERCENTILE,
+    min_target_usdc: 64.11,
+  },
+  [SWISSTONY_WALLET]: {
+    wallet: SWISSTONY_WALLET,
+    label: "swisstony",
+    captured_at: "2026-05-02T00:49:15Z",
+    sample_size: 1000,
+    percentile: CONVICTION_FILTER_PERCENTILE,
+    min_target_usdc: 73.37,
+  },
+};
+
+function buildSizingPolicy(targetWallet: `0x${string}`): SizingPolicy {
+  const statistic = TOP_TARGET_SIZE_STATS[targetWallet.toLowerCase()];
+  if (!statistic) {
+    return {
+      kind: "min_bet",
+      max_usdc_per_trade: MIRROR_MAX_USDC_PER_TRADE,
+    };
+  }
+  return {
+    kind: "target_percentile",
+    max_usdc_per_trade: MIRROR_MAX_USDC_PER_TRADE,
+    statistic,
+  };
+}
 
 /**
  * Build a `MirrorTargetConfig` from an enumerated target wallet + tenant
@@ -83,10 +123,7 @@ export function buildMirrorTargetConfig(params: {
     billing_account_id: params.billingAccountId,
     created_by_user_id: params.createdByUserId,
     mode: "live", // paper adapter body lands in P3; v0 only places live
-    sizing: {
-      kind: "min_bet",
-      max_usdc_per_trade: MIRROR_MAX_USDC_PER_TRADE,
-    },
+    sizing: buildSizingPolicy(params.targetWallet),
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
     // Persistence to a per-target column is deferred to task.0347.
     placement: { kind: "mirror_limit" },
