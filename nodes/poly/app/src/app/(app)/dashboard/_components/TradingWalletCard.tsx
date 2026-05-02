@@ -118,10 +118,10 @@ export function TradingWalletCard(): ReactElement {
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {data?.warnings?.length ? (
               <span
-                className="rounded bg-warning/15 px-1.5 py-0.5 text-warning"
+                className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground"
                 title="Some wallet reads are partial. Values may be incomplete."
               >
-                stale
+                partial
               </span>
             ) : null}
             {lowGas ? (

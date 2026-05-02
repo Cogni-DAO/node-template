@@ -48,7 +48,6 @@ const BASE_TARGET: MirrorTargetConfig = {
   },
   placement: { kind: "mirror_limit" },
 };
-
 const MARKET_CONSTRAINTS = async () => ({
   minShares: 1,
   minUsdcNotional: 1,

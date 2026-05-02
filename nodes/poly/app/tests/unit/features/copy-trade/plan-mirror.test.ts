@@ -86,6 +86,7 @@ describe("planMirrorFromFill() — place branches", () => {
     expect(d.intent.limit_price).toBe(FILL.price);
     expect(d.intent.client_order_id).toBe(COID);
     expect(d.intent.attributes?.token_id).toBe("0xasset");
+    expect(d.intent.attributes?.condition_id).toBe("0xcondition");
     expect(d.intent.attributes?.source_fill_id).toBe(FILL.fill_id);
     expect(d.intent.attributes?.target_wallet).toBe(FILL.target_wallet);
   });

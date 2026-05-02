@@ -126,7 +126,8 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
       minSize: 240,
       cell: ({ row }) => {
         const p = row.original;
-        const eventLabel = prettifyEventSlug(p.eventSlug, p.marketTitle);
+        const eventLabel =
+          p.eventTitle ?? prettifyEventSlug(p.eventSlug, p.marketTitle);
         return (
           <div className="flex flex-col gap-0.5">
             {eventLabel ? (

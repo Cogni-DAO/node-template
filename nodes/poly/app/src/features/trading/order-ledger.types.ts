@@ -132,6 +132,13 @@ export interface ListRecentOptions {
   target_id?: string;
 }
 
+/** Options for the tenant-scoped dashboard position read model. */
+export interface ListTenantPositionsOptions {
+  billing_account_id: string;
+  statuses?: LedgerStatus[];
+  limit?: number;
+}
+
 /** Options for `listOpenOrPending` — used by the reconciler tick. */
 export interface ListOpenOrPendingOptions {
   /** Only return rows older than this many milliseconds. Default 30000. */
@@ -155,6 +162,16 @@ export interface UpdateStatusInput {
    * `attributes.error`.
    */
   reason?: string;
+}
+
+/** Input to clear ledger exposure after a token is no longer held. */
+export interface MarkPositionClosedByAssetInput {
+  billing_account_id: string;
+  token_id: string;
+  close_order_id?: string;
+  close_client_order_id?: string;
+  reason?: "manual_close" | "refresh_no_position";
+  closed_at: Date;
 }
 
 /**
@@ -238,6 +255,16 @@ export interface OrderLedger {
   }): Promise<void>;
 
   /**
+   * Clear DB-derived position exposure after a token is no longer held.
+   * Keeps historical rows but stamps `attributes.closed_at`, so dashboard
+   * page-loads do not resurrect a closed position before the next background
+   * reconciliation/drain.
+   */
+  markPositionClosedByAsset(
+    input: MarkPositionClosedByAssetInput
+  ): Promise<number>;
+
+  /**
    * Existence check on the partial unique index slot. True iff any row for
    * `(billing_account_id, target_id, market_id)` has `status IN
    * ('pending','open','partial')`. Fail-closed: returns `true` on DB error.
@@ -275,6 +302,12 @@ export interface OrderLedger {
   listRecent(opts?: ListRecentOptions): Promise<LedgerRow[]>;
 
   /**
+   * Tenant-scoped position read model for dashboard page-loads. Reads
+   * `poly_copy_trade_fills` only; CLOB is background reconciliation input.
+   */
+  listTenantPositions(opts: ListTenantPositionsOptions): Promise<LedgerRow[]>;
+
+  /**
    * Return all rows with `status IN ('pending', 'open')` that are older than
    * `olderThanMs` milliseconds (default 30 000). Ordered by `created_at ASC`
    * so the reconciler processes oldest-first. Default limit 200.
@@ -287,8 +320,8 @@ export interface OrderLedger {
    * Overwrite `status` (and optionally `filled_size_usdc` / `order_id`) on
    * the row identified by `client_order_id`. Touches `updated_at`.
    *
-   * Called only by the order reconciler — no other path should drive status
-   * after placement (mirror-coordinator owns `markOrderId` / `markError`).
+   * Called by the order reconciler and explicit user refresh — no page-load
+   * route should drive status after placement.
    */
   updateStatus(input: UpdateStatusInput): Promise<void>;
 

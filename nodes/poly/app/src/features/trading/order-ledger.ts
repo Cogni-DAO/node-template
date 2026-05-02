@@ -44,6 +44,8 @@ import {
   type LedgerRow,
   type ListOpenOrPendingOptions,
   type ListRecentOptions,
+  type ListTenantPositionsOptions,
+  type MarkPositionClosedByAssetInput,
   type OpenOrderRow,
   type OrderLedger,
   type RecordDecisionInput,
@@ -218,6 +220,10 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           typeof input.intent.attributes?.token_id === "string"
             ? input.intent.attributes.token_id
             : undefined,
+        condition_id:
+          typeof input.intent.attributes?.condition_id === "string"
+            ? input.intent.attributes.condition_id
+            : undefined,
         target_wallet:
           typeof input.intent.attributes?.target_wallet === "string"
             ? input.intent.attributes.target_wallet
@@ -229,6 +235,26 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         title:
           typeof input.intent.attributes?.title === "string"
             ? input.intent.attributes.title
+            : undefined,
+        slug:
+          typeof input.intent.attributes?.slug === "string"
+            ? input.intent.attributes.slug
+            : undefined,
+        event_slug:
+          typeof input.intent.attributes?.event_slug === "string"
+            ? input.intent.attributes.event_slug
+            : undefined,
+        event_title:
+          typeof input.intent.attributes?.event_title === "string"
+            ? input.intent.attributes.event_title
+            : undefined,
+        end_date:
+          typeof input.intent.attributes?.end_date === "string"
+            ? input.intent.attributes.end_date
+            : undefined,
+        game_start_time:
+          typeof input.intent.attributes?.game_start_time === "string"
+            ? input.intent.attributes.game_start_time
             : undefined,
         transaction_hash:
           typeof input.intent.attributes?.transaction_hash === "string"
@@ -346,20 +372,28 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         .orderBy(desc(polyCopyTradeFills.observedAt))
         .limit(limit);
 
-      return rows.map((r) => ({
-        target_id: r.targetId,
-        fill_id: r.fillId,
-        observed_at: r.observedAt,
-        client_order_id: r.clientOrderId,
-        order_id: r.orderId,
-        // Schema CHECK enforces the set; cast is safe at the type boundary.
-        status: r.status as LedgerRow["status"],
-        attributes: (r.attributes as Record<string, unknown> | null) ?? null,
-        synced_at: r.syncedAt,
-        created_at: r.createdAt,
-        updated_at: r.updatedAt,
-        billing_account_id: r.billingAccountId,
-      }));
+      return rows.map(mapLedgerRow);
+    },
+
+    async listTenantPositions(
+      opts: ListTenantPositionsOptions
+    ): Promise<LedgerRow[]> {
+      const limit = opts.limit ?? DEFAULT_LIST_LIMIT;
+      const statuses = opts.statuses ?? ["open", "filled", "partial"];
+
+      const rows = await deps.db
+        .select()
+        .from(polyCopyTradeFills)
+        .where(
+          and(
+            eq(polyCopyTradeFills.billingAccountId, opts.billing_account_id),
+            inArray(polyCopyTradeFills.status, statuses)
+          )
+        )
+        .orderBy(desc(polyCopyTradeFills.observedAt))
+        .limit(limit);
+
+      return rows.map(mapLedgerRow);
     },
 
     async listOpenOrPending(
@@ -443,6 +477,33 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
           )}::jsonb`,
         })
         .where(eq(polyCopyTradeFills.clientOrderId, params.client_order_id));
+    },
+
+    async markPositionClosedByAsset(
+      input: MarkPositionClosedByAssetInput
+    ): Promise<number> {
+      const rows = await deps.db
+        .update(polyCopyTradeFills)
+        .set({
+          updatedAt: input.closed_at,
+          attributes: sql`COALESCE(${polyCopyTradeFills.attributes}, '{}'::jsonb) || ${JSON.stringify(
+            {
+              closed_at: input.closed_at.toISOString(),
+              close_order_id: input.close_order_id,
+              close_client_order_id: input.close_client_order_id,
+              close_reason: input.reason,
+            }
+          )}::jsonb`,
+        })
+        .where(
+          and(
+            eq(polyCopyTradeFills.billingAccountId, input.billing_account_id),
+            sql`${polyCopyTradeFills.attributes}->>'token_id' = ${input.token_id}`,
+            inArray(polyCopyTradeFills.status, ["open", "filled", "partial"])
+          )
+        )
+        .returning({ clientOrderId: polyCopyTradeFills.clientOrderId });
+      return rows.length;
     },
 
     async hasOpenForMarket(args: {
@@ -591,6 +652,23 @@ export function createOrderLedger(deps: OrderLedgerDeps): OrderLedger {
         rows_never_synced: Number(row?.never_synced ?? 0),
       };
     },
+  };
+}
+
+function mapLedgerRow(r: typeof polyCopyTradeFills.$inferSelect): LedgerRow {
+  return {
+    target_id: r.targetId,
+    fill_id: r.fillId,
+    observed_at: r.observedAt,
+    client_order_id: r.clientOrderId,
+    order_id: r.orderId,
+    // Schema CHECK enforces the set; cast is safe at the type boundary.
+    status: r.status as LedgerRow["status"],
+    attributes: (r.attributes as Record<string, unknown> | null) ?? null,
+    synced_at: r.syncedAt,
+    created_at: r.createdAt,
+    updated_at: r.updatedAt,
+    billing_account_id: r.billingAccountId,
   };
 }
 

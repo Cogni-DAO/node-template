@@ -91,6 +91,7 @@ export const WalletExecutionPositionSchema = z.object({
   conditionId: z.string(),
   asset: z.string(),
   marketTitle: z.string(),
+  eventTitle: z.string().nullable().optional(),
   marketSlug: z.string().nullable(),
   eventSlug: z.string().nullable(),
   marketUrl: z.string().url().nullable(),
@@ -100,6 +101,7 @@ export const WalletExecutionPositionSchema = z.object({
   openedAt: z.string(),
   closedAt: z.string().nullable(),
   resolvesAt: z.string().nullable(),
+  gameStartTime: z.string().nullable().optional(),
   heldMinutes: z.number().int().nonnegative(),
   entryPrice: z.number().min(0),
   currentPrice: z.number().min(0),
@@ -107,6 +109,9 @@ export const WalletExecutionPositionSchema = z.object({
   currentValue: z.number().nonnegative(),
   pnlUsd: z.number(),
   pnlPct: z.number(),
+  syncedAt: z.string().nullable().optional(),
+  syncAgeMs: z.number().int().nonnegative().nullable().optional(),
+  syncStale: z.boolean().optional(),
   timeline: z.array(WalletExecutionTimelinePointSchema),
   events: z.array(WalletExecutionEventSchema),
 });
@@ -149,7 +154,7 @@ export const polyWalletExecutionOperation = {
   summary:
     "Trading-wallet execution positions and trades-per-day with traceable price timelines",
   description:
-    "Returns the signed-in user's live daily trade counts, open positions (live_positions), and closed position history (closed_positions) derived from Polymarket Data API trades and positions plus public CLOB price history.",
+    "Returns the signed-in user's DB-backed daily trade counts, open positions (live_positions), and closed position history (closed_positions) for the trading-wallet dashboard.",
   input: z.object({}),
   output: PolyWalletExecutionOutputSchema,
 } as const;

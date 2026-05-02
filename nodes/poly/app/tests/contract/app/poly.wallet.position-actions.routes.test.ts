@@ -30,6 +30,7 @@ const mockAccountsForUser = vi.fn();
 const mockGetOrCreateBillingAccountForUser = vi.fn();
 const mockGetAddress = vi.fn();
 const mockInvalidateWalletAnalysisCaches = vi.fn();
+const mockMarkPositionClosedByAsset = vi.fn();
 
 class MockPolyTradeExecutorError extends Error {
   constructor(
@@ -75,6 +76,9 @@ vi.mock("@/bootstrap/capabilities/poly-trade-executor", () => ({
 vi.mock("@/bootstrap/container", () => ({
   getContainer: vi.fn(() => ({
     accountsForUser: mockAccountsForUser,
+    orderLedger: {
+      markPositionClosedByAsset: mockMarkPositionClosedByAsset,
+    },
   })),
 }));
 
@@ -114,6 +118,7 @@ describe("poly wallet position action routes", () => {
       getOrCreateBillingAccountForUser: mockGetOrCreateBillingAccountForUser,
     });
     mockGetOrCreateBillingAccountForUser.mockResolvedValue(ACCOUNT);
+    mockMarkPositionClosedByAsset.mockResolvedValue(1);
     mockGetAddress.mockResolvedValue(
       "0xAbCdEf0000000000000000000000000000000001"
     );
@@ -153,6 +158,14 @@ describe("poly wallet position action routes", () => {
     expect(executor.exitPosition).toHaveBeenCalledWith({
       tokenId: "token-1",
       client_order_id: expect.stringMatching(/^0x[a-f0-9]{64}$/),
+    });
+    expect(mockMarkPositionClosedByAsset).toHaveBeenCalledWith({
+      billing_account_id: ACCOUNT.id,
+      token_id: "token-1",
+      close_order_id: "0xclose",
+      close_client_order_id: "0xclient",
+      reason: "manual_close",
+      closed_at: expect.any(Date),
     });
     expect(mockGetAddress).toHaveBeenCalledWith(ACCOUNT.id);
     expect(mockInvalidateWalletAnalysisCaches).toHaveBeenCalledWith(
