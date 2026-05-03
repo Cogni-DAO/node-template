@@ -32,6 +32,28 @@ The shortest useful path is:
 
 PR #1137 only impacted specific wallet research pages and only populates the new distributions for RN1 and swisstony. That is fine for this MVP: task.5005 should start with those same two copy targets, then add Cogni comparison wallets as a separate selector or pinned comparison set.
 
+### 24h Fast Path
+
+The first implementation should make the last 24 hours useful before it tries to be a complete historical accounting system.
+
+This is the easy path for "I made 200 trades yesterday; compare us against RN1/swisstony now":
+
+1. Pull recent RN1/swisstony Data API trades with `takerOnly=false`, paginating until `timestamp < now - 24h`.
+2. Pull current RN1/swisstony positions for the markets touched by those trades.
+3. Pull Cogni `poly_copy_trade_decisions` and `poly_copy_trade_fills` from the same 24h window.
+4. Group by `(target_wallet, condition_id, token_id)`.
+5. Compute target 24h VWAP, Cogni 24h VWAP, target size, Cogni size, copy capture ratio, latest decision reason, and marked current value.
+6. Render this as a `1D` benchmark mode on the RN1/swisstony research pages.
+
+This fast path does not require:
+
+- final market resolution;
+- full lifetime wallet backfill;
+- historical snapshots before the 24h window;
+- a new streaming system.
+
+It does require idempotent target-trade storage, because a 200-trade day will be fetched repeatedly while the operator refreshes the page.
+
 ### Current Evidence
 
 Measured on 2026-05-03 against Polymarket public APIs.
@@ -108,6 +130,7 @@ The target wallets operate at a different scale. A research surface that only sh
 
 - [ ] RESEARCH_UI_FIRST: Task.5005 extends `/research/w/[addr]`; it does not create a separate dashboard for the MVP.
 - [ ] RN1_SWISSTONY_FIRST: The MVP target set is RN1 and swisstony, matching PR #1137's populated research surface.
+- [ ] TWENTY_FOUR_HOUR_FAST_PATH: The MVP supports a `1D` benchmark from recent target trades, current target positions, and same-window Cogni decisions/fills before complete historical outcome accounting.
 - [ ] DO_NOT_OVERLOAD_MIRROR_LEDGER: Target wallet fills and positions are not inserted into `poly_copy_trade_fills`.
 - [ ] POSTGRES_OPERATIONAL_TRUTH: Target activity, position snapshots, and attribution live in poly Postgres tables, not Doltgres.
 - [ ] CONTRACT_FIRST_HTTP: Any new research API response shape is defined in `nodes/poly/app/src/contracts/*.contract.ts` and routes parse input/output with Zod.
@@ -153,6 +176,8 @@ Show RN1, swisstony, and selected Cogni comparison wallets over 1d, 1w, 1m:
 - copy capture ratio: `cogni_size_usdc / target_size_usdc`;
 - missed edge: target marked or realized PnL on markets where Cogni did not place;
 - adverse copy: Cogni loss on markets where the target was flat or profitable.
+
+The `1D` view is the fast path. It should label results as "marked" when the market has not resolved and should favor recent-trade completeness over perfect lifetime attribution.
 
 #### Per-Market Attribution Table
 
