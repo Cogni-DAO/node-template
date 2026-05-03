@@ -119,6 +119,10 @@ POLY_WALLET_AEAD_KEY_HEX=<64-hex-chars>
 
 # Key-ring label stored on rows for future key rotation
 POLY_WALLET_AEAD_KEY_ID=v1
+
+# Optional: Polymarket-provided token passed as geo_block_token during CLOB
+# API-key provisioning when the deployed runtime is Cloudflare-blocked.
+POLY_CLOB_GEO_BLOCK_TOKEN=<polymarket-token>
 ```
 
 Generate the AEAD key with:

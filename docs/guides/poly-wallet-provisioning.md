@@ -121,9 +121,10 @@ gh secret set PRIVY_USER_WALLETS_APP_SECRET --env candidate-a
 gh secret set PRIVY_USER_WALLETS_SIGNING_KEY --env candidate-a
 gh secret set POLY_WALLET_AEAD_KEY_HEX --env candidate-a
 gh secret set POLY_WALLET_AEAD_KEY_ID --env candidate-a
+gh secret set POLY_CLOB_GEO_BLOCK_TOKEN --env candidate-a
 ```
 
-Those 5 are the only new secrets for this slice. If any are missing, `getPolyTraderWalletAdapter` throws `WalletAdapterUnconfiguredError` and the route returns 503 cleanly. No panic.
+The first 5 secrets enable wallet creation and encrypted CLOB credential storage. `POLY_CLOB_GEO_BLOCK_TOKEN` is optional, but candidate-a needs it if Polymarket Cloudflare blocks server-side `/auth/api-key` calls; without it, `/api/v1/poly/wallet/connect` returns `error_code: clob_cloudflare_blocked`.
 
 ### 4. Flight to candidate-a
 

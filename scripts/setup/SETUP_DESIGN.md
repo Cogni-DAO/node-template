@@ -154,6 +154,7 @@ pnpm setup github --env production
        - `PRIVY_USER_WALLETS_SIGNING_KEY` (`wallet-auth:...` authorization key — from the user-wallets app)
        - `POLY_WALLET_AEAD_KEY_HEX` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
        - `POLY_WALLET_AEAD_KEY_ID` (key-ring label, e.g. `v1`)
+       - `POLY_CLOB_GEO_BLOCK_TOKEN` (optional; Polymarket-provided `geo_block_token` for CLOB API-key provisioning from deployed runtimes)
      - **BYO-AI — Connection Encryption (optional — BYO-AI disabled when unset):**
        - `CONNECTIONS_ENCRYPTION_KEY` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
    - **Deployment secrets:** From previous steps
