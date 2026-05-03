@@ -20,6 +20,8 @@ labels: [deployment, infra, ci-cd]
 
 Get the trunk-based pipeline fully green: `pr-build.yml` builds once, `candidate-flight.yml` flies selected PRs into the `candidate-a` slot pre-merge, merged PRs auto-flight to preview via `flight-preview.yml` with a three-value review lease, and `release.yml` policy-gates promotion to production. Task.0293 (PR #870) landed the merge-to-preview lane. Remaining blockers below, plus the critical `candidate-flight` → `deploy-infra` gap tracked in bug.0312.
 
+Preservation snapshot: [Canary Preservation Matrix](../../docs/runbooks/CANARY_PRESERVATION_MATRIX.md) — current deploy-state matrix, frozen canary PRs, and local workspace preservation map for the 2026-04 stabilization window.
+
 ## Pipeline Health
 
 ```
