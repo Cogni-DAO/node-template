@@ -132,14 +132,14 @@ function PageVariant({
     <Card
       className={
         isHero
-          ? "border-primary/30 relative overflow-hidden"
+          ? "relative overflow-hidden border-primary/30"
           : "relative overflow-hidden"
       }
     >
       {rankBadge && (
         <span
           aria-hidden
-          className="text-primary/5 pointer-events-none absolute top-4 right-6 text-8xl leading-none font-black tracking-tighter select-none"
+          className="pointer-events-none absolute top-4 right-6 select-none font-black text-8xl text-primary/5 leading-none tracking-tighter"
         >
           {rankBadge}
         </span>
@@ -217,7 +217,7 @@ function ResearchDeepDiveVariant({
   headerActions?: ReactNode | undefined;
 }): ReactElement {
   return (
-    <Card className="border-primary/20 relative overflow-hidden">
+    <Card className="relative overflow-hidden border-primary/20">
       <CardHeader className="gap-3">
         <WalletIdentityHeader
           address={data.address}
@@ -296,12 +296,12 @@ function CopyTargetBenchmarkBlock({
 }): ReactNode {
   if (isLoading && !benchmark) {
     return (
-      <div className="bg-muted/20 rounded-lg border p-4">
-        <div className="bg-muted h-4 w-40 animate-pulse rounded" />
+      <div className="rounded-lg border bg-muted/20 p-4">
+        <div className="h-4 w-40 animate-pulse rounded bg-muted" />
         <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div className="bg-muted h-16 animate-pulse rounded" />
-          <div className="bg-muted h-16 animate-pulse rounded" />
-          <div className="bg-muted h-16 animate-pulse rounded" />
+          <div className="h-16 animate-pulse rounded bg-muted" />
+          <div className="h-16 animate-pulse rounded bg-muted" />
+          <div className="h-16 animate-pulse rounded bg-muted" />
         </div>
       </div>
     );
@@ -317,10 +317,10 @@ function CopyTargetBenchmarkBlock({
     benchmark.coverage.lastSuccessAt
   );
   return (
-    <section className="bg-background rounded-lg border p-4">
+    <section className="rounded-lg border bg-background p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h3 className="text-sm font-semibold">Copy Benchmark</h3>
+          <h3 className="font-semibold text-sm">Copy Benchmark</h3>
           <p className="text-muted-foreground text-xs">
             {benchmark.label ?? "Observed wallet"} · {benchmark.window} saved
             window · {benchmark.coverage.status ?? "pending"}
@@ -367,11 +367,11 @@ function MetricTile({
   detail?: string | undefined;
 }): ReactElement {
   return (
-    <div className="bg-muted/20 rounded-md border p-3">
+    <div className="rounded-md border bg-muted/20 p-3">
       <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="mt-1 text-lg font-semibold">{value}</p>
+      <p className="mt-1 font-semibold text-lg">{value}</p>
       {detail ? (
-        <p className="text-muted-foreground mt-1 text-xs">{detail}</p>
+        <p className="mt-1 text-muted-foreground text-xs">{detail}</p>
       ) : null}
     </div>
   );

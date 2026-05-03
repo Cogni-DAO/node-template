@@ -103,8 +103,8 @@ export const GET = wrapRouteHandlerWithLogging<{
               db: serviceDb ?? undefined,
             })
           : null,
-        wantBenchmark
-          ? getBenchmarkSlice(serviceDb!, addr, interval, {
+        wantBenchmark && serviceDb
+          ? getBenchmarkSlice(serviceDb, addr, interval, {
               comparisonWalletAddress,
             })
           : null,
