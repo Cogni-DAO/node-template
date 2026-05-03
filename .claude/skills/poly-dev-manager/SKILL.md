@@ -11,6 +11,39 @@ You are the orientation layer for Cogni's poly node. This file is intentionally 
 
 Takes a Polymarket wallet that demonstrably trades with edge and mirrors its fills onto a Cogni-controlled trading wallet. Target wallet trades → `wallet-watch` detects via Polymarket Data-API `/trades` poll → `mirror-coordinator` decides → `INSERT_BEFORE_PLACE` ledger row lands → `PolymarketClobAdapter` signs via Privy HSM → CLOB receipt. v0 shipped single-operator. Phase A shipped RLS on copy-trade tables. Phase B shipped per-tenant Privy trading wallets (`deploy_verified` 2026-04-22 on candidate-a, via [task.0318](../../../work/items/task.0318.poly-wallet-multi-tenant-auth.md)). Phase 4 will swap the 30s poll for CLOB WebSocket + adversarial-robust target ranking.
 
+## Current Status Card (2026-05-03)
+
+**Latest copy-policy branch:** PR #1203 lineage. Candidate-a was re-flighted at
+`74afb6a76d4c361b4c54b91c2bb2ba3d3cb71a6b`; re-flight again after any pXX
+snapshot edit.
+
+**Active copy-trade behavior:**
+
+- New entries for curated targets use `target_percentile_scaled`: the target condition/token position cost basis must be at or above that wallet's configured pXX threshold before we mirror it.
+- Default pXX is p75. The per-target UI/config slider may choose another percentile. p50/p75/p90/p95/p99 are hardcoded; unsupported values interpolate between known points and clamp outside the known range.
+- Accepted BUY branches size from market minimum toward `max_usdc_per_trade`, scaled by how far the target position is between pXX and p99.
+- Individual target orders are triggers only. Do not add a second order-size pXX gate.
+- Existing mirror positions add branch context through `position_followup`: same-token `layer`, opposite-token `hedge`, or SELL `sell_close`.
+- Follow-ups still require market floors, per-position caps, and local mirror exposure thresholds. They do not bypass `already_resting`, idempotency, tenant grant authorization, or CLOB placement checks.
+
+**Hardcoded position pXX currently baked into bootstrap config:**
+
+| target    | p50 |  p75 |  p90 |    p95 |    p99 | sample                                                                                   |
+| --------- | --: | ---: | ---: | -----: | -----: | ---------------------------------------------------------------------------------------- |
+| RN1       | $40 | $200 | $733 | $1,811 | $5,659 | 3,990 token positions, Data API `/positions?sizeThreshold=0`, captured 2026-05-03T02:34Z |
+| swisstony | $31 | $146 | $665 | $1,394 | $4,809 | 1,085 token positions, Data API `/positions?sizeThreshold=0`, captured 2026-05-03T02:34Z |
+
+**Position follow-up defaults for curated targets:**
+
+- `min_mirror_position_usdc = 5`
+- `market_floor_multiple = 5`
+- `min_target_hedge_ratio = 0.02`
+- `min_target_hedge_usdc = 5`
+- `max_hedge_fraction_of_position = 0.25`
+- `max_layer_fraction_of_position = 0.5`
+
+**Observability reality:** Loki is the current operational truth. Query `event="poly.mirror.decision"` for processed fills; position-aware branches include `position_branch`, `position_qty_shares`, `position_token_id`, `target_position_usdc`, and `target_hedge_ratio`. Metrics are still wired through `noopMetrics` in candidate-a bootstrap, so do not assume Prometheus counters exist yet.
+
 ## Which skill to load
 
 | If you're doing…                                                                                                                                                              | Load                                                 |
@@ -29,6 +62,16 @@ Load all three if you're reviewing a PR that cuts across them (the `/connect` �
 - [docs/spec/poly-order-position-lifecycle.md](../../../docs/spec/poly-order-position-lifecycle.md) — order status vs position lifecycle vs redeem job state machine
 - [docs/spec/poly-multi-tenant-auth.md](../../../docs/spec/poly-multi-tenant-auth.md) — Phase A tenant-scoped copy-trade tables + RLS
 - [docs/spec/poly-trader-wallet-port.md](../../../docs/spec/poly-trader-wallet-port.md) — Phase B `PolyTraderWalletPort` (AEAD, consent, invariants)
+
+**Current design/research pointers:**
+
+- [docs/design/poly-mirror-position-projection.md](../../../docs/design/poly-mirror-position-projection.md) — `MirrorPositionView`, position authority boundaries, follow-up branch predicates, decision-log observability contract
+- [docs/design/poly-positions.md](../../../docs/design/poly-positions.md) — canonical position model; do not confuse local mirror policy cache with chain/Data API authority
+- [docs/design/poly-bet-sizer-v1.md](../../../docs/design/poly-bet-sizer-v1.md) — current as-built hardcoded RN1/swisstony target-position pXX policy
+- [docs/research/poly/layering-policy-spike-2026-05-02.md](../../../docs/research/poly/layering-policy-spike-2026-05-02.md) — historical layering research; do not treat its order-flow pXX as the active position-pXX policy
+- [nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts](../../../nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts) — current hardcoded v0 sizing snapshots and position-follow-up defaults
+- [nodes/poly/app/src/features/copy-trade/plan-mirror.ts](../../../nodes/poly/app/src/features/copy-trade/plan-mirror.ts) — pure planner for pXX, layer, hedge, and SELL-close branch decisions
+- [nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts](../../../nodes/poly/app/src/features/copy-trade/mirror-pipeline.ts) — sequencing, target-position hydration, ledger decision recording, Loki fields
 
 **Guides:**
 

@@ -158,6 +158,10 @@ describe("planMirrorFromFill() — sizing policy: kind=min_bet (task.0404)", () 
       min_shares: 1,
       min_usdc_notional: 1,
     });
-    expect(d).toEqual({ kind: "skip", reason: "position_cap_reached" });
+    expect(d).toEqual({
+      kind: "skip",
+      reason: "position_cap_reached",
+      position_branch: "new_entry",
+    });
   });
 });

@@ -21,8 +21,11 @@ import type {
   MirrorPlan,
   PlacementPolicy,
   PlanMirrorInput,
+  PositionBranch,
+  PositionFollowupPolicy,
   SizingPolicy,
   SizingResult,
+  TargetConditionPositionView,
 } from "./types";
 
 /**
@@ -181,33 +184,272 @@ export function planMirrorFromFill(input: PlanMirrorInput): MirrorPlan {
   } = input;
 
   if (state.already_placed_ids.includes(client_order_id)) {
-    return { kind: "skip", reason: "already_placed" };
+    return {
+      kind: "skip",
+      reason: "already_placed",
+      position_branch: "new_entry",
+    };
+  }
+
+  const followup = applyPositionFollowupPolicy(
+    input,
+    min_shares,
+    min_usdc_notional
+  );
+  if (followup !== undefined) {
+    if (!followup.sizing.ok) {
+      return {
+        kind: "skip",
+        reason: followup.sizing.reason,
+        position_branch: followup.position_branch,
+      };
+    }
+    const intent = buildIntent(
+      fill,
+      followup.sizing.size_usdc,
+      client_order_id,
+      config.placement,
+      followup.position_branch
+    );
+    return {
+      kind: "place",
+      reason: followup.reason,
+      position_branch: followup.position_branch,
+      intent,
+    };
   }
 
   const sizing = applySizingPolicy(
     config.sizing,
     fill.price,
-    fill.size_usdc,
+    targetSizingUsdcForFill(fill, state, config.sizing),
     min_shares,
     min_usdc_notional,
     state.cumulative_intent_usdc_for_market
   );
   if (!sizing.ok) {
-    return { kind: "skip", reason: sizing.reason };
+    return {
+      kind: "skip",
+      reason: sizing.reason,
+      position_branch: "new_entry",
+    };
   }
 
   const intent = buildIntent(
     fill,
     sizing.size_usdc,
     client_order_id,
-    config.placement
+    config.placement,
+    "new_entry"
   );
 
   return {
     kind: "place",
     reason: config.mode === "paper" ? "mode_paper" : "ok",
+    position_branch: "new_entry",
     intent,
   };
+}
+
+function applyPositionFollowupPolicy(
+  input: PlanMirrorInput,
+  minShares: number | undefined,
+  minUsdcNotional: number | undefined
+):
+  | {
+      reason: "layer_scale_in" | "hedge_followup";
+      position_branch: "layer" | "hedge";
+      sizing: SizingResult;
+    }
+  | undefined {
+  const { fill, config, state } = input;
+  const policy = config.position_followup;
+  if (!policy?.enabled || fill.side !== "BUY") return undefined;
+
+  const tokenId =
+    typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
+  const position = state.position;
+  if (!tokenId || !position?.our_token_id) return undefined;
+
+  const isLayer = tokenId === position.our_token_id;
+  const isHedge =
+    position.opposite_token_id !== undefined &&
+    tokenId === position.opposite_token_id;
+  if (!isLayer && !isHedge) return undefined;
+
+  const branch: "layer" | "hedge" = isHedge ? "hedge" : "layer";
+  const followupReason: "layer_scale_in" | "hedge_followup" = isHedge
+    ? "hedge_followup"
+    : "layer_scale_in";
+  const mirrorExposureUsdc = mirrorExposureUsdcForBranch(
+    position.our_qty_shares,
+    position.our_vwap_usdc,
+    fill.price
+  );
+  const minPositionUsdc = effectiveMinPositionUsdc(policy, minUsdcNotional);
+  if (mirrorExposureUsdc < minPositionUsdc) {
+    return {
+      reason: followupReason,
+      position_branch: branch,
+      sizing: { ok: false, reason: "followup_position_too_small" },
+    };
+  }
+
+  const targetThreshold = targetFollowupThreshold(config.sizing);
+  const targetBranchCost = targetTokenCostUsdc(state.target_position, tokenId);
+  if (targetBranchCost < targetThreshold) {
+    return {
+      reason: followupReason,
+      position_branch: branch,
+      sizing: { ok: false, reason: "target_position_below_threshold" },
+    };
+  }
+
+  if (isLayer) {
+    return {
+      reason: "layer_scale_in",
+      position_branch: "layer",
+      sizing: applyFollowupSizing({
+        policy: config.sizing,
+        price: fill.price,
+        desiredSizeUsdc: minUsdcNotional,
+        maxFollowupUsdc:
+          mirrorExposureUsdc * policy.max_layer_fraction_of_position,
+        minShares,
+        minUsdcNotional,
+        cumulativeIntentForMarket: state.cumulative_intent_usdc_for_market,
+      }),
+    };
+  }
+
+  const targetHedgeCost = targetTokenCostUsdc(state.target_position, tokenId);
+  const targetPrimaryCost = targetTokenCostUsdc(
+    state.target_position,
+    position.our_token_id
+  );
+  if (targetHedgeCost < policy.min_target_hedge_usdc) {
+    return {
+      reason: "hedge_followup",
+      position_branch: "hedge",
+      sizing: { ok: false, reason: "target_position_below_threshold" },
+    };
+  }
+  const targetHedgeRatio =
+    targetPrimaryCost > 0 ? targetHedgeCost / targetPrimaryCost : 0;
+  if (targetHedgeRatio < policy.min_target_hedge_ratio) {
+    return {
+      reason: "hedge_followup",
+      position_branch: "hedge",
+      sizing: { ok: false, reason: "target_position_below_threshold" },
+    };
+  }
+
+  const existingHedgeUsdc = position.opposite_qty_shares * fill.price;
+  const desiredHedgeUsdc = mirrorExposureUsdc * targetHedgeRatio;
+  const desiredDeltaUsdc = desiredHedgeUsdc - existingHedgeUsdc;
+  if (desiredDeltaUsdc <= 0) {
+    return {
+      reason: "hedge_followup",
+      position_branch: "hedge",
+      sizing: { ok: false, reason: "followup_not_needed" },
+    };
+  }
+
+  return {
+    reason: "hedge_followup",
+    position_branch: "hedge",
+    sizing: applyFollowupSizing({
+      policy: config.sizing,
+      price: fill.price,
+      desiredSizeUsdc: desiredDeltaUsdc,
+      maxFollowupUsdc:
+        mirrorExposureUsdc * policy.max_hedge_fraction_of_position,
+      minShares,
+      minUsdcNotional,
+      cumulativeIntentForMarket: state.cumulative_intent_usdc_for_market,
+    }),
+  };
+}
+
+function targetSizingUsdcForFill(
+  fill: PlanMirrorInput["fill"],
+  state: PlanMirrorInput["state"],
+  policy: SizingPolicy
+): number {
+  if (policy.kind === "min_bet") return fill.size_usdc;
+  const tokenId =
+    typeof fill.attributes?.asset === "string" ? fill.attributes.asset : "";
+  return targetTokenCostUsdc(state.target_position, tokenId);
+}
+
+function mirrorExposureUsdcForBranch(
+  shares: number,
+  vwap: number | undefined,
+  fillPrice: number
+): number {
+  return shares * (vwap ?? fillPrice);
+}
+
+function effectiveMinPositionUsdc(
+  policy: PositionFollowupPolicy,
+  minUsdcNotional: number | undefined
+): number {
+  const marketFloorMin =
+    minUsdcNotional === undefined
+      ? 0
+      : minUsdcNotional * policy.market_floor_multiple;
+  return Math.max(policy.min_mirror_position_usdc, marketFloorMin);
+}
+
+function targetFollowupThreshold(policy: SizingPolicy): number {
+  switch (policy.kind) {
+    case "target_percentile":
+    case "target_percentile_scaled":
+      return policy.statistic.min_target_usdc;
+    case "min_bet":
+      return 0;
+  }
+}
+
+function targetTokenCostUsdc(
+  targetPosition: TargetConditionPositionView | undefined,
+  tokenId: string | undefined
+): number {
+  if (!targetPosition || !tokenId) return 0;
+  return targetPosition.tokens
+    .filter((token) => token.token_id === tokenId)
+    .reduce((sum, token) => sum + token.cost_usdc, 0);
+}
+
+function applyFollowupSizing(params: {
+  policy: SizingPolicy;
+  price: number;
+  desiredSizeUsdc: number | undefined;
+  maxFollowupUsdc: number;
+  minShares: number | undefined;
+  minUsdcNotional: number | undefined;
+  cumulativeIntentForMarket: number | undefined;
+}): SizingResult {
+  const maxUsdc = Math.min(
+    params.policy.max_usdc_per_trade,
+    params.maxFollowupUsdc
+  );
+  const sized = applyMarketFloors(
+    params.desiredSizeUsdc,
+    params.price,
+    params.minShares,
+    params.minUsdcNotional,
+    maxUsdc
+  );
+  if (!sized.ok) return sized;
+  if (
+    params.cumulativeIntentForMarket !== undefined &&
+    params.cumulativeIntentForMarket + sized.size_usdc >
+      params.policy.max_usdc_per_trade
+  ) {
+    return { ok: false, reason: "position_cap_reached" };
+  }
+  return sized;
 }
 
 /**
@@ -218,7 +460,8 @@ function buildIntent(
   fill: PlanMirrorInput["fill"],
   size_usdc: number,
   client_order_id: `0x${string}`,
-  policy: PlacementPolicy
+  policy: PlacementPolicy,
+  position_branch: PositionBranch
 ): OrderIntent {
   const placement: "limit" | "market_fok" =
     policy.kind === "mirror_limit" ? "limit" : "market_fok";
@@ -242,6 +485,7 @@ function buildIntent(
       source_fill_id: fill.fill_id,
       target_wallet: fill.target_wallet,
       placement,
+      position_branch,
       title:
         typeof fill.attributes?.title === "string"
           ? fill.attributes.title

@@ -316,7 +316,8 @@ export function extractNodePath(spec: RepoSpec, nodeId: string): string | null {
  *                `.github/**` ∪ `docs/**` ∪ root configs are all the operator's territory.
  *                `rideAlongApplied: true` flags a bounded carve-out where operator-domain
  *                paths matching the ride-along whitelist (`pnpm-lock.yaml`, `work/**`,
- *                `docs/**`) tagged along a single non-operator node PR.
+ *                `docs/**`, `.claude/skills/poly-dev-manager/SKILL.md`) tagged
+ *                along a single non-operator node PR.
  * - `conflict` — two or more domains touched. Refuse to review (post diagnostic).
  * - `miss`     — empty input. The reviewer surfaces a no-op neutral check.
  *
@@ -360,11 +361,22 @@ const NODES_PREFIX = "nodes/";
  * - `work/**`: per-task work items, projects, charters; high merge-conflict +
  *   index-regen churn. Ride-along until task tracking moves to Dolt.
  * - `docs/**`: cross-cutting prose updates that accompany a node change.
+ * - `.claude/skills/poly-dev-manager/SKILL.md`: poly-node manager status card.
+ * - Exact single-node-scope policy maintenance files: the workflow gate,
+ *   reference classifier, repo-spec resolver, parity fixtures, and narrow tests.
  */
 const RIDE_ALONG_PATTERNS: ReadonlyArray<(p: string) => boolean> = [
   (p) => p === "pnpm-lock.yaml",
   (p) => p.startsWith("work/"),
   (p) => p.startsWith("docs/"),
+  (p) => p === ".claude/skills/poly-dev-manager/SKILL.md",
+  (p) => p === ".github/workflows/ci.yaml",
+  (p) => p === "packages/repo-spec/AGENTS.md",
+  (p) => p === "packages/repo-spec/src/accessors.ts",
+  (p) => p === "tests/ci-invariants/classify.ts",
+  (p) => p.startsWith("tests/ci-invariants/fixtures/single-node-scope/"),
+  (p) => p === "tests/ci-invariants/single-node-scope-meta.spec.ts",
+  (p) => p === "tests/unit/packages/repo-spec/accessors.test.ts",
 ];
 
 function isRideAlong(p: string): boolean {
@@ -394,8 +406,9 @@ function topUnderNodes(p: string): string | null {
  * - two or more → `conflict` (sorted by `nodeId.localeCompare`)
  *
  * `RIDE_ALONG` exception: when domains is exactly `{operator, X}` and every operator-domain
- * path matches the ride-along whitelist (`pnpm-lock.yaml`, `work/**`, `docs/**`), drop
- * operator → `single { X, rideAlongApplied: true }`.
+ * path matches the ride-along whitelist (`pnpm-lock.yaml`, `work/**`, `docs/**`,
+ * `.claude/skills/poly-dev-manager/SKILL.md`), drop operator →
+ * `single { X, rideAlongApplied: true }`.
  *
  * Path safety: paths are consumed verbatim — no `..` rejection. Same boundary as `extractNodePath`.
  *

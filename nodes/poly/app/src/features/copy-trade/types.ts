@@ -52,11 +52,11 @@ export const WalletSizeStatisticSchema = z.object({
   label: z.string().min(1),
   /** UTC ISO timestamp for the Data-API sample window. */
   captured_at: z.string().min(1),
-  /** Number of target fills in the snapshot. */
+  /** Number of target token positions in the snapshot. */
   sample_size: z.number().int().positive(),
-  /** Target-wallet USDC-notional threshold; fills below this skip. */
+  /** Target-wallet position cost-basis threshold; positions below this skip. */
   min_target_usdc: z.number().positive(),
-  /** Largest observed target-wallet USDC notional in the snapshot. */
+  /** High-water percentile used as the top of the mirror scaling range. */
   max_target_usdc: z.number().positive(),
   /** Percentile slider that produced `min_target_usdc`, e.g. 75 = p75. */
   percentile: z.number().min(0).max(100),
@@ -64,9 +64,10 @@ export const WalletSizeStatisticSchema = z.object({
 export type WalletSizeStatistic = z.infer<typeof WalletSizeStatisticSchema>;
 
 /**
- * Filter-low-bets policy for conviction-aware copy trading. A target fill must
- * be at or above the configured wallet-stat percentile before we mirror it.
- * Accepted fills use the same min-bet sizing as `kind: "min_bet"`; relative
+ * Filter-low-position policy for conviction-aware copy trading. A target
+ * condition/token position must be at or above the configured wallet-stat
+ * percentile before we mirror it.
+ * Accepted triggers use the same min-bet sizing as `kind: "min_bet"`; relative
  * sizing is a future policy, not an implicit fallback here. Tenant
  * daily/hourly caps still live downstream in `authorizeIntent`.
  */
@@ -80,9 +81,10 @@ export type TargetPercentileSizingPolicy = z.infer<
 >;
 
 /**
- * Percentile-filtered relative sizing. Fills below `statistic.min_target_usdc`
- * skip. Accepted fills map linearly from market min bet at pXX to
- * `max_usdc_per_trade` at p100. This is intentionally a distinct policy from
+ * Percentile-filtered relative sizing. Positions below
+ * `statistic.min_target_usdc` skip. Accepted positions map linearly from
+ * market min bet at pXX to `max_usdc_per_trade` at the configured snapshot
+ * high-water percentile. This is intentionally a distinct policy from
  * `target_percentile`; there is no silent fallback between min-bet and scaled
  * sizing.
  */
@@ -120,6 +122,31 @@ export const PlacementPolicySchema = z.discriminatedUnion("kind", [
 export type PlacementPolicy = z.infer<typeof PlacementPolicySchema>;
 
 /**
+ * Position-aware follow-up policy. pXX remains the target-position conviction
+ * gate for every BUY branch; this policy adds the mirror-position safety gates
+ * that decide whether market-min layers or hedges are too chunky for our
+ * current exposure.
+ */
+export const PositionFollowupPolicySchema = z.object({
+  enabled: z.boolean(),
+  /** Minimum mirror exposure before a market-floor follow-up is considered. */
+  min_mirror_position_usdc: z.number().positive(),
+  /** Also require `marketFloor × N` exposure so high-floor markets do not over-adjust. */
+  market_floor_multiple: z.number().positive(),
+  /** Target hedge/primary ratio required before mirroring an opposite-token hedge. */
+  min_target_hedge_ratio: z.number().min(0).max(1),
+  /** Minimum target-side opposite-token cost basis before a hedge is meaningful. */
+  min_target_hedge_usdc: z.number().nonnegative(),
+  /** Max single hedge as a fraction of our primary mirror exposure. */
+  max_hedge_fraction_of_position: z.number().min(0).max(1),
+  /** Max same-token layer as a fraction of our current mirror exposure. */
+  max_layer_fraction_of_position: z.number().min(0).max(1),
+});
+export type PositionFollowupPolicy = z.infer<
+  typeof PositionFollowupPolicySchema
+>;
+
+/**
  * Per-target configuration. Populated from `poly_copy_trade_targets` rows +
  * per-tenant scaffolding defaults; daily / hourly caps now live on the
  * tenant's `poly_wallet_grants` row and are enforced by `authorizeIntent`.
@@ -143,6 +170,11 @@ export const MirrorTargetConfigSchema = z.object({
    * DB column is deferred to task.0347.
    */
   placement: PlacementPolicySchema,
+  /**
+   * Optional position-aware follow-up policy. When absent, every BUY uses the
+   * configured entry sizing policy exactly as before.
+   */
+  position_followup: PositionFollowupPolicySchema.optional(),
 });
 export type MirrorTargetConfig = z.infer<typeof MirrorTargetConfigSchema>;
 
@@ -172,6 +204,39 @@ export const MirrorPositionViewSchema = z.object({
   opposite_qty_shares: z.number(),
 });
 export type MirrorPositionView = z.infer<typeof MirrorPositionViewSchema>;
+
+export const TargetConditionTokenPositionSchema = z.object({
+  token_id: z.string(),
+  size_shares: z.number().nonnegative(),
+  cost_usdc: z.number().nonnegative(),
+  current_value_usdc: z.number().nonnegative(),
+});
+export type TargetConditionTokenPosition = z.infer<
+  typeof TargetConditionTokenPositionSchema
+>;
+
+/**
+ * Live target-wallet position context for the current condition. v0 reads this
+ * from Polymarket Data API `/positions?user=<target>&market=<conditionId>`.
+ * It is not persisted yet; future target-fill/position storage should feed
+ * this exact shape so the planner remains pure.
+ */
+export const TargetConditionPositionViewSchema = z.object({
+  condition_id: z.string(),
+  tokens: z.array(TargetConditionTokenPositionSchema),
+});
+export type TargetConditionPositionView = z.infer<
+  typeof TargetConditionPositionViewSchema
+>;
+
+export const PositionBranchSchema = z.enum([
+  "none",
+  "new_entry",
+  "layer",
+  "hedge",
+  "sell_close",
+]);
+export type PositionBranch = z.infer<typeof PositionBranchSchema>;
 
 /**
  * Pure aggregator: collapse generic per-(market, token) intent aggregates
@@ -265,6 +330,11 @@ export const RuntimeStateSchema = z.object({
    * predicates against this field.
    */
   position: MirrorPositionViewSchema.optional(),
+  /**
+   * Target wallet's current position on the same condition. v0 is a live
+   * Data-API read; vNext should hydrate from persisted target activity.
+   */
+  target_position: TargetConditionPositionViewSchema.optional(),
 });
 export type RuntimeState = z.infer<typeof RuntimeStateSchema>;
 
@@ -301,10 +371,21 @@ export const MirrorReasonSchema = z.enum([
    */
   "position_cap_reached",
   /**
-   * Target fill is below the configured wallet-stat percentile threshold, so
-   * the mirror treats it as low-conviction noise and does not place.
+   * Target token position is below the configured wallet-stat percentile
+   * threshold, so the mirror treats the trigger as low-conviction noise and
+   * does not place.
    */
   "below_target_percentile",
+  /** Existing same-token mirror position is being scaled in after the token-position pXX gate. */
+  "layer_scale_in",
+  /** Existing mirror position is being hedged with the binary opposite token after the token-position pXX gate. */
+  "hedge_followup",
+  /** Market-min follow-up would be too chunky for the current mirror position. */
+  "followup_position_too_small",
+  /** Target total condition/token position is not large enough to override pXX. */
+  "target_position_below_threshold",
+  /** Target position ratio says no additional mirror follow-up is needed. */
+  "followup_not_needed",
 ]);
 export type MirrorReason = z.infer<typeof MirrorReasonSchema>;
 
@@ -313,10 +394,16 @@ export type MirrorReason = z.infer<typeof MirrorReasonSchema>;
  * ready for the executor; `kind: "skip"` just carries the reason.
  */
 export type MirrorPlan =
-  | { kind: "place"; reason: "ok" | "mode_paper"; intent: OrderIntent }
+  | {
+      kind: "place";
+      reason: "ok" | "mode_paper" | "layer_scale_in" | "hedge_followup";
+      position_branch: PositionBranch;
+      intent: OrderIntent;
+    }
   | {
       kind: "skip";
       reason: Exclude<MirrorReason, "ok" | "sell_closed_position">;
+      position_branch: PositionBranch;
     };
 
 /** Inputs to `planMirrorFromFill()` — bundled for clarity + testability. */
@@ -350,5 +437,8 @@ export type SizingResult =
       reason:
         | "below_market_min"
         | "position_cap_reached"
-        | "below_target_percentile";
+        | "below_target_percentile"
+        | "followup_position_too_small"
+        | "target_position_below_threshold"
+        | "followup_not_needed";
     };

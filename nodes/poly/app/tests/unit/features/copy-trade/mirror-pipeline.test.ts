@@ -463,6 +463,165 @@ describe("mirror-pipeline.runMirrorTick — BUY fill smoke", () => {
     const placedDec = ledger.decisions.find((d) => d.outcome === "placed");
     expect(placedDec).toBeDefined();
   });
+
+  it("hydrates target condition position for position-aware follow-up planning", async () => {
+    const fill = makeFill({ size_usdc: 1 });
+    const cid = cidFor(fill, TARGET_ID);
+    const ledger = new FakeOrderLedger({
+      initial: [
+        {
+          target_id: TARGET_ID,
+          fill_id: "data-api:prior:12345:BUY:1713300000",
+          observed_at: new Date(fill.observed_at),
+          client_order_id: clientOrderIdFor(
+            TARGET_ID,
+            "data-api:prior:12345:BUY:1713300000"
+          ),
+          order_id: "0xprior",
+          status: "filled",
+          position_lifecycle: null,
+          attributes: {
+            market_id: fill.market_id,
+            token_id: "12345",
+            side: "BUY",
+            size_usdc: 5,
+            limit_price: 0.5,
+          },
+          created_at: new Date(),
+          updated_at: new Date(),
+          synced_at: null,
+          billing_account_id: COGNI_SYSTEM_BILLING_ACCOUNT_ID,
+        },
+      ],
+    });
+    const placeIntent = vi.fn(
+      async (i: OrderIntent): Promise<OrderReceipt> =>
+        makeReceipt("0xlayerorder", i.client_order_id)
+    );
+    const target = {
+      ...BASE_TARGET,
+      sizing: {
+        kind: "target_percentile_scaled" as const,
+        max_usdc_per_trade: 10,
+        statistic: {
+          wallet: TARGET_WALLET,
+          label: "test",
+          captured_at: "2026-05-02T00:00:00Z",
+          sample_size: 3942,
+          percentile: 75,
+          min_target_usdc: 199,
+          max_target_usdc: 5453,
+        },
+      },
+      position_followup: {
+        enabled: true,
+        min_mirror_position_usdc: 5,
+        market_floor_multiple: 5,
+        min_target_hedge_ratio: 0.02,
+        min_target_hedge_usdc: 5,
+        max_hedge_fraction_of_position: 0.25,
+        max_layer_fraction_of_position: 0.5,
+      },
+    } satisfies MirrorTargetConfig;
+    const getTargetConditionPosition = vi.fn().mockResolvedValue({
+      condition_id: fill.market_id,
+      tokens: [
+        {
+          token_id: "12345",
+          size_shares: 200,
+          cost_usdc: 200,
+          current_value_usdc: 200,
+        },
+      ],
+    });
+
+    await runMirrorTick({
+      source: makeSource([fill]),
+      ledger,
+      placeIntent,
+      target,
+      getMarketConstraints: MARKET_CONSTRAINTS,
+      getTargetConditionPosition,
+      getCursor: () => undefined,
+      setCursor: () => {},
+      logger: noopLogger,
+      metrics: createRecordingMetrics(),
+    });
+
+    expect(getTargetConditionPosition).toHaveBeenCalledWith({
+      targetWallet: TARGET_WALLET,
+      conditionId: fill.attributes?.condition_id,
+    });
+    expect(placeIntent).toHaveBeenCalledTimes(1);
+    expect(placeIntent.mock.calls[0]?.[0].client_order_id).toBe(cid);
+    expect(placeIntent.mock.calls[0]?.[0].attributes?.position_branch).toBe(
+      "layer"
+    );
+    const placedDec = ledger.decisions.find((d) => d.outcome === "placed");
+    expect(placedDec?.reason).toBe("layer_scale_in");
+    expect(placedDec?.intent.position_branch).toBe("layer");
+  });
+
+  it("hydrates target condition position for new-entry position sizing", async () => {
+    const fill = makeFill({ size_usdc: 1 });
+    const ledger = new FakeOrderLedger();
+    const placeIntent = vi.fn(
+      async (i: OrderIntent): Promise<OrderReceipt> =>
+        makeReceipt("0xnewentryorder", i.client_order_id)
+    );
+    const target = {
+      ...BASE_TARGET,
+      sizing: {
+        kind: "target_percentile_scaled" as const,
+        max_usdc_per_trade: 10,
+        statistic: {
+          wallet: TARGET_WALLET,
+          label: "test",
+          captured_at: "2026-05-03T00:59:00Z",
+          sample_size: 3942,
+          percentile: 75,
+          min_target_usdc: 199,
+          max_target_usdc: 5453,
+        },
+      },
+    } satisfies MirrorTargetConfig;
+    const getTargetConditionPosition = vi.fn().mockResolvedValue({
+      condition_id: fill.market_id,
+      tokens: [
+        {
+          token_id: "12345",
+          size_shares: 400,
+          cost_usdc: 300,
+          current_value_usdc: 300,
+        },
+      ],
+    });
+
+    await runMirrorTick({
+      source: makeSource([fill]),
+      ledger,
+      placeIntent,
+      target,
+      getMarketConstraints: MARKET_CONSTRAINTS,
+      getTargetConditionPosition,
+      getCursor: () => undefined,
+      setCursor: () => {},
+      logger: noopLogger,
+      metrics: createRecordingMetrics(),
+    });
+
+    expect(getTargetConditionPosition).toHaveBeenCalledWith({
+      targetWallet: TARGET_WALLET,
+      conditionId: fill.attributes?.condition_id,
+    });
+    expect(placeIntent).toHaveBeenCalledTimes(1);
+    expect(placeIntent.mock.calls[0]?.[0].attributes?.position_branch).toBe(
+      "new_entry"
+    );
+    const placedDec = ledger.decisions.find((d) => d.outcome === "placed");
+    expect(placedDec?.reason).toBe("ok");
+    expect(placedDec?.intent.position_branch).toBe("new_entry");
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

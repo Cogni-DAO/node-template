@@ -35,7 +35,9 @@ import {
 import { targetIdFromWallet } from "@/features/copy-trade/target-id";
 import type {
   MirrorTargetConfig,
+  PositionFollowupPolicy,
   SizingPolicy,
+  TargetConditionPositionView,
   WalletSizeStatistic,
 } from "@/features/copy-trade/types";
 import type { OrderLedger } from "@/features/trading";
@@ -59,6 +61,15 @@ const WARMUP_BACKLOG_SEC = 60;
 const MIRROR_POLL_MS = 30_000;
 const DEFAULT_MIRROR_MAX_USDC_PER_TRADE = 5;
 const DEFAULT_CONVICTION_FILTER_PERCENTILE = 75;
+const DEFAULT_POSITION_FOLLOWUP_POLICY: PositionFollowupPolicy = {
+  enabled: true,
+  min_mirror_position_usdc: 5,
+  market_floor_multiple: 5,
+  min_target_hedge_ratio: 0.02,
+  min_target_hedge_usdc: 5,
+  max_hedge_fraction_of_position: 0.25,
+  max_layer_fraction_of_position: 0.5,
+};
 const RN1_WALLET = "0x2005d16a84ceefa912d4e380cd32e7ff827875ea";
 const SWISSTONY_WALLET = "0x204f72f35326db932158cba6adff0b9a1da95e14";
 
@@ -74,35 +85,27 @@ const TOP_TARGET_SIZE_SNAPSHOTS: Record<string, WalletSizeSnapshot> = {
   [RN1_WALLET]: {
     wallet: RN1_WALLET,
     label: "RN1",
-    captured_at: "2026-05-02T01:51:56Z",
-    sample_size: 1000,
+    captured_at: "2026-05-03T02:34:00Z",
+    sample_size: 3990,
     percentiles: {
-      50: 16.52,
-      60: 33.78,
-      70: 75.07,
-      75: 117.65,
-      80: 175.51,
-      85: 302.19,
-      90: 427.81,
-      95: 702.3,
-      100: 2660.08,
+      50: 40,
+      75: 200,
+      90: 733,
+      95: 1811,
+      99: 5659,
     },
   },
   [SWISSTONY_WALLET]: {
     wallet: SWISSTONY_WALLET,
     label: "swisstony",
-    captured_at: "2026-05-02T01:51:56Z",
-    sample_size: 1000,
+    captured_at: "2026-05-03T02:34:00Z",
+    sample_size: 1085,
     percentiles: {
-      50: 19.77,
-      60: 32.43,
-      70: 69.6,
-      75: 114.57,
-      80: 166.7,
-      85: 232.36,
-      90: 321.62,
-      95: 805.05,
-      100: 4811.89,
+      50: 31,
+      75: 146,
+      90: 665,
+      95: 1394,
+      99: 4809,
     },
   },
 };
@@ -118,8 +121,19 @@ function interpolatePercentile(
   if (exact !== undefined) return exact;
   const lower = [...points].reverse().find((p) => p < percentile);
   const upper = points.find((p) => p > percentile);
-  if (lower === undefined || upper === undefined) {
-    throw new Error(`percentile ${percentile} outside snapshot range`);
+  if (lower === undefined) {
+    const minPoint = points[0];
+    if (minPoint === undefined) {
+      throw new Error("percentile snapshot is empty");
+    }
+    return percentiles[minPoint] ?? 0;
+  }
+  if (upper === undefined) {
+    const maxPoint = points.at(-1);
+    if (maxPoint === undefined) {
+      throw new Error("percentile snapshot is empty");
+    }
+    return percentiles[maxPoint] ?? 0;
   }
   const lowerValue = percentiles[lower];
   const upperValue = percentiles[upper];
@@ -134,9 +148,9 @@ function buildWalletStatistic(
   snapshot: WalletSizeSnapshot,
   percentile: number
 ): WalletSizeStatistic {
-  const maxTargetUsdc = snapshot.percentiles[100];
+  const maxTargetUsdc = snapshot.percentiles[99];
   if (maxTargetUsdc === undefined) {
-    throw new Error(`missing p100 for ${snapshot.wallet}`);
+    throw new Error(`missing p99 for ${snapshot.wallet}`);
   }
   return {
     wallet: snapshot.wallet,
@@ -215,7 +229,48 @@ export function buildMirrorTargetConfig(params: {
     // task.5001 — default to mirror_limit (resting GTC at target's entry).
     // Persistence to a per-target column is deferred to task.0347.
     placement: { kind: "mirror_limit" },
+    ...(snapshotForTargetWallet(params.targetWallet) !== undefined
+      ? { position_followup: DEFAULT_POSITION_FOLLOWUP_POLICY }
+      : {}),
   };
+}
+
+export function targetConditionPositionFromDataApiPositions(
+  conditionId: string,
+  positions: Array<{
+    asset: string;
+    conditionId: string;
+    size: number;
+    avgPrice: number;
+    initialValue: number;
+    currentValue: number;
+  }>
+): TargetConditionPositionView {
+  return {
+    condition_id: conditionId,
+    tokens: positions
+      .filter((position) => position.conditionId === conditionId)
+      .map((position) => ({
+        token_id: position.asset,
+        size_shares: Math.max(0, position.size),
+        cost_usdc: positionCostUsdc(position),
+        current_value_usdc: Math.max(0, position.currentValue),
+      })),
+  };
+}
+
+function positionCostUsdc(position: {
+  size: number;
+  avgPrice: number;
+  initialValue: number;
+}): number {
+  if (Number.isFinite(position.initialValue) && position.initialValue > 0) {
+    return position.initialValue;
+  }
+  if (Number.isFinite(position.size) && Number.isFinite(position.avgPrice)) {
+    return Math.max(0, position.size * position.avgPrice);
+  }
+  return 0;
 }
 
 export interface MirrorJobDeps {
@@ -240,6 +295,8 @@ export interface MirrorJobDeps {
   cancelOrder?: MirrorPipelineDeps["cancelOrder"];
   /** Optional market-constraints fetch; pipes into the pipeline. bug.0342. */
   getMarketConstraints?: MirrorPipelineDeps["getMarketConstraints"];
+  /** Optional target-position read; v0 production uses Polymarket Data API. */
+  getTargetConditionPosition?: MirrorPipelineDeps["getTargetConditionPosition"];
   /** Structured log sink. */
   logger: LoggerPort;
   /** Metrics sink. */
@@ -301,6 +358,7 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
       ? { cancelOrder: deps.cancelOrder }
       : {}),
     getMarketConstraints: deps.getMarketConstraints,
+    getTargetConditionPosition: deps.getTargetConditionPosition,
     target: deps.target,
     getCursor: () => cursor,
     setCursor: (n) => {

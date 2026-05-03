@@ -14,6 +14,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildMirrorTargetConfig,
   sizingPolicyKindForTargetWallet,
+  targetConditionPositionFromDataApiPositions,
 } from "@/bootstrap/jobs/copy-trade-mirror.job";
 
 const BILLING_ACCOUNT_ID = "00000000-0000-4000-b000-000000000000";
@@ -43,9 +44,16 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
         wallet: RN1,
         label: "RN1",
         percentile: 75,
-        min_target_usdc: 117.65,
-        max_target_usdc: 2660.08,
+        min_target_usdc: 200,
+        max_target_usdc: 5659,
       },
+    });
+    expect(config.position_followup).toMatchObject({
+      enabled: true,
+      min_mirror_position_usdc: 5,
+      market_floor_multiple: 5,
+      min_target_hedge_ratio: 0.02,
+      min_target_hedge_usdc: 5,
     });
   });
 
@@ -63,8 +71,8 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
         wallet: SWISSTONY,
         label: "swisstony",
         percentile: 75,
-        min_target_usdc: 114.57,
-        max_target_usdc: 4811.89,
+        min_target_usdc: 146,
+        max_target_usdc: 4809,
       },
     });
   });
@@ -82,8 +90,32 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
       max_usdc_per_trade: 12,
       statistic: {
         percentile: 90,
-        min_target_usdc: 321.62,
+        min_target_usdc: 665,
       },
+    });
+  });
+
+  it("hydrates p50 and clamps percentiles above the known research range", () => {
+    const low = buildMirrorTargetConfig({
+      targetWallet: RN1,
+      billingAccountId: BILLING_ACCOUNT_ID,
+      createdByUserId: CREATED_BY_USER_ID,
+      mirrorFilterPercentile: 50,
+    });
+    const high = buildMirrorTargetConfig({
+      targetWallet: RN1,
+      billingAccountId: BILLING_ACCOUNT_ID,
+      createdByUserId: CREATED_BY_USER_ID,
+      mirrorFilterPercentile: 100,
+    });
+
+    expect(low.sizing).toMatchObject({
+      kind: "target_percentile_scaled",
+      statistic: { percentile: 50, min_target_usdc: 40 },
+    });
+    expect(high.sizing).toMatchObject({
+      kind: "target_percentile_scaled",
+      statistic: { percentile: 100, min_target_usdc: 5659 },
     });
   });
 
@@ -93,6 +125,56 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
     expect(config.sizing).toEqual({
       kind: "min_bet",
       max_usdc_per_trade: 5,
+    });
+    expect(config.position_followup).toBeUndefined();
+  });
+});
+
+describe("targetConditionPositionFromDataApiPositions()", () => {
+  it("maps current target positions into the planner's condition view", () => {
+    const view = targetConditionPositionFromDataApiPositions("0xcondition", [
+      {
+        asset: "0xyes",
+        conditionId: "0xcondition",
+        size: 10,
+        avgPrice: 0.4,
+        initialValue: 4,
+        currentValue: 5,
+      },
+      {
+        asset: "0xno",
+        conditionId: "0xcondition",
+        size: 2,
+        avgPrice: 0.5,
+        initialValue: 0,
+        currentValue: 1.2,
+      },
+      {
+        asset: "0xother",
+        conditionId: "0xother",
+        size: 99,
+        avgPrice: 0.1,
+        initialValue: 9.9,
+        currentValue: 10,
+      },
+    ]);
+
+    expect(view).toEqual({
+      condition_id: "0xcondition",
+      tokens: [
+        {
+          token_id: "0xyes",
+          size_shares: 10,
+          cost_usdc: 4,
+          current_value_usdc: 5,
+        },
+        {
+          token_id: "0xno",
+          size_shares: 2,
+          cost_usdc: 1,
+          current_value_usdc: 1.2,
+        },
+      ],
     });
   });
 });
