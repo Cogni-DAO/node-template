@@ -172,11 +172,11 @@ export const GET = wrapRouteHandlerWithLogging(
     if (freshness === "live") {
       try {
         const currentExecution = await getExecutionSlice(address, {
-          includePriceHistory: false,
           includeTrades: false,
         });
-        livePositions = currentExecution.live_positions.filter(
-          hasActionableCurrentPosition
+        livePositions = mergeCurrentPositions(
+          dbLivePositions,
+          currentExecution.live_positions.filter(hasActionableCurrentPosition)
         );
         warnings.push(...currentExecution.warnings);
       } catch (err) {
@@ -226,4 +226,52 @@ function hasActionableCurrentPosition(
   position: PolyWalletExecutionOutput["live_positions"][number]
 ): boolean {
   return position.status !== "closed" && position.currentValue > 0;
+}
+
+function mergeCurrentPositions(
+  dbPositions: PolyWalletExecutionOutput["live_positions"],
+  currentPositions: PolyWalletExecutionOutput["live_positions"]
+): PolyWalletExecutionOutput["live_positions"] {
+  const currentByAsset = new Map(
+    currentPositions.map((position) => [position.asset, position] as const)
+  );
+  const merged = dbPositions.map((dbPosition) => {
+    const current = currentByAsset.get(dbPosition.asset);
+    if (!current) return dbPosition;
+    currentByAsset.delete(dbPosition.asset);
+    return {
+      ...dbPosition,
+      status: current.status,
+      marketSlug: current.marketSlug ?? dbPosition.marketSlug,
+      eventSlug: current.eventSlug ?? dbPosition.eventSlug,
+      marketUrl: current.marketUrl ?? dbPosition.marketUrl,
+      closedAt: current.closedAt ?? dbPosition.closedAt,
+      resolvesAt: current.resolvesAt ?? dbPosition.resolvesAt,
+      currentPrice: current.currentPrice,
+      size: current.size,
+      currentValue: current.currentValue,
+      pnlUsd: current.pnlUsd,
+      pnlPct: current.pnlPct,
+      timeline: chooseTimeline(dbPosition.timeline, current.timeline),
+      events:
+        current.events.length > dbPosition.events.length
+          ? current.events
+          : dbPosition.events,
+    };
+  });
+  return [...merged, ...currentByAsset.values()];
+}
+
+function chooseTimeline(
+  dbTimeline: PolyWalletExecutionOutput["live_positions"][number]["timeline"],
+  currentTimeline: PolyWalletExecutionOutput["live_positions"][number]["timeline"]
+): PolyWalletExecutionOutput["live_positions"][number]["timeline"] {
+  if (currentTimeline.length > dbTimeline.length) return currentTimeline;
+  if (
+    currentTimeline.length === dbTimeline.length &&
+    currentTimeline.some((point) => point.price !== currentTimeline[0]?.price)
+  ) {
+    return currentTimeline;
+  }
+  return dbTimeline;
 }

@@ -120,6 +120,8 @@ export function toWalletExecutionPosition(
       ? Math.max(0, capturedAt.getTime() - row.synced_at.getTime())
       : null;
   const terminalTs = status === "closed" ? (closedAt ?? captured) : null;
+  const heldUntilMs =
+    terminalTs !== null ? new Date(terminalTs).getTime() : capturedAt.getTime();
   const terminalEvent =
     status === "redeemable"
       ? [{ ts: captured, kind: "redeemable" as const, price, shares: size }]
@@ -147,13 +149,11 @@ export function toWalletExecutionPosition(
     openedAt: observed,
     closedAt: terminalTs,
     resolvesAt:
-      readLedgerNullableString(row, "game_start_time") ??
-      readLedgerNullableString(row, "resolves_at") ??
-      readLedgerNullableString(row, "end_date"),
+      readLedgerIso(row, "resolves_at") ?? readLedgerIso(row, "end_date"),
     gameStartTime: readLedgerNullableString(row, "game_start_time"),
     heldMinutes: Math.max(
       0,
-      Math.floor((capturedAt.getTime() - row.observed_at.getTime()) / 60_000)
+      Math.floor((heldUntilMs - row.observed_at.getTime()) / 60_000)
     ),
     entryPrice: price,
     currentPrice: price,
@@ -257,6 +257,13 @@ function readMarketUrl(row: LedgerRow): string | null {
     readLedgerNullableString(row, "slug");
   if (eventSlug === null || marketSlug === null) return null;
   return `https://polymarket.com/event/${eventSlug}/${marketSlug}`;
+}
+
+function readLedgerIso(row: LedgerRow, key: string): string | null {
+  const raw = readLedgerNullableString(row, key);
+  if (raw === null) return null;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
 }
 
 function roundToCents(value: number): number {

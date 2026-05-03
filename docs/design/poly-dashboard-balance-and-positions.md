@@ -126,8 +126,8 @@ flowchart LR
   Browser["/dashboard"]
   ReadModel["freshness=read_model\nDB order ledger + cached wallet address"]
   FirstPaint["render chart + position rows"]
-  Live["freshness=live\nPolymarket/Data API + on-chain balances"]
-  Enriched["replace read-model fields\nwhen live response returns"]
+  Live["freshness=live\nDB rows + Polymarket enrichment"]
+  Enriched["same row set\nwith live prices/traces"]
 
   Browser --> ReadModel --> FirstPaint
   Browser --> Live --> Enriched
@@ -139,9 +139,12 @@ Contract rules:
   reads.
 - `freshness=live` may call Polymarket/Data API and may fall back to the read
   model on upstream failure.
+- The DB read model owns row cardinality and ordering for dashboard positions.
+  Live Polymarket data enriches matching rows and may append new upstream-only
+  rows, but must not replace the table with a capped upstream slice.
 - `warnings[]` means degraded data, not intentional progressive loading.
-- UI merge logic lives in dashboard hooks; presentational wallet-analysis
-  components stay pure-prop.
+- Dashboard hooks choose between read-model and live route responses;
+  presentational wallet-analysis components stay pure-prop.
 
 ## Reuse rules
 

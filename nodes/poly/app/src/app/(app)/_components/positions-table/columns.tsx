@@ -188,11 +188,19 @@ export function makeColumns(opts: MakeColumnsOpts): AnyCol[] {
         const bt = bv ? Date.parse(bv) : Number.POSITIVE_INFINITY;
         return at === bt ? 0 : at < bt ? -1 : 1;
       },
-      cell: (info) => {
-        const v = info.getValue();
+      cell: ({ getValue, row }) => {
+        const v = getValue();
         return (
           <div className="text-right text-muted-foreground text-sm tabular-nums">
-            {v ? <ResolvesCountdown iso={v} /> : "—"}
+            {v ? (
+              <ResolvesCountdown
+                iso={v}
+                status={row.original.status}
+                lifecycleState={row.original.lifecycleState}
+              />
+            ) : (
+              "—"
+            )}
           </div>
         );
       },
@@ -387,7 +395,15 @@ function formatTimeUntil(targetMs: number, nowMs: number): string {
 // Countdown to resolution. TZ-agnostic by design — `targetMs - nowMs` is the
 // same delta in any timezone, so SSR/client mismatch collapses to a few-second
 // drift that's invisible at minute resolution. Ticks every 60s post-mount.
-function ResolvesCountdown({ iso }: { iso: string }): ReactElement {
+function ResolvesCountdown({
+  iso,
+  status,
+  lifecycleState,
+}: {
+  iso: string;
+  status: WalletPosition["status"];
+  lifecycleState?: WalletPosition["lifecycleState"];
+}): ReactElement {
   const targetMs = Date.parse(iso);
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -397,6 +413,21 @@ function ResolvesCountdown({ iso }: { iso: string }): ReactElement {
   }, []);
   if (!Number.isFinite(targetMs)) {
     return <span className="text-muted-foreground">—</span>;
+  }
+  if (targetMs <= nowMs) {
+    if (status === "redeemable" || lifecycleState === "winner") {
+      return <span className="text-warning">redeemable</span>;
+    }
+    if (
+      lifecycleState === "redeemed" ||
+      lifecycleState === "closed" ||
+      lifecycleState === "loser" ||
+      lifecycleState === "dust" ||
+      lifecycleState === "abandoned"
+    ) {
+      return <span className="text-muted-foreground">resolved</span>;
+    }
+    return <span className="text-muted-foreground">awaiting</span>;
   }
   return (
     <time dateTime={iso} suppressHydrationWarning>
