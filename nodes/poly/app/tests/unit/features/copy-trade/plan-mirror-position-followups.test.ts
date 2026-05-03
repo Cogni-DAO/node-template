@@ -173,7 +173,25 @@ describe("planMirrorFromFill() — position-aware followups", () => {
     const d = planMirrorFromFill({
       fill,
       config: CONFIG,
-      state: state(),
+      state: state({
+        target_position: {
+          condition_id: CONDITION_ID,
+          tokens: [
+            {
+              token_id: PRIMARY_TOKEN,
+              size_shares: 20_000,
+              cost_usdc: 10_000,
+              current_value_usdc: 10_000,
+            },
+            {
+              token_id: HEDGE_TOKEN,
+              size_shares: 1_000,
+              cost_usdc: 200,
+              current_value_usdc: 200,
+            },
+          ],
+        },
+      }),
       client_order_id: clientOrderIdFor(TARGET_ID, fill.fill_id),
       min_shares: 1,
       min_usdc_notional: 1,

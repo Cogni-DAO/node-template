@@ -296,11 +296,8 @@ function applyPositionFollowupPolicy(
   }
 
   const targetThreshold = targetFollowupThreshold(config.sizing);
-  const targetPrimaryCost = targetTokenCostUsdc(
-    state.target_position,
-    position.our_token_id
-  );
-  if (targetPrimaryCost < targetThreshold) {
+  const targetBranchCost = targetTokenCostUsdc(state.target_position, tokenId);
+  if (targetBranchCost < targetThreshold) {
     return {
       reason: followupReason,
       position_branch: branch,
@@ -309,14 +306,6 @@ function applyPositionFollowupPolicy(
   }
 
   if (isLayer) {
-    const targetLayerCost = targetTokenCostUsdc(state.target_position, tokenId);
-    if (targetLayerCost < targetThreshold) {
-      return {
-        reason: "layer_scale_in",
-        position_branch: "layer",
-        sizing: { ok: false, reason: "target_position_below_threshold" },
-      };
-    }
     return {
       reason: "layer_scale_in",
       position_branch: "layer",
@@ -334,6 +323,10 @@ function applyPositionFollowupPolicy(
   }
 
   const targetHedgeCost = targetTokenCostUsdc(state.target_position, tokenId);
+  const targetPrimaryCost = targetTokenCostUsdc(
+    state.target_position,
+    position.our_token_id
+  );
   if (targetHedgeCost < policy.min_target_hedge_usdc) {
     return {
       reason: "hedge_followup",
