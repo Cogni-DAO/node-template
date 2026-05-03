@@ -360,6 +360,30 @@ describe("poly wallet position action routes", () => {
     });
   });
 
+  it("close route does not surface raw upstream messages on untyped failures", async () => {
+    mockGetPolyTradeExecutorFor.mockResolvedValue({
+      exitPosition: vi
+        .fn()
+        .mockRejectedValue(
+          new Error("CLOB rejected request with POLY_API_KEY=secret")
+        ),
+    });
+
+    const { POST } = await import(
+      "@/app/api/v1/poly/wallet/positions/close/route"
+    );
+    const response = await POST(
+      makeJsonRequest("http://localhost/api/v1/poly/wallet/positions/close", {
+        token_id: "token-1",
+      })
+    );
+
+    expect(response.status).toBe(502);
+    await expect(response.json()).resolves.toEqual({
+      error: "close_failed",
+    });
+  });
+
   it("rejects invalid JSON bodies before touching the executor", async () => {
     const { POST: closePost } = await import(
       "@/app/api/v1/poly/wallet/positions/close/route"

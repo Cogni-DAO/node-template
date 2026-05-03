@@ -249,14 +249,16 @@ export const POST = wrapRouteHandlerWithLogging(
       ctx.log.error(
         {
           billing_account_id: account.id,
-          err: err instanceof Error ? err.message : String(err),
+          error_class:
+            err && typeof err === "object" && err.constructor?.name
+              ? err.constructor.name
+              : typeof err,
         },
         "poly.wallet.positions.close.error"
       );
       return NextResponse.json(
         {
           error: "close_failed",
-          message: err instanceof Error ? err.message : String(err),
         },
         { status: 502 }
       );
