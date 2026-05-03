@@ -36,7 +36,11 @@ import { Skeleton } from "@/components";
 import { DataGridColumnFilter } from "@/components/reui/data-grid/data-grid-column-filter";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 
-export type WalletStatsSource = "leaderboard" | "fallback" | "none";
+export type WalletStatsSource =
+  | "leaderboard"
+  | "wallet-analysis"
+  | "fallback"
+  | "none";
 
 export type WalletRow = WalletTopTraderItem & {
   /** True when the calling user has this wallet in poly_copy_trade_targets. */

@@ -332,7 +332,9 @@ describe("poly wallet dashboard DB read routes", () => {
     const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
 
     const response = await GET(
-      new Request("http://localhost/api/v1/poly/wallet/execution")
+      new Request(
+        "http://localhost/api/v1/poly/wallet/execution?freshness=live"
+      )
     );
     const json = await response.json();
 
@@ -443,7 +445,9 @@ describe("poly wallet dashboard DB read routes", () => {
     const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
 
     const response = await GET(
-      new Request("http://localhost/api/v1/poly/wallet/execution")
+      new Request(
+        "http://localhost/api/v1/poly/wallet/execution?freshness=live"
+      )
     );
     const json = await response.json();
 
@@ -764,7 +768,9 @@ describe("poly wallet dashboard DB read routes", () => {
     const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
 
     const response = await GET(
-      new Request("http://localhost/api/v1/poly/wallet/execution")
+      new Request(
+        "http://localhost/api/v1/poly/wallet/execution?freshness=live"
+      )
     );
     const json = await response.json();
 

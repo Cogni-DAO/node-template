@@ -4,7 +4,7 @@
 /**
  * Module: `@features/wallet-analysis/components/CopyWalletButton`
  * Purpose: Per-wallet copy-trade pill — "+ Copy wallet" when untracked, pulsing Radio "Copy-trading" when tracked. Used in the wallet-analysis page header and the wallet drawer header so users can mirror straight from the analysis surface.
- * Scope: Client component. Reads + invalidates the same `["dashboard-copy-targets"]` React Query key the dashboard's CopyTradedWalletsCard and `/research` view use, so flips reflect across surfaces.
+ * Scope: Client component. Reads + invalidates the same `["dashboard-copy-targets"]` React Query key the dashboard copy-target controls and `/research` view use, so flips reflect across surfaces.
  * Invariants:
  *   - PER_USER_RLS: server enforces per-user visibility + writes; client never sends user_id.
  *   - SHARED_QUERY_KEY: ["dashboard-copy-targets"] — must match dashboard + /research view.
