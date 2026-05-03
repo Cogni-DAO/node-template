@@ -17,6 +17,7 @@
 import type {
   PolyWalletOverviewInterval,
   WalletAnalysisBalance,
+  WalletAnalysisDistributions,
   WalletAnalysisPnl,
   WalletAnalysisResponse,
   WalletAnalysisSnapshot,
@@ -24,23 +25,40 @@ import type {
 } from "@cogni/poly-node-contracts";
 import { useQuery } from "@tanstack/react-query";
 
-import type { WalletAnalysisData } from "../types/wallet-analysis";
+import type {
+  WalletAnalysisData,
+  WalletDistributionsRangeMode,
+} from "../types/wallet-analysis";
 
 /** 30s cache mirrors the server-side coalesce TTL — refetches naturally on window focus. */
 const SLICE_STALE_MS = 30_000;
 
 async function fetchSlice<
-  TKey extends "snapshot" | "trades" | "balance" | "pnl",
+  TKey extends "snapshot" | "trades" | "balance" | "pnl" | "distributions",
 >(
   addr: string,
   slice: TKey,
-  interval: PolyWalletOverviewInterval
+  interval: PolyWalletOverviewInterval,
+  distributionMode?: WalletDistributionsRangeMode
 ): Promise<WalletAnalysisResponse> {
-  const url = `/api/v1/poly/wallets/${addr.toLowerCase()}?include=${slice}&interval=${interval}`;
+  const params = new URLSearchParams({ include: slice, interval });
+  if (slice === "distributions" && distributionMode) {
+    params.set("distributionMode", distributionMode);
+  }
+  const url = `/api/v1/poly/wallets/${addr.toLowerCase()}?${params.toString()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${slice} fetch failed: ${res.status}`);
   return (await res.json()) as WalletAnalysisResponse;
 }
+
+export type UseWalletAnalysisOptions = {
+  /** Defaults to "ALL". */
+  interval?: PolyWalletOverviewInterval;
+  /** When true, the hook also fetches the `distributions` slice. Default false. */
+  includeDistributions?: boolean;
+  /** Live (24-48h on-demand) or historical (Doltgres). Default "live". */
+  distributionMode?: WalletDistributionsRangeMode;
+};
 
 export type UseWalletAnalysisResult = {
   /** Always non-null — partial fields stream in as slices arrive. */
@@ -50,12 +68,14 @@ export type UseWalletAnalysisResult = {
     trades: boolean;
     balance: boolean;
     pnl: boolean;
+    distributions: boolean;
   };
   isError: {
     snapshot: boolean;
     trades: boolean;
     balance: boolean;
     pnl: boolean;
+    distributions: boolean;
   };
 };
 
@@ -69,8 +89,15 @@ export type UseWalletAnalysisResult = {
 export function useWalletAnalysis(
   addr: string | null,
   enabled = true,
-  interval: PolyWalletOverviewInterval = "ALL"
+  intervalOrOpts: PolyWalletOverviewInterval | UseWalletAnalysisOptions = "ALL"
 ): UseWalletAnalysisResult {
+  const opts: UseWalletAnalysisOptions =
+    typeof intervalOrOpts === "string"
+      ? { interval: intervalOrOpts }
+      : intervalOrOpts;
+  const interval = opts.interval ?? "ALL";
+  const includeDistributions = opts.includeDistributions ?? false;
+  const distributionMode = opts.distributionMode ?? "live";
   const lower = addr?.toLowerCase() ?? "";
   const active = enabled && Boolean(lower);
 
@@ -98,13 +125,21 @@ export function useWalletAnalysis(
     enabled: active,
     staleTime: SLICE_STALE_MS,
   });
+  const distributions = useQuery({
+    queryKey: ["wallet", lower, "distributions", distributionMode],
+    queryFn: () =>
+      fetchSlice(lower, "distributions", interval, distributionMode),
+    enabled: active && includeDistributions,
+    staleTime: SLICE_STALE_MS,
+  });
 
   const data = mapToView(
     lower,
     snapshot.data,
     trades.data,
     balance.data,
-    pnl.data
+    pnl.data,
+    distributions.data
   );
 
   return {
@@ -114,12 +149,14 @@ export function useWalletAnalysis(
       trades: trades.isLoading,
       balance: balance.isLoading,
       pnl: pnl.isLoading,
+      distributions: includeDistributions ? distributions.isLoading : false,
     },
     isError: {
       snapshot: snapshot.isError,
       trades: trades.isError,
       balance: balance.isError,
       pnl: pnl.isError,
+      distributions: includeDistributions ? distributions.isError : false,
     },
   };
 }
@@ -129,12 +166,15 @@ function mapToView(
   snapResp: WalletAnalysisResponse | undefined,
   tradesResp: WalletAnalysisResponse | undefined,
   balanceResp: WalletAnalysisResponse | undefined,
-  pnlResp: WalletAnalysisResponse | undefined
+  pnlResp: WalletAnalysisResponse | undefined,
+  distributionsResp: WalletAnalysisResponse | undefined
 ): WalletAnalysisData {
   const snapshot = mapSnapshot(snapResp?.snapshot);
   const trades = mapTrades(tradesResp?.trades);
   const balance = mapBalance(balanceResp?.balance);
   const pnl = mapPnl(pnlResp?.pnl);
+  const distributions: WalletAnalysisDistributions | undefined =
+    distributionsResp?.distributions;
   const inferredCategory = trades
     ? inferCategoryFromMarkets(trades.topMarkets)
     : undefined;
@@ -153,6 +193,7 @@ function mapToView(
     ...(trades && { trades }),
     ...(balance && { balance: pickBalance(balance) }),
     ...(pnl && { pnl }),
+    ...(distributions && { distributions }),
   };
 }
 

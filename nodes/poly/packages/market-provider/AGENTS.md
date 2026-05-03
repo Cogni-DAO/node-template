@@ -58,6 +58,11 @@ Standalone workspace package (`@cogni/poly-market-provider`) providing a typed p
 
 - `PaperAdapter`, `PaperAdapterConfig` (Phase-1 stub; body lands in Phase 3 per task.0315)
 
+**Subpath** (`@cogni/poly-market-provider/analysis`):
+
+- Pure fns: `computeWalletMetrics(trades, resolutions, opts)`, `summariseOrderFlow(trades, resolutions, opts)`, `mapExecutionPositions(input)`, `buildPolymarketEventUrl(...)`
+- Types: `WalletTradeInput`, `MarketResolutionInput`, `WalletMetrics`, `Distributions`, `Histogram`, `FlatHistogram`, `OutcomeStatus`, `OutcomeBuckets`, `Quantiles`, `TopEvent`, `ExecutionPosition`, `ExecutionEvent`, `ExecutionTimelinePoint`
+
 ## Ports
 
 - **Implements:** `MarketProviderPort`

@@ -52,7 +52,7 @@ The 13 `poly.*.v1.contract.ts` files re-exported via `src/index.ts`:
 - `poly.wallet.grants.v1.contract`
 - `poly.wallet.overview.v1.contract`
 - `poly.wallet.position-actions.v1.contract`
-- `poly.wallet-analysis.v1.contract`
+- `poly.wallet-analysis.v1.contract` — `GET /api/v1/poly/wallets/[addr]?include=…`; slice-scoped wallet research (`snapshot`, `trades`, `balance`, `pnl`, `distributions`). The `distributions` slice ships order-flow histograms — DCA depth, trade size, entry price, DCA window, hour-of-day (per-fill, won/lost/pending split) plus flat event clustering — gated by `?distributionMode=live|historical` (D1 = live only).
 
 ## Responsibilities
 

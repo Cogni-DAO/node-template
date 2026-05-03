@@ -39,8 +39,106 @@ export const WalletAnalysisSliceSchema = z.enum([
   "trades",
   "balance",
   "pnl",
+  "distributions",
 ]);
 export type WalletAnalysisSlice = z.infer<typeof WalletAnalysisSliceSchema>;
+
+/** Win/loss/pending outcome status for a single fill. */
+export const OutcomeStatusSchema = z.enum(["won", "lost", "pending"]);
+export type OutcomeStatus = z.infer<typeof OutcomeStatusSchema>;
+
+const OutcomeCountsSchema = z.object({
+  won: z.number().nonnegative(),
+  lost: z.number().nonnegative(),
+  pending: z.number().nonnegative(),
+});
+
+const OutcomeBucketsSchema = z.object({
+  count: OutcomeCountsSchema,
+  usdc: OutcomeCountsSchema,
+});
+
+/** Histogram bucket carrying outcome-split count + USDC sums. */
+export const HistogramBucketSchema = z.object({
+  lo: z.number(),
+  hi: z.number(),
+  label: z.string(),
+  values: OutcomeBucketsSchema,
+});
+export type HistogramBucket = z.infer<typeof HistogramBucketSchema>;
+
+export const HistogramSchema = z.object({
+  buckets: z.array(HistogramBucketSchema),
+});
+export type Histogram = z.infer<typeof HistogramSchema>;
+
+/** Flat histogram bucket (no outcome split — used for event clustering). */
+export const FlatBucketSchema = z.object({
+  lo: z.number(),
+  hi: z.number(),
+  label: z.string(),
+  count: z.number().nonnegative(),
+  usdc: z.number().nonnegative(),
+});
+export type FlatBucket = z.infer<typeof FlatBucketSchema>;
+
+export const FlatHistogramSchema = z.object({
+  buckets: z.array(FlatBucketSchema),
+});
+export type FlatHistogram = z.infer<typeof FlatHistogramSchema>;
+
+const QuantilesSchema = z.object({
+  p50: z.number(),
+  p90: z.number(),
+  max: z.number(),
+});
+export type Quantiles = z.infer<typeof QuantilesSchema>;
+
+const TopEventSchema = z.object({
+  slug: z.string(),
+  title: z.string(),
+  tradeCount: z.number().int().nonnegative(),
+  usdcNotional: z.number().nonnegative(),
+});
+export type TopEvent = z.infer<typeof TopEventSchema>;
+
+/**
+ * Order-flow distributions slice.
+ *
+ * Per-fill bucket charts (DCA depth, trade size, entry price, DCA window,
+ * hour-of-day) carry won/lost/pending outcome bands and USDC-weighted sums.
+ * Event clustering is flat — events span sub-markets that resolve
+ * independently, so the outcome split is meaningless at that aggregation.
+ */
+export const WalletAnalysisDistributionsSchema = z.object({
+  /** Live (24-48h on-demand) vs historical (Doltgres-backed) source. */
+  mode: z.enum(["live", "historical"]),
+  range: z.object({
+    fromTs: z.number().int().nonnegative(),
+    toTs: z.number().int().nonnegative(),
+    n: z.number().int().nonnegative(),
+  }),
+  dcaDepth: HistogramSchema,
+  tradeSize: HistogramSchema,
+  entryPrice: HistogramSchema,
+  dcaWindow: HistogramSchema,
+  hourOfDay: HistogramSchema,
+  eventClustering: FlatHistogramSchema,
+  topEvents: z.array(TopEventSchema),
+  pendingShare: z.object({
+    byCount: z.number().min(0).max(1),
+    byUsdc: z.number().min(0).max(1),
+  }),
+  quantiles: z.object({
+    dcaDepth: QuantilesSchema,
+    tradeSize: QuantilesSchema,
+    dcaWindowMin: QuantilesSchema,
+  }),
+  computedAt: z.string(),
+});
+export type WalletAnalysisDistributions = z.infer<
+  typeof WalletAnalysisDistributionsSchema
+>;
 
 /**
  * Deterministic trade-derived metrics (winrate, duration, activity counts).
@@ -141,6 +239,7 @@ export const WalletAnalysisResponseSchema = z.object({
   trades: WalletAnalysisTradesSchema.optional(),
   balance: WalletAnalysisBalanceSchema.optional(),
   pnl: WalletAnalysisPnlSchema.optional(),
+  distributions: WalletAnalysisDistributionsSchema.optional(),
   warnings: z.array(WalletAnalysisWarningSchema),
 });
 export type WalletAnalysisResponse = z.infer<
@@ -156,6 +255,12 @@ export type WalletAnalysisResponse = z.infer<
 export const WalletAnalysisQuerySchema = z.object({
   include: z.array(WalletAnalysisSliceSchema).nonempty().default(["snapshot"]),
   interval: PolyWalletOverviewIntervalSchema.optional().default("ALL"),
+  /**
+   * Source mode for the `distributions` slice. `live` always succeeds for any
+   * 0x address; `historical` returns a `distributions_unavailable` warning in
+   * D1 — the persistence layer is gated behind D2.
+   */
+  distributionMode: z.enum(["live", "historical"]).optional().default("live"),
 });
 export type WalletAnalysisQuery = z.infer<typeof WalletAnalysisQuerySchema>;
 

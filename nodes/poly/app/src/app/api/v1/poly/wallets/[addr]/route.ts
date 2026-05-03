@@ -23,6 +23,7 @@ import { getSessionUser } from "@/app/_lib/auth/session";
 import { wrapRouteHandlerWithLogging } from "@/bootstrap/http";
 import {
   getBalanceSlice,
+  getDistributionsSlice,
   getPnlSlice,
   getSnapshotSlice,
   getTradesSlice,
@@ -55,6 +56,7 @@ export const GET = wrapRouteHandlerWithLogging<{
     const queryParse = WalletAnalysisQuerySchema.safeParse({
       include: url.searchParams.getAll("include"),
       interval: url.searchParams.get("interval") ?? undefined,
+      distributionMode: url.searchParams.get("distributionMode") ?? undefined,
     });
     if (!queryParse.success) {
       return NextResponse.json(
@@ -64,18 +66,24 @@ export const GET = wrapRouteHandlerWithLogging<{
     }
     const include = queryParse.data.include;
     const interval = queryParse.data.interval;
+    const distributionMode = queryParse.data.distributionMode;
 
     const wantSnapshot = include.includes("snapshot");
     const wantTrades = include.includes("trades");
     const wantBalance = include.includes("balance");
     const wantPnl = include.includes("pnl");
+    const wantDistributions = include.includes("distributions");
 
-    const [snapshotR, tradesR, balanceR, pnlR] = await Promise.all([
-      wantSnapshot ? getSnapshotSlice(addr) : null,
-      wantTrades ? getTradesSlice(addr) : null,
-      wantBalance ? getBalanceSlice(addr) : null,
-      wantPnl ? getPnlSlice(addr, interval) : null,
-    ]);
+    const [snapshotR, tradesR, balanceR, pnlR, distributionsR] =
+      await Promise.all([
+        wantSnapshot ? getSnapshotSlice(addr) : null,
+        wantTrades ? getTradesSlice(addr) : null,
+        wantBalance ? getBalanceSlice(addr) : null,
+        wantPnl ? getPnlSlice(addr, interval) : null,
+        wantDistributions
+          ? getDistributionsSlice(addr, distributionMode)
+          : null,
+      ]);
 
     const response: WalletAnalysisResponse = {
       address: addr,
@@ -96,6 +104,11 @@ export const GET = wrapRouteHandlerWithLogging<{
     if (pnlR) {
       if (pnlR.kind === "ok") response.pnl = pnlR.value;
       else response.warnings.push(pnlR.warning);
+    }
+    if (distributionsR) {
+      if (distributionsR.kind === "ok")
+        response.distributions = distributionsR.value;
+      else response.warnings.push(distributionsR.warning);
     }
 
     return NextResponse.json(WalletAnalysisResponseSchema.parse(response));
