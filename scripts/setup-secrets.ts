@@ -555,11 +555,14 @@ const SECRETS: Secret[] = [
     required: false,
     category: "Observability (Grafana Cloud)",
     source: "human",
-    description: "Grafana service account token (Viewer role)",
+    description:
+      "Grafana service account token for observability reads and reproducible datasource provisioning",
     steps: [
       "Grafana instance",
       "Administration -> Service Accounts",
-      "Add service account (Viewer role)",
+      "Add service account with datasource read/query plus datasource create/write for setup runs",
+      "Required permissions: datasources:read, datasources:query, datasources:create, datasources:write",
+      "Use Grafana Cloud Private Data Source Connect (PDC) for private databases; do not expose Postgres publicly",
       "Add token, copy it",
     ],
   },

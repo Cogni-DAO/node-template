@@ -141,21 +141,21 @@ pnpm setup github --env production
        - See [VCS Integration Spec](../../docs/spec/vcs-integration.md) for app permissions and setup
      - **GitHub repos for ingestion:**
        - `GH_REPOS` (comma-separated, e.g. `Cogni-DAO/node-template` — set as GitHub Actions **variable**, not secret)
-     - **Grafana (optional):**
-       - `GRAFANA_URL` (Grafana instance URL)
-       - `GRAFANA_SERVICE_ACCOUNT_TOKEN` (service account token with viewer+ role)
-     - **Privy — Operator Wallet (optional — skipped if missing):**
-       - `PRIVY_APP_ID` (from privy.io → App Settings)
-       - `PRIVY_APP_SECRET` (from privy.io → App Settings)
-       - `PRIVY_SIGNING_KEY` (`wallet-auth:...` authorization key — from privy.io → Settings → Authorization)
-     - **Privy — Poly per-tenant trading wallets (optional for now; required to exercise task.0318 Phase B on candidate/preview/prod):**
-       - `PRIVY_USER_WALLETS_APP_ID` (dedicated Privy app for user trading wallets)
-       - `PRIVY_USER_WALLETS_APP_SECRET` (from the user-wallets Privy app)
-       - `PRIVY_USER_WALLETS_SIGNING_KEY` (`wallet-auth:...` authorization key — from the user-wallets app)
-       - `POLY_WALLET_AEAD_KEY_HEX` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
-       - `POLY_WALLET_AEAD_KEY_ID` (key-ring label, e.g. `v1`)
-     - **BYO-AI — Connection Encryption (optional — BYO-AI disabled when unset):**
-       - `CONNECTIONS_ENCRYPTION_KEY` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
+   - **Grafana (optional):**
+     - `GRAFANA_URL` (Grafana instance URL)
+     - `GRAFANA_SERVICE_ACCOUNT_TOKEN` (service account token with `datasources:read`, `datasources:query`, `datasources:create`, and `datasources:write` when setup/deploy provisions datasources; use Grafana Cloud PDC or another private path for database datasources, never public inbound Postgres)
+   - **Privy — Operator Wallet (optional — skipped if missing):**
+     - `PRIVY_APP_ID` (from privy.io → App Settings)
+     - `PRIVY_APP_SECRET` (from privy.io → App Settings)
+     - `PRIVY_SIGNING_KEY` (`wallet-auth:...` authorization key — from privy.io → Settings → Authorization)
+   - **Privy — Poly per-tenant trading wallets (optional for now; required to exercise task.0318 Phase B on candidate/preview/prod):**
+     - `PRIVY_USER_WALLETS_APP_ID` (dedicated Privy app for user trading wallets)
+     - `PRIVY_USER_WALLETS_APP_SECRET` (from the user-wallets Privy app)
+     - `PRIVY_USER_WALLETS_SIGNING_KEY` (`wallet-auth:...` authorization key — from the user-wallets app)
+     - `POLY_WALLET_AEAD_KEY_HEX` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
+     - `POLY_WALLET_AEAD_KEY_ID` (key-ring label, e.g. `v1`)
+   - **BYO-AI — Connection Encryption (optional — BYO-AI disabled when unset):**
+     - `CONNECTIONS_ENCRYPTION_KEY` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
      - `VM_HOST` (from `.env.<env>` file)

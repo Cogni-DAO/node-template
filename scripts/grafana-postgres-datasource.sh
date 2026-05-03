@@ -7,7 +7,7 @@
 # Required:
 #   GRAFANA_URL
 #   GRAFANA_SERVICE_ACCOUNT_TOKEN   token with datasource write permission
-#   GRAFANA_POSTGRES_HOST           host:port reachable by Grafana Cloud
+#   GRAFANA_POSTGRES_HOST           private/PDC host:port reachable from Grafana
 #   GRAFANA_POSTGRES_PASSWORD       app_readonly password from runtime env
 #
 # Optional:
@@ -17,6 +17,7 @@
 #   GRAFANA_POSTGRES_USER           defaults to app_readonly
 #   GRAFANA_POSTGRES_SSLMODE        defaults to disable for VM Postgres
 #   GRAFANA_POSTGRES_DATASOURCE_UID defaults to cogni-${COGNI_ENV}-${COGNI_NODE}-postgres
+#   GRAFANA_POSTGRES_ALLOW_PUBLIC_HOST=1 required for public internet hosts
 
 set -euo pipefail
 
@@ -42,6 +43,24 @@ GRAFANA_POSTGRES_SSLMODE="${GRAFANA_POSTGRES_SSLMODE:-disable}"
 UID_DEFAULT="cogni-${COGNI_ENV}-${COGNI_NODE}-postgres"
 GRAFANA_POSTGRES_DATASOURCE_UID="${GRAFANA_POSTGRES_DATASOURCE_UID:-$UID_DEFAULT}"
 NAME="Postgres - ${COGNI_ENV} ${COGNI_NODE}"
+
+host_only="${GRAFANA_POSTGRES_HOST%%:*}"
+if [[ "${GRAFANA_POSTGRES_ALLOW_PUBLIC_HOST:-0}" != "1" ]]; then
+  case "$host_only" in
+    localhost|127.*|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[0-1].*|postgres|*.internal|*.local)
+      ;;
+    *)
+      cat >&2 <<EOF
+Refusing public-looking Postgres host: ${GRAFANA_POSTGRES_HOST}
+
+Use Grafana Cloud Private Data Source Connect (PDC) or another private network path,
+then set GRAFANA_POSTGRES_HOST to the internal host:port visible from that agent.
+Set GRAFANA_POSTGRES_ALLOW_PUBLIC_HOST=1 only for a deliberate temporary experiment.
+EOF
+      exit 1
+      ;;
+  esac
+fi
 
 payload=$(
   jq -n \

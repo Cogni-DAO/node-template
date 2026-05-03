@@ -12,6 +12,8 @@ summary: Provision and use a read-only Postgres role through Grafana Cloud for a
 
 Give on-call humans and agents a fast read path for per-node Postgres state without SSH or `kubectl exec`.
 
+Do not expose Postgres to the public internet for this. Grafana Cloud should reach Postgres through a private network path such as Grafana Cloud Private Data Source Connect (PDC), or the datasource should run inside the same private runtime network.
+
 The control boundary is Postgres, not Grafana: `db-provision` creates `app_readonly` with `SELECT` on per-node DB tables and no write grants. The role has `BYPASSRLS` for v0 support/debugging across tenants; vNext should replace this with actor-scoped access.
 
 ## Provision
@@ -33,12 +35,14 @@ APP_DB_READONLY_PASSWORD=<derived from POSTGRES_ROOT_PASSWORD>
 
 ## Grafana Datasource
 
-Use a Grafana service account token with datasource write permission once to create or update a datasource:
+Use a Grafana service account token with datasource write permission once to create or update a datasource.
+
+For Grafana Cloud, deploy a PDC agent in the runtime network first, then use the internal Postgres host:port visible from that agent. The helper refuses public-looking Postgres hosts unless `GRAFANA_POSTGRES_ALLOW_PUBLIC_HOST=1` is set for a deliberate temporary experiment.
 
 ```bash
 export GRAFANA_URL=https://<org>.grafana.net
 export GRAFANA_SERVICE_ACCOUNT_TOKEN=glsa_...
-export GRAFANA_POSTGRES_HOST=<env>.vm.cognidao.org:5432
+export GRAFANA_POSTGRES_HOST=postgres:5432
 export GRAFANA_POSTGRES_PASSWORD=<APP_DB_READONLY_PASSWORD>
 COGNI_ENV=candidate-a COGNI_NODE=poly scripts/grafana-postgres-datasource.sh
 ```
@@ -88,6 +92,7 @@ This is a v0 operational support role. Keep the compensating controls explicit:
 
 - dedicated role, separate from app and service roles
 - no `INSERT`, `UPDATE`, `DELETE`, `TRUNCATE`, `CREATE`, `ALTER`, or `DROP` grants
+- no public inbound Postgres; use PDC/private network connectivity for Grafana Cloud
 - Grafana service-account tokens scoped to datasource read/query for normal use
 - datasource-write token used only for setup/rotation
 - quarterly access review of Grafana service accounts and datasource permissions
