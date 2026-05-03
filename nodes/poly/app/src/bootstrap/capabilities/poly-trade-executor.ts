@@ -493,9 +493,16 @@ async function buildExecutor(
     const marketExitAdapter = adapter as typeof adapter & MarketExitAdapter;
     const positions = await dataApiClient.listUserPositions(funderAddress);
     const position = positions.find((p) => p.asset === params.tokenId);
-    let shares = position?.size ?? 0;
+    const dataApiShares = position?.size ?? 0;
+    let shares = dataApiShares;
     let shareSource: "data_api" | "onchain_balance" = "data_api";
-    if (shares <= 0) {
+    if (dataApiShares > 0) {
+      const { minShares } = await adapter.getMarketConstraints(params.tokenId);
+      if (dataApiShares < minShares) {
+        shares = await getPositionShareBalance(params.tokenId);
+        shareSource = "onchain_balance";
+      }
+    } else {
       shares = await getPositionShareBalance(params.tokenId);
       shareSource = "onchain_balance";
     }
