@@ -436,7 +436,7 @@ function ResearchBenchmarkBoard({
           size="default"
         />
       ) : (
-        <div className="rounded-lg border border-dashed bg-muted/10 p-4">
+        <div className="rounded-lg border bg-muted/10 p-4">
           <p className="font-medium text-sm">Your comparison wallet</p>
           <p className="mt-1 text-muted-foreground text-sm">
             {userWalletConnected
