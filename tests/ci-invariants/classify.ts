@@ -40,12 +40,21 @@ const OPERATOR_NODE = "operator";
  *   index-regen churn. Ride-along until task tracking moves to Dolt.
  * - `docs/**`: cross-cutting prose updates that accompany a node change.
  * - `.claude/skills/poly-dev-manager/SKILL.md`: poly-node manager status card.
+ * - Exact single-node-scope policy maintenance files: the workflow gate,
+ *   reference classifier, repo-spec resolver, parity fixtures, and narrow tests.
  */
 const RIDE_ALONG_PATTERNS: ReadonlyArray<(p: string) => boolean> = [
   (p) => p === "pnpm-lock.yaml",
   (p) => p.startsWith("work/"),
   (p) => p.startsWith("docs/"),
   (p) => p === ".claude/skills/poly-dev-manager/SKILL.md",
+  (p) => p === ".github/workflows/ci.yaml",
+  (p) => p === "packages/repo-spec/AGENTS.md",
+  (p) => p === "packages/repo-spec/src/accessors.ts",
+  (p) => p === "tests/ci-invariants/classify.ts",
+  (p) => p.startsWith("tests/ci-invariants/fixtures/single-node-scope/"),
+  (p) => p === "tests/ci-invariants/single-node-scope-meta.spec.ts",
+  (p) => p === "tests/unit/packages/repo-spec/accessors.test.ts",
 ];
 
 function isRideAlong(path: string): boolean {

@@ -1,0 +1,21 @@
+{
+  "name": "ride-along: poly node files + poly manager skill + single-node-scope policy maintenance",
+  "paths": [
+    "nodes/poly/app/src/foo.ts",
+    ".claude/skills/poly-dev-manager/SKILL.md",
+    ".github/workflows/ci.yaml",
+    "docs/design/poly-bet-sizer-v1.md",
+    "docs/research/poly/layering-policy-spike-2026-05-02.md",
+    "packages/repo-spec/AGENTS.md",
+    "packages/repo-spec/src/accessors.ts",
+    "tests/ci-invariants/classify.ts",
+    "tests/ci-invariants/fixtures/single-node-scope/14-poly-manager-skill-ride-along.json",
+    "tests/ci-invariants/single-node-scope-meta.spec.ts",
+    "tests/unit/packages/repo-spec/accessors.test.ts"
+  ],
+  "expected": {
+    "domains": ["poly"],
+    "pass": true,
+    "rideAlongApplied": true
+  }
+}
