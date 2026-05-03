@@ -61,7 +61,10 @@ vi.mock("viem/chains", () => ({
   polygon: { id: 137 },
 }));
 
-import { createPolyTradeExecutorFactory } from "@/bootstrap/capabilities/poly-trade-executor";
+import {
+  createPolyTradeExecutorFactory,
+  normalizePolymarketApiKeyCreds,
+} from "@/bootstrap/capabilities/poly-trade-executor";
 
 const BILLING_ACCOUNT_ID = "billing-account-1";
 const FUNDER = "0x1111111111111111111111111111111111111111" as const;
@@ -386,5 +389,46 @@ describe("createPolyTradeExecutorFactory", () => {
       size_usdc: 1,
     });
     expect(walletPort.authorizeIntent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("normalizePolymarketApiKeyCreds", () => {
+  it("keeps plain v2 SDK credentials JSON-serializable before storage", () => {
+    expect(
+      normalizePolymarketApiKeyCreds({
+        key: "key",
+        secret: "secret",
+        passphrase: "passphrase",
+      })
+    ).toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+  });
+
+  it("accepts raw REST credential shape and maps apiKey to key", () => {
+    expect(
+      normalizePolymarketApiKeyCreds({
+        apiKey: "key",
+        secret: "secret",
+        passphrase: "passphrase",
+      })
+    ).toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+  });
+
+  it("rejects error-shaped or empty credential responses before encryption", () => {
+    expect(() =>
+      normalizePolymarketApiKeyCreds({ error: "could not derive api key" })
+    ).toThrow(
+      "Polymarket CLOB API credentials response missing key, secret, or passphrase"
+    );
+    expect(() => normalizePolymarketApiKeyCreds({})).toThrow(
+      "Polymarket CLOB API credentials response missing key, secret, or passphrase"
+    );
   });
 });

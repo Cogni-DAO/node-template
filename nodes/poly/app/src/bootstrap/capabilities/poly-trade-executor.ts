@@ -129,6 +129,39 @@ function isKnownAlreadyInvalidApiKeyError(err: unknown): boolean {
   );
 }
 
+type PolymarketApiKeyCreds = {
+  key: string;
+  secret: string;
+  passphrase: string;
+};
+
+function readNonEmptyString(
+  raw: Record<string, unknown>,
+  key: string
+): string | null {
+  const value = raw[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+export function normalizePolymarketApiKeyCreds(
+  raw: unknown
+): PolymarketApiKeyCreds {
+  if (!raw || typeof raw !== "object") {
+    throw new Error("Polymarket CLOB API credentials response was empty");
+  }
+  const obj = raw as Record<string, unknown>;
+  const key =
+    readNonEmptyString(obj, "key") ?? readNonEmptyString(obj, "apiKey");
+  const secret = readNonEmptyString(obj, "secret");
+  const passphrase = readNonEmptyString(obj, "passphrase");
+  if (!key || !secret || !passphrase) {
+    throw new Error(
+      "Polymarket CLOB API credentials response missing key, secret, or passphrase"
+    );
+  }
+  return { key, secret, passphrase };
+}
+
 /**
  * Build a viem wallet client around a Privy-backed signer, then ask the
  * Polymarket CLOB API to create or derive L2 API credentials for it. This
@@ -143,7 +176,7 @@ export async function createOrDerivePolymarketApiKeyForSigner({
   signer: LocalAccount;
   polygonRpcUrl?: string | undefined;
   host?: string | undefined;
-}): Promise<{ key: string; secret: string; passphrase: string }> {
+}): Promise<PolymarketApiKeyCreds> {
   // bug.0418 — clob-client-v2 takes an options object (not positional args).
   const { ClobClient } = await import("@polymarket/clob-client-v2");
   const { withSanitizedClobSdkConsoleErrors } = await import(
@@ -169,8 +202,13 @@ export async function createOrDerivePolymarketApiKeyForSigner({
     host,
     chain: POLYGON_CHAIN_ID,
     signer: clobSignerAny,
+    useServerTime: true,
+    throwOnError: true,
   });
-  return withSanitizedClobSdkConsoleErrors(() => clob.createOrDeriveApiKey());
+  const creds = await withSanitizedClobSdkConsoleErrors(() =>
+    clob.createOrDeriveApiKey()
+  );
+  return normalizePolymarketApiKeyCreds(creds);
 }
 
 export async function rotatePolymarketApiKeyForSigner({
@@ -183,7 +221,7 @@ export async function rotatePolymarketApiKeyForSigner({
   currentCreds: { key: string; secret: string; passphrase: string };
   polygonRpcUrl?: string | undefined;
   host?: string | undefined;
-}): Promise<{ key: string; secret: string; passphrase: string }> {
+}): Promise<PolymarketApiKeyCreds> {
   const { ClobClient } = await import("@polymarket/clob-client-v2");
   const { withSanitizedClobSdkConsoleErrors } = await import(
     "@cogni/poly-market-provider/adapters/polymarket"
@@ -222,7 +260,7 @@ export async function rotatePolymarketApiKeyForSigner({
     } catch (err) {
       if (!isKnownAlreadyInvalidApiKeyError(err)) throw err;
     }
-    return nextCreds;
+    return normalizePolymarketApiKeyCreds(nextCreds);
   });
 }
 

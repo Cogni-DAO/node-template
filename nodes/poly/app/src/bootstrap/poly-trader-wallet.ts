@@ -26,6 +26,7 @@ import { PrivyPolyTraderWalletAdapter } from "@/adapters/server/wallet";
 import {
   classifyClobCredentialRotationError,
   createOrDerivePolymarketApiKeyForSigner,
+  normalizePolymarketApiKeyCreds,
   rotatePolymarketApiKeyForSigner,
 } from "@/bootstrap/capabilities/poly-trade-executor";
 import { serverEnv } from "@/shared/env/server-env";
@@ -70,7 +71,9 @@ export function createRealClobCredsFactory({
   return {
     derive: async (signer: LocalAccount) => {
       try {
-        return await deriveCreds({ signer, polygonRpcUrl });
+        return normalizePolymarketApiKeyCreds(
+          await deriveCreds({ signer, polygonRpcUrl })
+        );
       } catch (err) {
         const failure = classifyClobCredentialRotationError(err);
         logger.error(
@@ -96,7 +99,9 @@ export function createRealClobCredsFactory({
       currentCreds: { key: string; secret: string; passphrase: string }
     ) => {
       try {
-        return await rotateCreds({ signer, currentCreds, polygonRpcUrl });
+        return normalizePolymarketApiKeyCreds(
+          await rotateCreds({ signer, currentCreds, polygonRpcUrl })
+        );
       } catch (err) {
         const failure = classifyClobCredentialRotationError(err);
         logger.error(
