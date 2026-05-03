@@ -20,6 +20,10 @@ import {
 export const EVENT_NAMES = {
   ...SHARED_EVENT_NAMES,
 
+  POLY_WALLET_ENABLE_TRADING_COMPLETE:
+    "feature.poly_wallet_enable_trading.complete",
+  ADAPTER_POLY_WALLET_RESOLVE_ERROR: "adapter.poly_wallet.resolve_error",
+
   // Poly redeem lifecycle bridge (task.5006)
   POLY_REDEEM_LIFECYCLE_MIRRORED: "feature.poly_redeem.lifecycle_mirrored",
   POLY_REDEEM_LIFECYCLE_MIRROR_FAILED:

@@ -12,11 +12,9 @@
  *   of grant caps so users can always unwind their own positions. Caches
  *   the per-tenant `PolymarketClobAdapter` + viem `WalletClient` so the
  *   Privy resolve / clob-client construction costs are paid once per tenant
- *   per process. Also the lone legal importer of `@polymarket/clob-client`
- *   alongside `poly-trade.ts`; this is where
- *   `createOrDerivePolymarketApiKeyForSigner` lives so the connect path
- *   (`bootstrap/poly-trader-wallet.ts`) does not cross into Poly-trade
- *   capability boundaries.
+ *   per process. CLOB credential provisioning lives in `poly-clob-creds.ts`;
+ *   this module re-exports that boundary for legacy callers while keeping
+ *   order execution separate from wallet setup.
  *
  *   Redeem is NOT a method on this executor — task.0388 moved it to the
  *   event-driven pipeline (`@bootstrap/redeem-pipeline`). The manual route
@@ -36,8 +34,9 @@
  *     for auth decisions. Every `placeIntent` call re-runs `authorizeIntent`,
  *     which reads connection + grant rows fresh, so a revoke that lands after
  *     the executor was constructed cannot bypass it.
- *   - NO_STATIC_CLOB_IMPORT — `@polymarket/clob-client` is pulled in via
- *     `await import(...)` so pods without Polymarket creds never load it.
+ *   - NO_STATIC_CLOB_IMPORT — CLOB SDKs are pulled in via dynamic imports at
+ *     the bootstrap / provider boundaries so pods without Polymarket creds
+ *     never load them on unrelated paths.
  *   - LAZY_INIT_ADAPTER — adapter construction happens on first per-tenant
  *     call. Subsequent calls reuse the cached instance until the process exits
  *     or an ops path invalidates that tenant after CLOB credential rotation.
@@ -63,168 +62,19 @@ import type {
   PolyTraderWalletPort,
 } from "@cogni/poly-wallet";
 import type { Logger } from "pino";
-import type { LocalAccount } from "viem";
 import {
   type ClobExecutor,
   createClobExecutor,
 } from "@/features/trading/clob-executor";
 
+export {
+  classifyClobCredentialRotationError,
+  createOrDerivePolymarketApiKeyForSigner,
+  normalizePolymarketApiKeyCreds,
+  rotatePolymarketApiKeyForSigner,
+} from "./poly-clob-creds";
+
 const DEFAULT_CLOB_HOST = "https://clob.polymarket.com";
-const POLYGON_CHAIN_ID = 137;
-
-type ClobHttpErrorLike = {
-  readonly status?: unknown;
-  readonly response?: {
-    readonly status?: unknown;
-  };
-  readonly message?: unknown;
-};
-
-function readClobHttpStatus(err: unknown): number | undefined {
-  const maybe = err as ClobHttpErrorLike | null;
-  if (typeof maybe?.response?.status === "number") {
-    return maybe.response.status;
-  }
-  if (typeof maybe?.status === "number") {
-    return maybe.status;
-  }
-  return undefined;
-}
-
-export function classifyClobCredentialRotationError(err: unknown): {
-  readonly reasonCode: string;
-  readonly httpStatus?: number | undefined;
-  readonly errorClass?: string | undefined;
-} {
-  const httpStatus = readClobHttpStatus(err);
-  const errorClass =
-    err && typeof err === "object" && err.constructor?.name
-      ? err.constructor.name
-      : undefined;
-  if (httpStatus === 401) {
-    return { reasonCode: "clob_upstream_unauthorized", httpStatus, errorClass };
-  }
-  if (httpStatus === 403) {
-    return { reasonCode: "clob_upstream_forbidden", httpStatus, errorClass };
-  }
-  if (httpStatus === 429) {
-    return { reasonCode: "clob_upstream_rate_limited", httpStatus, errorClass };
-  }
-  if (httpStatus !== undefined) {
-    return { reasonCode: "clob_upstream_http_error", httpStatus, errorClass };
-  }
-  return { reasonCode: "clob_upstream_error", errorClass };
-}
-
-function isKnownAlreadyInvalidApiKeyError(err: unknown): boolean {
-  const status = readClobHttpStatus(err);
-  if (status === 401) return true;
-  const message =
-    typeof (err as ClobHttpErrorLike | null)?.message === "string"
-      ? String((err as ClobHttpErrorLike).message).toLowerCase()
-      : "";
-  return (
-    message.includes("invalid api key") ||
-    message.includes("unauthorized api key")
-  );
-}
-
-/**
- * Build a viem wallet client around a Privy-backed signer, then ask the
- * Polymarket CLOB API to create or derive L2 API credentials for it. This
- * factory is the lone `@polymarket/clob-client` dynamic-import boundary
- * consumed by the provisioning path (`bootstrap/poly-trader-wallet.ts`).
- */
-export async function createOrDerivePolymarketApiKeyForSigner({
-  signer,
-  polygonRpcUrl,
-  host = DEFAULT_CLOB_HOST,
-}: {
-  signer: LocalAccount;
-  polygonRpcUrl?: string | undefined;
-  host?: string | undefined;
-}): Promise<{ key: string; secret: string; passphrase: string }> {
-  // bug.0418 — clob-client-v2 takes an options object (not positional args).
-  const { ClobClient } = await import("@polymarket/clob-client-v2");
-  const { withSanitizedClobSdkConsoleErrors } = await import(
-    "@cogni/poly-market-provider/adapters/polymarket"
-  );
-  const { createWalletClient, http } = await import("viem");
-  const { polygon } = await import("viem/chains");
-
-  // viem version drift between @privy-io/node/viem peerDep and this app's viem
-  // forces a cast; runtime shape matches WalletClient.account exactly.
-  // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
-  const signerAny: any = signer;
-  const walletClient = createWalletClient({
-    account: signerAny,
-    chain: polygon,
-    transport: http(polygonRpcUrl),
-  });
-
-  // Same cast rationale as above — dual-peerDep viem typing.
-  // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
-  const clobSignerAny: any = walletClient;
-  const clob = new ClobClient({
-    host,
-    chain: POLYGON_CHAIN_ID,
-    signer: clobSignerAny,
-  });
-  return withSanitizedClobSdkConsoleErrors(() => clob.createOrDeriveApiKey());
-}
-
-export async function rotatePolymarketApiKeyForSigner({
-  signer,
-  currentCreds,
-  polygonRpcUrl,
-  host = DEFAULT_CLOB_HOST,
-}: {
-  signer: LocalAccount;
-  currentCreds: { key: string; secret: string; passphrase: string };
-  polygonRpcUrl?: string | undefined;
-  host?: string | undefined;
-}): Promise<{ key: string; secret: string; passphrase: string }> {
-  const { ClobClient } = await import("@polymarket/clob-client-v2");
-  const { withSanitizedClobSdkConsoleErrors } = await import(
-    "@cogni/poly-market-provider/adapters/polymarket"
-  );
-  const { createWalletClient, http } = await import("viem");
-  const { polygon } = await import("viem/chains");
-
-  // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
-  const signerAny: any = signer;
-  const walletClient = createWalletClient({
-    account: signerAny,
-    chain: polygon,
-    transport: http(polygonRpcUrl),
-  });
-
-  // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
-  const clobSignerAny: any = walletClient;
-  const createClient = new ClobClient({
-    host,
-    chain: POLYGON_CHAIN_ID,
-    signer: clobSignerAny,
-    throwOnError: true,
-  });
-  const oldCredsClient = new ClobClient({
-    host,
-    chain: POLYGON_CHAIN_ID,
-    signer: clobSignerAny,
-    creds: currentCreds,
-    throwOnError: true,
-  });
-
-  return withSanitizedClobSdkConsoleErrors(async () => {
-    const nextCreds = await createClient.createApiKey();
-    try {
-      await oldCredsClient.deleteApiKey();
-    } catch (err) {
-      if (!isKnownAlreadyInvalidApiKeyError(err)) throw err;
-    }
-    return nextCreds;
-  });
-}
 
 /** Parameters for the autonomous SELL-to-close path. */
 export interface ClosePositionParams {

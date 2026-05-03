@@ -125,6 +125,7 @@ import {
   type WalletClient,
 } from "viem";
 import { polygon } from "viem/chains";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 /** Provider identifier pinned into the AEAD AAD envelope. */
 const CREDENTIAL_PROVIDER = "polymarket_clob";
@@ -151,8 +152,13 @@ const COLLATERAL_ONRAMP_POLYGON =
 const COLLATERAL_OFFRAMP_POLYGON =
   "0x2957922Eb93258b93368531d39fAcCA3B4dC5854" as Address;
 
+const USDC_E_ONRAMP_SPENDER = {
+  label: "USDC.e → Onramp",
+  address: COLLATERAL_ONRAMP_POLYGON,
+} as const satisfies { label: string; address: Address };
+
 const USDC_E_SPENDERS: readonly { label: string; address: Address }[] = [
-  { label: "USDC.e → Onramp", address: COLLATERAL_ONRAMP_POLYGON },
+  USDC_E_ONRAMP_SPENDER,
 ];
 
 const PUSD_SPENDERS: readonly { label: string; address: Address }[] = [
@@ -242,6 +248,21 @@ export interface DefaultGrantInput {
  */
 type TxOrDb = Omit<Database, "$client" | "transaction">;
 
+type ResolveSigningContextFailureReason =
+  | "no_connection"
+  | "tenant_mismatch"
+  | "clob_creds_invalid"
+  | "wallet_account_unavailable"
+  | "backend_unreachable";
+
+type ResolveSigningContextResult =
+  | { ok: true; context: PolyTraderSigningContext }
+  | {
+      ok: false;
+      reason: ResolveSigningContextFailureReason;
+      connectionId?: string;
+    };
+
 export interface PrivyPolyTraderWalletAdapterConfig {
   /**
    * Privy client bound to the USER-WALLETS app. MUST be constructed from
@@ -320,8 +341,18 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   async resolve(
     billingAccountId: string
   ): Promise<PolyTraderSigningContext | null> {
+    const result = await this.resolveSigningContext(billingAccountId);
+    if (result.ok) return result.context;
+    this.logResolveFailure(billingAccountId, result);
+    return null;
+  }
+
+  private async resolveSigningContext(
+    billingAccountId: string
+  ): Promise<ResolveSigningContextResult> {
+    let rows: (typeof polyWalletConnections.$inferSelect)[];
     try {
-      const rows = await this.serviceDb
+      rows = await this.serviceDb
         .select()
         .from(polyWalletConnections)
         .where(
@@ -331,25 +362,35 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
           )
         )
         .limit(1);
+    } catch {
+      return { ok: false, reason: "backend_unreachable" };
+    }
 
-      const row = rows[0];
-      if (!row) return null;
+    const row = rows[0];
+    if (!row) return { ok: false, reason: "no_connection" };
 
-      // TENANT_DEFENSE_IN_DEPTH
-      if (row.billingAccountId !== billingAccountId) {
-        this.log.warn(
-          { billing_account_id: billingAccountId, connection_id: row.id },
-          "tenant mismatch on poly_wallet_connections SELECT — refusing to resolve"
-        );
-        return null;
-      }
+    // TENANT_DEFENSE_IN_DEPTH
+    if (row.billingAccountId !== billingAccountId) {
+      return { ok: false, reason: "tenant_mismatch", connectionId: row.id };
+    }
 
-      const clobCreds = this.decryptCreds(row.clobApiKeyCiphertext, {
+    let clobCreds: PolyClobApiKeyCreds;
+    try {
+      clobCreds = this.decryptCreds(row.clobApiKeyCiphertext, {
         billing_account_id: row.billingAccountId,
         connection_id: row.id,
         provider: CREDENTIAL_PROVIDER,
       });
+    } catch {
+      return {
+        ok: false,
+        reason: "clob_creds_invalid",
+        connectionId: row.id,
+      };
+    }
 
+    let account: LocalAccount;
+    try {
       const rawAccount = createViemAccount(this.privyClient, {
         walletId: row.privyWalletId,
         address: row.address as `0x${string}`,
@@ -359,24 +400,65 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
       // viem forces a cast (runtime shape matches LocalAccount exactly — same
       // pattern as poly-trade.ts:696-700).
       // biome-ignore lint/suspicious/noExplicitAny: cross-peerDep viem type drift
-      const account: any = rawAccount;
-
+      account = rawAccount as any;
+    } catch {
       return {
+        ok: false,
+        reason: "wallet_account_unavailable",
+        connectionId: row.id,
+      };
+    }
+
+    return {
+      ok: true,
+      context: {
         account,
         clobCreds,
         funderAddress: getAddress(row.address),
         connectionId: row.id,
-      };
-    } catch (err) {
-      this.log.warn(
-        {
-          billing_account_id: billingAccountId,
-          err: err instanceof Error ? err.message : String(err),
-        },
-        "poly_wallet resolve failed — returning null (fail-closed)"
+      },
+    };
+  }
+
+  private logResolveFailure(
+    billingAccountId: string,
+    result: Exclude<ResolveSigningContextResult, { ok: true }>
+  ): void {
+    if (result.reason === "no_connection") return;
+    this.log.error(
+      {
+        event: EVENT_NAMES.ADAPTER_POLY_WALLET_RESOLVE_ERROR,
+        dep: "poly_wallet_connections",
+        billing_account_id: billingAccountId,
+        connection_id: result.connectionId ?? null,
+        reasonCode: result.reason,
+      },
+      EVENT_NAMES.ADAPTER_POLY_WALLET_RESOLVE_ERROR
+    );
+  }
+
+  private errorForResolveFailure(
+    result: Exclude<ResolveSigningContextResult, { ok: true }>
+  ): Error & {
+    code: EnableTradingPreflightError;
+    connectionId?: string;
+  } {
+    if (result.reason === "no_connection") {
+      return Object.assign(
+        new Error(
+          "ensureTradingApprovals: no active connection for tenant — provision first"
+        ),
+        { code: "no_connection" as const }
       );
-      return null;
     }
+    const error = Object.assign(
+      new Error(`ensureTradingApprovals preflight failed: ${result.reason}`),
+      { code: result.reason as EnableTradingPreflightError }
+    );
+    if (result.connectionId) {
+      return Object.assign(error, { connectionId: result.connectionId });
+    }
+    return error;
   }
 
   async getAddress(billingAccountId: string): Promise<`0x${string}` | null> {
@@ -1082,15 +1164,11 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
   async ensureTradingApprovals(
     billingAccountId: string
   ): Promise<TradingApprovalsState> {
-    const signingContext = await this.resolve(billingAccountId);
-    if (!signingContext) {
-      throw Object.assign(
-        new Error(
-          "ensureTradingApprovals: no active connection for tenant — provision first"
-        ),
-        { code: "no_connection" as EnableTradingPreflightError }
-      );
+    const resolveResult = await this.resolveSigningContext(billingAccountId);
+    if (!resolveResult.ok) {
+      throw this.errorForResolveFailure(resolveResult);
     }
+    const signingContext = resolveResult.context;
     if (!this.polygonRpcUrl) {
       throw Object.assign(
         new Error(
@@ -1370,7 +1448,7 @@ export class PrivyPolyTraderWalletAdapter implements PolyTraderWalletPort {
             signingContext,
             billingAccountId,
             USDC_E_POLYGON,
-            USDC_E_SPENDERS[0]!
+            USDC_E_ONRAMP_SPENDER
           );
           steps[0] = restoreStep;
           if (restoreStep.state !== "set") allOk = false;

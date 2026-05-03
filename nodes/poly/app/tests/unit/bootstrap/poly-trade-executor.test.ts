@@ -15,6 +15,8 @@ const writeContract = vi.fn();
 const waitForTransactionReceipt = vi.fn();
 const multicall = vi.fn();
 const readContract = vi.fn();
+const createOrDeriveApiKey = vi.fn();
+const clobClientV1Constructor = vi.fn();
 
 vi.mock("@cogni/poly-market-provider/adapters/polymarket", () => {
   class FakePolymarketClobAdapter {
@@ -39,9 +41,20 @@ vi.mock("@cogni/poly-market-provider/adapters/polymarket", () => {
     POLYGON_USDC_E: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as const,
     PolymarketClobAdapter: FakePolymarketClobAdapter,
     PolymarketDataApiClient: FakePolymarketDataApiClient,
+    withSanitizedClobSdkConsoleErrors: <T>(fn: () => T) => fn(),
     polymarketCtfRedeemAbi: [],
   };
 });
+
+vi.mock("@polymarket/clob-client", () => ({
+  ClobClient: class FakeClobClient {
+    constructor(...args: unknown[]) {
+      clobClientV1Constructor(...args);
+    }
+
+    createOrDeriveApiKey = createOrDeriveApiKey;
+  },
+}));
 
 vi.mock("viem", () => ({
   createWalletClient: vi.fn(() => ({ writeContract })),
@@ -61,6 +74,10 @@ vi.mock("viem/chains", () => ({
   polygon: { id: 137 },
 }));
 
+import {
+  createOrDerivePolymarketApiKeyForSigner,
+  normalizePolymarketApiKeyCreds,
+} from "@/bootstrap/capabilities/poly-clob-creds";
 import { createPolyTradeExecutorFactory } from "@/bootstrap/capabilities/poly-trade-executor";
 
 const BILLING_ACCOUNT_ID = "billing-account-1";
@@ -144,6 +161,8 @@ describe("createPolyTradeExecutorFactory", () => {
     getOrder.mockReset();
     getMarketConstraints.mockReset();
     listOpenOrders.mockReset();
+    createOrDeriveApiKey.mockReset();
+    clobClientV1Constructor.mockReset();
     writeContract.mockReset();
     waitForTransactionReceipt.mockReset();
     multicall.mockReset();
@@ -386,5 +405,85 @@ describe("createPolyTradeExecutorFactory", () => {
       size_usdc: 1,
     });
     expect(walletPort.authorizeIntent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createOrDerivePolymarketApiKeyForSigner", () => {
+  it("uses the manually verified v1 CLOB client boundary for provisioning credentials", async () => {
+    createOrDeriveApiKey.mockResolvedValue({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+
+    await expect(
+      createOrDerivePolymarketApiKeyForSigner({
+        signer: { address: FUNDER } as never,
+        polygonRpcUrl: "https://polygon.example",
+        host: "https://clob.polymarket.com",
+      })
+    ).resolves.toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+
+    expect(clobClientV1Constructor).toHaveBeenCalledWith(
+      "https://clob.polymarket.com",
+      137,
+      { writeContract },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true
+    );
+    expect(createOrDeriveApiKey).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("normalizePolymarketApiKeyCreds", () => {
+  it("keeps plain v2 SDK credentials JSON-serializable before storage", () => {
+    expect(
+      normalizePolymarketApiKeyCreds({
+        key: "key",
+        secret: "secret",
+        passphrase: "passphrase",
+      })
+    ).toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+  });
+
+  it("accepts raw REST credential shape and maps apiKey to key", () => {
+    expect(
+      normalizePolymarketApiKeyCreds({
+        apiKey: "key",
+        secret: "secret",
+        passphrase: "passphrase",
+      })
+    ).toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+  });
+
+  it("rejects error-shaped or empty credential responses before encryption", () => {
+    expect(() =>
+      normalizePolymarketApiKeyCreds({ error: "could not derive api key" })
+    ).toThrow(
+      "Polymarket CLOB API credentials response missing key, secret, or passphrase"
+    );
+    expect(() => normalizePolymarketApiKeyCreds({})).toThrow(
+      "Polymarket CLOB API credentials response missing key, secret, or passphrase"
+    );
   });
 });
