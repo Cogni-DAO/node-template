@@ -13,13 +13,14 @@ Takes a Polymarket wallet that demonstrably trades with edge and mirrors its fil
 
 ## Current Status Card (2026-05-03)
 
-**Latest copy-policy branch:** PR #1203 lineage. Candidate-a flight is stale
-after the position-pXX correction; re-flight before validating live behavior.
+**Latest copy-policy branch:** PR #1203 lineage. Candidate-a was re-flighted at
+`74afb6a76d4c361b4c54b91c2bb2ba3d3cb71a6b`; re-flight again after any pXX
+snapshot edit.
 
 **Active copy-trade behavior:**
 
 - New entries for curated targets use `target_percentile_scaled`: the target condition/token position cost basis must be at or above that wallet's configured pXX threshold before we mirror it.
-- Default pXX is p75. The per-target UI/config slider may choose another percentile; unsupported values interpolate between known points and clamp outside the known range.
+- Default pXX is p75. The per-target UI/config slider may choose another percentile. p50/p75/p90/p95/p99 are hardcoded; unsupported values interpolate between known points and clamp outside the known range.
 - Accepted BUY branches size from market minimum toward `max_usdc_per_trade`, scaled by how far the target position is between pXX and p99.
 - Individual target orders are triggers only. Do not add a second order-size pXX gate.
 - Existing mirror positions add branch context through `position_followup`: same-token `layer`, opposite-token `hedge`, or SELL `sell_close`.
@@ -27,10 +28,10 @@ after the position-pXX correction; re-flight before validating live behavior.
 
 **Hardcoded position pXX currently baked into bootstrap config:**
 
-| target    |  p75 |  p90 |    p95 |    p99 | sample                                                                   |
-| --------- | ---: | ---: | -----: | -----: | ------------------------------------------------------------------------ |
-| RN1       | $199 | $726 | $1,773 | $5,453 | 3,942 token positions, Data API `/positions`, captured 2026-05-03T00:59Z |
-| swisstony | $146 | $633 | $1,460 | $5,463 | 1,148 token positions, Data API `/positions`, captured 2026-05-03T00:59Z |
+| target    | p50 |  p75 |  p90 |    p95 |    p99 | sample                                                                                   |
+| --------- | --: | ---: | ---: | -----: | -----: | ---------------------------------------------------------------------------------------- |
+| RN1       | $40 | $200 | $733 | $1,811 | $5,659 | 3,990 token positions, Data API `/positions?sizeThreshold=0`, captured 2026-05-03T02:34Z |
+| swisstony | $31 | $146 | $665 | $1,394 | $4,809 | 1,085 token positions, Data API `/positions?sizeThreshold=0`, captured 2026-05-03T02:34Z |
 
 **Position follow-up defaults for curated targets:**
 

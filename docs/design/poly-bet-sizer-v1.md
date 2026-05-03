@@ -22,22 +22,24 @@ current condition/token position and our current mirror position.
 
 Position-aware mirror sizing is hardcoded for the two researched target wallets:
 
-| Wallet                                       | Label     |  p75 |  p90 |    p95 |    p99 |
-| -------------------------------------------- | --------- | ---: | ---: | -----: | -----: |
-| `0x2005d16a84ceefa912d4e380cd32e7ff827875ea` | RN1       | $199 | $726 | $1,773 | $5,453 |
-| `0x204f72f35326db932158cba6adff0b9a1da95e14` | swisstony | $146 | $633 | $1,460 | $5,463 |
+| Wallet                                       | Label     | p50 |  p75 |  p90 |    p95 |    p99 |
+| -------------------------------------------- | --------- | --: | ---: | ---: | -----: | -----: |
+| `0x2005d16a84ceefa912d4e380cd32e7ff827875ea` | RN1       | $40 | $200 | $733 | $1,811 | $5,659 |
+| `0x204f72f35326db932158cba6adff0b9a1da95e14` | swisstony | $31 | $146 | $665 | $1,394 | $4,809 |
 
 Snapshot source in code:
 `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts`
 `TOP_TARGET_SIZE_SNAPSHOTS`.
 
 Snapshot metadata: current token-position cost-basis distribution from
-Polymarket Data API `/positions`, captured at `2026-05-03T00:59Z`.
+Polymarket Data API `/positions?sizeThreshold=0`, captured at
+`2026-05-03T02:34Z`.
 
 As-built behavior:
 
 - Curated target wallets use `target_percentile_scaled`.
-- `mirror_filter_percentile` defaults to `75`.
+- `mirror_filter_percentile` defaults to `75`, and `50` is a real configured
+  threshold for the curated wallets.
 - `mirror_max_usdc_per_trade` defaults to `$5`.
 - `placement.kind` defaults to `mirror_limit`.
 - `position_followup` is enabled for these snapshot-backed wallets.

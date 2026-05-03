@@ -44,8 +44,8 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
         wallet: RN1,
         label: "RN1",
         percentile: 75,
-        min_target_usdc: 199,
-        max_target_usdc: 5453,
+        min_target_usdc: 200,
+        max_target_usdc: 5659,
       },
     });
     expect(config.position_followup).toMatchObject({
@@ -72,7 +72,7 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
         label: "swisstony",
         percentile: 75,
         min_target_usdc: 146,
-        max_target_usdc: 5463,
+        max_target_usdc: 4809,
       },
     });
   });
@@ -90,12 +90,12 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
       max_usdc_per_trade: 12,
       statistic: {
         percentile: 90,
-        min_target_usdc: 633,
+        min_target_usdc: 665,
       },
     });
   });
 
-  it("clamps unsupported slider percentiles to the nearest known research point", () => {
+  it("hydrates p50 and clamps percentiles above the known research range", () => {
     const low = buildMirrorTargetConfig({
       targetWallet: RN1,
       billingAccountId: BILLING_ACCOUNT_ID,
@@ -111,11 +111,11 @@ describe("buildMirrorTargetConfig() — sizing policy selection", () => {
 
     expect(low.sizing).toMatchObject({
       kind: "target_percentile_scaled",
-      statistic: { percentile: 50, min_target_usdc: 199 },
+      statistic: { percentile: 50, min_target_usdc: 40 },
     });
     expect(high.sizing).toMatchObject({
       kind: "target_percentile_scaled",
-      statistic: { percentile: 100, min_target_usdc: 5453 },
+      statistic: { percentile: 100, min_target_usdc: 5659 },
     });
   });
 
