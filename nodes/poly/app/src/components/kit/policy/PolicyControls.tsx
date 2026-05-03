@@ -29,6 +29,7 @@ export interface PolicyControlsProps {
   values: PolicyValues;
   onSave?: (next: PolicyValues) => Promise<void>;
   readonly?: boolean;
+  label?: string;
   className?: string;
 }
 
@@ -43,6 +44,7 @@ export function PolicyControls({
   values,
   onSave,
   readonly,
+  label = "Policy",
   className,
 }: PolicyControlsProps): React.ReactElement {
   const [editing, setEditing] = useState(false);
@@ -107,7 +109,7 @@ export function PolicyControls({
     <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex items-center justify-between">
         <span className="font-mono text-muted-foreground text-xs uppercase tracking-wide">
-          Policy
+          {label}
         </span>
         {!readonly && !editing ? (
           <button

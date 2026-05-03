@@ -16,8 +16,8 @@
  *     no parallel toolbar chips.
  *   - URL_DRIVEN_STATE: q / period / tracked / sort all round-trip through
  *     the URL for shareable views.
- *   - COPY_TARGETS_QUERY_KEY shared with the dashboard's CopyTradedWalletsCard so
- *     flips reflect across surfaces.
+ *   - COPY_TARGETS_QUERY_KEY shared with the dashboard copy-target controls so flips
+ *     reflect across surfaces.
  * Side-effects: IO (React Query — fetchTopWallets, fetchCopyTargets,
  *               createCopyTarget, deleteCopyTarget).
  * @public

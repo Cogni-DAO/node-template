@@ -55,14 +55,13 @@ import {
   buildGroupedChartData,
 } from "@/components/kit/data-display/activity-chart-utils";
 import type { RunCardData } from "@/components/kit/data-display/RunCard";
-import { WalletQuickJump } from "@/features/wallet-analysis";
 import { cn } from "@/shared/util/cn";
 import { fetchActivity } from "../activity/_api/fetchActivity";
 import { WorkItemDetail } from "../work/_components/WorkItemDetail";
 import { StatusPill, TypeIcon } from "../work/_components/work-item-icons";
 import { postPolymarketRefresh } from "./_api/fetchPolymarketRefresh";
 import { fetchRuns } from "./_api/fetchRuns";
-import { CopyTradedWalletsCard } from "./_components/CopyTradedWalletsCard";
+import { CopyTargetControlPanel } from "./_components/CopyTargetControlPanel";
 import { ExecutionActivityCard } from "./_components/ExecutionActivityCard";
 import { OperatorWalletChartsRow } from "./_components/OperatorWalletChartsRow";
 import { TradingWalletCard } from "./_components/TradingWalletCard";
@@ -289,12 +288,14 @@ export function DashboardView(): ReactElement {
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-3">
           <h1 className="font-bold text-2xl tracking-tight">Dashboard</h1>
-          {activeCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 font-medium text-sm text-success">
-              <Radio className="size-3.5 animate-pulse" />
-              {activeCount} active
-            </span>
-          )}
+          <div className="flex flex-wrap items-center gap-2">
+            {activeCount > 0 && (
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2.5 py-0.5 font-medium text-sm text-success">
+                <Radio className="size-3.5 animate-pulse" />
+                {activeCount} agent{activeCount === 1 ? "" : "s"} live
+              </span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2">
           <Button
@@ -331,16 +332,10 @@ export function DashboardView(): ReactElement {
       </div>
 
       {/* Polymarket primary section (top of fold) */}
+      <CopyTargetControlPanel />
       <TradingWalletCard />
       <OperatorWalletChartsRow />
       <ExecutionActivityCard />
-      <div className="flex flex-col gap-2">
-        <h2 className="font-semibold text-muted-foreground text-xs uppercase tracking-widest">
-          Open any wallet
-        </h2>
-        <WalletQuickJump />
-      </div>
-      <CopyTradedWalletsCard />
 
       {/* Two-column section: Agents + Work (demoted below the Polymarket cards) */}
       <div className="grid gap-6 lg:grid-cols-2">

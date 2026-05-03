@@ -48,7 +48,14 @@ export function useTradingWalletOverview(
     retry: 1,
   });
 
-  const data = liveQuery.data ?? readModelQuery.data;
+  const readModelData = readModelQuery.data;
+  const readModelIsStale =
+    readModelData?.freshness === "read_model" &&
+    readModelData.connected &&
+    readModelData.positions_stale;
+  const data =
+    liveQuery.data ??
+    (readModelIsStale && !liveQuery.isError ? undefined : readModelData);
 
   return {
     data,

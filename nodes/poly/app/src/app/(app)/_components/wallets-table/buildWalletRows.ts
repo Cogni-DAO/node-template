@@ -8,9 +8,10 @@
  *          - `buildCopyTradedWalletRows`: dashboard/copy-traded variant → the user's
  *            copy-trade targets (ground truth from `poly_copy_trade_targets`) enriched
  *            in this precedence order:
- *              1. windowed leaderboard (tradersByWallet) — trustworthy for the period
- *              2. all-time leaderboard (fallbackByWallet) — labeled "all-time est." in the UI
- *              3. none — em-dashes
+ *              1. direct wallet-analysis summary — authoritative for tracked rows
+ *              2. windowed leaderboard (tradersByWallet) — trustworthy for the period
+ *              3. all-time leaderboard (fallbackByWallet) — labeled "all-time est." in the UI
+ *              4. none — em-dashes
  *            The real windowed-stats unification lives in a follow-up Data-API-first
  *            task, not here.
  * Scope: Pure. No I/O. No React.
@@ -47,10 +48,22 @@ export function buildWalletRows(
 export function buildCopyTradedWalletRows(
   targets: ReadonlyArray<PolyCopyTradeTarget>,
   tradersByWallet: ReadonlyMap<string, WalletTopTraderItem>,
-  fallbackByWallet: ReadonlyMap<string, WalletTopTraderItem>
+  fallbackByWallet: ReadonlyMap<string, WalletTopTraderItem>,
+  analysisByWallet: ReadonlyMap<string, WalletTopTraderItem> = new Map()
 ): WalletRow[] {
   return targets.map((target, index) => {
     const wallet = target.target_wallet.toLowerCase();
+
+    const analysis = analysisByWallet.get(wallet);
+    if (analysis) {
+      return {
+        ...analysis,
+        rank: index + 1,
+        tracked: true,
+        targetId: target.target_id,
+        statsSource: "wallet-analysis",
+      };
+    }
 
     const trader = tradersByWallet.get(wallet);
     if (trader) {

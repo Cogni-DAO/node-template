@@ -18,6 +18,7 @@ import type {
   PolyCopyTradeTargetCreateOutput,
   PolyCopyTradeTargetDeleteOutput,
   PolyCopyTradeTargetsOutput,
+  PolyCopyTradeTargetUpdateOutput,
 } from "@cogni/poly-node-contracts";
 
 export type {
@@ -92,4 +93,37 @@ export async function deleteCopyTarget(
     );
   }
   return (await res.json()) as PolyCopyTradeTargetDeleteOutput;
+}
+
+export async function updateCopyTargetPolicy(
+  id: string,
+  input: {
+    mirror_filter_percentile: number;
+    mirror_max_usdc_per_trade: number;
+  }
+): Promise<PolyCopyTradeTargetUpdateOutput> {
+  const res = await fetch(
+    `/api/v1/poly/copy-trade/targets/${encodeURIComponent(id)}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    }
+  );
+  if (!res.ok) {
+    let detail: unknown;
+    try {
+      detail = await res.json();
+    } catch {
+      // ignore parse failure
+    }
+    throw new Error(
+      `Failed to update copy target: ${res.status} ${
+        detail && typeof detail === "object" && "error" in detail
+          ? String((detail as { error: unknown }).error)
+          : res.statusText
+      }`
+    );
+  }
+  return (await res.json()) as PolyCopyTradeTargetUpdateOutput;
 }

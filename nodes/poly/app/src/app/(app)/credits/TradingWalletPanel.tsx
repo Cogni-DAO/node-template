@@ -46,7 +46,6 @@ import { useSession } from "next-auth/react";
 import type { ReactElement } from "react";
 import { AddressChip, Card, HintText } from "@/components";
 import { AutoWrapToggle } from "./AutoWrapToggle";
-import { PolicyPanel } from "./PolicyPanel";
 import { TradingReadinessSection } from "./TradingReadinessSection";
 import { TradingWalletConnectFlow } from "./TradingWalletConnectFlow";
 
@@ -188,14 +187,12 @@ export function TradingWalletPanel(): ReactElement {
             <AutoWrapToggle autoWrapConsentAt={status.auto_wrap_consent_at} />
           ) : null}
 
-          {status.trading_ready ? <PolicyPanel /> : null}
-
           {status.trading_ready ? (
             <Link
-              href="/research"
+              href="/dashboard"
               className="inline-flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/10 px-4 py-3 font-medium text-primary text-sm transition-colors hover:bg-primary/20"
             >
-              <span>Next — pick a wallet to copy on Research</span>
+              <span>Next — setup copy targets on Dashboard</span>
               <ArrowRight size={16} />
             </Link>
           ) : null}

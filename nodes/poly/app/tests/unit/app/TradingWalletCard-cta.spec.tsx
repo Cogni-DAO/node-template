@@ -29,7 +29,12 @@ import { TradingWalletCard } from "@/app/(app)/dashboard/_components/TradingWall
 // Stub the P/L chart — it pulls recharts / DOM measurements that jsdom
 // cannot satisfy and is orthogonal to the CTA branches under test.
 vi.mock("@/features/wallet-analysis", () => ({
-  BalanceBar: () => null,
+  BalanceBar: ({
+    balance,
+  }: {
+    balance?: { total: number } | undefined;
+  }): ReactElement | null =>
+    balance ? <div>{`$${balance.total.toFixed(2)}`}</div> : null,
   WalletProfitLossCard: () => null,
 }));
 
@@ -165,5 +170,84 @@ describe("TradingWalletCard onboarding CTAs", () => {
         screen.queryByRole("link", { name: /Enable trading →/ })
       ).not.toBeInTheDocument();
     });
+  });
+
+  it("does not paint a stale read-model total before the first live balance arrives", async () => {
+    const staleReadModel: PolyWalletOverviewOutput = {
+      configured: true,
+      connected: true,
+      freshness: "read_model",
+      address: "0x0000000000000000000000000000000000000003",
+      interval: "1W",
+      capturedAt: new Date().toISOString(),
+      pol_gas: 0.5,
+      usdc_available: 20,
+      usdc_locked: 0,
+      usdc_positions_mtm: 0,
+      usdc_total: 20,
+      open_orders: 0,
+      positions_synced_at: new Date(Date.now() - 600_000).toISOString(),
+      positions_sync_age_ms: 600_000,
+      positions_stale: true,
+      pnlHistory: [],
+      warnings: [],
+    };
+    const liveOverview: PolyWalletOverviewOutput = {
+      ...staleReadModel,
+      freshness: "live",
+      usdc_available: 10,
+      usdc_total: 10,
+      positions_stale: false,
+    };
+    const status: PolyWalletStatusOutput = {
+      configured: true,
+      connected: true,
+      connection_id: "conn-3",
+      funder_address: "0x0000000000000000000000000000000000000003",
+      trading_ready: true,
+    } as PolyWalletStatusOutput;
+
+    let resolveLive:
+      | ((response: Response | PromiseLike<Response>) => void)
+      | undefined;
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.includes("freshness=read_model")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => staleReadModel,
+        } as Response);
+      }
+      if (url.includes("/wallet/overview")) {
+        return new Promise<Response>((resolve) => {
+          resolveLive = resolve;
+        });
+      }
+      if (url.includes("/wallet/status")) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => status,
+        } as Response);
+      }
+      throw new Error(`unexpected fetch: ${url}`);
+    }) as typeof fetch;
+
+    render(withClient(<TradingWalletCard />));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        expect.stringContaining("freshness=read_model"),
+        expect.any(Object)
+      );
+    });
+    expect(screen.queryByText("$20.00")).not.toBeInTheDocument();
+
+    resolveLive?.({
+      ok: true,
+      json: async () => liveOverview,
+    } as Response);
+
+    expect(await screen.findByText("$10.00")).toBeInTheDocument();
+    expect(screen.queryByText("$20.00")).not.toBeInTheDocument();
   });
 });
