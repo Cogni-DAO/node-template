@@ -113,6 +113,7 @@ export const POST = wrapRouteHandlerWithLogging(
       });
 
       const payload = polyWalletClosePositionOperation.output.parse({
+        kind: "order",
         order_id: receipt.order_id,
         status: receipt.status,
         client_order_id: receipt.client_order_id,
@@ -185,10 +186,10 @@ export const POST = wrapRouteHandlerWithLogging(
             );
             return NextResponse.json(
               polyWalletClosePositionOperation.output.parse({
-                order_id: "",
+                kind: "classified",
                 status: "closed",
-                client_order_id: "",
-                filled_size_usdc: 0,
+                classification: "stale_zero_balance",
+                ledger_rows_updated: updated,
               })
             );
           }
@@ -227,10 +228,10 @@ export const POST = wrapRouteHandlerWithLogging(
         );
         return NextResponse.json(
           polyWalletClosePositionOperation.output.parse({
-            order_id: "",
+            kind: "classified",
             status: "dust",
-            client_order_id: "",
-            filled_size_usdc: 0,
+            classification: "below_market_min",
+            ledger_rows_updated: updated,
           })
         );
       }

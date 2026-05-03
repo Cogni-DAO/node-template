@@ -42,6 +42,10 @@
  *     or an ops path invalidates that tenant after CLOB credential rotation.
  *   - SHARED_PUBLIC_CLIENT — the `viem.PublicClient` used for RPC reads is a
  *     process-level singleton; wallet clients fan out per tenant.
+ *   - DATA_API_DISCOVERY_HINT_FOR_EXIT — `exitPosition` uses Data API as the
+ *     cheap discovery path only. If a ledger-backed token is omitted there,
+ *     CTF ERC-1155 `balanceOf(funder, tokenId)` is the close authority before
+ *     deciding there is no position to sell.
  * Side-effects: on first `placeIntent` for a new tenant: HTTPS to Polymarket
  *   CLOB + Privy API. Subsequent calls reuse cached clients.
  * Links: work/items/task.0318 (Phase B3), work/items/task.0388,
@@ -145,7 +149,8 @@ export interface PolyTradeExecutor {
   /**
    * User-facing full exit path. Sells the wallet's entire share balance for
    * the token via a market FOK order and bypasses grant caps so users can
-   * always unwind exposure.
+   * always unwind exposure. Data API is only a discovery hint; Data API
+   * omission falls through to CTF ERC-1155 `balanceOf` before refusing close.
    */
   exitPosition: (params: ExitPositionParams) => Promise<OrderReceipt>;
   /** Per-tenant position query for the operator address. */

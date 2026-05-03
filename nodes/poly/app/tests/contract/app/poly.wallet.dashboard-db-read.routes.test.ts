@@ -1482,6 +1482,72 @@ describe("poly wallet dashboard DB read routes", () => {
     });
   });
 
+  it("refresh keeps Data API-omitted above-floor chain balances actionable without writing shares as USDC", async () => {
+    mockListPositions.mockResolvedValue([]);
+    mockListTenantPositions.mockResolvedValue([
+      {
+        ...row,
+        order_id: null,
+        status: "filled",
+      },
+    ]);
+    const getPositionShareBalance = vi.fn().mockResolvedValue(7);
+    const getMarketConstraints = vi.fn().mockResolvedValue({ minShares: 1 });
+    mockGetPolyTradeExecutorFor.mockResolvedValue({
+      getOrder: mockGetOrder,
+      listPositions: mockListPositions,
+      getPositionShareBalance,
+      getMarketConstraints,
+    });
+    const { POST } = await import("@/app/api/v1/poly/wallet/refresh/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/v1/poly/wallet/refresh", {
+        method: "POST",
+      })
+    );
+
+    expect(response.status).toBe(200);
+    expect(getPositionShareBalance).toHaveBeenCalledWith("token-1");
+    expect(getMarketConstraints).toHaveBeenCalledWith("token-1");
+    expect(mockUpdateStatus).not.toHaveBeenCalled();
+    expect(mockMarkPositionLifecycleByAsset).not.toHaveBeenCalled();
+    expect(mockMarkSynced).toHaveBeenCalledWith(["0xclient"]);
+  });
+
+  it("refresh keeps other reconciliation work when actionability classification fails", async () => {
+    mockListPositions.mockResolvedValue([]);
+    const getPositionShareBalance = vi
+      .fn()
+      .mockRejectedValue(new Error("rpc unavailable"));
+    mockGetPolyTradeExecutorFor.mockResolvedValue({
+      getOrder: mockGetOrder,
+      listPositions: mockListPositions,
+      getPositionShareBalance,
+      getMarketConstraints: vi.fn(),
+    });
+    const { POST } = await import("@/app/api/v1/poly/wallet/refresh/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/v1/poly/wallet/refresh", {
+        method: "POST",
+      })
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.warnings).toContainEqual(
+      expect.objectContaining({ code: "positions_actionability_partial" })
+    );
+    expect(mockUpdateStatus).toHaveBeenCalledWith({
+      client_order_id: "0xclient",
+      status: "partial",
+      filled_size_usdc: 10,
+      order_id: "0xorder",
+    });
+    expect(mockMarkPositionLifecycleByAsset).not.toHaveBeenCalled();
+  });
+
   it("refresh does not close DB positions when positions reconciliation fails", async () => {
     mockRefreshCurrentPositionsForWallet.mockRejectedValue(
       new Error("positions unavailable")

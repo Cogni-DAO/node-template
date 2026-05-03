@@ -193,6 +193,7 @@ describe("poly wallet position action routes", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
+      kind: "order",
       order_id: "0xclose",
       status: "filled",
       client_order_id: "0xclient",
@@ -257,10 +258,10 @@ describe("poly wallet position action routes", () => {
     );
     expect(missing.status).toBe(200);
     await expect(missing.json()).resolves.toEqual({
-      order_id: "",
+      kind: "classified",
       status: "closed",
-      client_order_id: "",
-      filled_size_usdc: 0,
+      classification: "stale_zero_balance",
+      ledger_rows_updated: 1,
     });
     expect(mockMarkPositionLifecycleByAsset).toHaveBeenCalledWith({
       billing_account_id: ACCOUNT.id,
@@ -316,10 +317,10 @@ describe("poly wallet position action routes", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
-      order_id: "",
+      kind: "classified",
       status: "dust",
-      client_order_id: "",
-      filled_size_usdc: 0,
+      classification: "below_market_min",
+      ledger_rows_updated: 1,
     });
     expect(mockMarkPositionLifecycleByAsset).toHaveBeenCalledWith({
       billing_account_id: ACCOUNT.id,
@@ -412,6 +413,7 @@ describe("poly wallet position action routes", () => {
 
     expect(response.status).toBe(200);
     await expect(response.json()).resolves.toEqual({
+      kind: "order",
       order_id: "0xclose",
       status: "filled",
       client_order_id: "0xclient",

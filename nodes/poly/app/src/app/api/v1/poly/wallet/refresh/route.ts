@@ -32,7 +32,12 @@ import {
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
 } from "@/bootstrap/poly-trader-wallet";
-import type { LedgerRow, LedgerStatus } from "@/features/trading";
+import {
+  classifyPositionActionability,
+  type LedgerRow,
+  type LedgerStatus,
+  type PositionActionability,
+} from "@/features/trading";
 import { refreshCurrentPositionsForWallet } from "@/features/wallet-analysis/server/trader-observation-service";
 import {
   getExecutionSlice,
@@ -232,61 +237,83 @@ export const POST = wrapRouteHandlerWithLogging(
               "Current positions were fetched up to the configured page cap; missing DB rows were not deactivated.",
           });
         }
-        const currentPositionByAsset = new Map(
-          currentPositionsResult.result.positions
-            .filter((position) => position.size > 0)
-            .map((position) => [position.asset, position])
-        );
-
-        const classifiedAssets = new Set<string>();
+        const positionActionabilityFailures: string[] = [];
+        const actionabilityByAsset = new Map<
+          string,
+          Promise<PositionActionability>
+        >();
+        const lifecycleClassifiedAssets = new Set<string>();
+        const classifyAsset = (tokenId: string) => {
+          const existing = actionabilityByAsset.get(tokenId);
+          if (existing !== undefined) return existing;
+          const next = classifyPositionActionability({
+            tokenId,
+            dataApiPositions: currentPositionsResult.result.positions,
+            readOnchainShares: executor.getPositionShareBalance,
+            readMarketConstraints: executor.getMarketConstraints,
+          });
+          actionabilityByAsset.set(tokenId, next);
+          return next;
+        };
         const exposureRows = rows.filter(hasPositionExposure);
         const exposureUpdateCounts = await mapConcurrent(
           exposureRows,
           REFRESH_CONCURRENCY,
           async (row) => {
-            const tokenId = readTokenId(row);
-            if (tokenId === null) return 0;
-            syncedIds.add(row.client_order_id);
-            const currentPosition = currentPositionByAsset.get(tokenId);
-            if (
-              currentPosition !== undefined &&
-              currentPosition.currentValue > 0
-            ) {
-              await container.orderLedger.updateStatus({
-                client_order_id: row.client_order_id,
-                status: row.status,
-                filled_size_usdc: roundToCents(currentPosition.currentValue),
-              });
-              return 1;
+            try {
+              const tokenId = readTokenId(row);
+              if (tokenId === null) return 0;
+              syncedIds.add(row.client_order_id);
+              const actionability = await classifyAsset(tokenId);
+              if (actionability.kind === "data_api_current") {
+                await container.orderLedger.updateStatus({
+                  client_order_id: row.client_order_id,
+                  status: row.status,
+                  filled_size_usdc: roundToCents(
+                    actionability.currentValueUsdc
+                  ),
+                });
+                return 1;
+              }
+              if (actionability.kind === "stale_zero_balance") {
+                if (lifecycleClassifiedAssets.has(tokenId)) return 0;
+                lifecycleClassifiedAssets.add(tokenId);
+                return container.orderLedger.markPositionLifecycleByAsset({
+                  billing_account_id: account.id,
+                  token_id: tokenId,
+                  lifecycle: "closed",
+                  updated_at: new Date(),
+                });
+              }
+              if (actionability.kind === "dust") {
+                if (lifecycleClassifiedAssets.has(tokenId)) return 0;
+                lifecycleClassifiedAssets.add(tokenId);
+                return container.orderLedger.markPositionLifecycleByAsset({
+                  billing_account_id: account.id,
+                  token_id: tokenId,
+                  lifecycle: "dust",
+                  updated_at: new Date(),
+                });
+              }
+              return 0;
+            } catch (err) {
+              positionActionabilityFailures.push(
+                err instanceof Error ? err.message : String(err)
+              );
+              return 0;
             }
-            if (!currentPositionsResult.result.complete) return 0;
-            if (classifiedAssets.has(tokenId)) return 0;
-            classifiedAssets.add(tokenId);
-            const shares = await executor.getPositionShareBalance(tokenId);
-            if (shares <= 0) {
-              return container.orderLedger.markPositionLifecycleByAsset({
-                billing_account_id: account.id,
-                token_id: tokenId,
-                lifecycle: "closed",
-                updated_at: new Date(),
-              });
-            }
-            const constraints = await executor.getMarketConstraints(tokenId);
-            if (shares < constraints.minShares) {
-              return container.orderLedger.markPositionLifecycleByAsset({
-                billing_account_id: account.id,
-                token_id: tokenId,
-                lifecycle: "dust",
-                updated_at: new Date(),
-              });
-            }
-            return 0;
           }
         );
         ledgerRowsUpdated += exposureUpdateCounts.reduce<number>(
           (sum, count) => sum + count,
           0
         );
+        if (positionActionabilityFailures.length > 0) {
+          warnings.push({
+            code: "positions_actionability_partial",
+            message: `${positionActionabilityFailures.length} position classifications failed; first error: ${positionActionabilityFailures[0]}`,
+          });
+        }
       }
 
       await container.orderLedger.markSynced([...syncedIds]);

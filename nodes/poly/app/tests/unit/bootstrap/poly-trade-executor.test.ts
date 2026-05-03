@@ -260,7 +260,7 @@ describe("createPolyTradeExecutorFactory", () => {
     expect(listUserPositions).toHaveBeenCalledTimes(1);
   });
 
-  it("exitPosition falls back to on-chain CTF balance when Data API omits a legacy holding", async () => {
+  it("exitPosition reads on-chain CTF balance when Data API omits a legacy holding", async () => {
     listUserPositions.mockResolvedValue([]);
     readContract.mockResolvedValue(4_898_000n);
     const receipt: OrderReceipt = {
