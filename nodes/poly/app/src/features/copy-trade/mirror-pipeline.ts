@@ -29,7 +29,11 @@ import {
   type OrderReceipt,
 } from "@cogni/poly-market-provider";
 
-import { AlreadyRestingError, type OrderLedger } from "@/features/trading";
+import {
+  AlreadyRestingError,
+  type OrderLedger,
+  PositionCapReachedError,
+} from "@/features/trading";
 import type { WalletActivitySource } from "@/features/wallet-watch";
 
 import { planMirrorFromFill } from "./plan-mirror";
@@ -776,6 +780,9 @@ async function executeMirrorOrder(
       fill_id: fill.fill_id,
       observed_at: new Date(fill.observed_at),
       intent,
+      ...(intent.side === "BUY"
+        ? { max_market_intent_usdc: deps.target.sizing.max_usdc_per_trade }
+        : {}),
     });
   } catch (err: unknown) {
     // DB partial unique index races past the app-level gate → same skip outcome.
@@ -810,6 +817,46 @@ async function executeMirrorOrder(
           ...decisionLogFields,
         },
         "mirror pipeline: skip (already resting; DB index backstop)"
+      );
+      return;
+    }
+    if (err instanceof PositionCapReachedError) {
+      emitDecisionMetric(
+        deps.metrics,
+        "skipped",
+        "position_cap_reached",
+        source,
+        placement
+      );
+      await deps.ledger.recordDecision({
+        ...decisionBase,
+        outcome: "skipped",
+        reason: "position_cap_reached",
+        intent: buildDecisionIntentBlob(fill, deps.target, client_order_id, {
+          ...decisionLogFields,
+          position_branch: decisionLogFields?.position_branch ?? "new_entry",
+          current_intent_usdc: err.current_intent_usdc,
+          proposed_intent_usdc: err.proposed_intent_usdc,
+          max_intent_usdc: err.max_intent_usdc,
+        }),
+        receipt: null,
+      });
+      log.info(
+        {
+          event: EVENT_NAMES.POLY_MIRROR_DECISION,
+          outcome: "skipped",
+          reason: "position_cap_reached",
+          source,
+          fill_id: fill.fill_id,
+          client_order_id,
+          market_id: fill.market_id,
+          current_intent_usdc: err.current_intent_usdc,
+          proposed_intent_usdc: err.proposed_intent_usdc,
+          max_intent_usdc: err.max_intent_usdc,
+          detail: "DB tenant-market intent cap backstop fired",
+          ...decisionLogFields,
+        },
+        "mirror pipeline: skip (position cap reached; DB backstop)"
       );
       return;
     }
