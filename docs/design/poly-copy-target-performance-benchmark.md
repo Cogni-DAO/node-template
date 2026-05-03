@@ -22,7 +22,7 @@ Ship task.5005 as a research UI extension, not a new dashboard and not another p
 
 The shortest useful path is:
 
-1. Persist observed RN1/swisstony target activity and Cogni comparison-wallet snapshots into Postgres read-model tables.
+1. Persist rolling-window RN1/swisstony target activity and Cogni comparison-wallet snapshots into Postgres read-model tables.
 2. Attribute each observed target fill or target position to Cogni's existing mirror decision/fill ledger.
 3. Extend the existing wallet research detail pages at `/research/w/[addr]` with three panels:
    - benchmark summary;
@@ -32,11 +32,13 @@ The shortest useful path is:
 
 PR #1137 only impacted specific wallet research pages and only populates the new distributions for RN1 and swisstony. That is fine for this MVP: task.5005 should start with those same two copy targets, then add Cogni comparison wallets as a separate selector or pinned comparison set.
 
-### 24h Fast Path
+### Rolling-Window Ingestion
 
-The first implementation should make the last 24 hours useful before it tries to be a complete historical accounting system.
+Do not crawl full RN1/swisstony history. These wallets are high-frequency enough that a full-history pull would be slow, rate-limit-prone, and unnecessary for the operator question.
 
-This is the easy path for "I made 200 trades yesterday; compare us against RN1/swisstony now":
+The first implementation should make the last 24 hours useful, then extend the same rolling-window pattern to 1w/1m if the upstream rate budget allows it.
+
+This is the path for "I made 200 trades yesterday; compare us against RN1/swisstony now":
 
 1. Pull recent RN1/swisstony Data API trades with `takerOnly=false`, paginating until `timestamp < now - 24h`.
 2. Pull current RN1/swisstony positions for the markets touched by those trades.
@@ -45,14 +47,19 @@ This is the easy path for "I made 200 trades yesterday; compare us against RN1/s
 5. Compute target 24h VWAP, Cogni 24h VWAP, target size, Cogni size, copy capture ratio, latest decision reason, and marked current value.
 6. Render this as a `1D` benchmark mode on the RN1/swisstony research pages.
 
-This fast path does not require:
+This path does not require:
 
 - final market resolution;
 - full lifetime wallet backfill;
 - historical snapshots before the 24h window;
 - a new streaming system.
 
-It does require idempotent target-trade storage, because a 200-trade day will be fetched repeatedly while the operator refreshes the page.
+It does require:
+
+- per-wallet cursors or watermark checkpoints for each source;
+- small-page pagination with early stop at the requested window boundary;
+- idempotent upserts by native trade identifier;
+- explicit stale/partial labels if an upstream page fails or the rate budget is exhausted.
 
 ### Current Evidence
 
@@ -130,7 +137,8 @@ The target wallets operate at a different scale. A research surface that only sh
 
 - [ ] RESEARCH_UI_FIRST: Task.5005 extends `/research/w/[addr]`; it does not create a separate dashboard for the MVP.
 - [ ] RN1_SWISSTONY_FIRST: The MVP target set is RN1 and swisstony, matching PR #1137's populated research surface.
-- [ ] TWENTY_FOUR_HOUR_FAST_PATH: The MVP supports a `1D` benchmark from recent target trades, current target positions, and same-window Cogni decisions/fills before complete historical outcome accounting.
+- [ ] TWENTY_FOUR_HOUR_FAST_PATH: The MVP supports a `1D` benchmark from recent target trades, current target positions, and same-window Cogni decisions/fills without crawling full target history.
+- [ ] NO_FULL_HISTORY_CRAWL: RN1/swisstony ingestion uses rolling windows, cursors/watermarks, early-stop pagination, and stale/partial labels under rate pressure.
 - [ ] DO_NOT_OVERLOAD_MIRROR_LEDGER: Target wallet fills and positions are not inserted into `poly_copy_trade_fills`.
 - [ ] POSTGRES_OPERATIONAL_TRUTH: Target activity, position snapshots, and attribution live in poly Postgres tables, not Doltgres.
 - [ ] CONTRACT_FIRST_HTTP: Any new research API response shape is defined in `nodes/poly/app/src/contracts/*.contract.ts` and routes parse input/output with Zod.
@@ -177,7 +185,7 @@ Show RN1, swisstony, and selected Cogni comparison wallets over 1d, 1w, 1m:
 - missed edge: target marked or realized PnL on markets where Cogni did not place;
 - adverse copy: Cogni loss on markets where the target was flat or profitable.
 
-The `1D` view is the fast path. It should label results as "marked" when the market has not resolved and should favor recent-trade completeness over perfect lifetime attribution.
+The `1D` view is the fast path. It should label results as "marked" when the market has not resolved and should favor recent-window completeness over lifetime attribution.
 
 #### Per-Market Attribution Table
 
@@ -247,7 +255,7 @@ Do not create a second hedge-size pXX gate. The selected pXX remains the convict
 ### Implementation Sequence
 
 1. Schema and migration for trader wallets, observed fills, position snapshots, attribution, and market outcomes.
-2. Backfill command/job for RN1, swisstony, prod funder, Derek candidate tenant, and old shared operator from Data API/user-PnL API.
+2. Rolling 24h ingestion job for RN1, swisstony, prod funder, Derek candidate tenant, and old shared operator from Data API/user-PnL API, with cursor checkpoints and early-stop pagination.
 3. Attribution write path from target observation and existing mirror decision/fill rows.
 4. Benchmark API contract and service returning an empty-safe bundle for non-target wallets.
 5. Research UI panels on `/research/w/[addr]`, reusing #1137 distributions for RN1/swisstony.
@@ -255,7 +263,7 @@ Do not create a second hedge-size pXX gate. The selected pXX remains the convict
 
 ### Validation
 
-exercise: On candidate-a, backfill RN1, swisstony, and one Cogni funder, then let the mirror process at least one new target fill. Open `/research/w/0x2005d16a84ceefa912d4e380cd32e7ff827875ea` and `/research/w/0x204f72f35326db932158cba6adff0b9a1da95e14`; verify target headline deltas, Cogni deltas, PR #1137 order-flow distributions, per-market VWAP comparison, and active gap reason codes render for the exercised wallets.
+exercise: On candidate-a, ingest the rolling 24h window for RN1, swisstony, and one Cogni funder, then let the mirror process at least one new target fill. Open `/research/w/0x2005d16a84ceefa912d4e380cd32e7ff827875ea` and `/research/w/0x204f72f35326db932158cba6adff0b9a1da95e14`; verify target headline deltas, Cogni deltas, PR #1137 order-flow distributions, per-market VWAP comparison, and active gap reason codes render for the exercised wallets.
 
 observability: Query Loki for the deployed SHA and confirm ingestion logs `poly.copy_target.ingest` for RN1/swisstony, mirror logs `poly.mirror.decision` with `position_branch` fields, and attribution write logs `poly.copy_target.attribution` include the target fill id plus the Cogni decision id for the agent's own exercised fill.
 
@@ -263,19 +271,19 @@ observability: Query Loki for the deployed SHA and confirm ingestion logs `poly.
 
 ### Scorecard
 
-| Dimension              | Score   | Rationale                                                                                                                                |
-| ---------------------- | ------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Simplicity             | PASS    | The MVP is three panels on the existing wallet research detail page and avoids a new dashboard or planner rewrite.                       |
-| OSS-First              | PASS    | No bespoke charting or stream framework is required; the design reuses existing React/query/table patterns and upstream Polymarket APIs. |
-| Architecture Alignment | PASS    | Schema, contracts, API route, feature service, and UI are placed in existing repo layers.                                                |
-| Boundary Placement     | PASS    | Shared table definitions live in `@cogni/poly-db-schema`; runtime ingestion and UI stay in the app.                                      |
-| Content Boundaries     | PASS    | This doc owns design and invariants; task.5005 owns execution status; #1137 remains linked as UI foundation.                             |
-| Scope Discipline       | PASS    | The task is scoped to benchmark attribution and active gaps, not trading policy changes.                                                 |
-| Risk Surface           | CONCERN | Data API pagination, rate limits, and 500+ open-position wallets require bounded ingestion and dedupe tests.                             |
+| Dimension              | Score   | Rationale                                                                                                                                  |
+| ---------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| Simplicity             | PASS    | The MVP is three panels on the existing wallet research detail page and avoids a new dashboard or planner rewrite.                         |
+| OSS-First              | PASS    | No bespoke charting or stream framework is required; the design reuses existing React/query/table patterns and upstream Polymarket APIs.   |
+| Architecture Alignment | PASS    | Schema, contracts, API route, feature service, and UI are placed in existing repo layers.                                                  |
+| Boundary Placement     | PASS    | Shared table definitions live in `@cogni/poly-db-schema`; runtime ingestion and UI stay in the app.                                        |
+| Content Boundaries     | PASS    | This doc owns design and invariants; task.5005 owns execution status; #1137 remains linked as UI foundation.                               |
+| Scope Discipline       | PASS    | The task is scoped to benchmark attribution and active gaps, not trading policy changes.                                                   |
+| Risk Surface           | CONCERN | Data API pagination, rate limits, and high-frequency target wallets require rolling windows, cursors, bounded ingestion, and dedupe tests. |
 
 ### Review Concerns
 
-1. Data API ingestion must be paginated and idempotent before this ships. RN1 and swisstony exceed 500 open rows, so a first-page-only implementation would make the active-gaps panel misleading.
+1. Data API ingestion must be rolling-window, paginated, cursor/watermark-based, and idempotent before this ships. RN1 and swisstony are too large for a full-history crawl or first-page-only implementation.
 2. PnL chart deltas from `user-pnl-api` should be labeled as upstream chart-service values until market outcome attribution is mature. They are useful headlines, not accounting truth.
 3. If the benchmark route is added as a sibling route instead of a slice on `/api/v1/poly/wallets/[addr]`, the route contract still needs to live in `src/contracts` first.
 
