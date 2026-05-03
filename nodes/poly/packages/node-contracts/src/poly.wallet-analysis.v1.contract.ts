@@ -40,6 +40,7 @@ export const WalletAnalysisSliceSchema = z.enum([
   "balance",
   "pnl",
   "distributions",
+  "benchmark",
 ]);
 export type WalletAnalysisSlice = z.infer<typeof WalletAnalysisSliceSchema>;
 
@@ -225,6 +226,51 @@ export const WalletAnalysisPnlSchema = z.object({
 });
 export type WalletAnalysisPnl = z.infer<typeof WalletAnalysisPnlSchema>;
 
+export const WalletAnalysisBenchmarkSchema = z.object({
+  isObserved: z.boolean(),
+  traderKind: z.enum(["copy_target", "cogni_wallet"]).nullable(),
+  label: z.string().nullable(),
+  window: PolyWalletOverviewIntervalSchema,
+  coverage: z.object({
+    observedSince: z.string().nullable(),
+    lastSuccessAt: z.string().nullable(),
+    status: z.string().nullable(),
+    targetTrades: z.number().int().nonnegative(),
+    cogniTrades: z.number().int().nonnegative(),
+  }),
+  summary: z.object({
+    targetSizeUsdc: z.number(),
+    cogniSizeUsdc: z.number(),
+    copyCaptureRatio: z.number().nullable(),
+    targetOpenValueUsdc: z.number(),
+    cogniOpenValueUsdc: z.number(),
+  }),
+  markets: z.array(
+    z.object({
+      conditionId: z.string(),
+      tokenId: z.string(),
+      targetVwap: z.number().nullable(),
+      cogniVwap: z.number().nullable(),
+      targetSizeUsdc: z.number(),
+      cogniSizeUsdc: z.number(),
+      status: z.enum(["copied", "partial", "missed", "no_response_yet"]),
+      reason: z.string(),
+    })
+  ),
+  activeGaps: z.array(
+    z.object({
+      conditionId: z.string(),
+      tokenId: z.string(),
+      targetCurrentValueUsdc: z.number(),
+      reason: z.string(),
+    })
+  ),
+  computedAt: z.string(),
+});
+export type WalletAnalysisBenchmark = z.infer<
+  typeof WalletAnalysisBenchmarkSchema
+>;
+
 /** Surfaced when a slice fetch fails but others succeeded — UI shows "trades unavailable, retrying". */
 export const WalletAnalysisWarningSchema = z.object({
   slice: WalletAnalysisSliceSchema,
@@ -240,6 +286,7 @@ export const WalletAnalysisResponseSchema = z.object({
   balance: WalletAnalysisBalanceSchema.optional(),
   pnl: WalletAnalysisPnlSchema.optional(),
   distributions: WalletAnalysisDistributionsSchema.optional(),
+  benchmark: WalletAnalysisBenchmarkSchema.optional(),
   warnings: z.array(WalletAnalysisWarningSchema),
 });
 export type WalletAnalysisResponse = z.infer<

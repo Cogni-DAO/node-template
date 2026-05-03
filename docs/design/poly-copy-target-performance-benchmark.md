@@ -22,18 +22,19 @@ Ship task.5005 as a research UI extension, not a new dashboard and not another p
 
 The shortest useful path is:
 
-1. Start continuously observing configured trader wallets from today forward: RN1, swisstony, and the Cogni trading wallets we want to benchmark.
-2. Persist every observed wallet trade for both copy targets and Cogni wallets into the same Postgres observation tables.
+1. Start continuously observing configured trader wallets from today forward: RN1, swisstony, and active tenant trading wallets.
+2. Persist every observed wallet trade for both copy targets and tenant trading wallets into the same Postgres observation tables.
 3. Persist current position snapshots for those wallets on each poll, deduping unchanged snapshots.
-4. Attribute observed target trades/positions to Cogni's observed wallet trades and existing mirror decision/fill ledger.
-5. Query the stored observation data by time window, starting with `1D`.
-6. Extend the existing wallet research detail pages at `/research/w/[addr]` with three panels:
+4. Maintain a separate current-position state table for active-gap queries; snapshots remain immutable observation history.
+5. Attribute observed target trades/positions to the signed-in tenant's observed wallet trades and existing mirror decision/fill ledger.
+6. Query the stored observation data by time window, starting with `1D`.
+7. Extend the existing wallet research detail pages at `/research/w/[addr]` with three panels:
    - benchmark summary;
    - per-market VWAP attribution;
    - active gaps.
-7. Reuse PR #1137's order-flow distributions as the style context on those same wallet research pages.
+8. Reuse PR #1137's order-flow distributions as the style context on those same wallet research pages.
 
-PR #1137 only impacted specific wallet research pages and only populates the new distributions for RN1 and swisstony. That is fine for this MVP: task.5005 should start with those same two copy targets, then add Cogni comparison wallets as first-class observed trader wallets.
+PR #1137 only impacted specific wallet research pages and only populates the new distributions for RN1 and swisstony. That is fine for this MVP: task.5005 should start with those same two copy targets, then add active tenant trading wallets as first-class observed trader wallets.
 
 ### Live Forward Observation
 
@@ -41,12 +42,14 @@ The primary design is live forward collection, not rolling-window scraping. From
 
 The observed-wallet set has two independent states:
 
-- `observe_enabled`: save this wallet's public Polymarket activity for research and benchmarking. This belongs to the trader-observation read model.
-- `copy_enabled`: allow the mirror planner to consider this wallet as a copy-trade target. This remains backed by the existing `poly_copy_trade_targets` policy table and its active/disabled state.
+- `active_for_research`: save this wallet's public Polymarket activity for research and benchmarking. This belongs to the trader-observation read model.
+- `active_for_copy_trade`: allow the mirror planner to consider this wallet as a copy-trade target. This is represented by the existing `poly_copy_trade_targets` policy table's active row state (`disabled_at IS NULL`), not by trader-observation config.
 
-RN1/swisstony should normally have `observe_enabled=true`. They may have `copy_enabled=true` or `false`; observation must not depend on active copying.
+RN1/swisstony should normally have `active_for_research=true`. They may have `active_for_copy_trade=true` or `false`; observation must not depend on active copying.
 
-Cogni wallets should also be observed directly. `poly_copy_trade_fills` remains useful as our intent/placement ledger, but direct wallet observation is the apples-to-apples comparison against target wallets. It catches actual public wallet activity, manual trades, fills not cleanly reflected in intent rows, and reconciliation drift.
+Active tenant trading wallets should also be observed directly. `poly_copy_trade_fills` remains useful as our intent/placement ledger, but direct wallet observation is the apples-to-apples comparison against target wallets. It catches actual public wallet activity, manual trades, fills not cleanly reflected in intent rows, and reconciliation drift.
+
+In the UI and benchmark queries, "our wallet" means the signed-in user's active `poly_wallet_connections.address`. The observer may save public facts for every active tenant wallet, but benchmark aggregation must filter to the current user's active funder address. Never aggregate all `kind='cogni_wallet'` rows as "Cogni" in a multi-tenant view.
 
 ### Query Windows And Historical Backfill
 
@@ -54,13 +57,13 @@ Do not crawl full RN1/swisstony history. These wallets are high-frequency enough
 
 `1D`, `1W`, and `1M` are query windows over saved observations. They are not separate ingestion strategies.
 
-For the first day after launch, the `1D` view answers: "since we started observing, what did RN1/swisstony do, what did Cogni do, and where did we miss?" After a week of continuous observation, the same tables power `1W`. After a month, they power `1M`.
+For the first day after launch, the `1D` view answers: "since we started observing, what did RN1/swisstony do, what did the signed-in tenant wallet do, and where did we miss?" After a week of continuous observation, the same tables power `1W`. After a month, they power `1M`.
 
-Historical backfill is v2. It can fill older gaps opportunistically under a strict rate budget, but it must not block the live-forward MVP.
+Historical backfill is v2. It can fill older gaps opportunistically under a strict rate budget, using the same observed-trade tables with an explicit source/cursor path, but it must not block the live-forward MVP.
 
 The live observation poller should:
 
-1. Poll configured `observe_enabled` wallets with `takerOnly=false`.
+1. Poll configured `active_for_research` wallets with `takerOnly=false`.
 2. Paginate from newest toward the previous watermark and stop as soon as it reaches already-seen data.
 3. Upsert each observed trade by native source identity.
 4. Update per-wallet ingestion checkpoints only after successful upserts.
@@ -95,9 +98,9 @@ Source: `https://user-pnl-api.polymarket.com/user-pnl`.
 
 These are chart-service PnL values. They are useful headline benchmarks but not sufficient for per-market copy-trade attribution.
 
-#### Cogni Wallet PnL Curve Deltas
+#### Existing Tenant Wallet PnL Curve Deltas
 
-Known Cogni wallets from existing work items and handoffs:
+Known tenant wallets from existing work items and handoffs. These are evidence samples, not hardcoded comparison identities:
 
 | Wallet                                                              | 1d delta | 1w delta | 1m delta | Current PnL chart value | Notes                                               |
 | ------------------------------------------------------------------- | -------: | -------: | -------: | ----------------------: | --------------------------------------------------- |
@@ -133,14 +136,14 @@ The target wallets operate at a different scale. A research surface that only sh
 
 ### Approach
 
-**Solution**: Add a Postgres operational read model for observed trader activity across both copy targets and Cogni wallets, continuously populate it from today forward, then expose a small benchmark API slice consumed by the existing wallet research detail surface.
+**Solution**: Add a Postgres operational read model for observed trader activity across both copy targets and active tenant trading wallets, continuously populate it from today forward, then expose a small benchmark API slice consumed by the existing wallet research detail surface.
 
 **Reuses**:
 
 - Existing Polymarket Data API client and user-PnL fetch path from `features/wallet-analysis`.
 - Existing generic `features/wallet-watch` observation primitive, extended to paginate safely for high-frequency wallets instead of single-page polling.
-- Existing `poly_copy_trade_fills` and `poly_copy_trade_decisions` as Cogni execution truth.
-- Existing `MirrorPositionView` / `aggregatePositionRows()` as Cogni VWAP and position projection.
+- Existing `poly_copy_trade_fills` and `poly_copy_trade_decisions` as tenant execution truth.
+- Existing `MirrorPositionView` / `aggregatePositionRows()` as tenant VWAP and position projection.
 - Existing wallet research route and PR #1137 `DistributionsBlock` for target-style context.
 - Existing Pino/Loki event flow for validation and candidate-a verification.
 
@@ -158,10 +161,10 @@ The target wallets operate at a different scale. A research surface that only sh
 
 - [ ] RESEARCH_UI_FIRST: Task.5005 extends `/research/w/[addr]`; it does not create a separate dashboard for the MVP.
 - [ ] RN1_SWISSTONY_FIRST: The MVP target set is RN1 and swisstony, matching PR #1137's populated research surface.
-- [ ] LIVE_FORWARD_COLLECTION: The MVP starts saving observed RN1/swisstony and Cogni wallet trades continuously from deployment forward.
+- [ ] LIVE_FORWARD_COLLECTION: The MVP starts saving observed RN1/swisstony and active tenant trading-wallet trades continuously from deployment forward.
 - [ ] QUERY_WINDOWS_NOT_INGESTION_WINDOWS: `1D`/`1W`/`1M` are query windows over saved observations, not ad hoc scraping jobs.
 - [ ] OBSERVATION_INDEPENDENT_OF_COPYING: RN1/swisstony observation continues even when a wallet is not actively copy-enabled.
-- [ ] SAME_OBSERVED_TRADE_TABLE: Copy-target and Cogni wallet public trades use the same observed-trade table keyed by `trader_wallet_id`.
+- [ ] SAME_OBSERVED_TRADE_TABLE: Copy-target and tenant trading-wallet public trades use the same observed-trade table keyed by `trader_wallet_id`.
 - [ ] NO_FULL_HISTORY_CRAWL: Historical RN1/swisstony backfill is v2 and must be rate-budgeted; the MVP does not crawl full target history.
 - [ ] DO_NOT_OVERLOAD_MIRROR_LEDGER: Target wallet fills and positions are not inserted into `poly_copy_trade_fills`.
 - [ ] POSTGRES_OPERATIONAL_TRUTH: Target activity, position snapshots, and attribution live in poly Postgres tables, not Doltgres.
@@ -178,16 +181,15 @@ The target wallets operate at a different scale. A research surface that only sh
 
 Use Postgres read-model tables in `@cogni/poly-db-schema`; generate the migration under the poly app DB migrations directory.
 
-| Table                            | Grain                                                       | Purpose                                                                                                                                                                                                                                                                   |
-| -------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Table                            | Grain                                                       | Purpose                                                                                                                                                                                                                                                                   |
-| -------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------        |
-| `poly_trader_wallets`            | one row per observed wallet address                         | Canonical observed trader identity: `kind in ('copy_target','cogni_wallet')`, label, `observe_enabled`, first_observed_at. This is research observation state, not copy policy.                                                                                           |
-| `poly_trader_ingestion_cursors`  | one row per trader/source                                   | Watermark/checkpoint for live forward observation: source, last_seen_at, last_seen_native_id, last_success_at, last_error_at, partial/stale status. Prevents re-scraping and makes rate-limit gaps visible.                                                               |
-| `poly_trader_fills`              | one normalized observed trade per trader                    | Data API or future WS/on-chain fills for both target wallets and Cogni wallets. Includes `trader_wallet_id`, `source`, `native_id`, `condition_id`, `token_id`, `side`, `price`, `shares`, `size_usdc`, `tx_hash`, `observed_at`, `raw`. Unique on `(source, native_id)`. |
-| `poly_trader_position_snapshots` | one row per trader/condition/token/material snapshot        | Position snapshots: shares, cost basis, current value, avg price, captured_at, content_hash, raw. Save on material change or cadence boundary. Powers active gaps and marked outcomes.                                                                                    |
-| `poly_copy_trade_attribution`    | one row per target fill or target position x Cogni response | Joins target observation to Cogni observed fills plus optional existing decision/fill rows: `copied`, `partial`, `missed`, `resting`, `skipped`, `error`, `no_response_yet`. Carries bounded reason and Cogni VWAP fields when available.                                 |
-| `poly_market_outcomes`           | one row per condition/token resolution                      | Final outcome, payout, close/resolution time. Needed for realized attribution once outcomes are available; marked current value remains valid before resolution.                                                                                                          |
+| Table                            | Grain                                                       | Purpose                                                                                                                                                                                                                                                                                              |
+| -------------------------------- | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `poly_trader_wallets`            | one row per observed wallet address                         | Canonical observed trader identity: `kind in ('copy_target','cogni_wallet')`, label, `active_for_research`, first_observed_at. Copy targets are seeded; active tenant trading wallets are synced from `poly_wallet_connections`. This is research observation state, not copy policy.                |
+| `poly_trader_ingestion_cursors`  | one row per trader/source                                   | Watermark/checkpoint for live forward observation: source, last_seen_at, last_seen_native_id, last_success_at, last_error_at, partial/stale status. Prevents re-scraping and makes rate-limit gaps visible.                                                                                          |
+| `poly_trader_fills`              | one normalized observed trade per trader                    | Data API or future WS/on-chain fills for both target wallets and tenant trading wallets. Includes `trader_wallet_id`, `source`, `native_id`, `condition_id`, `token_id`, `side`, `price`, `shares`, `size_usdc`, `tx_hash`, `observed_at`, `raw`. Unique on `(trader_wallet_id, source, native_id)`. |
+| `poly_trader_position_snapshots` | one row per trader/condition/token/material snapshot        | Immutable position history: shares, cost basis, current value, avg price, captured_at, content_hash, raw. Save on material change or cadence boundary. Powers later outcome analysis without pretending absences are close events.                                                                   |
+| `poly_trader_current_positions`  | one row per trader/condition/token latest state             | Current active-position state for live research UI. Updated from complete paginated position polls. Missing rows are deactivated only when the poll proves it saw the full wallet position set.                                                                                                      |
+| `poly_copy_trade_attribution`    | one row per target fill or target position x Cogni response | Joins target observation to Cogni observed fills plus optional existing decision/fill rows: `copied`, `partial`, `missed`, `resting`, `skipped`, `error`, `no_response_yet`. Carries bounded reason and Cogni VWAP fields when available.                                                            |
+| `poly_market_outcomes`           | one row per condition/token resolution                      | Final outcome, payout, close/resolution time. Needed for realized attribution once outcomes are available; marked current value remains valid before resolution.                                                                                                                                     |
 
 This keeps joins explicit:
 
@@ -195,15 +197,15 @@ This keeps joins explicit:
 - `target observed fill -> attribution -> poly_copy_trade_decisions/poly_copy_trade_fills`
 - `target position snapshot -> MirrorPositionView -> active gap reason`
 - `target fill/position/outcome -> target VWAP/outcome`
-- `Cogni observed fill/position/outcome -> Cogni VWAP/outcome`
+- `signed-in tenant observed fill/position/outcome -> tenant VWAP/outcome`
 
 ### API And UI Requirements
 
-The existing wallet research page should load one benchmark bundle for the viewed wallet. For RN1/swisstony, the bundle includes target metrics plus comparison against selected Cogni wallets. For non-target wallets, the bundle may return empty attribution while the existing wallet research surface still renders.
+The existing wallet research page should load one benchmark bundle for the viewed wallet. For RN1/swisstony, the bundle includes target metrics plus comparison against the signed-in user's active tenant trading wallet. For non-target wallets, the bundle may return empty attribution while the existing wallet research surface still renders.
 
 #### Benchmark Panel
 
-Show RN1, swisstony, and selected Cogni comparison wallets over 1d, 1w, 1m:
+Show RN1, swisstony, and the signed-in user's active tenant trading wallet over 1d, 1w, 1m:
 
 - target PnL chart delta;
 - Cogni PnL chart delta;
@@ -268,7 +270,7 @@ Do not create a second hedge-size pXX gate. The selected pXX remains the convict
 
 ### Files
 
-- Create: `nodes/poly/packages/db-schema/src/trader-activity.ts` — Drizzle schema for target/Cogni trader read-model tables.
+- Create: `nodes/poly/packages/db-schema/src/trader-activity.ts` — Drizzle schema for target/tenant trader read-model tables.
 - Modify: `nodes/poly/packages/db-schema/src/index.ts` and package exports — expose the new schema slice.
 - Create: `nodes/poly/app/src/adapters/server/db/migrations/<next>_poly_trader_activity.sql` — generated migration for the new Postgres tables.
 - Create: `nodes/poly/app/src/contracts/poly.copy-target-benchmark.v1.contract.ts` — Zod request/response contract for the research benchmark bundle.
@@ -276,7 +278,7 @@ Do not create a second hedge-size pXX gate. The selected pXX remains the convict
 - Create: `nodes/poly/app/src/features/wallet-analysis/server/copy-target-benchmark-service.ts` — server-side read model and aggregation service.
 - Modify: `nodes/poly/app/src/app/api/v1/poly/wallets/[addr]/route.ts` or add a sibling benchmark route — attach the benchmark bundle without bypassing contracts.
 - Modify: `nodes/poly/app/src/features/wallet-analysis/` components — render benchmark, attribution, and active-gap panels on `/research/w/[addr]`.
-- Modify: `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` and/or add a sibling observed-trader job — schedule forward observation for `observe_enabled` wallets while preserving pure planner boundaries.
+- Modify: `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts` and/or add a sibling observed-trader job — schedule forward observation for `active_for_research` wallets while preserving pure planner boundaries.
 - Test: `nodes/poly/app/tests/unit/features/wallet-analysis/` — aggregation math, gap reason classification, and empty-bundle behavior.
 - Test: `nodes/poly/app/tests/unit/features/copy-trade/` — attribution does not alter planner decisions.
 - Test: `nodes/poly/app/tests/unit/features/wallet-watch/` — pagination stops at the previous watermark and does not lose high-frequency pages.
@@ -285,18 +287,18 @@ Do not create a second hedge-size pXX gate. The selected pXX remains the convict
 ### Implementation Sequence
 
 1. Schema and migration for observed trader wallets, ingestion cursors, observed fills, position snapshots, attribution, and market outcomes.
-2. Seed RN1, swisstony, prod funder, Derek candidate tenant, and old shared operator as `observe_enabled` trader wallets.
-3. Forward observation job that polls `observe_enabled` wallets, paginates to prior watermark, upserts observed trades, snapshots positions, and records stale/partial status under rate pressure.
-4. Attribution write path from target observations to Cogni observed fills plus existing mirror decision/fill rows.
+2. Seed RN1 and swisstony as `active_for_research` trader wallets.
+3. Forward observation job that syncs active tenant trading-wallet connections into `poly_trader_wallets`, polls `active_for_research` wallets, paginates to prior watermark, upserts observed trades, snapshots positions, and records stale/partial status under rate pressure.
+4. Attribution write path from target observations to signed-in tenant observed fills plus existing mirror decision/fill rows.
 5. Benchmark API contract and service returning an empty-safe bundle for non-target wallets and explicit coverage metadata for observed wallets.
 6. Research UI panels on `/research/w/[addr]`, reusing #1137 distributions for RN1/swisstony.
-7. Candidate-a validation with one new observed target fill, one observed Cogni wallet window, and Loki evidence.
+7. Candidate-a validation with one new observed target fill, one observed signed-in tenant wallet window, and Loki evidence.
 
 ### Validation
 
-exercise: On candidate-a, enable forward observation for RN1, swisstony, and one Cogni funder, wait for at least one successful observation tick, then let the mirror process at least one new target fill. Open `/research/w/0x2005d16a84ceefa912d4e380cd32e7ff827875ea` and `/research/w/0x204f72f35326db932158cba6adff0b9a1da95e14`; verify target headline deltas, Cogni deltas, PR #1137 order-flow distributions, per-market VWAP comparison, active gap reason codes, and observation coverage metadata render for the exercised wallets.
+exercise: On candidate-a, use a signed-in account with an active Polymarket trading wallet, wait for at least one successful observation tick for RN1, swisstony, and that tenant wallet, then let the mirror process at least one new target fill. Open `/research` and the target wallet pages `/research/w/0x2005d16a84ceefa912d4e380cd32e7ff827875ea` and `/research/w/0x204f72f35326db932158cba6adff0b9a1da95e14`; verify target headline deltas, tenant-wallet deltas, PR #1137 order-flow distributions, per-market VWAP comparison, active gap reason codes, and observation coverage metadata render for the exercised wallets.
 
-observability: Query Loki for the deployed SHA and confirm observation logs `poly.trader.observe` for RN1/swisstony and the Cogni wallet, mirror logs `poly.mirror.decision` with `position_branch` fields, and attribution write logs `poly.copy_target.attribution` include the target observed fill id plus the Cogni observed fill id or mirror decision id for the agent's own exercised fill.
+observability: Query Loki for the deployed SHA and confirm observation logs `poly.trader.observe` for RN1/swisstony and the signed-in tenant wallet, mirror logs `poly.mirror.decision` with `position_branch` fields, and attribution write logs `poly.copy_target.attribution` include the target observed fill id plus the tenant observed fill id or mirror decision id for the agent's own exercised fill.
 
 ## Design Review
 
@@ -314,8 +316,8 @@ observability: Query Loki for the deployed SHA and confirm observation logs `pol
 
 ### Blocking Issues Found And Corrected
 
-1. The prior design treated `24h` as an ingestion strategy. That fails the outcome because it would keep re-scraping high-frequency wallets and would not build durable forward oversight. Corrected to continuous `observe_enabled` wallet observation, with `1D`/`1W`/`1M` as query windows over saved facts.
-2. The prior design did not make direct Cogni wallet observation first-class. That fails apples-to-apples VWAP comparison. Corrected by saving Cogni public wallet trades into the same `poly_trader_fills` table as target-wallet trades, while retaining `poly_copy_trade_fills` as the intent/placement ledger.
+1. The prior design treated `24h` as an ingestion strategy. That fails the outcome because it would keep re-scraping high-frequency wallets and would not build durable forward oversight. Corrected to continuous `active_for_research` wallet observation, with `1D`/`1W`/`1M` as query windows over saved facts.
+2. The prior design did not make direct tenant-wallet observation first-class. That fails apples-to-apples VWAP comparison. Corrected by saving tenant public wallet trades into the same `poly_trader_fills` table as target-wallet trades, while retaining `poly_copy_trade_fills` as the intent/placement ledger.
 3. `features/wallet-watch` currently documents that v0 can lose tail trades when activity exceeds one page between polls. That is incompatible with RN1/swisstony. Implementation must upgrade wallet-watch pagination before relying on it for benchmark collection.
 
 ### Remaining Concerns

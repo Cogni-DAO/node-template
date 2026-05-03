@@ -41,6 +41,7 @@ export type WalletAnalysisLoadingState = {
   balance?: boolean | undefined;
   pnl?: boolean | undefined;
   distributions?: boolean | undefined;
+  benchmark?: boolean | undefined;
 };
 
 export type WalletAnalysisViewProps = {
@@ -170,6 +171,13 @@ function PageVariant({
           />
         )}
 
+        {(data.benchmark || isLoading?.benchmark) && (
+          <CopyTargetBenchmarkBlock
+            benchmark={data.benchmark}
+            isLoading={isLoading?.benchmark}
+          />
+        )}
+
         <div className="grid gap-8 lg:grid-cols-5">
           <div className="lg:col-span-3">
             <TradesPerDayChart
@@ -206,4 +214,121 @@ function PageVariant({
       </CardContent>
     </Card>
   );
+}
+
+function CopyTargetBenchmarkBlock({
+  benchmark,
+  isLoading,
+}: {
+  benchmark: WalletAnalysisData["benchmark"] | undefined;
+  isLoading?: boolean | undefined;
+}): ReactNode {
+  if (isLoading && !benchmark) {
+    return (
+      <div className="rounded-lg border bg-muted/20 p-4">
+        <div className="h-4 w-40 animate-pulse rounded bg-muted" />
+        <div className="mt-3 grid gap-3 sm:grid-cols-3">
+          <div className="h-16 animate-pulse rounded bg-muted" />
+          <div className="h-16 animate-pulse rounded bg-muted" />
+          <div className="h-16 animate-pulse rounded bg-muted" />
+        </div>
+      </div>
+    );
+  }
+  if (!benchmark?.isObserved) return null;
+
+  const capture =
+    benchmark.summary.copyCaptureRatio !== null
+      ? `${Math.round(benchmark.summary.copyCaptureRatio * 100)}%`
+      : "—";
+  return (
+    <section className="rounded-lg border bg-background p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="font-semibold text-sm">Copy Benchmark</h3>
+          <p className="text-muted-foreground text-xs">
+            {benchmark.label ?? "Observed wallet"} · {benchmark.window} ·{" "}
+            {benchmark.coverage.status ?? "pending"}
+          </p>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          Last observed {formatCoverageTime(benchmark.coverage.lastSuccessAt)}
+        </p>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-3">
+        <MetricTile
+          label="Target size"
+          value={formatUsd(benchmark.summary.targetSizeUsdc)}
+        />
+        <MetricTile
+          label="Cogni size"
+          value={formatUsd(benchmark.summary.cogniSizeUsdc)}
+        />
+        <MetricTile label="Capture" value={capture} />
+      </div>
+
+      {benchmark.markets.length > 0 && (
+        <div className="mt-4 overflow-hidden rounded-md border">
+          <div className="grid grid-cols-5 bg-muted/40 px-3 py-2 font-medium text-muted-foreground text-xs">
+            <span className="col-span-2">Market</span>
+            <span>Target VWAP</span>
+            <span>Cogni VWAP</span>
+            <span>Status</span>
+          </div>
+          {benchmark.markets.slice(0, 5).map((market) => (
+            <div
+              key={`${market.conditionId}:${market.tokenId}`}
+              className="grid grid-cols-5 border-t px-3 py-2 text-xs"
+            >
+              <span className="col-span-2 truncate">
+                {market.conditionId.slice(0, 10)}…/{market.tokenId.slice(0, 6)}
+              </span>
+              <span>{formatPrice(market.targetVwap)}</span>
+              <span>{formatPrice(market.cogniVwap)}</span>
+              <span>{market.status}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {benchmark.activeGaps.length > 0 && (
+        <p className="mt-3 text-muted-foreground text-xs">
+          {benchmark.activeGaps.length} active target gaps above dust.
+        </p>
+      )}
+    </section>
+  );
+}
+
+function MetricTile({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}): ReactElement {
+  return (
+    <div className="rounded-md border bg-muted/20 p-3">
+      <p className="text-muted-foreground text-xs">{label}</p>
+      <p className="mt-1 font-semibold text-lg">{value}</p>
+    </div>
+  );
+}
+
+function formatUsd(value: number): string {
+  return value.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 0,
+  });
+}
+
+function formatPrice(value: number | null): string {
+  return value === null ? "—" : value.toFixed(3);
+}
+
+function formatCoverageTime(value: string | null): string {
+  if (!value) return "pending";
+  return new Date(value).toISOString().slice(5, 16).replace("T", " ");
 }
