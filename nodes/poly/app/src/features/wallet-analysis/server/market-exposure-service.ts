@@ -2,16 +2,17 @@
 // SPDX-FileCopyrightText: 2026 Cogni-DAO
 
 /**
- * Module: `@app/api/v1/poly/wallet/_lib/market-exposure`
+ * Module: `@features/wallet-analysis/server/market-exposure-service`
  * Purpose: Build the dashboard market aggregation read model from our live
  *   execution positions plus observed active copy-target current positions.
- * Scope: Route-local aggregation. No upstream Polymarket calls.
+ * Scope: Feature service. Caller injects DB and already-fetched live positions.
+ *   No upstream Polymarket calls.
  * Invariants:
  *   - OUR_POSITIONS_ANCHOR_GROUPS: only markets/events where the caller holds a
  *     live position are returned.
  *   - HEDGE_IS_RELATIVE_POSITION: a hedge is the smaller cost-basis leg of a
  *     two-token active condition for one wallet, not a persisted flag.
- * Side-effects: DB read for copy-target current positions and fill VWAP.
+ * Side-effects: DB read for copy-target current positions.
  * Links: docs/design/poly-dashboard-balance-and-positions.md,
  *        docs/design/poly-hedge-followup-policy.md
  * @internal
@@ -44,7 +45,6 @@ type TargetPositionRow = {
   cost_basis_usdc: string | number | null;
   current_value_usdc: string | number | null;
   avg_price: string | number | null;
-  vwap: string | number | null;
   hedge_role: HedgeRole | null;
   last_observed_at: Date | string | null;
 };
@@ -154,21 +154,9 @@ async function readTargetMarketPositions(params: {
         AND p.current_value_usdc > 0
         AND p.condition_id IN (${conditionList})
     ),
-    target_vwap AS (
-      SELECT
-        f.trader_wallet_id,
-        f.condition_id,
-        f.token_id,
-        SUM(f.size_usdc::numeric) / NULLIF(SUM(f.shares::numeric), 0) AS vwap
-      FROM poly_trader_fills f
-      JOIN active_targets a ON a.trader_wallet_id = f.trader_wallet_id
-      WHERE f.condition_id IN (${conditionList})
-      GROUP BY f.trader_wallet_id, f.condition_id, f.token_id
-    ),
     ranked AS (
       SELECT
         p.*,
-        v.vwap,
         COUNT(*) OVER (
           PARTITION BY p.trader_wallet_id, p.condition_id
         ) AS active_legs,
@@ -177,9 +165,6 @@ async function readTargetMarketPositions(params: {
           ORDER BY p.cost_basis_usdc ASC, p.token_id ASC
         ) AS cost_rank
       FROM target_positions p
-      LEFT JOIN target_vwap v ON v.trader_wallet_id = p.trader_wallet_id
-        AND v.condition_id = p.condition_id
-        AND v.token_id = p.token_id
     )
     SELECT
       wallet_address,
@@ -195,7 +180,6 @@ async function readTargetMarketPositions(params: {
       cost_basis_usdc,
       current_value_usdc,
       avg_price,
-      vwap,
       CASE
         WHEN active_legs = 2 AND cost_rank = 1 THEN 'hedge'
         WHEN active_legs = 2 THEN 'primary'
@@ -215,6 +199,10 @@ async function readTargetMarketPositions(params: {
       return [];
     }
 
+    const shares = toNumber(row.shares);
+    const costBasisUsdc = toNumber(row.cost_basis_usdc);
+    const avgPrice = nullableNumber(row.avg_price);
+
     return [
       {
         side: "copy_target" as const,
@@ -228,11 +216,11 @@ async function readTargetMarketPositions(params: {
         marketSlug: row.market_slug,
         eventSlug: row.event_slug,
         outcome: row.outcome ?? "UNKNOWN",
-        shares: toNumber(row.shares),
-        costBasisUsdc: toNumber(row.cost_basis_usdc),
+        shares,
+        costBasisUsdc,
         currentValueUsdc: toNumber(row.current_value_usdc),
-        vwap: nullableNumber(row.vwap),
-        avgPrice: nullableNumber(row.avg_price),
+        vwap: positionVwap(costBasisUsdc, shares, avgPrice),
+        avgPrice,
         hedgeRole: row.hedge_role ?? "single",
         lastObservedAt: isoOrNull(row.last_observed_at),
       },
@@ -264,7 +252,12 @@ function groupMarketPositions(
 
   for (const [conditionId, linePositions] of linesByCondition.entries()) {
     const anchor = pickAnchorPosition(linePositions);
-    const eventSlug = anchor.eventSlug;
+    const eventSlug =
+      linePositions.find((position) => position.eventSlug !== null)
+        ?.eventSlug ?? null;
+    const eventTitle =
+      linePositions.find((position) => position.eventTitle !== null)
+        ?.eventTitle ?? null;
     const groupKey = eventSlug
       ? `event:${eventSlug}`
       : `condition:${conditionId}`;
@@ -284,13 +277,16 @@ function groupMarketPositions(
       hedgeCount: linePositions.filter(
         (position) => position.hedgeRole === "hedge"
       ).length,
-      positions: linePositions.sort(compareParticipantPosition),
+      positions: [...linePositions].sort(compareParticipantPosition),
     };
     const bucket = groupBuckets.get(groupKey) ?? {
-      eventTitle: anchor.eventTitle ?? null,
+      eventTitle,
       eventSlug,
       lines: [],
     };
+    if (bucket.eventTitle === null && eventTitle !== null) {
+      bucket.eventTitle = eventTitle;
+    }
     bucket.lines.push(line);
     groupBuckets.set(groupKey, bucket);
   }
@@ -331,14 +327,16 @@ function groupMarketPositions(
     .sort((left, right) => right.ourValueUsdc - left.ourValueUsdc);
 }
 
+type HedgeInput = {
+  conditionId: string;
+  tokenId: string;
+  costBasisUsdc: number;
+};
+
 function hedgeRolesByCondition(
-  positions: readonly {
-    conditionId: string;
-    tokenId: string;
-    costBasisUsdc: number;
-  }[]
+  positions: readonly HedgeInput[]
 ): Map<string, HedgeRole> {
-  const grouped = new Map<string, typeof positions>();
+  const grouped = new Map<string, HedgeInput[]>();
   for (const position of positions) {
     const existing = grouped.get(position.conditionId) ?? [];
     grouped.set(position.conditionId, [...existing, position]);
@@ -356,8 +354,10 @@ function hedgeRolesByCondition(
         ? left.tokenId.localeCompare(right.tokenId)
         : left.costBasisUsdc - right.costBasisUsdc
     );
-    roles.set(`${conditionId}:${sorted[0]?.tokenId}`, "hedge");
-    roles.set(`${conditionId}:${sorted[1]?.tokenId}`, "primary");
+    const [hedge, primary] = sorted;
+    if (!hedge || !primary) continue;
+    roles.set(`${conditionId}:${hedge.tokenId}`, "hedge");
+    roles.set(`${conditionId}:${primary.tokenId}`, "primary");
   }
   return roles;
 }
@@ -465,6 +465,17 @@ function nullableNumber(
 ): number | null {
   const parsed = toNumber(value);
   return parsed > 0 ? parsed : null;
+}
+
+function positionVwap(
+  costBasisUsdc: number,
+  shares: number,
+  fallback: number | null
+): number | null {
+  if (costBasisUsdc > 0 && shares > 0) {
+    return roundPrice(costBasisUsdc / shares);
+  }
+  return fallback;
 }
 
 function roundMoney(value: number): number {

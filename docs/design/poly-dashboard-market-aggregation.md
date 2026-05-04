@@ -30,8 +30,10 @@ Target overlays come from the observed-trader tables:
 - `poly_trader_wallets`: observed wallets, including `copy_target` and
   `cogni_wallet` rows.
 - `poly_trader_current_positions`: latest active open positions from
-  Polymarket Data API `/positions?sizeThreshold=0`.
-- `poly_trader_fills`: observed trade fills used for target VWAP.
+  Polymarket Data API `/positions?sizeThreshold=0`; current target VWAP is
+  derived from `cost_basis_usdc / shares` on these rows.
+- `poly_trader_fills`: observed trade fills retained for historical trade
+  analysis, not the current exposure VWAP.
 
 The observation job polls active research wallets, upserts current positions,
 stores changed snapshots, and deactivates stale current-position rows only

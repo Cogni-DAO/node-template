@@ -41,6 +41,7 @@ import {
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
 } from "@/bootstrap/poly-trader-wallet";
+import { buildMarketExposureGroups } from "@/features/wallet-analysis/server/market-exposure-service";
 import { getExecutionSlice } from "@/features/wallet-analysis/server/wallet-analysis-service";
 import { EVENT_NAMES, logEvent } from "@/shared/observability";
 import { enrichWalletExecutionPositions } from "../_lib/enrich-positions";
@@ -51,7 +52,6 @@ import {
   summarizeDailyTradeCounts,
   toWalletExecutionPosition,
 } from "../_lib/ledger-positions";
-import { buildMarketExposureGroups } from "../_lib/market-exposure";
 
 export const dynamic = "force-dynamic";
 
