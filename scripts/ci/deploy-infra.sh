@@ -866,6 +866,19 @@ if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^db-backup$'; then
 
     if [[ "$BACKUP_HEALTH" == "healthy" ]]; then
       log_info "db-backup service is healthy"
+      $RUNTIME_COMPOSE exec -T db-backup bash -lc '
+        set -euo pipefail
+        for cluster in app temporal; do
+          latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
+          test -n "$latest"
+          test -s "${latest}/MANIFEST.sha256"
+          echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
+        done
+      '
+      $RUNTIME_COMPOSE logs --tail 40 db-backup | grep 'db_backup.completed' || {
+        log_error "db-backup completed logs missing after healthy status"
+        exit 1
+      }
       emit_deployment_event "infra_deployment.db_backup_healthy" "success" "db-backup service is healthy"
       break
     fi
