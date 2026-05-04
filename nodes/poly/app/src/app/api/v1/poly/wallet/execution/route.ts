@@ -184,7 +184,13 @@ export const GET = wrapRouteHandlerWithLogging(
         walletAddress: address,
         capturedAt,
       });
-      livePositions = currentPositions.positions.map((position) => {
+      const currentLivePositions = currentPositions.positions.filter(
+        (position) => position.status !== "closed" && position.currentValue > 0
+      );
+      const currentClosedPositions = currentPositions.positions.filter(
+        (position) => position.status === "closed" || position.currentValue <= 0
+      );
+      livePositions = currentLivePositions.map((position) => {
         const ledgerPosition = ledgerLiveByAsset.get(position.asset);
         if (ledgerPosition === undefined) return position;
         return {
@@ -208,8 +214,13 @@ export const GET = wrapRouteHandlerWithLogging(
       const currentAssets = new Set(
         currentPositions.positions.map((position) => position.asset)
       );
-      closedPositions = closedPositions.filter(
-        (position) => !currentAssets.has(position.asset)
+      closedPositions = coalesceWalletExecutionPositions(
+        [
+          ...closedPositions.filter(
+            (position) => !currentAssets.has(position.asset)
+          ),
+          ...currentClosedPositions,
+        ].filter((position) => position.status === "closed")
       );
       warnings.push(...currentPositions.warnings);
     } catch (err) {

@@ -484,6 +484,53 @@ describe("poly wallet dashboard DB read routes", () => {
     });
   });
 
+  it("execution moves zero-value current positions into history", async () => {
+    mockCurrentPositionModel([
+      makeCurrentExecutionPosition({
+        asset: "token-live",
+        positionId:
+          "0x1111111111111111111111111111111111111111111111111111111111111111:token-live",
+        currentValue: 5,
+      }),
+      makeCurrentExecutionPosition({
+        asset: "token-loser",
+        positionId:
+          "0x2222222222222222222222222222222222222222222222222222222222222222:token-loser",
+        conditionId:
+          "0x2222222222222222222222222222222222222222222222222222222222222222",
+        marketTitle: "Resolved loser",
+        status: "closed",
+        lifecycleState: "loser",
+        currentPrice: 0,
+        currentValue: 0,
+        pnlUsd: 0,
+        pnlPct: 0,
+        closedAt: NOW.toISOString(),
+      }),
+    ]);
+    const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/poly/wallet/execution")
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.live_positions).toHaveLength(1);
+    expect(json.live_positions[0]).toMatchObject({ asset: "token-live" });
+    expect(
+      json.live_positions.map((p: { asset: string }) => p.asset)
+    ).not.toContain("token-loser");
+    expect(json.closed_positions).toContainEqual(
+      expect.objectContaining({
+        asset: "token-loser",
+        status: "closed",
+        lifecycleState: "loser",
+        currentValue: 0,
+      })
+    );
+  });
+
   it("execution read-model freshness skips live Polymarket positions", async () => {
     mockGetExecutionSlice.mockResolvedValue({
       address: FUNDER,

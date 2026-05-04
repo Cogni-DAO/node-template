@@ -20,7 +20,9 @@
  */
 
 import type {
+  WalletExecutionLifecycleState,
   WalletExecutionPosition,
+  WalletExecutionPositionStatus,
   WalletExecutionWarning,
 } from "@cogni/poly-node-contracts";
 import { type SQL, sql } from "drizzle-orm";
@@ -43,6 +45,8 @@ type CurrentPositionRow = {
   raw: Record<string, unknown> | null;
   cursor_last_success_at: Date | string | null;
   cursor_status: string | null;
+  redeem_status: string | null;
+  redeem_lifecycle_state: WalletExecutionLifecycleState | null;
 };
 
 export interface CurrentWalletPositionReadModel {
@@ -74,7 +78,9 @@ export async function readCurrentWalletPositionModel(params: {
         p.last_observed_at,
         p.raw,
         c.last_success_at AS cursor_last_success_at,
-        c.status AS cursor_status
+        c.status AS cursor_status,
+        r.status AS redeem_status,
+        r.lifecycle_state AS redeem_lifecycle_state
       FROM poly_trader_wallets w
       LEFT JOIN poly_trader_ingestion_cursors c
         ON c.trader_wallet_id = w.id
@@ -83,6 +89,10 @@ export async function readCurrentWalletPositionModel(params: {
         ON p.trader_wallet_id = w.id
        AND p.active = true
        AND p.shares > 0
+      LEFT JOIN poly_redeem_jobs r
+        ON lower(r.funder_address) = lower(w.wallet_address)
+       AND lower(r.condition_id) = lower(p.condition_id)
+       AND r.position_id = p.token_id
       WHERE lower(w.wallet_address) = lower(${params.walletAddress})
         AND w.kind = 'cogni_wallet'
         AND w.active_for_research = true
@@ -170,7 +180,12 @@ function rowToExecutionPosition(
   const pnlUsd = roundToCents(currentValue - costBasis);
   const pnlPct = costBasis > 0 ? roundToCents((pnlUsd / costBasis) * 100) : 0;
   const syncAgeMs = Math.max(0, capturedAt.getTime() - Date.parse(observedAt));
-  const status = readBoolean(raw, "redeemable") ? "redeemable" : "open";
+  const status = deriveCurrentPositionStatus({
+    currentValue,
+    redeemable: readBoolean(raw, "redeemable"),
+    lifecycleState: row.redeem_lifecycle_state,
+  });
+  const terminalTs = status === "closed" ? observedAt : null;
 
   return [
     {
@@ -184,9 +199,9 @@ function rowToExecutionPosition(
       marketUrl: marketUrl(raw),
       outcome: readOptionalString(raw, "outcome") ?? "UNKNOWN",
       status,
-      lifecycleState: null,
+      lifecycleState: row.redeem_lifecycle_state,
       openedAt: observedAt,
-      closedAt: null,
+      closedAt: terminalTs,
       resolvesAt: endDate,
       gameStartTime: null,
       heldMinutes: Math.max(
@@ -196,16 +211,49 @@ function rowToExecutionPosition(
       entryPrice,
       currentPrice,
       size: roundToPrecision(shares, 4),
-      currentValue: roundToCents(currentValue),
-      pnlUsd,
-      pnlPct,
+      currentValue: status === "closed" ? 0 : roundToCents(currentValue),
+      pnlUsd: status === "closed" ? 0 : pnlUsd,
+      pnlPct: status === "closed" ? 0 : pnlPct,
       syncedAt: observedAt,
       syncAgeMs,
       syncStale: syncAgeMs > POSITION_STALE_MS,
       timeline: [],
-      events: [{ ts: observedAt, kind: "entry", price: entryPrice, shares }],
+      events: [
+        { ts: observedAt, kind: "entry", price: entryPrice, shares },
+        ...(terminalTs !== null
+          ? [
+              {
+                ts: terminalTs,
+                kind: "close" as const,
+                price: currentPrice,
+                shares,
+              },
+            ]
+          : []),
+      ],
     },
   ];
+}
+
+function deriveCurrentPositionStatus(input: {
+  currentValue: number;
+  redeemable: boolean;
+  lifecycleState: WalletExecutionLifecycleState | null;
+}): WalletExecutionPositionStatus {
+  if (input.currentValue <= 0) return "closed";
+  if (
+    input.lifecycleState === "redeemed" ||
+    input.lifecycleState === "loser" ||
+    input.lifecycleState === "dust" ||
+    input.lifecycleState === "abandoned" ||
+    input.lifecycleState === "closed"
+  ) {
+    return "closed";
+  }
+  if (input.lifecycleState === "winner" || input.redeemable) {
+    return "redeemable";
+  }
+  return "open";
 }
 
 function normalizeRows<T>(result: unknown): T[] {
