@@ -13,7 +13,7 @@ REST API routes for VCS operations — CI-gated candidate-a flight dispatch for 
 
 ## Pointers
 
-- [Agentic Contribution Loop](../../../../../../../docs/spec/agentic-contribution-loop.md)
+- [Agentic Contribution Loop](../../../../../../../docs/spec/development-lifecycle.md)
 - [VCS Integration Spec](../../../../../../../docs/spec/vcs-integration.md)
 - [VCS Flight Contract](../../../../../../../../packages/node-contracts/src/vcs.flight.v1.contract.ts)
 

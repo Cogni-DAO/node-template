@@ -15,7 +15,7 @@
  *   - NO_INTERNAL_BIND_ADDR: URLs must never expose `0.0.0.0:3000` or other
  *     in-pod addresses. Always derive origin from forwarded headers first.
  * Side-effects: none
- * Links: docs/spec/agentic-contribution-loop.md, docs/guides/agent-api-validation.md
+ * Links: docs/spec/development-lifecycle.md, docs/guides/agent-api-validation.md
  * @public
  */
 
@@ -65,7 +65,7 @@ export async function GET(request: Request) {
       flight: `${origin}/api/v1/vcs/flight`,
     },
     process: {
-      contributionSpec: "docs/spec/agentic-contribution-loop.md",
+      contributionSpec: "docs/spec/development-lifecycle.md",
       validationGuide: "docs/guides/agent-api-validation.md",
       validationSkill: ".claude/skills/validate-candidate",
       requiredLoop: [

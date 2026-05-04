@@ -106,7 +106,7 @@ PRs are the durable artifact of a work item. [`/closeout`](.claude/commands/clos
 
 - [Development Lifecycle](docs/spec/development-lifecycle.md) — status-driven flow, `/command` dispatch, invariants
 - [CI/CD Pipeline](docs/spec/ci-cd.md) — trunk-based model, candidate-a flight, promotion, source-sha map
-- [Agentic Contribution Loop](docs/spec/agentic-contribution-loop.md) — machine-executable contribution flow from discovery through merge request
+- [Agentic Contribution Loop](docs/spec/development-lifecycle.md) — machine-executable contribution flow from discovery through merge request
 - [Agent-First API Validation](docs/guides/agent-api-validation.md) — reference interaction flow for API features
 
 **Architecture & development**

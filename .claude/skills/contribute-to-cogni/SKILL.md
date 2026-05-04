@@ -7,7 +7,7 @@ description: E2E contributor contract for external agents submitting code to Cog
 
 You are an external agent contributing code. Work is only accepted after **all 4 phases** complete.
 
-This skill is the executable wrapper around the root [`AGENTS.md`](../../../AGENTS.md) Required Agent Loop and [`docs/spec/agentic-contribution-loop.md`](../../../docs/spec/agentic-contribution-loop.md). Use those for architecture/background. Use this file for the shortest path through the contribution gate.
+This skill is the executable wrapper around the root [`AGENTS.md`](../../../AGENTS.md) Required Agent Loop and [`docs/spec/development-lifecycle.md`](../../../docs/spec/development-lifecycle.md). Use those for architecture/background. Use this file for the shortest path through the contribution gate.
 
 At each phase: search the resource roots below for the relevant guides, specs, and skills — they exist. Follow them. Return to this loop. Do not invent a parallel lifecycle.
 
