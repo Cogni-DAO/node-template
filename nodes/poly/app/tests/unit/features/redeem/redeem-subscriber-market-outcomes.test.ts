@@ -185,9 +185,10 @@ describe("RedeemSubscriber poly_market_outcomes UPSERT (bug.5008)", () => {
       "111",
       "222",
     ]);
-    expect(
-      calls.map((c: { outcome: string }) => c.outcome).sort()
-    ).toEqual(["loser", "winner"]);
+    expect(calls.map((c: { outcome: string }) => c.outcome).sort()).toEqual([
+      "loser",
+      "winner",
+    ]);
   });
 
   it("does not throw when the UPSERT itself fails — logs and continues", async () => {

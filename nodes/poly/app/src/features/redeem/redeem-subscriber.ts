@@ -239,15 +239,13 @@ export class RedeemSubscriber {
    * table to classify rows as `winner | loser` without consulting Polymarket
    * Data-API `raw.redeemable`. (bug.5008)
    */
-  private async persistMarketOutcome(c: ResolvedRedeemCandidate): Promise<void> {
+  private async persistMarketOutcome(
+    c: ResolvedRedeemCandidate
+  ): Promise<void> {
     const numerator = c.payoutNumerator;
     const denominator = c.payoutDenominator;
     const outcome =
-      numerator === null
-        ? "unknown"
-        : numerator > 0n
-          ? "winner"
-          : "loser";
+      numerator === null ? "unknown" : numerator > 0n ? "winner" : "loser";
     const payout =
       numerator !== null && denominator !== null && denominator > 0n
         ? (Number(numerator) / Number(denominator)).toString()

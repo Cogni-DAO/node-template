@@ -158,12 +158,9 @@ export const POST = wrapRouteHandlerWithLogging(
             position_id: c.positionId.toString(),
             negative_risk: c.negativeRisk,
             kind: c.decision.kind,
-            reason:
-              c.decision.kind === "redeem" ? null : c.decision.reason,
+            reason: c.decision.kind === "redeem" ? null : c.decision.reason,
             payout_numerator:
-              c.payoutNumerator !== null
-                ? c.payoutNumerator.toString()
-                : null,
+              c.payoutNumerator !== null ? c.payoutNumerator.toString() : null,
             payout_denominator:
               c.payoutDenominator !== null
                 ? c.payoutDenominator.toString()

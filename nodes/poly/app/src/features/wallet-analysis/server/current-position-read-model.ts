@@ -280,10 +280,7 @@ export function deriveCurrentPositionStatus(input: {
   ) {
     return "closed";
   }
-  if (
-    input.marketOutcome === "winner" ||
-    input.lifecycleState === "winner"
-  ) {
+  if (input.marketOutcome === "winner" || input.lifecycleState === "winner") {
     return "redeemable";
   }
   if (input.currentValue <= 0) return "closed";
