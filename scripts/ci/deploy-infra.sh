@@ -854,6 +854,24 @@ $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
 log_info "[$(date -u +%H:%M:%S)] Infra stack up complete"
 emit_deployment_event "infra_deployment.stack_up_complete" "success" "Infrastructure services started"
 
+ALLOY_CONFIG="/opt/cogni-template-runtime/configs/alloy-config.metrics.alloy"
+ALLOY_HASH_FILE="/var/lib/cogni/alloy-config.sha256"
+if [[ -f "$ALLOY_CONFIG" ]]; then
+  mkdir -p /var/lib/cogni
+  NEW_ALLOY_HASH=$(hash_file "$ALLOY_CONFIG")
+  OLD_ALLOY_HASH=$(cat "$ALLOY_HASH_FILE" 2>/dev/null || echo "none")
+  if [[ "$NEW_ALLOY_HASH" != "$OLD_ALLOY_HASH" && "$NEW_ALLOY_HASH" != "no-hash-tool" ]]; then
+    log_info "Alloy config changed (hash: ${NEW_ALLOY_HASH:0:12}...), restarting container..."
+    $RUNTIME_COMPOSE restart alloy
+    echo "$NEW_ALLOY_HASH" > "$ALLOY_HASH_FILE"
+    log_info "Alloy restarted with new config"
+  else
+    log_info "Alloy config unchanged (hash: ${NEW_ALLOY_HASH:0:12}...), no restart needed"
+  fi
+else
+  log_warn "Alloy config missing at $ALLOY_CONFIG, skipping restart check"
+fi
+
 if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^db-backup$'; then
   log_info "[$(date -u +%H:%M:%S)] Waiting for db-backup service health..."
   BACKUP_DEADLINE=$((SECONDS + 420))
@@ -866,6 +884,8 @@ if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^db-backup$'; then
 
     if [[ "$BACKUP_HEALTH" == "healthy" ]]; then
       log_info "db-backup service is healthy"
+      log_info "Running db-backup validation backup..."
+      $RUNTIME_COMPOSE exec -T db-backup /usr/local/bin/db-backup.sh once
       $RUNTIME_COMPOSE exec -T db-backup bash -lc '
         set -euo pipefail
         for cluster in app temporal; do
@@ -875,7 +895,7 @@ if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^db-backup$'; then
           echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
         done
       '
-      $RUNTIME_COMPOSE logs --tail 40 db-backup | grep 'db_backup.completed' || {
+      $RUNTIME_COMPOSE logs --tail 80 db-backup | grep 'db_backup.completed' || {
         log_error "db-backup completed logs missing after healthy status"
         exit 1
       }
