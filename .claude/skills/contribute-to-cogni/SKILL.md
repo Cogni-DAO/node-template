@@ -46,6 +46,7 @@ At each phase: search the resource roots below for the relevant guides, specs, a
      ```
      Keep the item lean: a one-line `outcome` describing successful E2E validation (a user-facing capability, or a specific response after repro condition X). Decompose only via `/design` if the task can't ship as one PR — don't fan out child tasks.
 4. Claim the work item, heartbeat while active, link your branch/PR once opened, and poll coordination for the operator's next-action text:
+
    ```bash
    # Claim — once per session
    curl -X POST "$BASE/api/v1/work/items/$ID/claims" \
@@ -66,7 +67,9 @@ At each phase: search the resource roots below for the relevant guides, specs, a
    curl "$BASE/api/v1/work/items/$ID/coordination" \
      -H "Authorization: Bearer $API_KEY" | jq .nextAction
    ```
+
    The operator uses `coordination.nextAction` to push back when your work doesn't match scorecard requirements (e.g., demanding `/validate-candidate` before `/review-implementation` when `deployVerified` is false). Treat that text as authoritative — re-read it after each phase.
+
 5. Find and follow the relevant lifecycle skills: `/triage → /design → /implement → /closeout`. PATCH the work item with `branch` + `pr` + `status` as you progress so `dolt_log` reflects state.
 6. Run the smallest checks that cover your edited surface; normally `pnpm check:fast` must pass unless a human explicitly narrows verification. Push branch. `gh pr create` with a conventional commit title.
 
