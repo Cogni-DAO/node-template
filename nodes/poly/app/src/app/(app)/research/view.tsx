@@ -3,9 +3,10 @@
 
 /**
  * Module: `@app/(app)/research/view`
- * Purpose: One-view wallets research workspace — focus one benchmark target,
- *          then move between target, hedge, compare, discovery, and guardrail
- *          panels without stacking every surface at once.
+ * Purpose: Wallets research portal — search, per-column sort/filter, pagination,
+ *          track/untrack actions, and the side-sheet drawer drill-in. Full
+ *          discovery surface for Polymarket wallets. Renders the app-wide
+ *          `WalletsTable` component (variant="full").
  * Scope: Client view. Joins live leaderboard (`fetchTopWallets`) with the user's
  *        tracked targets (`fetchCopyTargets`) and passes rows into the shared
  *        table. Track/untrack mutations live here. Does not place orders.
@@ -52,7 +53,6 @@ import {
   CopyWalletButton,
   DistributionComparisonBlock,
   type DistributionComparisonSeries,
-  useWalletAnalysis,
   WalletAnalysisSurface,
   WalletDetailDrawer,
   WalletQuickJump,
@@ -85,21 +85,10 @@ const PRIMARY_RESEARCH_WALLETS = [
   },
 ] as const;
 
-const RESEARCH_PANELS = [
-  { id: "target", label: "Target" },
-  { id: "hedges", label: "Hedges" },
-  { id: "compare", label: "Compare" },
-  { id: "discover", label: "Discover" },
-  { id: "guardrails", label: "Guardrails" },
-] as const;
-
 type ResearchComparisonWallet = {
   label: string;
   address: string;
 };
-
-type ResearchPanel = (typeof RESEARCH_PANELS)[number]["id"];
-type PrimaryResearchWallet = (typeof PRIMARY_RESEARCH_WALLETS)[number];
 
 async function fetchWalletStatus(): Promise<PolyWalletStatusOutput> {
   const res = await fetch("/api/v1/poly/wallet/status", {
@@ -162,10 +151,6 @@ export function ResearchView() {
   const [sorting, setSorting] = useState<SortingState>(initialSort);
   const [globalFilter, setGlobalFilter] = useState(searchParams.get("q") ?? "");
   const [selectedAddr, setSelectedAddr] = useState<string | null>(null);
-  const [activePanel, setActivePanel] = useState<ResearchPanel>("target");
-  const [activeWalletAddress, setActiveWalletAddress] = useState<string>(
-    PRIMARY_RESEARCH_WALLETS[0].address
-  );
 
   const syncUrl = useCallback(
     (next: {
@@ -315,92 +300,114 @@ export function ResearchView() {
     )
       ? addressMatch.data
       : null;
-  const activeWallet =
-    PRIMARY_RESEARCH_WALLETS.find(
-      (wallet) => wallet.address === activeWalletAddress
-    ) ?? PRIMARY_RESEARCH_WALLETS[0];
 
   return (
-    <div className="flex flex-col gap-4 p-5 md:p-6">
-      <section className="rounded-lg border bg-card p-4">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-1">
-            <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-              <WalletCards className="size-3.5" />
-              Research
-            </div>
-            <h1 className="font-semibold text-xl tracking-tight md:text-2xl">
-              Hedge-ready copy targets
-            </h1>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {PRIMARY_RESEARCH_WALLETS.map((wallet) => (
-              <button
-                key={wallet.address}
-                type="button"
-                aria-pressed={activeWallet.address === wallet.address}
-                onClick={() => setActiveWalletAddress(wallet.address)}
-                className={
-                  activeWallet.address === wallet.address
-                    ? "rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground text-sm"
-                    : "rounded-md border px-3 py-1.5 text-sm hover:bg-muted"
-                }
-              >
-                {wallet.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-4 flex gap-1 overflow-x-auto rounded-lg border bg-background p-1">
-          {RESEARCH_PANELS.map((panel) => (
-            <button
-              key={panel.id}
-              type="button"
-              aria-pressed={activePanel === panel.id}
-              onClick={() => setActivePanel(panel.id)}
-              className={
-                activePanel === panel.id
-                  ? "shrink-0 rounded-md bg-muted px-3 py-1.5 font-medium text-sm"
-                  : "shrink-0 rounded-md px-3 py-1.5 text-muted-foreground text-sm hover:bg-muted/60 hover:text-foreground"
-              }
-            >
-              {panel.label}
-            </button>
-          ))}
-        </div>
-      </section>
+    <div className="flex flex-col gap-6 p-5 md:p-6">
+      {/* Header */}
+      <div className="flex flex-col gap-2">
+        <h1 className="font-semibold text-xl tracking-tight md:text-2xl">
+          Research
+        </h1>
+        <p className="max-w-2xl text-muted-foreground text-sm">
+          Target-wallet benchmarks, our current tenant wallet, and live copy
+          gaps.
+        </p>
+      </div>
 
       <ResearchBenchmarkBoard
         userWalletAddress={walletStatus?.funder_address ?? null}
         userWalletConnected={walletStatus?.connected === true}
         targets={targetsData?.targets ?? []}
-        activeWallet={activeWallet}
-        activePanel={activePanel}
       />
 
-      {activePanel === "discover" ? (
-        <ResearchDiscoveryPanel
-          period={period}
-          setPeriod={setPeriod}
-          globalFilter={globalFilter}
-          setGlobalFilter={setGlobalFilter}
-          syncUrl={syncUrl}
-          offRosterAddress={offRosterAddress}
-          rows={rows}
-          walletsLoading={walletsLoading}
-          walletsError={walletsError}
-          sorting={sorting}
-          setSorting={setSorting}
-          columnFilters={columnFilters}
-          setColumnFilters={setColumnFilters}
-          renderActions={renderActions}
-          onSelectWallet={(addr) => setSelectedAddr(addr)}
-        />
-      ) : null}
+      <section className="flex flex-col gap-4 pt-2">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
+              <Search className="size-3.5" />
+              Wallet Discovery
+            </div>
+            <h2 className="font-semibold text-lg">Search Polymarket wallets</h2>
+          </div>
+          <WalletQuickJump className="w-full max-w-xl sm:w-96" />
+        </div>
 
-      {activePanel === "guardrails" ? <NoFlyFooter /> : null}
+        {/* Minimal toolbar: search + period (drives the leaderboard query).
+            Sort/filter/hide are in the column headers — not here. */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Input
+            data-search-input
+            className="h-9 w-full sm:w-72"
+            placeholder="Search wallet address or name…"
+            value={globalFilter}
+            onChange={(e) => {
+              setGlobalFilter(e.target.value);
+              syncUrl({ q: e.target.value });
+            }}
+          />
+          <ToggleGroup
+            type="single"
+            value={period}
+            onValueChange={(v) => {
+              const next = (v as WalletTimePeriod | "") || "WEEK";
+              if (!PERIOD_OPTIONS.includes(next)) return;
+              setPeriod(next);
+              syncUrl({ period: next });
+            }}
+            className="rounded-lg border"
+          >
+            {PERIOD_OPTIONS.map((p) => (
+              <ToggleGroupItem key={p} value={p} className="px-3 text-xs">
+                {p === "ALL" ? "All" : p.charAt(0) + p.slice(1).toLowerCase()}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
+
+        {/* Off-roster address hint — "you pasted a valid 0x, open its analysis" */}
+        {offRosterAddress && (
+          <button
+            type="button"
+            onClick={() => setSelectedAddr(offRosterAddress)}
+            className="self-start rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-sm hover:bg-primary/10"
+          >
+            Open wallet analysis for{" "}
+            <code className="font-mono">{offRosterAddress}</code> · not in top{" "}
+            {TOP_N} for this window →
+          </button>
+        )}
+
+        {/* Grid — single shared component, same on /dashboard */}
+        <WalletsTable
+          rows={rows}
+          variant="full"
+          isLoading={walletsLoading}
+          onRowClick={(row) => setSelectedAddr(row.proxyWallet.toLowerCase())}
+          renderActions={renderActions}
+          emptyMessage={
+            walletsError
+              ? "Failed to load wallets — Polymarket may be slow. Try refreshing."
+              : "No wallets match the current filters."
+          }
+          fullState={{
+            sorting,
+            onSortingChange: (next) => {
+              setSorting(next);
+              syncUrl({ sorting: next });
+            },
+            columnFilters,
+            onColumnFiltersChange: (next) => {
+              setColumnFilters(next);
+              syncUrl({ filters: next });
+            },
+            globalFilter,
+            onGlobalFilterChange: setGlobalFilter,
+          }}
+        />
+      </section>
+
+      {/* Compact no-fly footer */}
+      <NoFlyFooter />
 
       {/* Inline drawer — skeletons render instantly. */}
       <WalletDetailDrawer
@@ -418,14 +425,10 @@ function ResearchBenchmarkBoard({
   userWalletAddress,
   userWalletConnected,
   targets,
-  activeWallet,
-  activePanel,
 }: {
   userWalletAddress: string | null;
   userWalletConnected: boolean;
   targets: readonly { target_wallet: string }[];
-  activeWallet: PrimaryResearchWallet;
-  activePanel: ResearchPanel;
 }) {
   const comparisonWallets = useMemo(
     () => buildComparisonWallets(userWalletAddress, targets),
@@ -438,7 +441,6 @@ function ResearchBenchmarkBoard({
         wallet.address.toLowerCase(),
       ],
       queryFn: () => fetchWalletDistributions(wallet.address),
-      enabled: activePanel === "compare",
       staleTime: 30_000,
       gcTime: 5 * 60_000,
     })),
@@ -450,30 +452,6 @@ function ResearchBenchmarkBoard({
       isLoading: distributionQueries[i]?.isLoading,
       isError: distributionQueries[i]?.isError,
     }));
-
-  if (activePanel === "target") {
-    return (
-      <section className="flex flex-col gap-4">
-        <PanelHeader eyebrow="Active Target" title={activeWallet.label} />
-        <WalletAnalysisSurface
-          key={activeWallet.address}
-          addr={activeWallet.address}
-          variant="compact"
-          size="default"
-          includeDistributions={false}
-          headerActions={<CopyWalletButton addr={activeWallet.address} />}
-        />
-      </section>
-    );
-  }
-
-  if (activePanel === "hedges") {
-    return <HedgePolicyPanel activeWallet={activeWallet} />;
-  }
-
-  if (activePanel !== "compare") {
-    return null;
-  }
 
   return (
     <section className="flex flex-col gap-4">
@@ -495,6 +473,19 @@ function ResearchBenchmarkBoard({
             Open your wallet
           </Link>
         ) : null}
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {PRIMARY_RESEARCH_WALLETS.map((wallet) => (
+          <WalletAnalysisSurface
+            key={wallet.address}
+            addr={wallet.address}
+            variant="compact"
+            size="default"
+            includeDistributions={false}
+            headerActions={<CopyWalletButton addr={wallet.address} />}
+          />
+        ))}
       </div>
 
       {userWalletAddress ? (
@@ -526,241 +517,6 @@ function ResearchBenchmarkBoard({
       </div>
     </section>
   );
-}
-
-function HedgePolicyPanel({
-  activeWallet,
-}: {
-  activeWallet: PrimaryResearchWallet;
-}) {
-  const { data, isLoading } = useWalletAnalysis(activeWallet.address, true, {
-    interval: "ALL",
-    includeDistributions: false,
-  });
-  const benchmark = data.benchmark;
-  const policy = benchmark?.hedgePolicy;
-
-  return (
-    <section className="flex flex-col gap-4">
-      <PanelHeader eyebrow="Hedge Policy" title={activeWallet.label}>
-        <CopyWalletButton addr={activeWallet.address} />
-      </PanelHeader>
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <PolicyTile
-          label="Actionable"
-          value={
-            policy
-              ? `${policy.actionableHedges.toLocaleString()}/${policy.hedgedConditions.toLocaleString()}`
-              : isLoading.benchmark
-                ? "Loading"
-                : "Not observed"
-          }
-          detail="Hedges passing dust and ratio gates"
-        />
-        <PolicyTile
-          label="Follow when"
-          value={
-            policy ? `>=${formatPolicyPct(policy.minTargetHedgeRatio)}` : ">=2%"
-          }
-          detail={`and >=${formatPolicyUsd(policy?.minTargetHedgeUsdc ?? 5)} target hedge`}
-        />
-        <PolicyTile
-          label="Smallest live pass"
-          value={
-            policy?.lowestActionableRatio
-              ? formatPolicyPct(policy.lowestActionableRatio)
-              : "Pending"
-          }
-          detail="Confirms the gate is reachable"
-        />
-      </div>
-
-      <div className="rounded-lg border bg-muted/10 p-4 text-sm">
-        <p className="font-medium">Prototype rule</p>
-        <p className="mt-1 text-muted-foreground">
-          Mirror opposite-token target buys only after the target has at least a
-          2% hedge against its primary side and at least $5 in hedge cost basis.
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function ResearchDiscoveryPanel({
-  period,
-  setPeriod,
-  globalFilter,
-  setGlobalFilter,
-  syncUrl,
-  offRosterAddress,
-  rows,
-  walletsLoading,
-  walletsError,
-  sorting,
-  setSorting,
-  columnFilters,
-  setColumnFilters,
-  renderActions,
-  onSelectWallet,
-}: {
-  period: WalletTimePeriod;
-  setPeriod: (period: WalletTimePeriod) => void;
-  globalFilter: string;
-  setGlobalFilter: (value: string) => void;
-  syncUrl: (next: {
-    period?: WalletTimePeriod;
-    filters?: ColumnFiltersState;
-    sorting?: SortingState;
-    q?: string;
-  }) => void;
-  offRosterAddress: string | null;
-  rows: WalletRow[];
-  walletsLoading: boolean;
-  walletsError: boolean;
-  sorting: SortingState;
-  setSorting: (next: SortingState) => void;
-  columnFilters: ColumnFiltersState;
-  setColumnFilters: (next: ColumnFiltersState) => void;
-  renderActions: (row: WalletRow) => React.ReactNode;
-  onSelectWallet: (addr: string) => void;
-}) {
-  return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-            <Search className="size-3.5" />
-            Wallet Discovery
-          </div>
-          <h2 className="font-semibold text-lg">Search Polymarket wallets</h2>
-        </div>
-        <WalletQuickJump className="w-full max-w-xl sm:w-96" />
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Input
-          data-search-input
-          className="h-9 w-full sm:w-72"
-          placeholder="Search wallet address or name..."
-          value={globalFilter}
-          onChange={(e) => {
-            setGlobalFilter(e.target.value);
-            syncUrl({ q: e.target.value });
-          }}
-        />
-        <ToggleGroup
-          type="single"
-          value={period}
-          onValueChange={(v) => {
-            const next = (v as WalletTimePeriod | "") || "WEEK";
-            if (!PERIOD_OPTIONS.includes(next)) return;
-            setPeriod(next);
-            syncUrl({ period: next });
-          }}
-          className="rounded-lg border"
-        >
-          {PERIOD_OPTIONS.map((p) => (
-            <ToggleGroupItem key={p} value={p} className="px-3 text-xs">
-              {p === "ALL" ? "All" : p.charAt(0) + p.slice(1).toLowerCase()}
-            </ToggleGroupItem>
-          ))}
-        </ToggleGroup>
-      </div>
-
-      {offRosterAddress && (
-        <button
-          type="button"
-          onClick={() => onSelectWallet(offRosterAddress)}
-          className="self-start rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-left text-sm hover:bg-primary/10"
-        >
-          Open wallet analysis for{" "}
-          <code className="font-mono">{offRosterAddress}</code>
-        </button>
-      )}
-
-      <WalletsTable
-        rows={rows}
-        variant="full"
-        isLoading={walletsLoading}
-        onRowClick={(row) => onSelectWallet(row.proxyWallet.toLowerCase())}
-        renderActions={renderActions}
-        emptyMessage={
-          walletsError
-            ? "Failed to load wallets. Try refreshing."
-            : "No wallets match the current filters."
-        }
-        fullState={{
-          sorting,
-          onSortingChange: (next) => {
-            setSorting(next);
-            syncUrl({ sorting: next });
-          },
-          columnFilters,
-          onColumnFiltersChange: (next) => {
-            setColumnFilters(next);
-            syncUrl({ filters: next });
-          },
-          globalFilter,
-          onGlobalFilterChange: setGlobalFilter,
-        }}
-      />
-    </section>
-  );
-}
-
-function PanelHeader({
-  eyebrow,
-  title,
-  children,
-}: {
-  eyebrow: string;
-  title: string;
-  children?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-wrap items-end justify-between gap-3">
-      <div className="flex flex-col gap-1">
-        <div className="text-muted-foreground text-xs uppercase tracking-wider">
-          {eyebrow}
-        </div>
-        <h2 className="font-semibold text-lg">{title}</h2>
-      </div>
-      {children ? (
-        <div className="flex items-center gap-2">{children}</div>
-      ) : null}
-    </div>
-  );
-}
-
-function PolicyTile({
-  label,
-  value,
-  detail,
-}: {
-  label: string;
-  value: string;
-  detail: string;
-}) {
-  return (
-    <div className="rounded-lg border bg-card p-4">
-      <p className="text-muted-foreground text-xs">{label}</p>
-      <p className="mt-1 font-semibold text-2xl">{value}</p>
-      <p className="mt-1 text-muted-foreground text-xs">{detail}</p>
-    </div>
-  );
-}
-
-function formatPolicyPct(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
-function formatPolicyUsd(value: number): string {
-  return value.toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 0,
-  });
 }
 
 function buildComparisonWallets(
