@@ -245,9 +245,9 @@ function ResearchDeepDiveVariant({
           />
         )}
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
+        <div className="grid gap-6 xl:grid-cols-3">
           {(data.pnl || isLoading?.pnl || pnlInterval) && (
-            <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-4 xl:col-span-2">
               {pnlInterval && onPnlIntervalChange ? (
                 <TimeWindowHeader
                   interval={pnlInterval}

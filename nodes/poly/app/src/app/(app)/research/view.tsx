@@ -29,10 +29,17 @@ import type { WalletTimePeriod } from "@cogni/poly-ai-tools";
 import {
   PolyAddressSchema,
   type PolyWalletStatusOutput,
+  type WalletAnalysisDistributions,
+  type WalletAnalysisResponse,
 } from "@cogni/poly-node-contracts";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from "@tanstack/react-query";
 import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
-import { Ban, Plus, Radio, Search, Shield, WalletCards } from "lucide-react";
+import { Ban, Plus, Radio, Search, Shield } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
@@ -43,8 +50,8 @@ import {
 } from "@/app/(app)/_components/wallets-table";
 import { Input, ToggleGroup, ToggleGroupItem } from "@/components";
 import {
-  CopyWalletButton,
-  WalletAnalysisSurface,
+  DistributionComparisonBlock,
+  type DistributionComparisonSeries,
   WalletDetailDrawer,
   WalletQuickJump,
 } from "@/features/wallet-analysis";
@@ -76,6 +83,11 @@ const PRIMARY_RESEARCH_WALLETS = [
   },
 ] as const;
 
+type ResearchComparisonWallet = {
+  label: string;
+  address: string;
+};
+
 async function fetchWalletStatus(): Promise<PolyWalletStatusOutput> {
   const res = await fetch("/api/v1/poly/wallet/status", {
     credentials: "include",
@@ -84,6 +96,24 @@ async function fetchWalletStatus(): Promise<PolyWalletStatusOutput> {
     throw new Error(`wallet status failed: ${res.status}`);
   }
   return (await res.json()) as PolyWalletStatusOutput;
+}
+
+async function fetchWalletDistributions(
+  address: string
+): Promise<WalletAnalysisDistributions | undefined> {
+  const params = new URLSearchParams({
+    include: "distributions",
+    interval: "ALL",
+    distributionMode: "historical",
+  });
+  const res = await fetch(
+    `/api/v1/poly/wallets/${address.toLowerCase()}?${params.toString()}`
+  );
+  if (!res.ok) {
+    throw new Error(`wallet distributions failed: ${res.status}`);
+  }
+  const json = (await res.json()) as WalletAnalysisResponse;
+  return json.distributions;
 }
 
 export function ResearchView() {
@@ -276,15 +306,12 @@ export function ResearchView() {
         <h1 className="font-semibold text-xl tracking-tight md:text-2xl">
           Research
         </h1>
-        <p className="max-w-2xl text-muted-foreground text-sm">
-          Target-wallet benchmarks, our current tenant wallet, and live copy
-          gaps.
-        </p>
       </div>
 
       <ResearchBenchmarkBoard
         userWalletAddress={walletStatus?.funder_address ?? null}
         userWalletConnected={walletStatus?.connected === true}
+        targets={targetsData?.targets ?? []}
       />
 
       <section className="flex flex-col gap-4 pt-2">
@@ -391,68 +418,92 @@ export function ResearchView() {
 function ResearchBenchmarkBoard({
   userWalletAddress,
   userWalletConnected,
+  targets,
 }: {
   userWalletAddress: string | null;
   userWalletConnected: boolean;
+  targets: readonly { target_wallet: string }[];
 }) {
+  const comparisonWallets = useMemo(
+    () => buildComparisonWallets(userWalletAddress, targets),
+    [userWalletAddress, targets]
+  );
+  const distributionQueries = useQueries({
+    queries: comparisonWallets.map((wallet) => ({
+      queryKey: [
+        "research-distribution-comparison",
+        wallet.address.toLowerCase(),
+      ],
+      queryFn: () => fetchWalletDistributions(wallet.address),
+      staleTime: 30_000,
+      gcTime: 5 * 60_000,
+    })),
+  });
+  const distributionSeries: readonly DistributionComparisonSeries[] =
+    comparisonWallets.map((wallet, i) => ({
+      label: wallet.label,
+      data: distributionQueries[i]?.data,
+      isLoading: distributionQueries[i]?.isLoading,
+      isError: distributionQueries[i]?.isError,
+    }));
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-            <WalletCards className="size-3.5" />
-            Live Wallet Benchmarks
-          </div>
-          <h2 className="font-semibold text-lg">
-            Copy targets vs your trading wallet
-          </h2>
-        </div>
-        {userWalletAddress ? (
-          <Link
-            href={`/research/w/${userWalletAddress}`}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            Open your wallet
-          </Link>
-        ) : null}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        {PRIMARY_RESEARCH_WALLETS.map((wallet) => (
-          <WalletAnalysisSurface
-            key={wallet.address}
-            addr={wallet.address}
-            variant="compact"
-            size="default"
-            headerActions={<CopyWalletButton addr={wallet.address} />}
-          />
-        ))}
-      </div>
-
-      {userWalletAddress ? (
-        <WalletAnalysisSurface
-          addr={userWalletAddress}
-          variant="compact"
-          size="default"
-        />
-      ) : (
-        <div className="rounded-lg border bg-muted/10 p-4">
-          <p className="font-medium text-sm">Your comparison wallet</p>
-          <p className="mt-1 text-muted-foreground text-sm">
-            {userWalletConnected
-              ? "Your wallet is connected, but the funder address is not available from wallet status yet."
-              : "Connect a Polymarket trading wallet to compare your VWAP and active positions against RN1 and swisstony."}
-          </p>
+    <section className="flex flex-col gap-3">
+      {!userWalletAddress ? (
+        <div className="flex justify-end">
           <Link
             href="/credits"
-            className="mt-3 inline-flex rounded border px-3 py-1.5 text-sm hover:bg-muted"
+            className="rounded border px-3 py-1.5 text-sm hover:bg-muted"
           >
-            Open money setup
+            Add your wallet
           </Link>
         </div>
-      )}
+      ) : null}
+
+      <div className="rounded-lg border border-primary/20 bg-card p-4">
+        <DistributionComparisonBlock series={distributionSeries} />
+        {!userWalletAddress ? (
+          <p className="mt-3 text-muted-foreground text-xs">
+            {userWalletConnected
+              ? "Wallet is connected, but the funder address is not available yet."
+              : "Add your wallet to include it in overlays."}
+          </p>
+        ) : null}
+      </div>
     </section>
   );
+}
+
+function buildComparisonWallets(
+  userWalletAddress: string | null,
+  targets: readonly { target_wallet: string }[]
+): readonly ResearchComparisonWallet[] {
+  const wallets: ResearchComparisonWallet[] = [];
+  const seen = new Set<string>();
+  const addWallet = (wallet: ResearchComparisonWallet) => {
+    const lower = wallet.address.toLowerCase();
+    if (seen.has(lower)) return;
+    seen.add(lower);
+    wallets.push({ ...wallet, address: lower });
+  };
+
+  if (userWalletAddress) {
+    addWallet({ label: "You", address: userWalletAddress });
+  }
+  for (const wallet of PRIMARY_RESEARCH_WALLETS) {
+    addWallet(wallet);
+  }
+  for (const target of targets) {
+    addWallet({
+      label: shortAddress(target.target_wallet),
+      address: target.target_wallet,
+    });
+  }
+
+  return wallets;
+}
+
+function shortAddress(address: string): string {
+  return `${address.slice(0, 6)}…${address.slice(-4)}`;
 }
 
 function NoFlyFooter() {
