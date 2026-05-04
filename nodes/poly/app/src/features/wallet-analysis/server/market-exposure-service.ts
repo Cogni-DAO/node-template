@@ -17,8 +17,11 @@
  *   - SERVER_SIDE_PIVOT: per-participant primary/hedge/net shape is computed
  *     here, never client-side. Same shape will feed Research views once
  *     `poly_market_outcomes` is populated.
- *   - LIFECYCLE_DEFAULTS_UNKNOWN: leg `lifecycle` is `unknown` until the
- *     outcomes backfill (handoff item #4) lands; the join slot is reserved.
+ *   - LIFECYCLE_IS_ACTIVE_UNTIL_OUTCOMES_LAND: every leg is emitted with
+ *     `lifecycle: "active"` because we only see currently-held positions
+ *     here. Once `poly_market_outcomes` is populated (handoff item #4),
+ *     resolved legs get joined in to promote `active` → `winner`/`loser`/
+ *     `resolved`. The enum slot is reserved for that backfill.
  * Side-effects: DB read for copy-target current positions.
  * Links: docs/design/poly-dashboard-market-aggregation.md,
  *        docs/design/poly-hedge-followup-policy.md,
@@ -325,9 +328,14 @@ function pivotParticipants(
   const rows: WalletExecutionMarketParticipantRow[] = [];
   for (const [walletAddress, walletLegs] of byWallet.entries()) {
     const primaryLeg = pickPrimary(walletLegs);
+    // Map guarantees ≥1 leg per entry; null is unreachable but the lint rule
+    // forbids non-null assertions.
     if (primaryLeg === null) continue;
+    // Polymarket binary markets are the v0 norm; this still handles N≥3
+    // (multi-outcome markets, or stale active=true rows) by taking the next
+    // largest cost-basis leg as hedge so we never silently drop exposure.
     const hedgeLeg =
-      walletLegs.length === 2 ? pickHedge(walletLegs, primaryLeg) : null;
+      walletLegs.length >= 2 ? pickHedge(walletLegs, primaryLeg) : null;
     const anchor = primaryLeg;
 
     const primary = toContractLeg(primaryLeg);
@@ -388,7 +396,15 @@ function pickPrimary(legs: readonly RawLeg[]): RawLeg | null {
 }
 
 function pickHedge(legs: readonly RawLeg[], primary: RawLeg): RawLeg | null {
-  const others = legs.filter((leg) => leg.tokenId !== primary.tokenId);
+  // Next-largest cost-basis leg becomes hedge. Deterministic tiebreak by
+  // tokenId so re-renders are stable when two non-primary legs tie.
+  const others = [...legs]
+    .filter((leg) => leg.tokenId !== primary.tokenId)
+    .sort((left, right) =>
+      left.costBasisUsdc === right.costBasisUsdc
+        ? right.tokenId.localeCompare(left.tokenId)
+        : right.costBasisUsdc - left.costBasisUsdc
+    );
   return others[0] ?? null;
 }
 
