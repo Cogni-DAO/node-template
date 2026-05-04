@@ -12,12 +12,12 @@
 
 // Extracted to @cogni/node-shared
 export {
-  logEvent,
   logRequestEnd,
   logRequestError,
   logRequestStart,
   logRequestWarn,
 } from "@cogni/node-shared";
+export { logEvent } from "./logEvent";
 // App-local (pino runtime, prom-client runtime)
 export * from "./logger";
 export * from "./metrics";
