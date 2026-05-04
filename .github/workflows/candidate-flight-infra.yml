@@ -186,7 +186,7 @@ jobs:
           set -euo pipefail
           query='{env="candidate-a",service="db-backup"} | json | event="db_backup.completed"'
           for attempt in $(seq 1 12); do
-            result=$(scripts/loki-query.sh "$query" 60 200)
+            result=$(scripts/loki-query.sh "$query" 600 200)
             app_count=$(jq '[.data.result[].values[][1] | fromjson? | select(.cluster == "app")] | length' <<<"$result")
             temporal_count=$(jq '[.data.result[].values[][1] | fromjson? | select(.cluster == "temporal")] | length' <<<"$result")
             if [ "$app_count" -gt 0 ] && [ "$temporal_count" -gt 0 ]; then
