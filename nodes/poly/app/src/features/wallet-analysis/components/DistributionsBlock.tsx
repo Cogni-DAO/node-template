@@ -137,6 +137,8 @@ export function DistributionComparisonBlock({
 }): ReactElement {
   const [viewMode, setViewMode] =
     useState<WalletDistributionsViewMode>("count");
+  const [activeView, setActiveView] =
+    useState<DistributionComparisonViewKey>("tradeSize");
   const readySeries = series.filter(
     (
       s
@@ -149,25 +151,15 @@ export function DistributionComparisonBlock({
 
   if (isLoading) {
     return (
-      <Section title="Trade detail comparison">
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-          {Array.from({ length: 6 }, (_, i) => `comparison-skeleton-${i}`).map(
-            (key) => (
-              <div
-                key={key}
-                className="h-40 animate-pulse rounded bg-muted"
-                aria-hidden
-              />
-            )
-          )}
-        </div>
+      <Section title="Wallet research">
+        <div className="h-80 animate-pulse rounded bg-muted" aria-hidden />
       </Section>
     );
   }
 
   if (isError || readySeries.length === 0) {
     return (
-      <Section title="Trade detail comparison">
+      <Section title="Wallet research">
         <div className="text-muted-foreground text-sm">
           {isError
             ? "Could not load distribution comparison — retrying on next refresh."
@@ -178,70 +170,37 @@ export function DistributionComparisonBlock({
   }
 
   return (
-    <Section
-      title="Trade detail comparison"
-      caption={<ComparisonCaption series={readySeries} viewMode={viewMode} />}
-      toolbar={<ViewModeToggle viewMode={viewMode} onChange={setViewMode} />}
-    >
-      <div className="flex flex-wrap gap-3">
-        {readySeries.map((s, i) => (
-          <span
-            key={s.label}
-            className="inline-flex items-center gap-1.5 text-muted-foreground text-xs"
-          >
-            <span
-              className={cn("size-2 rounded-full", seriesColorClass(i))}
-              aria-hidden
-            />
-            {s.label}
-          </span>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <ChartCard title="Entries per outcome">
-          <ComparisonHistogramChart
-            series={readySeries}
-            viewMode={viewMode}
-            pickHistogram={(d) => d.dcaDepth}
-          />
-        </ChartCard>
-        <ChartCard title="Trade size">
-          <ComparisonHistogramChart
-            series={readySeries}
-            viewMode={viewMode}
-            pickHistogram={(d) => d.tradeSize}
-          />
-        </ChartCard>
-        <ChartCard title="Entry price">
-          <ComparisonHistogramChart
-            series={readySeries}
-            viewMode={viewMode}
-            pickHistogram={(d) => d.entryPrice}
-          />
-        </ChartCard>
-        <ChartCard title="Time in position">
-          <ComparisonHistogramChart
-            series={readySeries}
-            viewMode={viewMode}
-            pickHistogram={(d) => d.dcaWindow}
-          />
-        </ChartCard>
-        <ChartCard title="Hour of day (UTC)">
-          <ComparisonHistogramChart
-            series={readySeries}
-            viewMode={viewMode}
-            pickHistogram={(d) => d.hourOfDay}
-            compact
-            sparseLabels={3}
-          />
-        </ChartCard>
-        <ChartCard title="Bets per market">
-          <ComparisonFlatChart
-            series={readySeries}
-            viewMode={viewMode}
-            pickHistogram={(d) => d.eventClustering}
-          />
-        </ChartCard>
+    <Section title="">
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-2">
+            {DISTRIBUTION_COMPARISON_VIEWS.map((view) => (
+              <button
+                key={view.key}
+                type="button"
+                onClick={() => setActiveView(view.key)}
+                className={cn(
+                  "rounded border px-3 py-1.5 text-xs transition-colors",
+                  activeView === view.key
+                    ? "border-primary/50 bg-primary/10 text-foreground"
+                    : "border-border text-muted-foreground hover:bg-muted hover:text-foreground"
+                )}
+              >
+                {view.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <ComparisonLegend series={readySeries} viewMode={viewMode} />
+            <ViewModeToggle viewMode={viewMode} onChange={setViewMode} />
+          </div>
+        </div>
+
+        <DistributionOverlayChart
+          series={readySeries}
+          view={DISTRIBUTION_COMPARISON_VIEWS_BY_KEY[activeView]}
+          viewMode={viewMode}
+        />
       </div>
     </Section>
   );
@@ -258,19 +217,24 @@ function Section({
   toolbar?: ReactNode;
   children: ReactNode;
 }): ReactElement {
+  const hasHeader = Boolean(title || caption || toolbar);
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="flex flex-col gap-1">
-          <h3 className="font-semibold text-sm uppercase tracking-widest">
-            {title}
-          </h3>
-          {caption ? (
-            <p className="text-muted-foreground text-xs">{caption}</p>
-          ) : null}
+      {hasHeader ? (
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <div className="flex flex-col gap-1">
+            {title ? (
+              <h3 className="font-semibold text-sm uppercase tracking-widest">
+                {title}
+              </h3>
+            ) : null}
+            {caption ? (
+              <p className="text-muted-foreground text-xs">{caption}</p>
+            ) : null}
+          </div>
+          {toolbar}
         </div>
-        {toolbar}
-      </div>
+      ) : null}
       {children}
     </div>
   );
@@ -323,18 +287,21 @@ function ViewModeToggle({
 
 const BAR_GREY = "bg-muted-foreground/30";
 const BAR_HIGHLIGHT = "bg-emerald-500/80";
-const SERIES_COLOR_CLASSES = [
-  "bg-sky-500/85",
-  "bg-emerald-500/85",
-  "bg-amber-400/85",
-  "bg-fuchsia-500/85",
+const SERIES_COLORS = [
+  { dot: "bg-sky-500/85", stroke: "#0ea5e9" },
+  { dot: "bg-emerald-500/85", stroke: "#10b981" },
+  { dot: "bg-amber-400/85", stroke: "#fbbf24" },
+  { dot: "bg-fuchsia-500/85", stroke: "#d946ef" },
+  { dot: "bg-rose-500/85", stroke: "#f43f5e" },
+  { dot: "bg-cyan-300/85", stroke: "#67e8f9" },
 ] as const;
 
 function seriesColorClass(index: number): string {
-  return (
-    SERIES_COLOR_CLASSES[index % SERIES_COLOR_CLASSES.length] ??
-    SERIES_COLOR_CLASSES[0]
-  );
+  return seriesColor(index).dot;
+}
+
+function seriesColor(index: number): (typeof SERIES_COLORS)[number] {
+  return SERIES_COLORS[index % SERIES_COLORS.length] ?? SERIES_COLORS[0];
 }
 
 function bucketTotal(
@@ -365,7 +332,7 @@ function YAxis({
   );
 }
 
-function ComparisonCaption({
+function ComparisonLegend({
   series,
   viewMode,
 }: {
@@ -375,11 +342,17 @@ function ComparisonCaption({
   viewMode: WalletDistributionsViewMode;
 }): ReactElement {
   return (
-    <>
+    <div className="flex flex-wrap gap-3">
       {series.map((s, i) => (
-        <span key={s.label}>
-          {i > 0 ? " · " : null}
-          <span className="font-mono">{s.label}</span>{" "}
+        <span
+          key={s.label}
+          className="inline-flex items-center gap-1.5 text-muted-foreground text-xs"
+        >
+          <span
+            className={cn("size-2 rounded-full", seriesColorClass(i))}
+            aria-hidden
+          />
+          {s.label}
           <span className="font-mono">
             {fmtVal(
               viewMode === "count" ? s.data.range.n : totalUsdc(s.data),
@@ -388,7 +361,7 @@ function ComparisonCaption({
           </span>
         </span>
       ))}
-    </>
+    </div>
   );
 }
 
@@ -399,386 +372,319 @@ function totalUsdc(data: WalletAnalysisDistributions): number {
   );
 }
 
-function groupedBucketValues(
+type DistributionComparisonViewKey =
+  | "tradeSize"
+  | "entryPrice"
+  | "timeInPosition"
+  | "entriesPerOutcome"
+  | "hourOfDay"
+  | "betsPerMarket";
+
+type DistributionComparisonView = {
+  key: DistributionComparisonViewKey;
+  label: string;
+  metric: "histogram" | "flat";
+  sparseLabels?: number | undefined;
+  histogram?: ((d: WalletAnalysisDistributions) => Histogram) | undefined;
+  flat?: ((d: WalletAnalysisDistributions) => FlatHistogram) | undefined;
+};
+
+const DISTRIBUTION_COMPARISON_VIEWS = [
+  {
+    key: "tradeSize",
+    label: "Trade size",
+    metric: "histogram",
+    histogram: (d) => d.tradeSize,
+  },
+  {
+    key: "entryPrice",
+    label: "Entry price",
+    metric: "histogram",
+    histogram: (d) => d.entryPrice,
+  },
+  {
+    key: "timeInPosition",
+    label: "Time in position",
+    metric: "histogram",
+    histogram: (d) => d.dcaWindow,
+  },
+  {
+    key: "entriesPerOutcome",
+    label: "Entries/outcome",
+    metric: "histogram",
+    histogram: (d) => d.dcaDepth,
+  },
+  {
+    key: "hourOfDay",
+    label: "Hour of day",
+    metric: "histogram",
+    sparseLabels: 3,
+    histogram: (d) => d.hourOfDay,
+  },
+  {
+    key: "betsPerMarket",
+    label: "Bets/market",
+    metric: "flat",
+    flat: (d) => d.eventClustering,
+  },
+] satisfies readonly DistributionComparisonView[];
+
+const DISTRIBUTION_COMPARISON_VIEWS_BY_KEY = Object.fromEntries(
+  DISTRIBUTION_COMPARISON_VIEWS.map((view) => [view.key, view])
+) as unknown as Record<
+  DistributionComparisonViewKey,
+  DistributionComparisonView
+>;
+
+type CurvePoint = {
+  label: string;
+  absolute: number;
+  share: number;
+};
+
+type CurveSeries = {
+  label: string;
+  color: string;
+  total: number;
+  points: readonly CurvePoint[];
+};
+
+function DistributionOverlayChart({
+  series,
+  view,
+  viewMode,
+}: {
+  series: readonly (DistributionComparisonSeries & {
+    data: WalletAnalysisDistributions;
+  })[];
+  view: DistributionComparisonView;
+  viewMode: WalletDistributionsViewMode;
+}): ReactElement {
+  const curves = buildCurveSeries(series, view, viewMode);
+  const maxShare = Math.max(
+    0.01,
+    ...curves.flatMap((curve) => curve.points.map((point) => point.share))
+  );
+  const labels = curves[0]?.points.map((point) => point.label) ?? [];
+
+  return (
+    <div className="rounded border bg-background p-3">
+      <DistributionCurveSvg
+        curves={curves}
+        labels={labels}
+        maxShare={maxShare}
+        viewMode={viewMode}
+        sparseLabels={view.sparseLabels}
+        xAxisLabel={view.label}
+      />
+    </div>
+  );
+}
+
+function buildCurveSeries(
   series: readonly (DistributionComparisonSeries & {
     data: WalletAnalysisDistributions;
   })[],
-  pickHistogram: (d: WalletAnalysisDistributions) => Histogram,
-  bucketIndex: number,
+  view: DistributionComparisonView,
   viewMode: WalletDistributionsViewMode
-): readonly {
-  label: string;
-  value: number;
-  tooltip: string;
-}[] {
-  return series.map((s) => {
-    const bucket = pickHistogram(s.data).buckets[bucketIndex];
-    if (!bucket) {
-      return { label: s.label, value: 0, tooltip: `${s.label}: no data` };
-    }
-    const counts =
-      viewMode === "count" ? bucket.values.count : bucket.values.usdc;
-    const value = counts.won + counts.lost + counts.pending;
+): readonly CurveSeries[] {
+  return series.map((s, i) => {
+    const points =
+      view.metric === "flat" && view.flat
+        ? flatCurvePoints(view.flat(s.data), viewMode)
+        : histogramCurvePoints(
+            view.histogram?.(s.data) ?? s.data.tradeSize,
+            viewMode
+          );
+    const total = points.reduce((sum, point) => sum + point.absolute, 0);
+    const normalized = points.map((point) => ({
+      ...point,
+      share: total > 0 ? point.absolute / total : 0,
+    }));
     return {
       label: s.label,
-      value,
-      tooltip: `${s.label} · ${bucket.label}: won ${fmtVal(counts.won, viewMode)} · lost ${fmtVal(counts.lost, viewMode)} · pending ${fmtVal(counts.pending, viewMode)}`,
+      color: seriesColor(i).stroke,
+      total,
+      points: normalized,
     };
   });
 }
 
-const GROUPED_BAR_SERIES_LIMIT = 4;
-
-function ComparisonHistogramChart({
-  series,
-  viewMode,
-  pickHistogram,
-  compact,
-  sparseLabels,
-}: {
-  series: readonly (DistributionComparisonSeries & {
-    data: WalletAnalysisDistributions;
-  })[];
-  viewMode: WalletDistributionsViewMode;
-  pickHistogram: (d: WalletAnalysisDistributions) => Histogram;
-  compact?: boolean | undefined;
-  sparseLabels?: number | undefined;
-}): ReactElement {
-  if (series.length > GROUPED_BAR_SERIES_LIMIT) {
-    return (
-      <HistogramHeatmap
-        series={series}
-        viewMode={viewMode}
-        pickHistogram={pickHistogram}
-        sparseLabels={sparseLabels}
-      />
-    );
-  }
-  return (
-    <GroupedHistogramBars
-      series={series}
-      viewMode={viewMode}
-      pickHistogram={pickHistogram}
-      compact={compact}
-      sparseLabels={sparseLabels}
-    />
-  );
+function histogramCurvePoints(
+  histogram: Histogram,
+  viewMode: WalletDistributionsViewMode
+): readonly Omit<CurvePoint, "share">[] {
+  return histogram.buckets.map((bucket) => ({
+    label: bucket.label,
+    absolute: bucketTotal(bucket, viewMode),
+  }));
 }
 
-function ComparisonFlatChart({
-  series,
-  viewMode,
-  pickHistogram,
-}: {
-  series: readonly (DistributionComparisonSeries & {
-    data: WalletAnalysisDistributions;
-  })[];
-  viewMode: WalletDistributionsViewMode;
-  pickHistogram: (d: WalletAnalysisDistributions) => FlatHistogram;
-}): ReactElement {
-  if (series.length > GROUPED_BAR_SERIES_LIMIT) {
-    return (
-      <FlatHeatmap
-        series={series}
-        viewMode={viewMode}
-        pickHistogram={pickHistogram}
-      />
-    );
-  }
-  return (
-    <GroupedFlatBars
-      series={series}
-      viewMode={viewMode}
-      pickHistogram={pickHistogram}
-    />
-  );
+function flatCurvePoints(
+  histogram: FlatHistogram,
+  viewMode: WalletDistributionsViewMode
+): readonly Omit<CurvePoint, "share">[] {
+  return histogram.buckets.map((bucket) => ({
+    label: bucket.label,
+    absolute: viewMode === "count" ? bucket.count : bucket.usdc,
+  }));
 }
 
-function GroupedHistogramBars({
-  series,
-  viewMode,
-  pickHistogram,
-  compact,
-  sparseLabels,
-}: {
-  series: readonly (DistributionComparisonSeries & {
-    data: WalletAnalysisDistributions;
-  })[];
-  viewMode: WalletDistributionsViewMode;
-  pickHistogram: (d: WalletAnalysisDistributions) => Histogram;
-  compact?: boolean | undefined;
-  sparseLabels?: number | undefined;
-}): ReactElement {
-  const first = series[0];
-  if (!first) return <div />;
-  const reference = pickHistogram(first.data);
-  const max = series.reduce(
-    (seriesMax, s) =>
-      Math.max(
-        seriesMax,
-        ...pickHistogram(s.data).buckets.map((bucket) =>
-          bucketTotal(bucket, viewMode)
-        )
-      ),
-    0
-  );
-  const scaleMax = Math.max(max, 1);
-  const chartPx = compact ? 72 : 104;
-  return (
-    <div className="flex items-stretch gap-2">
-      <YAxis max={max} height={chartPx} viewMode={viewMode} />
-      <div className="flex flex-1 flex-col">
-        <div
-          className="relative flex items-end gap-1"
-          style={{ height: `${chartPx}px` }}
-        >
-          <ChartGuides />
-          {reference.buckets.map((bucket, bucketIndex) => (
-            <BucketGroup
-              key={`${bucket.label}-${bucketIndex}`}
-              values={groupedBucketValues(
-                series,
-                pickHistogram,
-                bucketIndex,
-                viewMode
-              )}
-              scaleMax={scaleMax}
-              chartPx={chartPx}
-            />
-          ))}
-        </div>
-        <BucketLabels buckets={reference.buckets} sparseLabels={sparseLabels} />
-      </div>
-    </div>
-  );
-}
-
-function HistogramHeatmap({
-  series,
-  viewMode,
-  pickHistogram,
-  sparseLabels,
-}: {
-  series: readonly (DistributionComparisonSeries & {
-    data: WalletAnalysisDistributions;
-  })[];
-  viewMode: WalletDistributionsViewMode;
-  pickHistogram: (d: WalletAnalysisDistributions) => Histogram;
-  sparseLabels?: number | undefined;
-}): ReactElement {
-  const first = series[0];
-  if (!first) return <div />;
-  const reference = pickHistogram(first.data);
-  const max = series.reduce(
-    (seriesMax, s) =>
-      Math.max(
-        seriesMax,
-        ...pickHistogram(s.data).buckets.map((bucket) =>
-          bucketTotal(bucket, viewMode)
-        )
-      ),
-    0
-  );
-  return (
-    <HeatmapShell labels={reference.buckets} sparseLabels={sparseLabels}>
-      {series.map((s) => (
-        <HeatmapRow
-          key={s.label}
-          label={s.label}
-          cells={reference.buckets.map((bucket, bucketIndex) => {
-            const seriesBucket = pickHistogram(s.data).buckets[bucketIndex];
-            if (!seriesBucket) {
-              return { label: bucket.label, value: 0, tooltip: "no data" };
-            }
-            const counts =
-              viewMode === "count"
-                ? seriesBucket.values.count
-                : seriesBucket.values.usdc;
-            const value = counts.won + counts.lost + counts.pending;
-            return {
-              label: bucket.label,
-              value,
-              tooltip: `${s.label} · ${bucket.label}: won ${fmtVal(counts.won, viewMode)} · lost ${fmtVal(counts.lost, viewMode)} · pending ${fmtVal(counts.pending, viewMode)}`,
-            };
-          })}
-          max={max}
-          viewMode={viewMode}
-        />
-      ))}
-    </HeatmapShell>
-  );
-}
-
-function FlatHeatmap({
-  series,
-  viewMode,
-  pickHistogram,
-}: {
-  series: readonly (DistributionComparisonSeries & {
-    data: WalletAnalysisDistributions;
-  })[];
-  viewMode: WalletDistributionsViewMode;
-  pickHistogram: (d: WalletAnalysisDistributions) => FlatHistogram;
-}): ReactElement {
-  const first = series[0];
-  if (!first) return <div />;
-  const reference = pickHistogram(first.data);
-  const max = series.reduce(
-    (seriesMax, s) =>
-      Math.max(
-        seriesMax,
-        ...pickHistogram(s.data).buckets.map((bucket) =>
-          viewMode === "count" ? bucket.count : bucket.usdc
-        )
-      ),
-    0
-  );
-  return (
-    <HeatmapShell labels={reference.buckets}>
-      {series.map((s) => (
-        <HeatmapRow
-          key={s.label}
-          label={s.label}
-          cells={reference.buckets.map((bucket, bucketIndex) => {
-            const seriesBucket = pickHistogram(s.data).buckets[bucketIndex];
-            const value = seriesBucket
-              ? viewMode === "count"
-                ? seriesBucket.count
-                : seriesBucket.usdc
-              : 0;
-            return {
-              label: bucket.label,
-              value,
-              tooltip: `${s.label} · ${bucket.label}: ${fmtVal(value, viewMode)}`,
-            };
-          })}
-          max={max}
-          viewMode={viewMode}
-        />
-      ))}
-    </HeatmapShell>
-  );
-}
-
-function HeatmapShell({
+function DistributionCurveSvg({
+  curves,
   labels,
+  maxShare,
+  viewMode,
   sparseLabels,
-  children,
+  xAxisLabel,
 }: {
-  labels: readonly { label: string }[];
+  curves: readonly CurveSeries[];
+  labels: readonly string[];
+  maxShare: number;
+  viewMode: WalletDistributionsViewMode;
   sparseLabels?: number | undefined;
-  children: ReactNode;
+  xAxisLabel: string;
 }): ReactElement {
-  return (
-    <div className="flex min-w-0 flex-col gap-1">
-      <div className="flex gap-2">
-        <div className="w-24 shrink-0" />
-        <div className="min-w-0 flex-1">
-          <BucketLabels buckets={labels} sparseLabels={sparseLabels} />
-        </div>
-      </div>
-      {children}
-    </div>
-  );
-}
+  const width = 1000;
+  const height = 430;
+  const left = 78;
+  const right = 28;
+  const top = 30;
+  const bottom = 76;
+  const plotW = width - left - right;
+  const plotH = height - top - bottom;
+  const yScaleMax = Math.min(1, Math.max(0.01, maxShare * 1.1));
+  const xFor = (i: number) =>
+    labels.length <= 1 ? left : left + (i / (labels.length - 1)) * plotW;
+  const yFor = (share: number) => top + (1 - share / yScaleMax) * plotH;
 
-function HeatmapRow({
-  label,
-  cells,
-  max,
-  viewMode,
-}: {
-  label: string;
-  cells: readonly { label: string; value: number; tooltip: string }[];
-  max: number;
-  viewMode: WalletDistributionsViewMode;
-}): ReactElement {
   return (
-    <div className="flex items-center gap-2">
-      <div className="w-24 shrink-0 truncate font-mono text-muted-foreground text-xs">
-        {label}
-      </div>
-      <div className="flex min-w-0 flex-1 gap-1">
-        {cells.map((cell, i) => (
-          <div
-            key={`${cell.label}-${i}`}
-            className="h-5 flex-1 rounded-sm border border-background"
-            style={{ backgroundColor: heatmapCellColor(cell.value, max) }}
-            title={`${cell.tooltip} · ${fmtVal(cell.value, viewMode)}`}
-          />
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function heatmapCellColor(value: number, max: number): string {
-  if (max <= 0 || value <= 0) return "rgba(148, 163, 184, 0.12)";
-  const intensity = Math.max(0.18, Math.min(0.92, value / max));
-  return `rgba(16, 185, 129, ${intensity})`;
-}
-
-function GroupedFlatBars({
-  series,
-  viewMode,
-  pickHistogram,
-}: {
-  series: readonly (DistributionComparisonSeries & {
-    data: WalletAnalysisDistributions;
-  })[];
-  viewMode: WalletDistributionsViewMode;
-  pickHistogram: (d: WalletAnalysisDistributions) => FlatHistogram;
-}): ReactElement {
-  const first = series[0];
-  if (!first) return <div />;
-  const reference = pickHistogram(first.data);
-  const max = series.reduce(
-    (seriesMax, s) =>
-      Math.max(
-        seriesMax,
-        ...pickHistogram(s.data).buckets.map((bucket) =>
-          viewMode === "count" ? bucket.count : bucket.usdc
-        )
-      ),
-    0
-  );
-  const scaleMax = Math.max(max, 1);
-  const chartPx = 104;
-  return (
-    <div className="flex items-stretch gap-2">
-      <YAxis max={max} height={chartPx} viewMode={viewMode} />
-      <div className="flex flex-1 flex-col">
-        <div
-          className="relative flex items-end gap-1"
-          style={{ height: `${chartPx}px` }}
+    <div className="mt-4 overflow-hidden rounded border bg-card/40">
+      <svg
+        role="img"
+        aria-label="Wallet distribution overlay"
+        viewBox={`0 0 ${width} ${height}`}
+        className="h-96 w-full"
+      >
+        <line
+          x1={left}
+          y1={top}
+          x2={left}
+          y2={height - bottom}
+          stroke="rgba(148, 163, 184, 0.28)"
+        />
+        <line
+          x1={left}
+          y1={top}
+          x2={width - right}
+          y2={top}
+          stroke="rgba(148, 163, 184, 0.18)"
+        />
+        <line
+          x1={left}
+          y1={top + plotH / 2}
+          x2={width - right}
+          y2={top + plotH / 2}
+          stroke="rgba(148, 163, 184, 0.14)"
+        />
+        <line
+          x1={left}
+          y1={height - bottom}
+          x2={width - right}
+          y2={height - bottom}
+          stroke="rgba(148, 163, 184, 0.28)"
+        />
+        <text
+          x={18}
+          y={top + plotH / 2}
+          textAnchor="middle"
+          transform={`rotate(-90 18 ${top + plotH / 2})`}
+          className="fill-muted-foreground font-mono text-xs"
         >
-          <ChartGuides />
-          {reference.buckets.map((bucket, bucketIndex) => {
-            const values = series.map((s) => {
-              const seriesBucket = pickHistogram(s.data).buckets[bucketIndex];
-              const value = seriesBucket
-                ? viewMode === "count"
-                  ? seriesBucket.count
-                  : seriesBucket.usdc
-                : 0;
-              return {
-                label: s.label,
-                value,
-                tooltip: `${s.label} · ${bucket.label}: ${fmtVal(value, viewMode)}`,
-              };
-            });
-            return (
-              <BucketGroup
-                key={`${bucket.label}-${bucketIndex}`}
-                values={values}
-                scaleMax={scaleMax}
-                chartPx={chartPx}
+          % of wallet
+        </text>
+        <text
+          x={left - 10}
+          y={top + 4}
+          textAnchor="end"
+          className="fill-muted-foreground font-mono text-xs"
+        >
+          {(yScaleMax * 100).toFixed(0)}%
+        </text>
+        <text
+          x={left - 10}
+          y={height - bottom + 4}
+          textAnchor="end"
+          className="fill-muted-foreground font-mono text-xs"
+        >
+          0
+        </text>
+        <text
+          x={left + plotW / 2}
+          y={height - 14}
+          textAnchor="middle"
+          className="fill-muted-foreground font-mono text-xs"
+        >
+          {xAxisLabel}
+        </text>
+
+        {curves.map((curve) => {
+          const points = curve.points.map((point, i) => ({
+            ...point,
+            x: xFor(i),
+            y: yFor(point.share),
+          }));
+          const path = points
+            .map((point, i) => `${i === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+            .join(" ");
+          return (
+            <g key={curve.label}>
+              <path
+                d={path}
+                fill="none"
+                stroke={curve.color}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="3"
+                opacity="0.9"
               />
-            );
-          })}
-        </div>
-        <BucketLabels buckets={reference.buckets} />
-      </div>
+              {points.map((point, i) => (
+                <circle
+                  key={`${curve.label}-${point.label}-${i}`}
+                  cx={point.x}
+                  cy={point.y}
+                  r="4"
+                  fill={curve.color}
+                  stroke="hsl(var(--background))"
+                  strokeWidth="2"
+                >
+                  <title>
+                    {curve.label} · {point.label}:{" "}
+                    {(point.share * 100).toFixed(1)}% ·{" "}
+                    {fmtVal(point.absolute, viewMode)}
+                  </title>
+                </circle>
+              ))}
+            </g>
+          );
+        })}
+
+        {labels.map((label, i) => {
+          const showLabel = !sparseLabels || i % sparseLabels === 0;
+          if (!showLabel) return null;
+          return (
+            <text
+              key={label}
+              x={xFor(i)}
+              y={height - 20}
+              textAnchor="middle"
+              className="fill-muted-foreground font-mono text-xs"
+            >
+              {label}
+            </text>
+          );
+        })}
+      </svg>
     </div>
   );
 }
@@ -795,39 +701,6 @@ function ChartGuides(): ReactElement {
         className="pointer-events-none absolute inset-x-0 bottom-0 border-muted-foreground/30 border-t"
       />
     </>
-  );
-}
-
-function BucketGroup({
-  values,
-  scaleMax,
-  chartPx,
-}: {
-  values: readonly { label: string; value: number; tooltip: string }[];
-  scaleMax: number;
-  chartPx: number;
-}): ReactElement {
-  return (
-    <div className="flex flex-1 items-end justify-center gap-0.5">
-      {values.map((v, i) => {
-        const heightPx =
-          v.value === 0
-            ? 2
-            : Math.max(4, Math.round((v.value / scaleMax) * chartPx));
-        return (
-          <div
-            key={`${v.label}-${i}`}
-            className="flex min-w-1 flex-1 items-end justify-center"
-            title={v.tooltip}
-          >
-            <div
-              className={cn("w-full rounded-t-sm", seriesColorClass(i))}
-              style={{ height: `${heightPx}px` }}
-            />
-          </div>
-        );
-      })}
-    </div>
   );
 }
 

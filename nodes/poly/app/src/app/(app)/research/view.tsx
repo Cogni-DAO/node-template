@@ -39,7 +39,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import type { ColumnFiltersState, SortingState } from "@tanstack/react-table";
-import { Ban, Plus, Radio, Search, Shield, WalletCards } from "lucide-react";
+import { Ban, Plus, Radio, Search, Shield } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
@@ -50,10 +50,8 @@ import {
 } from "@/app/(app)/_components/wallets-table";
 import { Input, ToggleGroup, ToggleGroupItem } from "@/components";
 import {
-  CopyWalletButton,
   DistributionComparisonBlock,
   type DistributionComparisonSeries,
-  WalletAnalysisSurface,
   WalletDetailDrawer,
   WalletQuickJump,
 } from "@/features/wallet-analysis";
@@ -308,10 +306,6 @@ export function ResearchView() {
         <h1 className="font-semibold text-xl tracking-tight md:text-2xl">
           Research
         </h1>
-        <p className="max-w-2xl text-muted-foreground text-sm">
-          Target-wallet benchmarks, our current tenant wallet, and live copy
-          gaps.
-        </p>
       </div>
 
       <ResearchBenchmarkBoard
@@ -452,68 +446,28 @@ function ResearchBenchmarkBoard({
       isLoading: distributionQueries[i]?.isLoading,
       isError: distributionQueries[i]?.isError,
     }));
-
   return (
-    <section className="flex flex-col gap-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2 text-muted-foreground text-xs uppercase tracking-wider">
-            <WalletCards className="size-3.5" />
-            Live Wallet Benchmarks
-          </div>
-          <h2 className="font-semibold text-lg">
-            Copy targets vs your trading wallet
-          </h2>
-        </div>
-        {userWalletAddress ? (
-          <Link
-            href={`/research/w/${userWalletAddress}`}
-            className="rounded border px-3 py-1.5 text-sm hover:bg-muted"
-          >
-            Open your wallet
-          </Link>
-        ) : null}
-      </div>
-
-      <div className="grid gap-4 xl:grid-cols-2">
-        {PRIMARY_RESEARCH_WALLETS.map((wallet) => (
-          <WalletAnalysisSurface
-            key={wallet.address}
-            addr={wallet.address}
-            variant="compact"
-            size="default"
-            includeDistributions={false}
-            headerActions={<CopyWalletButton addr={wallet.address} />}
-          />
-        ))}
-      </div>
-
-      {userWalletAddress ? (
-        <WalletAnalysisSurface
-          addr={userWalletAddress}
-          variant="compact"
-          size="default"
-          includeDistributions={false}
-        />
-      ) : (
-        <div className="rounded-lg border bg-muted/10 p-4">
-          <p className="font-medium text-sm">Your comparison wallet</p>
-          <p className="mt-1 text-muted-foreground text-sm">
-            {userWalletConnected
-              ? "Your wallet is connected, but the funder address is not available from wallet status yet."
-              : "Connect a Polymarket trading wallet to compare your VWAP and active positions against RN1 and swisstony."}
-          </p>
+    <section className="flex flex-col gap-3">
+      {!userWalletAddress ? (
+        <div className="flex justify-end">
           <Link
             href="/credits"
-            className="mt-3 inline-flex rounded border px-3 py-1.5 text-sm hover:bg-muted"
+            className="rounded border px-3 py-1.5 text-sm hover:bg-muted"
           >
-            Open money setup
+            Add your wallet
           </Link>
         </div>
-      )}
+      ) : null}
 
       <div className="rounded-lg border border-primary/20 bg-card p-4">
         <DistributionComparisonBlock series={distributionSeries} />
+        {!userWalletAddress ? (
+          <p className="mt-3 text-muted-foreground text-xs">
+            {userWalletConnected
+              ? "Wallet is connected, but the funder address is not available yet."
+              : "Add your wallet to include it in overlays."}
+          </p>
+        ) : null}
       </div>
     </section>
   );
