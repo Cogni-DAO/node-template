@@ -262,9 +262,14 @@ services:
 
   db-backup:
     image: postgres:15
-    restart: unless-stopped
-    labels:
-      - "autoheal=true"
+    profiles: ["backup"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
     networks:
       - internal
     environment:
@@ -277,7 +282,7 @@ services:
     volumes:
       - ./db-backup/backup.sh:/usr/local/bin/db-backup.sh:ro
       - db_backups:/backups
-    command: ["/usr/local/bin/db-backup.sh", "loop"]
+    command: ["/usr/local/bin/db-backup.sh", "once"]
     depends_on:
       postgres:
         condition: service_healthy
@@ -285,12 +290,6 @@ services:
         condition: service_healthy
       temporal:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD", "/usr/local/bin/db-backup.sh", "health"]
-      interval: 60s
-      timeout: 5s
-      retries: 3
-      start_period: 5m
 
   db-migrate:
     # task.0370 step 1: same image as the app, invoking the bundled migrate.mjs.

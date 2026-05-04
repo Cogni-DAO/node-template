@@ -7,7 +7,6 @@ set -euo pipefail
 BACKUP_ROOT="${DB_BACKUP_ROOT:-/backups}"
 INTERVAL_SECONDS="${DB_BACKUP_INTERVAL_SECONDS:-86400}"
 RETENTION_DAYS="${DB_BACKUP_RETENTION_DAYS:-14}"
-STATUS_FILE="${DB_BACKUP_STATUS_FILE:-/tmp/db-backup.last-success}"
 
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -98,7 +97,6 @@ run_once() {
   backup_cluster temporal temporal-postgres 5432 "${TEMPORAL_DB_USER:-temporal}" "${TEMPORAL_DB_PASSWORD:-temporal}" || failed=1
 
   if [ "$failed" -eq 0 ]; then
-    date +%s > "$STATUS_FILE"
     log_json info db_backup.run_completed all "all postgres backups completed"
     return 0
   fi
@@ -107,35 +105,17 @@ run_once() {
   return 1
 }
 
-healthcheck() {
-  local now last max_age
-  [ -s "$STATUS_FILE" ] || exit 1
-  now="$(date +%s)"
-  last="$(cat "$STATUS_FILE")"
-  max_age="${DB_BACKUP_MAX_AGE_SECONDS:-$((INTERVAL_SECONDS * 2 + 3600))}"
-  [ "$((now - last))" -le "$max_age" ]
-}
-
 main() {
   require_positive_int DB_BACKUP_INTERVAL_SECONDS "$INTERVAL_SECONDS"
   require_positive_int DB_BACKUP_RETENTION_DAYS "$RETENTION_DAYS"
   mkdir -p "$BACKUP_ROOT"
 
-  case "${1:-loop}" in
+  case "${1:-once}" in
     once)
       run_once
       ;;
-    loop)
-      while true; do
-        run_once || true
-        sleep "$INTERVAL_SECONDS"
-      done
-      ;;
-    health)
-      healthcheck
-      ;;
     *)
-      echo "Usage: $0 [once|loop|health]" >&2
+      echo "Usage: $0 [once]" >&2
       exit 2
       ;;
   esac

@@ -90,7 +90,7 @@ docker compose --project-name cogni-runtime logs -f app
 - Alloy UI exposed at 127.0.0.1:12345 (internal only)
 - `DEPLOY_ENVIRONMENT` must be set (local|candidate-a|preview|production) - used for env label, fail-closed validation
 - `db-migrate` service runs via `--profile bootstrap`, receives only DB env vars (least-secret exposure)
-- `db-backup` runs `pg_dump`/`pg_dumpall --globals-only` against app Postgres and Temporal Postgres on startup and then every `DB_BACKUP_INTERVAL_SECONDS` (default 24h); dumps live in the persistent `db_backups` volume with `DB_BACKUP_RETENTION_DAYS` retention (default 14d)
+- `db-backup` is a `--profile backup` one-shot service, scheduled on deployed VMs by the host `cogni-db-backup.timer`; it runs `pg_dump`/`pg_dumpall --globals-only` against app Postgres and Temporal Postgres every `DB_BACKUP_INTERVAL_SECONDS` (default 24h), and dumps live in the persistent `db_backups` volume with `DB_BACKUP_RETENTION_DAYS` retention (default 14d)
 - `MIGRATOR_IMAGE` required in production compose (no fallback), derived from APP_IMAGE with `-migrate` suffix
 - `git-sync` runs as bootstrap profile service (prod) or regular service (dev), populates `repo_data` volume at `/repo/current` via atomic symlink
 - App reads `COGNI_REPO_PATH=/repo/current` in all environments; `COGNI_REPO_REF` pins to deploy commit SHA

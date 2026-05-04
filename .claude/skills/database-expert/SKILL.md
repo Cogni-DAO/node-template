@@ -130,18 +130,18 @@ import { polyCopyTradeFills } from "@cogni/poly-db-schema/copy-trade";
 
 ## Runtime backups — candidate-a/preview/prod Compose infra
 
-App Postgres and Temporal Postgres are backed up by the Compose-managed `db-backup` service in `infra/compose/runtime/docker-compose.yml` (dev parity in `docker-compose.dev.yml`). It uses the official `postgres:15` image and the script at `infra/compose/runtime/db-backup/backup.sh`.
+App Postgres and Temporal Postgres are backed up by the Compose `db-backup` profile service in `infra/compose/runtime/docker-compose.yml` (dev parity in `docker-compose.dev.yml`). It uses the official `postgres:15` image and the script at `infra/compose/runtime/db-backup/backup.sh`. On deployed VMs, `scripts/ci/deploy-infra.sh` installs `cogni-db-backup.timer`, which runs the service as a one-shot container instead of keeping a privileged DB client idle on the network.
 
 What it does:
 
 - Backs up app Postgres (`postgres:5432`) and Temporal Postgres (`temporal-postgres:5432`).
-- Runs once on service startup, then every `DB_BACKUP_INTERVAL_SECONDS` (default 86400 = 24h).
+- Runs only when invoked: candidate-flight-infra forces one validation run, and the host systemd timer runs it every `DB_BACKUP_INTERVAL_SECONDS` (default 86400 = 24h).
 - Retains backups for `DB_BACKUP_RETENTION_DAYS` (default 14).
 - Writes timestamped directories under the persistent Docker volume `db_backups`.
 - Each backup dir contains `globals.sql`, one custom-format `pg_dump` file per database, and `MANIFEST.sha256`.
 - Emits JSON logs with `event="db_backup.completed"` and `cluster="app"` / `cluster="temporal"`.
 
-The candidate-a infra lever proves this path. `scripts/ci/deploy-infra.sh` starts `db-backup`, restarts Alloy when the log allowlist changes, forces a validation backup, verifies both latest manifests, and prints `db_backup.completed` logs. `.github/workflows/candidate-flight-infra.yml` then queries Loki for `{env="candidate-a",service="db-backup"} | json | event="db_backup.completed"` and requires hits for both clusters.
+The candidate-a infra lever proves this path. `scripts/ci/deploy-infra.sh` installs/enables the timer, restarts Alloy when the log allowlist changes, forces a validation backup, verifies both latest manifests, and prints `db_backup.completed` logs. `.github/workflows/candidate-flight-infra.yml` then queries Loki for `{env="candidate-a",service="db-backup"} | json | event="db_backup.completed"` and requires hits for both clusters.
 
 Known scope: this is same-VM persistent-volume backup. It protects against logical DB damage and operator mistakes, not full VM loss. Do not claim disaster recovery until an off-host object store sink and restore drill exist. The next hardening step is S3-compatible storage (or equivalent OSS object store) plus a scheduled restore rehearsal.
 

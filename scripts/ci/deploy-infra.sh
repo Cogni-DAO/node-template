@@ -669,9 +669,8 @@ LITELLM_NODE_ENDPOINTS="4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://${LITELLM_NO
 printf '%s=%s\n' COGNI_NODE_ENDPOINTS "$LITELLM_NODE_ENDPOINTS" >> "$RUNTIME_ENV"
 # Multi-node DB provisioning
 append_env_if_set "$RUNTIME_ENV" COGNI_NODE_DBS "${COGNI_NODE_DBS-}"
-# Database backup cadence. The db-backup service runs once at startup and then
-# sleeps for this interval; defaults keep candidate-a validation immediate
-# without requiring new GitHub Environment secrets.
+# Database backup cadence. A systemd timer runs the Compose db-backup profile as
+# a one-shot container; defaults avoid requiring new GitHub Environment secrets.
 printf '%s=%s\n' DB_BACKUP_INTERVAL_SECONDS "${DB_BACKUP_INTERVAL_SECONDS:-86400}" >> "$RUNTIME_ENV"
 printf '%s=%s\n' DB_BACKUP_RETENTION_DAYS "${DB_BACKUP_RETENTION_DAYS:-14}" >> "$RUNTIME_ENV"
 
@@ -841,8 +840,8 @@ emit_deployment_event "infra_deployment.stack_up_started" "in_progress" "Startin
 # (autoheal can restart a container between compose stop and remove)
 $RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
 
-# Infra services only — excludes app, scheduler-worker, db-migrate
-INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui db-backup autoheal repo-init git-sync"
+# Infra services only — excludes app, scheduler-worker, db-migrate, and one-shot backup jobs
+INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
 # Doltgres is optional — only include if it's in the compose file for this env.
 if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
   INFRA_SERVICES="$INFRA_SERVICES doltgres"
@@ -872,44 +871,62 @@ else
   log_warn "Alloy config missing at $ALLOY_CONFIG, skipping restart check"
 fi
 
-if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^db-backup$'; then
-  log_info "[$(date -u +%H:%M:%S)] Waiting for db-backup service health..."
-  BACKUP_DEADLINE=$((SECONDS + 420))
-  while true; do
-    BACKUP_CID=$($RUNTIME_COMPOSE ps -q db-backup 2>/dev/null || true)
-    BACKUP_HEALTH="missing"
-    if [[ -n "$BACKUP_CID" ]]; then
-      BACKUP_HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$BACKUP_CID" 2>/dev/null || echo "missing")
-    fi
+if $RUNTIME_COMPOSE --profile backup config --services 2>/dev/null | grep -q '^db-backup$'; then
+  log_info "[$(date -u +%H:%M:%S)] Installing db-backup systemd timer..."
+  $RUNTIME_COMPOSE --profile backup stop db-backup 2>/dev/null || true
+  $RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+  DOCKER_BIN=$(command -v docker)
+  BACKUP_INTERVAL_SECONDS="${DB_BACKUP_INTERVAL_SECONDS:-86400}"
+  cat >/etc/systemd/system/cogni-db-backup.service <<SYSTEMD_SERVICE_EOF
+[Unit]
+Description=Cogni runtime Postgres logical backup
+Requires=docker.service
+After=docker.service
 
-    if [[ "$BACKUP_HEALTH" == "healthy" ]]; then
-      log_info "db-backup service is healthy"
-      log_info "Running db-backup validation backup..."
-      $RUNTIME_COMPOSE exec -T db-backup /usr/local/bin/db-backup.sh once
-      $RUNTIME_COMPOSE exec -T db-backup bash -lc '
-        set -euo pipefail
-        for cluster in app temporal; do
-          latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
-          test -n "$latest"
-          test -s "${latest}/MANIFEST.sha256"
-          echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
-        done
-      '
-      $RUNTIME_COMPOSE logs --tail 80 db-backup | grep 'db_backup.completed' || {
-        log_error "db-backup completed logs missing after healthy status"
-        exit 1
-      }
-      emit_deployment_event "infra_deployment.db_backup_healthy" "success" "db-backup service is healthy"
-      break
-    fi
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cogni-template-runtime
+ExecStart=${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
+TimeoutStartSec=2h
+SYSTEMD_SERVICE_EOF
 
-    if [ "$SECONDS" -ge "$BACKUP_DEADLINE" ]; then
-      log_error "db-backup service did not become healthy (last status: $BACKUP_HEALTH)"
-      $RUNTIME_COMPOSE logs --tail 80 db-backup || true
-      exit 1
-    fi
-    sleep 5
-  done
+  cat >/etc/systemd/system/cogni-db-backup.timer <<SYSTEMD_TIMER_EOF
+[Unit]
+Description=Run Cogni runtime Postgres logical backup
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=${BACKUP_INTERVAL_SECONDS}s
+AccuracySec=5min
+RandomizedDelaySec=5min
+Persistent=true
+Unit=cogni-db-backup.service
+
+[Install]
+WantedBy=timers.target
+SYSTEMD_TIMER_EOF
+
+  systemctl daemon-reload
+  systemctl enable --now cogni-db-backup.timer
+  systemctl reset-failed cogni-db-backup.service 2>/dev/null || true
+  log_info "db-backup timer installed with interval ${BACKUP_INTERVAL_SECONDS}s"
+
+  log_info "Running db-backup validation backup..."
+  $RUNTIME_COMPOSE --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
+  $RUNTIME_COMPOSE --profile backup run --rm --no-deps --entrypoint bash db-backup -lc '
+    set -euo pipefail
+    for cluster in app temporal; do
+      latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
+      test -n "$latest"
+      test -s "${latest}/MANIFEST.sha256"
+      echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
+    done
+  '
+  $RUNTIME_COMPOSE --profile backup logs --tail 80 db-backup | grep 'db_backup.completed' || {
+    log_error "db-backup completed logs missing after validation backup"
+    exit 1
+  }
+  emit_deployment_event "infra_deployment.db_backup_scheduled" "success" "db-backup timer installed and validation backup completed"
 fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1249,7 +1266,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "    $REPO_ROOT/infra/compose/runtime/             → root@$VM_HOST:/opt/cogni-template-runtime/"
     echo "    $REPO_ROOT/infra/k8s/argocd/image-updater/    → root@$VM_HOST:/opt/cogni-template-argocd-updater/  (bug.0344)"
     echo "Remote script:      $ARTIFACT_DIR/deploy-infra-remote.sh → /tmp/deploy-infra-remote.sh"
-    echo "Infra services managed by remote script: postgres, litellm, temporal, db-backup, alloy, caddy (plus healthchecks)"
+    echo "Infra services managed by remote script: postgres, litellm, temporal, alloy, caddy (plus db-backup timer and healthchecks)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log_info "Dry run complete — exiting before any VM contact"
     exit 0
