@@ -28,6 +28,8 @@
 import type { WalletTimePeriod } from "@cogni/poly-ai-tools";
 import {
   PolyAddressSchema,
+  type PolyResearchTraderComparisonResponse,
+  type PolyWalletOverviewInterval,
   type PolyWalletStatusOutput,
   type WalletAnalysisDistributions,
   type WalletAnalysisResponse,
@@ -52,6 +54,7 @@ import { Input, ToggleGroup, ToggleGroupItem } from "@/components";
 import {
   DistributionComparisonBlock,
   type DistributionComparisonSeries,
+  TraderComparisonBlock,
   WalletDetailDrawer,
   WalletQuickJump,
 } from "@/features/wallet-analysis";
@@ -114,6 +117,24 @@ async function fetchWalletDistributions(
   }
   const json = (await res.json()) as WalletAnalysisResponse;
   return json.distributions;
+}
+
+async function fetchTraderComparison(params: {
+  wallets: readonly ResearchComparisonWallet[];
+  interval: PolyWalletOverviewInterval;
+}): Promise<PolyResearchTraderComparisonResponse> {
+  const search = new URLSearchParams({ interval: params.interval });
+  for (const wallet of params.wallets.slice(0, 3)) {
+    search.append("wallet", wallet.address);
+    search.append("label", wallet.label);
+  }
+  const res = await fetch(
+    `/api/v1/poly/research/trader-comparison?${search.toString()}`
+  );
+  if (!res.ok) {
+    throw new Error(`trader comparison failed: ${res.status}`);
+  }
+  return (await res.json()) as PolyResearchTraderComparisonResponse;
 }
 
 export function ResearchView() {
@@ -428,6 +449,35 @@ function ResearchBenchmarkBoard({
     () => buildComparisonWallets(userWalletAddress, targets),
     [userWalletAddress, targets]
   );
+  const headlineWallets = useMemo(
+    () => comparisonWallets.slice(0, 3),
+    [comparisonWallets]
+  );
+  const [comparisonInterval, setComparisonInterval] =
+    useState<PolyWalletOverviewInterval>("1W");
+  const [comparisonMode, setComparisonMode] = useState<
+    "pnl" | "count" | "flow"
+  >("pnl");
+  const {
+    data: traderComparison,
+    isLoading: traderComparisonLoading,
+    isError: traderComparisonError,
+  } = useQuery({
+    queryKey: [
+      "research-trader-comparison",
+      comparisonInterval,
+      headlineWallets.map((wallet) => wallet.address).join(","),
+    ],
+    queryFn: () =>
+      fetchTraderComparison({
+        wallets: headlineWallets,
+        interval: comparisonInterval,
+      }),
+    enabled: headlineWallets.length > 0,
+    staleTime: 30_000,
+    gcTime: 5 * 60_000,
+    retry: 1,
+  });
   const distributionQueries = useQueries({
     queries: comparisonWallets.map((wallet) => ({
       queryKey: [
@@ -458,6 +508,18 @@ function ResearchBenchmarkBoard({
           </Link>
         </div>
       ) : null}
+
+      <div className="rounded-lg border border-primary/20 bg-card p-4">
+        <TraderComparisonBlock
+          data={traderComparison}
+          isLoading={traderComparisonLoading}
+          isError={traderComparisonError}
+          interval={comparisonInterval}
+          onIntervalChange={setComparisonInterval}
+          mode={comparisonMode}
+          onModeChange={setComparisonMode}
+        />
+      </div>
 
       <div className="rounded-lg border border-primary/20 bg-card p-4">
         <DistributionComparisonBlock series={distributionSeries} />
