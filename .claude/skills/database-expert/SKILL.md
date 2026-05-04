@@ -136,6 +136,7 @@ What it does:
 
 - Backs up app Postgres (`postgres:5432`) and Temporal Postgres (`temporal-postgres:5432`).
 - Runs only when invoked: candidate-flight-infra forces one validation run, and the host systemd timer runs it every `DB_BACKUP_INTERVAL_SECONDS` (default 86400 = 24h).
+- Waits `DB_BACKUP_OBSERVABILITY_GRACE_SECONDS` (default 90) before exit so Alloy can scrape one-shot container logs.
 - Retains backups for `DB_BACKUP_RETENTION_DAYS` (default 14).
 - Writes timestamped directories under the persistent Docker volume `db_backups`.
 - Each backup dir contains `globals.sql`, one custom-format `pg_dump` file per database, and `MANIFEST.sha256`.

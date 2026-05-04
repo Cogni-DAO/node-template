@@ -7,6 +7,7 @@ set -euo pipefail
 BACKUP_ROOT="${DB_BACKUP_ROOT:-/backups}"
 INTERVAL_SECONDS="${DB_BACKUP_INTERVAL_SECONDS:-86400}"
 RETENTION_DAYS="${DB_BACKUP_RETENTION_DAYS:-14}"
+OBSERVABILITY_GRACE_SECONDS="${DB_BACKUP_OBSERVABILITY_GRACE_SECONDS:-90}"
 
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
@@ -27,6 +28,14 @@ require_positive_int() {
   local name="$1" value="$2"
   if ! [[ "$value" =~ ^[0-9]+$ ]] || [ "$value" -lt 1 ]; then
     log_json error db_backup.config "" "$name must be a positive integer"
+    exit 2
+  fi
+}
+
+require_nonnegative_int() {
+  local name="$1" value="$2"
+  if ! [[ "$value" =~ ^[0-9]+$ ]]; then
+    log_json error db_backup.config "" "$name must be a non-negative integer"
     exit 2
   fi
 }
@@ -108,11 +117,18 @@ run_once() {
 main() {
   require_positive_int DB_BACKUP_INTERVAL_SECONDS "$INTERVAL_SECONDS"
   require_positive_int DB_BACKUP_RETENTION_DAYS "$RETENTION_DAYS"
+  require_nonnegative_int DB_BACKUP_OBSERVABILITY_GRACE_SECONDS "$OBSERVABILITY_GRACE_SECONDS"
   mkdir -p "$BACKUP_ROOT"
 
   case "${1:-once}" in
     once)
-      run_once
+      local status=0
+      run_once || status=$?
+      if [ "$OBSERVABILITY_GRACE_SECONDS" -gt 0 ]; then
+        log_json info db_backup.observe_grace all "waiting for log collection before exit"
+        sleep "$OBSERVABILITY_GRACE_SECONDS"
+      fi
+      return "$status"
       ;;
     *)
       echo "Usage: $0 [once]" >&2

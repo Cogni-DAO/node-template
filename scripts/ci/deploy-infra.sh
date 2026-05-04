@@ -673,6 +673,7 @@ append_env_if_set "$RUNTIME_ENV" COGNI_NODE_DBS "${COGNI_NODE_DBS-}"
 # a one-shot container; defaults avoid requiring new GitHub Environment secrets.
 printf '%s=%s\n' DB_BACKUP_INTERVAL_SECONDS "${DB_BACKUP_INTERVAL_SECONDS:-86400}" >> "$RUNTIME_ENV"
 printf '%s=%s\n' DB_BACKUP_RETENTION_DAYS "${DB_BACKUP_RETENTION_DAYS:-14}" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DB_BACKUP_OBSERVABILITY_GRACE_SECONDS "${DB_BACKUP_OBSERVABILITY_GRACE_SECONDS:-90}" >> "$RUNTIME_ENV"
 
 # ── Doltgres (knowledge data plane) credentials ──────────────────────────
 # Derived deterministically from POSTGRES_ROOT_PASSWORD + salt so no new GitHub
@@ -871,13 +872,12 @@ else
   log_warn "Alloy config missing at $ALLOY_CONFIG, skipping restart check"
 fi
 
-if $RUNTIME_COMPOSE --profile backup config --services 2>/dev/null | grep -q '^db-backup$'; then
-  log_info "[$(date -u +%H:%M:%S)] Installing db-backup systemd timer..."
-  $RUNTIME_COMPOSE --profile backup stop db-backup 2>/dev/null || true
-  $RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
-  DOCKER_BIN=$(command -v docker)
-  BACKUP_INTERVAL_SECONDS="${DB_BACKUP_INTERVAL_SECONDS:-86400}"
-  cat >/etc/systemd/system/cogni-db-backup.service <<SYSTEMD_SERVICE_EOF
+log_info "[$(date -u +%H:%M:%S)] Installing db-backup systemd timer..."
+$RUNTIME_COMPOSE --profile backup stop db-backup 2>/dev/null || true
+$RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+DOCKER_BIN=$(command -v docker)
+BACKUP_INTERVAL_SECONDS="${DB_BACKUP_INTERVAL_SECONDS:-86400}"
+cat >/etc/systemd/system/cogni-db-backup.service <<SYSTEMD_SERVICE_EOF
 [Unit]
 Description=Cogni runtime Postgres logical backup
 Requires=docker.service
@@ -890,7 +890,7 @@ ExecStart=${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cog
 TimeoutStartSec=2h
 SYSTEMD_SERVICE_EOF
 
-  cat >/etc/systemd/system/cogni-db-backup.timer <<SYSTEMD_TIMER_EOF
+cat >/etc/systemd/system/cogni-db-backup.timer <<SYSTEMD_TIMER_EOF
 [Unit]
 Description=Run Cogni runtime Postgres logical backup
 
@@ -906,28 +906,27 @@ Unit=cogni-db-backup.service
 WantedBy=timers.target
 SYSTEMD_TIMER_EOF
 
-  systemctl daemon-reload
-  systemctl enable --now cogni-db-backup.timer
-  systemctl reset-failed cogni-db-backup.service 2>/dev/null || true
-  log_info "db-backup timer installed with interval ${BACKUP_INTERVAL_SECONDS}s"
+systemctl daemon-reload
+systemctl enable --now cogni-db-backup.timer
+systemctl reset-failed cogni-db-backup.service 2>/dev/null || true
+log_info "db-backup timer installed with interval ${BACKUP_INTERVAL_SECONDS}s"
 
-  log_info "Running db-backup validation backup..."
-  $RUNTIME_COMPOSE --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
-  $RUNTIME_COMPOSE --profile backup run --rm --no-deps --entrypoint bash db-backup -lc '
-    set -euo pipefail
-    for cluster in app temporal; do
-      latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
-      test -n "$latest"
-      test -s "${latest}/MANIFEST.sha256"
-      echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
-    done
-  '
-  $RUNTIME_COMPOSE --profile backup logs --tail 80 db-backup | grep 'db_backup.completed' || {
-    log_error "db-backup completed logs missing after validation backup"
-    exit 1
-  }
-  emit_deployment_event "infra_deployment.db_backup_scheduled" "success" "db-backup timer installed and validation backup completed"
-fi
+log_info "Running db-backup validation backup..."
+$RUNTIME_COMPOSE --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
+$RUNTIME_COMPOSE --profile backup run --rm --no-deps --entrypoint bash db-backup -lc '
+  set -euo pipefail
+  for cluster in app temporal; do
+    latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
+    test -n "$latest"
+    test -s "${latest}/MANIFEST.sha256"
+    echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
+  done
+'
+$RUNTIME_COMPOSE --profile backup logs --tail 80 db-backup | grep 'db_backup.completed' || {
+  log_error "db-backup completed logs missing after validation backup"
+  exit 1
+}
+emit_deployment_event "infra_deployment.db_backup_scheduled" "success" "db-backup timer installed and validation backup completed"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6.6a: Checksum-gated restart for LiteLLM config changes
