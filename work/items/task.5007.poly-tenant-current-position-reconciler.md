@@ -8,8 +8,8 @@ rank: 1
 estimate: 3
 created: 2026-05-04
 updated: 2026-05-04
-summary: "Production showed the wallet summary had about $960 of active Polymarket positions while the dashboard Open tab showed only ledger-derived rows totaling far less. The observation job already pages Polymarket /positions into poly_trader_current_positions for active tenant wallets; wire overview, execution, and market aggregation to that DB current-position source instead of deriving current exposure from poly_copy_trade_fills."
-outcome: "The dashboard's position MTM, Open positions table, and Markets aggregation all reconcile to the same DB-backed current-position inventory for the signed-in tenant wallet. Page load does not broaden live Polymarket /positions reads; the background observation job owns upstream pagination and freshness."
+summary: "Production showed the wallet summary had about $960 of active Polymarket positions while the dashboard Open tab showed only ledger-derived rows totaling far less. Page-load reads now come from poly_trader_current_positions, and both the background observer and explicit wallet refresh reconcile that table from paginated Polymarket /positions."
+outcome: "The dashboard's position MTM, Open positions table, and Markets aggregation all reconcile to the same DB-backed current-position inventory for the signed-in tenant wallet. Page load does not broaden live Polymarket /positions reads; the background observation job and explicit /wallet/refresh path own bounded upstream pagination and freshness."
 spec_refs:
   - docs/design/poly-dashboard-market-aggregation.md
   - docs/design/poly-dashboard-balance-and-positions.md
@@ -47,7 +47,7 @@ snapshot saved into `poly_trader_current_positions`.
 
 ## Current Fact
 
-The background observer already does the hard upstream work:
+The background observer does the routine upstream work:
 
 - `runTraderObservationTick` syncs active `poly_wallet_connections` rows into
   `poly_trader_wallets` as `kind='cogni_wallet'`.
@@ -55,7 +55,8 @@ The background observer already does the hard upstream work:
 - It upserts `poly_trader_current_positions`.
 - It only deactivates missing rows after a complete position poll.
 
-The missing work is using that DB read model on the dashboard.
+The explicit refresh route now uses the same writer so an agent/user can force
+DB-vs-Polymarket reconciliation before reading the dashboard.
 
 ## Scope
 
@@ -77,6 +78,9 @@ In:
 - Ensure `market_groups` receives those same `live_positions`, so Open and
   Markets reconcile by construction.
 - Surface warnings when the current-position read model is unavailable or stale.
+- Reuse the same paginated current-position writer from `/api/v1/poly/wallet/refresh`.
+  A complete poll can deactivate missing rows; a partial/page-capped poll must
+  not deactivate or close omitted rows.
 
 Out:
 
@@ -89,16 +93,19 @@ Out:
 
 ## Validation
 
-- **exercise:** On candidate-a/prod-like data for a tenant wallet with many live
-  positions, call `/api/v1/poly/wallet/overview` and
+- **exercise:** On candidate-a/prod-like data for a tenant wallet with known
+  Polymarket positions missing from DB, call `/api/v1/poly/wallet/refresh`,
+  then call `/api/v1/poly/wallet/overview` and
   `/api/v1/poly/wallet/execution`. Confirm `overview.usdc_positions_mtm` equals
   the sum of returned `live_positions[].currentValue` within rounding, and the
   Open tab returns all active nonzero-share current-position rows subject only
   to UI pagination. Closed history is allowed to differ from Polymarket current
   inventory; it is ledger history, not the current inventory authority.
 - **observability:** Loki for the deployed SHA shows
+  `poly.wallet.refresh phase=complete current_positions_complete=true` for the
+  tenant wallet request, or
   `poly.trader.observe phase=wallet_ok kind=cogni_wallet positions_complete=true`
-  for the tenant wallet before the dashboard request, then
+  from the background observer before the dashboard request, then
   `feature.poly_wallet_execution.complete` with `live_positions` matching the DB
   current-position count. No route-local broad `/positions` fetch is required.
 

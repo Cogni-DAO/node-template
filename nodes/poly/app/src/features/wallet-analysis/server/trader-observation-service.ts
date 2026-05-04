@@ -69,6 +69,18 @@ export interface TraderObservationTickResult {
   errors: number;
 }
 
+export interface CurrentPositionRefreshResult {
+  positions: PolymarketUserPosition[];
+  positionRows: number;
+  complete: boolean;
+}
+
+type PersistedCurrentPositions = {
+  observedPositions: PolymarketUserPosition[];
+  positionRows: number;
+  complete: boolean;
+};
+
 export async function runTraderObservationTick(
   deps: TraderObservationTickDeps
 ): Promise<TraderObservationTickResult> {
@@ -127,6 +139,24 @@ export async function runTraderObservationTick(
   return { wallets: wallets.length, fills, positions, errors };
 }
 
+export async function refreshCurrentPositionsForWallet(params: {
+  db: Db;
+  client: PolymarketDataApiClient;
+  walletAddress: string;
+  positionMaxPages?: number;
+}): Promise<CurrentPositionRefreshResult> {
+  const wallet = await upsertCogniObservedWallet(
+    params.db,
+    params.walletAddress.toLowerCase()
+  );
+  return observePositionsNow({
+    db: params.db,
+    client: params.client,
+    wallet,
+    positionMaxPages: params.positionMaxPages,
+  });
+}
+
 async function syncActiveTenantWallets(db: Db): Promise<void> {
   const now = new Date();
   const activeConnections = await db
@@ -167,6 +197,35 @@ async function syncActiveTenantWallets(db: Db): Promise<void> {
     activeConnections.map((connection) => connection.address.toLowerCase()),
     now
   );
+}
+
+async function upsertCogniObservedWallet(
+  db: Db,
+  walletAddress: string
+): Promise<PolyTraderWallet> {
+  const now = new Date();
+  const [wallet] = await db
+    .insert(polyTraderWallets)
+    .values({
+      walletAddress,
+      kind: "cogni_wallet",
+      label: TENANT_TRADING_WALLET_LABEL,
+      activeForResearch: true,
+      disabledAt: null,
+      updatedAt: now,
+    })
+    .onConflictDoUpdate({
+      target: polyTraderWallets.walletAddress,
+      set: {
+        kind: "cogni_wallet",
+        label: TENANT_TRADING_WALLET_LABEL,
+        activeForResearch: true,
+        disabledAt: null,
+        updatedAt: now,
+      },
+    })
+    .returning();
+  return wallet;
 }
 
 async function disableMissingTenantWallets(
@@ -368,12 +427,52 @@ async function observePositionsIfDue(
     walletAddress: deps.wallet.walletAddress,
     maxPages: deps.positionMaxPages ?? DEFAULT_POSITION_MAX_PAGES,
   });
+  const result = await persistObservedCurrentPositions(
+    deps.db,
+    deps.wallet,
+    pageResult
+  );
+  return {
+    positions: result.positionRows,
+    complete: result.complete,
+    skipped: false,
+  };
+}
+
+async function observePositionsNow(deps: {
+  db: Db;
+  client: PolymarketDataApiClient;
+  wallet: PolyTraderWallet;
+  positionMaxPages?: number;
+}): Promise<CurrentPositionRefreshResult> {
+  const pageResult = await fetchTraderPositionsPages({
+    client: deps.client,
+    walletAddress: deps.wallet.walletAddress,
+    maxPages: deps.positionMaxPages ?? DEFAULT_POSITION_MAX_PAGES,
+  });
+  const result = await persistObservedCurrentPositions(
+    deps.db,
+    deps.wallet,
+    pageResult
+  );
+  return {
+    positions: result.observedPositions,
+    positionRows: result.positionRows,
+    complete: result.complete,
+  };
+}
+
+async function persistObservedCurrentPositions(
+  db: Db,
+  wallet: PolyTraderWallet,
+  pageResult: { positions: PolymarketUserPosition[]; complete: boolean }
+): Promise<PersistedCurrentPositions> {
   const positions = pageResult.positions;
   const capturedAt = new Date();
   const values = positions.map((position) => {
     const contentHash = hashPosition(position);
     return {
-      traderWalletId: deps.wallet.id,
+      traderWalletId: wallet.id,
       conditionId: position.conditionId,
       tokenId: position.asset,
       shares: Math.max(0, position.size).toFixed(8),
@@ -386,7 +485,7 @@ async function observePositionsIfDue(
     };
   });
   if (values.length > 0) {
-    await deps.db
+    await db
       .insert(polyTraderPositionSnapshots)
       .values(values)
       .onConflictDoNothing({
@@ -397,7 +496,7 @@ async function observePositionsIfDue(
           polyTraderPositionSnapshots.contentHash,
         ],
       });
-    await deps.db
+    await db
       .insert(polyTraderCurrentPositions)
       .values(
         values.map((value) => ({
@@ -433,7 +532,7 @@ async function observePositionsIfDue(
       });
   }
   if (pageResult.complete) {
-    await deps.db
+    await db
       .update(polyTraderCurrentPositions)
       .set({
         active: false,
@@ -445,17 +544,17 @@ async function observePositionsIfDue(
       })
       .where(
         and(
-          eq(polyTraderCurrentPositions.traderWalletId, deps.wallet.id),
+          eq(polyTraderCurrentPositions.traderWalletId, wallet.id),
           eq(polyTraderCurrentPositions.active, true),
           lt(polyTraderCurrentPositions.lastObservedAt, capturedAt)
         )
       );
   }
 
-  await deps.db
+  await db
     .insert(polyTraderIngestionCursors)
     .values({
-      traderWalletId: deps.wallet.id,
+      traderWalletId: wallet.id,
       source: POSITION_SOURCE,
       lastSuccessAt: capturedAt,
       status: pageResult.complete ? "ok" : "partial",
@@ -480,9 +579,9 @@ async function observePositionsIfDue(
     });
 
   return {
-    positions: values.length,
+    observedPositions: positions,
+    positionRows: values.length,
     complete: pageResult.complete,
-    skipped: false,
   };
 }
 

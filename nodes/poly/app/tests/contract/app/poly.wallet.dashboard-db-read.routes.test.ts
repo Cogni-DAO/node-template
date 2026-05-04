@@ -66,6 +66,8 @@ const mockGetBalanceSlice = vi.fn();
 const mockGetExecutionSlice = vi.fn();
 const mockInvalidateWalletAnalysisCaches = vi.fn();
 const mockReadCurrentWalletPositionModel = vi.fn();
+const mockRefreshCurrentPositionsForWallet = vi.fn();
+const mockServiceDb = {};
 
 vi.mock("@/bootstrap/http", () => ({
   wrapRouteHandlerWithLogging:
@@ -102,6 +104,7 @@ vi.mock("@/bootstrap/container", () => ({
       markPositionClosedByAsset: mockMarkPositionClosedByAsset,
       markSynced: mockMarkSynced,
     },
+    serviceDb: mockServiceDb,
   })),
 }));
 
@@ -131,6 +134,13 @@ vi.mock(
   "@/features/wallet-analysis/server/current-position-read-model",
   () => ({
     readCurrentWalletPositionModel: mockReadCurrentWalletPositionModel,
+  })
+);
+
+vi.mock(
+  "@/features/wallet-analysis/server/trader-observation-service",
+  () => ({
+    refreshCurrentPositionsForWallet: mockRefreshCurrentPositionsForWallet,
   })
 );
 
@@ -260,6 +270,11 @@ describe("poly wallet dashboard DB read routes", () => {
         currentValue: 10,
       },
     ]);
+    mockRefreshCurrentPositionsForWallet.mockResolvedValue({
+      positions: [{ asset: "token-1", size: 20, currentValue: 10 }],
+      positionRows: 1,
+      complete: true,
+    });
     syncedAt = new Date();
     mockUpdateStatus.mockResolvedValue(undefined);
     mockMarkPositionClosedByAsset.mockResolvedValue(1);
@@ -1298,7 +1313,11 @@ describe("poly wallet dashboard DB read routes", () => {
   });
 
   it("refresh updates the ledger rows that dashboard page-loads read", async () => {
-    mockListPositions.mockResolvedValue([]);
+    mockRefreshCurrentPositionsForWallet.mockResolvedValue({
+      positions: [],
+      positionRows: 0,
+      complete: true,
+    });
     mockGetExecutionSlice.mockResolvedValue({
       address: FUNDER,
       capturedAt: NOW.toISOString(),
@@ -1326,6 +1345,13 @@ describe("poly wallet dashboard DB read routes", () => {
       limit: 2_000,
     });
     expect(mockGetOrder).toHaveBeenCalledWith("0xorder");
+    expect(mockRefreshCurrentPositionsForWallet).toHaveBeenCalledWith(
+      expect.objectContaining({
+        db: expect.anything(),
+        client: expect.anything(),
+        walletAddress: FUNDER,
+      })
+    );
     expect(mockUpdateStatus).toHaveBeenCalledWith({
       client_order_id: "0xclient",
       status: "partial",
@@ -1344,7 +1370,11 @@ describe("poly wallet dashboard DB read routes", () => {
 
   it("refresh still reconciles positions when one order lookup fails", async () => {
     mockGetOrder.mockRejectedValue(new Error("clob getOrder unavailable"));
-    mockListPositions.mockResolvedValue([]);
+    mockRefreshCurrentPositionsForWallet.mockResolvedValue({
+      positions: [],
+      positionRows: 0,
+      complete: true,
+    });
     const { POST } = await import("@/app/api/v1/poly/wallet/refresh/route");
 
     const response = await POST(
@@ -1361,7 +1391,7 @@ describe("poly wallet dashboard DB read routes", () => {
     expect(json.warnings).not.toContainEqual(
       expect.objectContaining({ code: "ledger_refresh_unavailable" })
     );
-    expect(mockListPositions).toHaveBeenCalled();
+    expect(mockRefreshCurrentPositionsForWallet).toHaveBeenCalled();
     expect(mockMarkPositionClosedByAsset).toHaveBeenCalledWith({
       billing_account_id: ACCOUNT.id,
       token_id: "token-1",
@@ -1371,7 +1401,9 @@ describe("poly wallet dashboard DB read routes", () => {
   });
 
   it("refresh does not close DB positions when positions reconciliation fails", async () => {
-    mockListPositions.mockRejectedValue(new Error("positions unavailable"));
+    mockRefreshCurrentPositionsForWallet.mockRejectedValue(
+      new Error("positions unavailable")
+    );
     const { POST } = await import("@/app/api/v1/poly/wallet/refresh/route");
 
     const response = await POST(
@@ -1391,6 +1423,28 @@ describe("poly wallet dashboard DB read routes", () => {
       filled_size_usdc: 10,
       order_id: "0xorder",
     });
+    expect(mockMarkPositionClosedByAsset).not.toHaveBeenCalled();
+  });
+
+  it("refresh keeps stale DB rows active when the current-position poll is partial", async () => {
+    mockRefreshCurrentPositionsForWallet.mockResolvedValue({
+      positions: [],
+      positionRows: 0,
+      complete: false,
+    });
+    const { POST } = await import("@/app/api/v1/poly/wallet/refresh/route");
+
+    const response = await POST(
+      new Request("http://localhost/api/v1/poly/wallet/refresh", {
+        method: "POST",
+      })
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.warnings).toContainEqual(
+      expect.objectContaining({ code: "positions_reconciliation_partial" })
+    );
     expect(mockMarkPositionClosedByAsset).not.toHaveBeenCalled();
   });
 });
