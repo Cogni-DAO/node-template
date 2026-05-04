@@ -669,6 +669,11 @@ LITELLM_NODE_ENDPOINTS="4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://${LITELLM_NO
 printf '%s=%s\n' COGNI_NODE_ENDPOINTS "$LITELLM_NODE_ENDPOINTS" >> "$RUNTIME_ENV"
 # Multi-node DB provisioning
 append_env_if_set "$RUNTIME_ENV" COGNI_NODE_DBS "${COGNI_NODE_DBS-}"
+# Database backup cadence. The db-backup service runs once at startup and then
+# sleeps for this interval; defaults keep candidate-a validation immediate
+# without requiring new GitHub Environment secrets.
+printf '%s=%s\n' DB_BACKUP_INTERVAL_SECONDS "${DB_BACKUP_INTERVAL_SECONDS:-86400}" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DB_BACKUP_RETENTION_DAYS "${DB_BACKUP_RETENTION_DAYS:-14}" >> "$RUNTIME_ENV"
 
 # ── Doltgres (knowledge data plane) credentials ──────────────────────────
 # Derived deterministically from POSTGRES_ROOT_PASSWORD + salt so no new GitHub
@@ -837,7 +842,7 @@ emit_deployment_event "infra_deployment.stack_up_started" "in_progress" "Startin
 $RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
 
 # Infra services only — excludes app, scheduler-worker, db-migrate
-INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
+INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui db-backup autoheal repo-init git-sync"
 # Doltgres is optional — only include if it's in the compose file for this env.
 if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
   INFRA_SERVICES="$INFRA_SERVICES doltgres"
@@ -848,6 +853,31 @@ $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
 
 log_info "[$(date -u +%H:%M:%S)] Infra stack up complete"
 emit_deployment_event "infra_deployment.stack_up_complete" "success" "Infrastructure services started"
+
+if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^db-backup$'; then
+  log_info "[$(date -u +%H:%M:%S)] Waiting for db-backup service health..."
+  BACKUP_DEADLINE=$((SECONDS + 420))
+  while true; do
+    BACKUP_CID=$($RUNTIME_COMPOSE ps -q db-backup 2>/dev/null || true)
+    BACKUP_HEALTH="missing"
+    if [[ -n "$BACKUP_CID" ]]; then
+      BACKUP_HEALTH=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$BACKUP_CID" 2>/dev/null || echo "missing")
+    fi
+
+    if [[ "$BACKUP_HEALTH" == "healthy" ]]; then
+      log_info "db-backup service is healthy"
+      emit_deployment_event "infra_deployment.db_backup_healthy" "success" "db-backup service is healthy"
+      break
+    fi
+
+    if [ "$SECONDS" -ge "$BACKUP_DEADLINE" ]; then
+      log_error "db-backup service did not become healthy (last status: $BACKUP_HEALTH)"
+      $RUNTIME_COMPOSE logs --tail 80 db-backup || true
+      exit 1
+    fi
+    sleep 5
+  done
+fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6.6a: Checksum-gated restart for LiteLLM config changes
@@ -1186,7 +1216,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "    $REPO_ROOT/infra/compose/runtime/             → root@$VM_HOST:/opt/cogni-template-runtime/"
     echo "    $REPO_ROOT/infra/k8s/argocd/image-updater/    → root@$VM_HOST:/opt/cogni-template-argocd-updater/  (bug.0344)"
     echo "Remote script:      $ARTIFACT_DIR/deploy-infra-remote.sh → /tmp/deploy-infra-remote.sh"
-    echo "Infra services managed by remote script: postgres, litellm, temporal, alloy, caddy (plus healthchecks)"
+    echo "Infra services managed by remote script: postgres, litellm, temporal, db-backup, alloy, caddy (plus healthchecks)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log_info "Dry run complete — exiting before any VM contact"
     exit 0
