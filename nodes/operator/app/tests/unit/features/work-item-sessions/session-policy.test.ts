@@ -135,7 +135,12 @@ describe("work-item session policy", () => {
 
   it("flags done work items still missing deployVerified", () => {
     const text = nextActionForWorkItem({
-      workItem: { ...WORK_ITEM, status: "done", deployVerified: false, pr: "1204" },
+      workItem: {
+        ...WORK_ITEM,
+        status: "done",
+        deployVerified: false,
+        pr: "1204",
+      },
       session: session({ prNumber: 1204 }),
       now: NOW,
     });
