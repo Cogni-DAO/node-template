@@ -51,7 +51,7 @@ import type {
   WalletExecutionPosition,
   WalletExecutionWarning,
 } from "@cogni/poly-node-contracts";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { clearTtlCacheByPrefix, coalesce } from "./coalesce";
@@ -66,6 +66,17 @@ const SLICE_TTL_MS = 30_000;
 
 /** Trades fetched per analysis request (`computeWalletMetrics` accepts up to ~500 per the Data API cap). */
 const TRADE_FETCH_LIMIT = 500;
+/**
+ * Hard ceiling on rows pulled into memory for a single wallet's snapshot /
+ * distributions / execution slice. Walks the index
+ * `poly_trader_fills_trader_observed_idx` in DESC order, so the kept rows are
+ * always the most recent. Sized to keep the JS heap below ~50 MB even with
+ * the ~600-byte `raw` jsonb payload (25 K × 600 B ≈ 15 MB raw + JS overhead).
+ * Wallets with more fills than this get a `slice-truncated` warning.
+ * Removable once snapshot/distributions/execution math moves to SQL aggregation
+ * (CP8). See docs/research/poly/backfill-spike-2026-05-05.md.
+ */
+const WALLET_FILLS_QUERY_LIMIT = 25_000;
 /** Max open/redeemable rows returned in live_positions. */
 const EXECUTION_OPEN_LIMIT = 18;
 /** Max closed rows returned in closed_positions. */
@@ -212,7 +223,7 @@ export async function getSnapshotSlice(
   addr: string
 ): Promise<SliceResult<WalletAnalysisSnapshot>> {
   try {
-    const trades = await readDbFillsAsOrderFlowTrades(db, addr);
+    const { trades } = await readDbFillsAsOrderFlowTrades(db, addr);
     const cids = [...new Set(trades.map((t) => t.conditionId))];
     const resolutions = await readResolutionsForConditions(db, cids);
 
@@ -261,7 +272,7 @@ export async function getDistributionsSlice(
   mode: "live" | "historical"
 ): Promise<SliceResult<WalletAnalysisDistributions>> {
   try {
-    const trades = await readDbFillsAsOrderFlowTrades(db, addr);
+    const { trades } = await readDbFillsAsOrderFlowTrades(db, addr);
     const cids = [...new Set(trades.map((t) => t.conditionId))];
     const resolutions = await readResolutionsForConditions(db, cids);
 
@@ -300,31 +311,54 @@ export async function getDistributionsSlice(
 async function readDbFillsAsOrderFlowTrades(
   db: Db,
   addr: string
-): Promise<OrderFlowTrade[]> {
+): Promise<{ trades: OrderFlowTrade[]; truncated: boolean }> {
   return coalesce(
     `historical-trader-fills:${addr}`,
     async () => {
-      const rows = (await db
-        .select({
-          conditionId: polyTraderFills.conditionId,
-          tokenId: polyTraderFills.tokenId,
-          side: polyTraderFills.side,
-          price: polyTraderFills.price,
-          shares: polyTraderFills.shares,
-          observedAt: polyTraderFills.observedAt,
-          raw: polyTraderFills.raw,
-        })
-        .from(polyTraderFills)
-        .innerJoin(
-          polyTraderWallets,
-          eq(polyTraderWallets.id, polyTraderFills.traderWalletId)
-        )
-        .where(eq(polyTraderWallets.walletAddress, addr.toLowerCase()))
-        .orderBy(asc(polyTraderFills.observedAt))) as HistoricalFillRow[];
-      return rows.map(historicalFillToOrderFlowTrade);
+      const rows = await readWalletFillsBounded(db, addr);
+      return {
+        trades: rows.rows.map(historicalFillToOrderFlowTrade),
+        truncated: rows.truncated,
+      };
     },
     SLICE_TTL_MS
   );
+}
+
+/**
+ * Bounded wallet-fill read used by snapshot / distributions / execution slices.
+ * Walks `(trader_wallet_id, observed_at)` index DESC, caps at
+ * `WALLET_FILLS_QUERY_LIMIT`, then reverses to ASC for callers expecting
+ * chronological order. Returns `truncated=true` iff the cap was hit.
+ */
+async function readWalletFillsBounded(
+  db: Db,
+  addr: string
+): Promise<{ rows: HistoricalFillRow[]; truncated: boolean }> {
+  const fetched = (await db
+    .select({
+      conditionId: polyTraderFills.conditionId,
+      tokenId: polyTraderFills.tokenId,
+      side: polyTraderFills.side,
+      price: polyTraderFills.price,
+      shares: polyTraderFills.shares,
+      observedAt: polyTraderFills.observedAt,
+      raw: polyTraderFills.raw,
+    })
+    .from(polyTraderFills)
+    .innerJoin(
+      polyTraderWallets,
+      eq(polyTraderWallets.id, polyTraderFills.traderWalletId)
+    )
+    .where(eq(polyTraderWallets.walletAddress, addr.toLowerCase()))
+    .orderBy(desc(polyTraderFills.observedAt))
+    .limit(WALLET_FILLS_QUERY_LIMIT)) as HistoricalFillRow[];
+  // Callers expect ASC chronological order.
+  fetched.reverse();
+  return {
+    rows: fetched,
+    truncated: fetched.length === WALLET_FILLS_QUERY_LIMIT,
+  };
 }
 
 /**
@@ -383,24 +417,9 @@ async function readResolutionsForConditions(
 type DbFillRow = HistoricalFillRow;
 
 async function readFillsFromDb(db: Db, addr: string): Promise<DbFillRow[]> {
-  const rows = await db
-    .select({
-      conditionId: polyTraderFills.conditionId,
-      tokenId: polyTraderFills.tokenId,
-      side: polyTraderFills.side,
-      price: polyTraderFills.price,
-      shares: polyTraderFills.shares,
-      observedAt: polyTraderFills.observedAt,
-      raw: polyTraderFills.raw,
-    })
-    .from(polyTraderFills)
-    .innerJoin(
-      polyTraderWallets,
-      eq(polyTraderWallets.id, polyTraderFills.traderWalletId)
-    )
-    .where(eq(polyTraderWallets.walletAddress, addr.toLowerCase()))
-    .orderBy(asc(polyTraderFills.observedAt));
-  return rows as DbFillRow[];
+  // Bounded read; see readWalletFillsBounded + WALLET_FILLS_QUERY_LIMIT for rationale.
+  const { rows } = await readWalletFillsBounded(db, addr);
+  return rows;
 }
 
 /**

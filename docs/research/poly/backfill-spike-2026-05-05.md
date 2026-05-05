@@ -266,6 +266,68 @@ End-to-end run that proved the pipeline against the real candidate-a `cogni_poly
 
 **Conclusion of demo:** the writer side is functional. The full 1-year corpus for both wallets can be loaded with this same flow in **~30 min wall-clock** (12 monthly windows × 2 wallets). The dashboard will start consuming the corpus as CP2 / CP3 / CP4 / CP6 merge — backfilling more does not unblock those PRs, but having the corpus already resident means the user-facing render lights up the moment those readers ship.
 
+## Incident: OOM on RN1 dashboard after 825K-row backfill (2026-05-05 evening)
+
+After CP2–CP6 flighted to candidate-a, every wallet-analysis slice on `/research/w/RN1` returned 502. Loki:
+
+```
+FATAL ERROR: Reached heap limit Allocation failed - JavaScript heap out of memory
+```
+
+### Root cause
+
+Two helpers in `nodes/poly/app/src/features/wallet-analysis/server/wallet-analysis-service.ts` issue **unbounded** reads against `poly_trader_fills`:
+
+| helper                                   | callers                                     | line |
+| ---------------------------------------- | ------------------------------------------- | ---: |
+| `readDbFillsAsOrderFlowTrades(db, addr)` | `getSnapshotSlice`, `getDistributionsSlice` |  302 |
+| `readFillsFromDb(db, addr)`              | `getExecutionSlice`                         |  387 |
+
+Both run `SELECT … FROM poly_trader_fills WHERE walletAddress=$addr ORDER BY observed_at` with **no LIMIT**. For RN1 (825,484 rows × ~600 B `raw` jsonb each) that's ~500 MB resident set, blowing the pod heap. (CP2's `getTradesSlice` is fine — it already has `.limit(TRADE_FETCH_LIMIT=500)`.)
+
+The CPx PRs were validated against ~25 K-row live-tick wallets. The shape changed under them when the backfill landed; nothing in the queries scales.
+
+### Fix design — bounded most-recent read
+
+**Outcome**: poly node serves every wallet-analysis slice for RN1 (or any wallet with millions of fills) without OOM, with explicit truncation visibility for callers.
+
+**Approach (one helper, two callsites)**:
+
+1. Replace both helpers with a single `readWalletFillsBounded(db, addr, limit)` that runs `ORDER BY observed_at DESC LIMIT <limit>` and returns the rows reversed back to ASC for the consumer's mental model.
+2. Constant `WALLET_FILLS_QUERY_LIMIT = 25_000` (≈21 h of RN1, multiple weeks for tenant/swisstony, complete for all small wallets).
+3. When the result count `=== limit`, attach a slice-level `warnings[]` entry with `code: "trades_truncated"` so the dashboard can render a "showing recent 25K of N" caption later (no contract change required — `warnings[]` already exists per the route handler comment).
+4. Trades slice already has its own `.limit(500)`; leave it alone.
+5. **No schema change, no migration.** `poly_trader_fills` already has the index `poly_trader_fills_trader_observed_idx` on `(trader_wallet_id, observed_at)` — the new ORDER BY DESC LIMIT walks that index in reverse. Fast, bounded, zero new SQL surface.
+
+**Rejected alternatives**:
+
+- **Push aggregation to SQL** (GROUP BY conditionId for snapshot, width_bucket for distributions). Correct numbers regardless of volume. Rejected for v0: 6 helper rewrites + new SQL surface, well outside spike scope. Routed to follow-up CP8 prose below.
+- **Bump `--max-old-space-size`**. Pure punt; 825K is already at ~500 MB and corpus grows with future backfills.
+- **Time-window filter `observed_at >= now() - 90d`**. RN1 at 27 K/day × 90d = 2.4 M rows — same OOM with extra steps.
+- **Stream rows via `pg` cursor + incremental fold**. Right answer at scale; high implementation cost. Same CP8 deferral as the SQL-aggregation path.
+- **`DELETE FROM poly_trader_fills WHERE raw->>'backfill_source' = 'spike.5024'`** to revert the data. Loses the corpus. Doesn't fix the underlying code defect — the next agent doing a backfill of swisstony or any 100K+ wallet trips the same OOM. Symptom, not cause.
+
+**Files**:
+
+- Modify: `nodes/poly/app/src/features/wallet-analysis/server/wallet-analysis-service.ts` — collapse two helpers into one, add LIMIT + truncation-warning, leave the rest of the file untouched.
+- Modify: `nodes/poly/app/tests/unit/features/wallet-analysis/wallet-analysis-service.test.ts` — add a unit test for the bounded path: synth 30 K fills, assert query returns 25 K + warning code.
+
+### Self-review (before implement)
+
+- ✅ **SIMPLICITY_WINS** — single new constant, single helper, two callsite swaps, zero schema/contract change. ~25 net lines.
+- ✅ **REUSE_OVER_REBUILD** — uses existing index `poly_trader_fills_trader_observed_idx` already on `(trader_wallet_id, observed_at)`.
+- ✅ **OUTCOME_DRIVEN** — directly maps to "no OOM on RN1" plus surfaces truncation so the UI can be honest about it.
+- ✅ **INVARIANTS** — `PAGE_LOAD_DB_ONLY` preserved (still hits `poly_trader_fills`, no Polymarket fallback). `SAME_OBSERVED_TRADE_TABLE` preserved.
+- ⚠ **Correctness gap acknowledged**: RN1's `tradesPerDay30d`, `topEvents`, etc. now reflect the most-recent 25K fills (~21 h), not 30 days. For market-maker wallets the displayed numbers will be biased toward recent activity. Dashboard caption + truncation flag make this visible. Proper fix is CP8 (SQL aggregation), filed prose-only below.
+- ⚠ **Unit-test honesty**: the test will run on local Postgres in CI, which is fine for the bounded-read assertion. We are NOT stress-testing memory; that's empirically validated only when re-flighted to candidate-a.
+- ⚠ **CP3 dependency**: CP3's `runMarketOutcomeTick` is responsible for populating `poly_market_outcomes`. With 14,474 unique RN1 markets and the current tick rate, full coverage may take time. Slices that join on `poly_market_outcomes` will still render but with `closed=false` for stragglers. This is unrelated to the OOM and acceptable for v0.
+
+### Follow-up (prose, no preemptive task fan-out per Derek's pattern)
+
+- **CP8** — push slice math to SQL. `getSnapshotSlice` becomes `SELECT condition_id, MIN(observed_at), MAX(observed_at), COUNT(*), SUM(size_usdc) FROM poly_trader_fills WHERE walletAddress=$ GROUP BY condition_id`. `getDistributionsSlice` uses `width_bucket` for histograms. `getExecutionSlice` already aggregates by condition; just swap the in-memory fold for a SQL one. After CP8 the bounded LIMIT can be removed and dashboard numbers will be correct over the full corpus.
+- **Pod heap headroom** — current pod presumably runs Node default `--max-old-space-size`. After CP8 we should be nowhere near the limit, but if other features land that hold large datasets, a one-line heap bump is a fast safety net.
+- **runMarketOutcomeTick coverage SLA** — define how soon after a fill lands its market's resolution should be in `poly_market_outcomes`. Tied to how fast the dashboard "resolves" a closed position. Not blocking this fix.
+
 ## Validation
 
 `exercise:` Run `pnpm tsx scripts/experiments/poly-backfill/probe.sh` and `pnpm tsx scripts/experiments/poly-backfill/walk.ts --wallet RN1 --windows 12 --max-pages-per-window 5 --out /tmp/poly-backfill` from a clean worktree with `.env.local` sourced. Expect both wallets' NDJSON files to land in `/tmp/poly-backfill/` with non-zero row counts and timestamps spanning the requested windows. Inspect a sample row and confirm it carries `conditionId`, `title`, `outcome`, `usdcSize`.

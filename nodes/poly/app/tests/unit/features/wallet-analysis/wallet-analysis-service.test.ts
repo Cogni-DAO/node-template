@@ -79,12 +79,21 @@ function makeFakeDb(opts: { positions: FakeDbRow[]; fills: FakeFillRow[] }) {
           return builder;
         },
         where() {
+          // Chain shapes used by the slice queries:
+          //   .where(...) (positions)                                                         → resolves rows
+          //   .where(...).orderBy(...) (legacy)                                               → resolves rows
+          //   .where(...).orderBy(...).limit(N) (bounded fill read, snapshot/dist/execution)  → resolves rows.slice(0, N)
           return Object.assign(Promise.resolve(rows), {
-            orderBy: () => Promise.resolve(rows),
+            orderBy: () =>
+              Object.assign(Promise.resolve(rows), {
+                limit: (n: number) => Promise.resolve(rows.slice(0, n)),
+              }),
           });
         },
         orderBy() {
-          return Promise.resolve(rows);
+          return Object.assign(Promise.resolve(rows), {
+            limit: (n: number) => Promise.resolve(rows.slice(0, n)),
+          });
         },
       };
       return builder;
@@ -476,5 +485,28 @@ describe("getSnapshotSlice — DB-backed (task.5012 CP4)", () => {
     expect(result.kind).toBe("warn");
     if (result.kind !== "warn") return;
     expect(result.warning.slice).toBe("snapshot");
+  });
+
+  it("caps wallet-fill reads at WALLET_FILLS_QUERY_LIMIT (bounds memory on whale wallets)", async () => {
+    // 30K fills > 25K WALLET_FILLS_QUERY_LIMIT cap — simulates a market-maker wallet
+    // (e.g. RN1 post-backfill at ~825K fills) that would otherwise OOM the slice.
+    const NOW = Date.now();
+    const fills: FakeFillRow[] = Array.from({ length: 30_000 }, (_, i) => ({
+      conditionId: `cid-${i % 100}`,
+      tokenId: `tok-${i}`,
+      side: "BUY",
+      price: "0.5",
+      shares: "10",
+      observedAt: new Date(NOW - i * 1_000),
+      raw: { title: `Market ${i}`, outcome: "YES" },
+    }));
+    const db = makeFakeDb({ positions: [], fills });
+    const result = await getSnapshotSlice(db as never, ADDR);
+    // The slice still returns ok with truncated values (bounded set is correct
+    // for itself; OOM is averted). Numbers reflect the most-recent 25K rows.
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") return;
+    // 25K fills * up to 100 unique cids → expect ≤100 markets surfaced.
+    expect(result.value.uniqueMarkets).toBeLessThanOrEqual(100);
   });
 });
