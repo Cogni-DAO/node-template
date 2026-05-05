@@ -17,20 +17,25 @@
  *   - SERVER_SIDE_PIVOT: per-participant primary/hedge/net shape is computed
  *     here, never client-side. Same shape will feed Research views once
  *     `poly_market_outcomes` is populated.
- *   - ATTRIBUTION_OUTLIVES_TARGET_EXIT: every (target, condition) we ever
- *     mirrored via `poly_copy_trade_fills` surfaces as a participant on the
- *     market group, even after the target wallet has exited. Exited legs are
- *     emitted with zero shares/value and `lifecycle: "inactive"` so the
- *     dashboard can show "we copied this from <target>" for every position
- *     we still hold. Set 1 (current target positions) merges with Set 2
- *     (attribution-only legs) via UNION; NOT EXISTS prevents duplicates.
- *   - SERVER_SIDE_LIFECYCLE: legs from `poly_trader_current_positions` are
- *     emitted as `lifecycle: "active"`. Attribution-only legs are
- *     `lifecycle: "inactive"`. Once `poly_market_outcomes` is populated
- *     (handoff item #4), resolved legs get joined in to promote
- *     `active`/`inactive` → `winner`/`loser`/`resolved`.
- * Side-effects: DB read for copy-target current positions + copy-trade fills
- *   (attribution).
+ *   - SNAPSHOTS_ARE_DURABLE_TRUTH: target legs are read from
+ *     `poly_trader_position_snapshots` (append-only history) rather than
+ *     `poly_trader_current_positions`, because the sync deactivates and zeros
+ *     out target rows once Polymarket Data API stops returning a position
+ *     (post-resolution / post-redeem). Snapshots preserve the last observed
+ *     `(shares, cost_basis_usdc, current_value_usdc)` so attribution survives
+ *     target exit by any means.
+ *   - ATTRIBUTION_ANCHORED_ON_FILLS: only (target, condition) pairs we have
+ *     actually mirrored — `poly_copy_trade_fills` rows with status in
+ *     {filled, partial, open} for the caller's tenant — are surfaced. Random
+ *     other-target activity is not shown.
+ *   - SERVER_SIDE_LIFECYCLE: a leg's lifecycle is `"active"` if the latest
+ *     snapshot still shows positive current value, otherwise `"inactive"`
+ *     (target observed but no longer held). Once `poly_market_outcomes` is
+ *     populated, resolved legs get joined in to promote `active`/`inactive`
+ *     → `winner`/`loser`/`resolved`.
+ * Side-effects: DB read across `poly_copy_trade_targets`,
+ *   `poly_trader_wallets`, `poly_copy_trade_fills`,
+ *   `poly_trader_position_snapshots`. No upstream Polymarket calls.
  * Links: docs/design/poly-dashboard-market-aggregation.md,
  *        docs/design/poly-hedge-followup-policy.md,
  *        .context/market-aggregation-research-handoff.md
@@ -163,73 +168,60 @@ async function readTargetLegs(params: {
         AND t.disabled_at IS NULL
         AND w.disabled_at IS NULL
     ),
-    current_legs AS (
-      SELECT
-        a.wallet_address,
-        a.label,
-        a.trader_wallet_id,
-        p.condition_id,
-        p.token_id,
-        COALESCE(NULLIF(p.raw->>'title', ''), 'Polymarket') AS market_title,
-        NULLIF(p.raw->>'eventTitle', '') AS event_title,
-        NULLIF(p.raw->>'slug', '') AS market_slug,
-        NULLIF(p.raw->>'eventSlug', '') AS event_slug,
-        COALESCE(NULLIF(p.raw->>'outcome', ''), 'UNKNOWN') AS outcome,
-        p.shares::numeric AS shares,
-        p.cost_basis_usdc::numeric AS cost_basis_usdc,
-        p.current_value_usdc::numeric AS current_value_usdc,
-        p.avg_price::numeric AS avg_price,
-        p.last_observed_at,
-        'active'::text AS lifecycle
-      FROM poly_trader_current_positions p
-      JOIN active_targets a ON a.trader_wallet_id = p.trader_wallet_id
-      WHERE p.active = true
-        AND p.current_value_usdc > 0
-        AND p.condition_id IN (${conditionList})
-    ),
-    attribution_legs AS (
+    filled_target_conditions AS (
       SELECT DISTINCT
+        a.copy_target_id,
+        a.trader_wallet_id,
         a.wallet_address,
         a.label,
-        a.trader_wallet_id,
-        f.market_id AS condition_id,
-        f.market_id AS token_id,
-        'Polymarket'::text AS market_title,
-        NULL::text AS event_title,
-        NULL::text AS market_slug,
-        NULL::text AS event_slug,
-        'UNKNOWN'::text AS outcome,
-        0::numeric AS shares,
-        0::numeric AS cost_basis_usdc,
-        0::numeric AS current_value_usdc,
-        NULL::numeric AS avg_price,
-        NULL::timestamptz AS last_observed_at,
-        'inactive'::text AS lifecycle
+        f.market_id AS condition_id
       FROM active_targets a
       JOIN poly_copy_trade_fills f ON f.target_id = a.copy_target_id
       WHERE f.billing_account_id = ${params.billingAccountId}
         AND f.market_id IN (${conditionList})
         AND f.status IN ('filled', 'partial', 'open')
-        AND NOT EXISTS (
-          SELECT 1 FROM current_legs cl
-          WHERE cl.trader_wallet_id = a.trader_wallet_id
-            AND cl.condition_id = f.market_id
-        )
+    ),
+    latest_snapshots AS (
+      SELECT DISTINCT ON (s.trader_wallet_id, s.condition_id, s.token_id)
+        s.trader_wallet_id,
+        s.condition_id,
+        s.token_id,
+        s.shares::numeric AS shares,
+        s.cost_basis_usdc::numeric AS cost_basis_usdc,
+        s.current_value_usdc::numeric AS current_value_usdc,
+        s.avg_price::numeric AS avg_price,
+        s.captured_at AS last_observed_at,
+        s.raw
+      FROM poly_trader_position_snapshots s
+      WHERE EXISTS (
+        SELECT 1 FROM filled_target_conditions ftc
+        WHERE ftc.trader_wallet_id = s.trader_wallet_id
+          AND ftc.condition_id = s.condition_id
+      )
+      ORDER BY s.trader_wallet_id, s.condition_id, s.token_id, s.captured_at DESC
     )
     SELECT
-      wallet_address, label, condition_id, token_id, market_title,
-      event_title, market_slug, event_slug, outcome,
-      shares, cost_basis_usdc, current_value_usdc, avg_price,
-      last_observed_at, lifecycle
-    FROM current_legs
-    UNION ALL
-    SELECT
-      wallet_address, label, condition_id, token_id, market_title,
-      event_title, market_slug, event_slug, outcome,
-      shares, cost_basis_usdc, current_value_usdc, avg_price,
-      last_observed_at, lifecycle
-    FROM attribution_legs
-    ORDER BY current_value_usdc DESC
+      ftc.wallet_address,
+      ftc.label,
+      ls.condition_id,
+      ls.token_id,
+      COALESCE(NULLIF(ls.raw->>'title', ''), 'Polymarket') AS market_title,
+      NULLIF(ls.raw->>'eventTitle', '') AS event_title,
+      NULLIF(ls.raw->>'slug', '') AS market_slug,
+      NULLIF(ls.raw->>'eventSlug', '') AS event_slug,
+      COALESCE(NULLIF(ls.raw->>'outcome', ''), 'UNKNOWN') AS outcome,
+      ls.shares,
+      ls.cost_basis_usdc,
+      ls.current_value_usdc,
+      ls.avg_price,
+      ls.last_observed_at,
+      CASE WHEN ls.current_value_usdc > 0 THEN 'active' ELSE 'inactive' END
+        AS lifecycle
+    FROM filled_target_conditions ftc
+    JOIN latest_snapshots ls
+      ON ls.trader_wallet_id = ftc.trader_wallet_id
+      AND ls.condition_id = ftc.condition_id
+    ORDER BY ls.current_value_usdc DESC NULLS LAST
   `)) as unknown as TargetPositionRow[];
 
   return rows.flatMap((row) => {
