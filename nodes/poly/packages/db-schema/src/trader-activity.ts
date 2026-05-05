@@ -3,14 +3,15 @@
 
 /**
  * Module: `@cogni/poly-db-schema/trader-activity`
- * Purpose: Operational read-model tables for continuously observed Polymarket trader wallets.
+ * Purpose: Operational read-model tables for continuously observed Polymarket trader wallets — fills, position snapshots, current positions, attribution, market outcomes, and user-pnl time-series.
  * Scope: Drizzle table definitions only. Runtime observation, attribution, and UI aggregation live in the app.
  * Invariants:
  *   - SAME_OBSERVED_TRADE_TABLE: copy-target and Cogni wallet public trades share `poly_trader_fills`.
  *   - OBSERVATION_INDEPENDENT_OF_COPYING: `active_for_research` is research state, not copy-trade policy.
  *   - NO_FULL_HISTORY_CRAWL: ingestion cursors store forward watermarks; historical backfill is a separate v2 concern.
+ *   - PNL_TIMESERIES_KEYED_BY_FIDELITY: `poly_trader_user_pnl_points` PK is `(trader_wallet_id, fidelity, ts)`; reader picks `1h` for short windows, `1d` for long.
  * Side-effects: none
- * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
+ * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005, work/items/task.5012
  * @public
  */
 

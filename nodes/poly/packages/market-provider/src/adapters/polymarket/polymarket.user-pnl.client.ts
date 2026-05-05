@@ -4,14 +4,13 @@
 /**
  * Module: `@cogni/poly-market-provider/adapters/polymarket/polymarket.user-pnl.client`
  * Purpose: Read-only client for Polymarket's public user P/L chart service.
- * Scope: HTTP fetch + Zod validation only. Does not read env, persist state,
- *   or write to upstreams.
+ * Scope: HTTP fetch + Zod validation only. Does not read env, persist state, or write to upstreams.
  * Invariants:
  *   - READ_ONLY: only GET requests against the public P/L endpoint.
- *   - FAILS_CLOSED: malformed upstream payloads throw instead of being silently
- *     reshaped into fake chart points.
- * Side-effects: IO (HTTP fetch to https://user-pnl-api.polymarket.com).
- * Links: docs/design/poly-dashboard-balance-and-positions.md
+ *   - FAILS_CLOSED: malformed upstream payloads throw instead of being silently reshaped into fake chart points.
+ *   - OUTBOUND_OBSERVABLE: callers may pass a structured logger; when provided, every fetch emits one `poly.user-pnl.outbound` event tagged with `component`, used to assert PAGE_LOAD_DB_ONLY (task.5012) in Loki.
+ * Side-effects: IO (HTTP fetch to https://user-pnl-api.polymarket.com); optional structured log emit on each call.
+ * Links: docs/design/poly-dashboard-balance-and-positions.md, work/items/task.5012
  * @public
  */
 

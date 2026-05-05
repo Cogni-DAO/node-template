@@ -3,14 +3,15 @@
 
 /**
  * Module: `@features/wallet-analysis/server/trader-observation-service`
- * Purpose: Live-forward observation service for configured Polymarket trader wallets.
+ * Purpose: Live-forward observation service for configured Polymarket trader wallets — fills, current positions, and (when `userPnlClient` is injected) user-pnl time-series for the page-load read model.
  * Scope: Feature service. Caller injects DB/client/logger; this module does not construct runtime dependencies or own scheduling.
  * Invariants:
  *   - LIVE_FORWARD_COLLECTION: polls `active_for_research` wallets and stores facts for later query windows.
  *   - SAME_OBSERVED_TRADE_TABLE: target and Cogni public wallet trades are both stored in `poly_trader_fills`.
  *   - WATERMARKED_INGESTION: reads newest-to-prior-watermark and advances cursor only after DB upserts complete.
- * Side-effects: IO through injected Data API client and injected DB.
- * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
+ *   - PNL_INGEST_INDEPENDENT: per-wallet user-pnl ingest runs after observation regardless of observe outcome; failures bump `errors` and continue. Retention prune runs once per tick after all wallets.
+ * Side-effects: IO through injected Data API client + optional user-pnl client + injected DB.
+ * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005, work/items/task.5012
  * @public
  */
 
