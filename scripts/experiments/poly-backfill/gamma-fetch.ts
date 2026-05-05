@@ -40,7 +40,9 @@ function parseArgs(): Args {
   const inFile = get("in");
   const outFile = get("out");
   if (!inFile || !outFile) {
-    throw new Error("usage: gamma-fetch --in <fills.ndjson> --out <markets.ndjson> [--fan-out N]");
+    throw new Error(
+      "usage: gamma-fetch --in <fills.ndjson> --out <markets.ndjson> [--fan-out N]"
+    );
   }
   return {
     inFile,
@@ -59,7 +61,8 @@ async function readUniqueConditionIds(path: string): Promise<string[]> {
     if (!line.trim()) continue;
     try {
       const r = JSON.parse(line);
-      if (r.conditionId && typeof r.conditionId === "string") seen.add(r.conditionId);
+      if (r.conditionId && typeof r.conditionId === "string")
+        seen.add(r.conditionId);
     } catch {
       /* skip malformed line */
     }
@@ -92,7 +95,9 @@ async function fetchOne(conditionId: string): Promise<GammaMarket | null> {
   url.searchParams.set("condition_ids", conditionId);
   const resp = await fetch(url.toString());
   if (!resp.ok) {
-    console.warn(`  [gamma] ${resp.status} ${resp.statusText} for ${conditionId}`);
+    console.warn(
+      `  [gamma] ${resp.status} ${resp.statusText} for ${conditionId}`
+    );
     return null;
   }
   const json = await resp.json();
@@ -104,7 +109,9 @@ async function main(): Promise<void> {
   const args = parseArgs();
   const t0 = Date.now();
   const ids = await readUniqueConditionIds(args.inFile);
-  console.log(`[gamma-fetch] ${ids.length} unique conditionIds from ${args.inFile}`);
+  console.log(
+    `[gamma-fetch] ${ids.length} unique conditionIds from ${args.inFile}`
+  );
 
   const out = createWriteStream(args.outFile, { encoding: "utf8" });
   let ok = 0;
@@ -126,7 +133,9 @@ async function main(): Promise<void> {
       }
       if ((ok + miss) % 100 === 0) {
         const rate = ((ok + miss) / ((Date.now() - t0) / 1000)).toFixed(0);
-        console.log(`  [gamma] ${ok + miss}/${ids.length}  ok=${ok} miss=${miss}  ${rate}/s`);
+        console.log(
+          `  [gamma] ${ok + miss}/${ids.length}  ok=${ok} miss=${miss}  ${rate}/s`
+        );
       }
     }
   }

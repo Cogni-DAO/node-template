@@ -145,14 +145,19 @@ function toFillRow(row: ActivityRow, traderWalletId: string): FillRow | null {
 
 async function streamLines(inFile: string): Promise<AsyncIterable<string>> {
   return createInterface({
-    input: createReadStream(inFile, { encoding: "utf8", highWaterMark: 256 * 1024 }),
+    input: createReadStream(inFile, {
+      encoding: "utf8",
+      highWaterMark: 256 * 1024,
+    }),
     crlfDelay: Number.POSITIVE_INFINITY,
   });
 }
 
 async function main(): Promise<void> {
   const args = parseArgs();
-  console.log(`[load] in=${args.inFile} wallet=${args.walletAddress} apply=${args.apply}`);
+  console.log(
+    `[load] in=${args.inFile} wallet=${args.walletAddress} apply=${args.apply}`
+  );
 
   if (!args.apply) {
     let n = 0;
@@ -163,7 +168,10 @@ async function main(): Promise<void> {
     for await (const line of await streamLines(args.inFile)) {
       if (!line.trim()) continue;
       n++;
-      const r = toFillRow(JSON.parse(line), "00000000-0000-0000-0000-000000000000");
+      const r = toFillRow(
+        JSON.parse(line),
+        "00000000-0000-0000-0000-000000000000"
+      );
       if (!r || seen.has(r.native_id)) {
         dropped++;
         continue;
@@ -173,7 +181,8 @@ async function main(): Promise<void> {
       if (!firstRow) firstRow = r;
     }
     console.log(`[load] dry-run: total=${n} kept=${kept} dropped=${dropped}`);
-    if (firstRow) console.log("  sample row[0]:", JSON.stringify(firstRow, null, 2));
+    if (firstRow)
+      console.log("  sample row[0]:", JSON.stringify(firstRow, null, 2));
     return;
   }
 
@@ -187,7 +196,9 @@ async function main(): Promise<void> {
       LIMIT 1
     `;
     if (wallets.length === 0) {
-      throw new Error(`wallet not found in poly_trader_wallets: ${args.walletAddress}`);
+      throw new Error(
+        `wallet not found in poly_trader_wallets: ${args.walletAddress}`
+      );
     }
     const traderWalletId = wallets[0].id as string;
     const label = wallets[0].label as string;
@@ -216,7 +227,9 @@ async function main(): Promise<void> {
       processed += batch.length;
       if (processed % 10_000 < BATCH_SIZE) {
         const rate = (processed / ((Date.now() - t0) / 1000)).toFixed(0);
-        console.log(`  [load] ${processed} (inserted=${inserted} skipped=${skipped})  ${rate}/s`);
+        console.log(
+          `  [load] ${processed} (inserted=${inserted} skipped=${skipped})  ${rate}/s`
+        );
       }
       batch = [];
     }
