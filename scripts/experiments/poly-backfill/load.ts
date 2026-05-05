@@ -25,7 +25,8 @@
  * @internal — experiment code, not shipped to production
  */
 
-import { readFileSync } from "node:fs";
+import { createReadStream } from "node:fs";
+import { createInterface } from "node:readline";
 
 import postgres from "postgres";
 
@@ -142,31 +143,11 @@ function toFillRow(row: ActivityRow, traderWalletId: string): FillRow | null {
   };
 }
 
-function parseAndDedupe(
-  inFile: string,
-  traderWalletId: string
-): { rows: FillRow[]; n: number; dropped: number } {
-  const lines = readFileSync(inFile, "utf8").split("\n");
-  const seen = new Set<string>();
-  const rows: FillRow[] = [];
-  let dropped = 0;
-  let n = 0;
-  for (const line of lines) {
-    if (!line.trim()) continue;
-    n++;
-    const r = toFillRow(JSON.parse(line), traderWalletId);
-    if (!r) {
-      dropped++;
-      continue;
-    }
-    if (seen.has(r.native_id)) {
-      dropped++;
-      continue;
-    }
-    seen.add(r.native_id);
-    rows.push(r);
-  }
-  return { rows, n, dropped };
+async function streamLines(inFile: string): Promise<AsyncIterable<string>> {
+  return createInterface({
+    input: createReadStream(inFile, { encoding: "utf8", highWaterMark: 256 * 1024 }),
+    crlfDelay: Number.POSITIVE_INFINITY,
+  });
 }
 
 async function main(): Promise<void> {
@@ -174,9 +155,25 @@ async function main(): Promise<void> {
   console.log(`[load] in=${args.inFile} wallet=${args.walletAddress} apply=${args.apply}`);
 
   if (!args.apply) {
-    const { rows, n, dropped } = parseAndDedupe(args.inFile, "00000000-0000-0000-0000-000000000000");
-    console.log(`[load] dry-run: total=${n} kept=${rows.length} dropped=${dropped}`);
-    console.log("  sample row[0]:", JSON.stringify(rows[0], null, 2));
+    let n = 0;
+    let kept = 0;
+    let dropped = 0;
+    let firstRow: FillRow | null = null;
+    const seen = new Set<string>();
+    for await (const line of await streamLines(args.inFile)) {
+      if (!line.trim()) continue;
+      n++;
+      const r = toFillRow(JSON.parse(line), "00000000-0000-0000-0000-000000000000");
+      if (!r || seen.has(r.native_id)) {
+        dropped++;
+        continue;
+      }
+      seen.add(r.native_id);
+      kept++;
+      if (!firstRow) firstRow = r;
+    }
+    console.log(`[load] dry-run: total=${n} kept=${kept} dropped=${dropped}`);
+    if (firstRow) console.log("  sample row[0]:", JSON.stringify(firstRow, null, 2));
     return;
   }
 
@@ -196,29 +193,50 @@ async function main(): Promise<void> {
     const label = wallets[0].label as string;
     console.log(`[load] target wallet: ${label} (${traderWalletId})`);
 
-    const { rows, n, dropped } = parseAndDedupe(args.inFile, traderWalletId);
-    console.log(`[load] parsed: total=${n} kept=${rows.length} dropped=${dropped}`);
-
+    let n = 0;
+    let kept = 0;
+    let dropped = 0;
     let inserted = 0;
     let skipped = 0;
+    let processed = 0;
+    const seen = new Set<string>();
+    let batch: FillRow[] = [];
     const t0 = Date.now();
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE) as unknown as Record<string, unknown>[];
+
+    async function flush(): Promise<void> {
+      if (batch.length === 0) return;
+      const rows = batch as unknown as Record<string, unknown>[];
       const result = await sql`
-        INSERT INTO poly_trader_fills ${sql(batch)}
+        INSERT INTO poly_trader_fills ${sql(rows)}
         ON CONFLICT (trader_wallet_id, source, native_id) DO NOTHING
         RETURNING 1 AS one
       `;
       inserted += result.length;
       skipped += batch.length - result.length;
-      const done = i + batch.length;
-      if (done % 5000 < BATCH_SIZE || done === rows.length) {
-        const rate = (done / ((Date.now() - t0) / 1000)).toFixed(0);
-        console.log(`  [load] ${done}/${rows.length} (inserted=${inserted} skipped=${skipped})  ${rate}/s`);
+      processed += batch.length;
+      if (processed % 10_000 < BATCH_SIZE) {
+        const rate = (processed / ((Date.now() - t0) / 1000)).toFixed(0);
+        console.log(`  [load] ${processed} (inserted=${inserted} skipped=${skipped})  ${rate}/s`);
       }
+      batch = [];
     }
+
+    for await (const line of await streamLines(args.inFile)) {
+      if (!line.trim()) continue;
+      n++;
+      const r = toFillRow(JSON.parse(line), traderWalletId);
+      if (!r || seen.has(r.native_id)) {
+        dropped++;
+        continue;
+      }
+      seen.add(r.native_id);
+      kept++;
+      batch.push(r);
+      if (batch.length >= BATCH_SIZE) await flush();
+    }
+    await flush();
     console.log(
-      `[load] done in ${((Date.now() - t0) / 1000).toFixed(1)}s — inserted ${inserted}, skipped ${skipped} (already-present)`
+      `[load] done in ${((Date.now() - t0) / 1000).toFixed(1)}s — read ${n} kept ${kept} dropped ${dropped} inserted ${inserted} skipped ${skipped}`
     );
   } finally {
     await sql.end();
