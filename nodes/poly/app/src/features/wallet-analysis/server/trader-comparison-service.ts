@@ -102,7 +102,7 @@ export async function getTraderComparison(
       const [summary, tradeSizePnl, pnlResult] = await Promise.all([
         readTradeSummary(db, address, windowStartIso),
         readTradeSizePnl(db, address, windowStartIso, readResolution),
-        getPnlSlice(address, interval),
+        getPnlSlice(db, address, interval),
       ]);
       const pnlHistory =
         pnlResult.kind === "ok" ? [...pnlResult.value.history] : [];

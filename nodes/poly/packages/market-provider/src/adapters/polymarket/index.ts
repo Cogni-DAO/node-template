@@ -129,4 +129,5 @@ export {
   type PolymarketUserPnlPoint,
   PolymarketUserPnlPointSchema,
   PolymarketUserPnlResponseSchema,
+  type UserPnlOutboundLogger,
 } from "./polymarket.user-pnl.client.js";

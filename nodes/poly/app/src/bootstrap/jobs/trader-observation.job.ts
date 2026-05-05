@@ -3,18 +3,22 @@
 
 /**
  * Module: `@bootstrap/jobs/trader-observation.job`
- * Purpose: Process-local scheduler for live-forward observed trader wallet collection.
- * Scope: Wiring + cadence only. Caller injects DB/client/logger/metrics; the feature service owns the tick body.
+ * Purpose: Process-local scheduler for live-forward observed trader wallet collection (fills + current positions + optional user-pnl ingest).
+ * Scope: Wiring + cadence only. Caller injects DB/clients/logger/metrics; the feature service owns the tick body.
  * Invariants:
  *   - LIVE_FORWARD_COLLECTION: every tick observes configured `active_for_research` wallets from current watermarks.
  *   - TICK_IS_SELF_HEALING: escaped errors are logged and the interval continues.
+ *   - USER_PNL_OPTIONAL: `userPnlClient` is optional; when omitted (e.g. in component tests), the tick skips the user-pnl read model writer and prune entirely.
  * Side-effects: starts a timer, performs IO through injected deps.
- * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
+ * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005, work/items/task.5012
  * @internal
  */
 
 import type { LoggerPort, MetricsPort } from "@cogni/poly-market-provider";
-import type { PolymarketDataApiClient } from "@cogni/poly-market-provider/adapters/polymarket";
+import type {
+  PolymarketDataApiClient,
+  PolymarketUserPnlClient,
+} from "@cogni/poly-market-provider/adapters/polymarket";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { runTraderObservationTick } from "@/features/wallet-analysis/server/trader-observation-service";
@@ -30,6 +34,7 @@ export type TraderObservationJobStopFn = () => void;
 export interface TraderObservationJobDeps {
   db: Db;
   client: PolymarketDataApiClient;
+  userPnlClient?: PolymarketUserPnlClient;
   logger: LoggerPort;
   metrics: MetricsPort;
   pollMs?: number;

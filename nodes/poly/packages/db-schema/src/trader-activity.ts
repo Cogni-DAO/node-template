@@ -3,14 +3,15 @@
 
 /**
  * Module: `@cogni/poly-db-schema/trader-activity`
- * Purpose: Operational read-model tables for continuously observed Polymarket trader wallets.
+ * Purpose: Operational read-model tables for continuously observed Polymarket trader wallets — fills, position snapshots, current positions, attribution, market outcomes, and user-pnl time-series.
  * Scope: Drizzle table definitions only. Runtime observation, attribution, and UI aggregation live in the app.
  * Invariants:
  *   - SAME_OBSERVED_TRADE_TABLE: copy-target and Cogni wallet public trades share `poly_trader_fills`.
  *   - OBSERVATION_INDEPENDENT_OF_COPYING: `active_for_research` is research state, not copy-trade policy.
  *   - NO_FULL_HISTORY_CRAWL: ingestion cursors store forward watermarks; historical backfill is a separate v2 concern.
+ *   - PNL_TIMESERIES_KEYED_BY_FIDELITY: `poly_trader_user_pnl_points` PK is `(trader_wallet_id, fidelity, ts)`; reader picks `1h` for short windows, `1d` for long.
  * Side-effects: none
- * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
+ * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005, work/items/task.5012
  * @public
  */
 
@@ -304,6 +305,33 @@ export const polyCopyTradeAttribution = pgTable(
   ]
 );
 
+export const polyTraderUserPnlPoints = pgTable(
+  "poly_trader_user_pnl_points",
+  {
+    traderWalletId: uuid("trader_wallet_id")
+      .notNull()
+      .references(() => polyTraderWallets.id, { onDelete: "cascade" }),
+    fidelity: text("fidelity").notNull(),
+    ts: timestamp("ts", { withTimezone: true }).notNull(),
+    pnlUsdc: numeric("pnl_usdc", { precision: 20, scale: 8 }).notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.traderWalletId, table.fidelity, table.ts] }),
+    check(
+      "poly_trader_user_pnl_points_fidelity_check",
+      sql`${table.fidelity} IN ('1h','1d')`
+    ),
+    index("poly_trader_user_pnl_points_read_idx").on(
+      table.traderWalletId,
+      table.fidelity,
+      table.ts
+    ),
+  ]
+);
+
 export const polyMarketOutcomes = pgTable(
   "poly_market_outcomes",
   {
@@ -338,3 +366,7 @@ export type PolyTraderCurrentPosition =
   typeof polyTraderCurrentPositions.$inferSelect;
 export type NewPolyTraderCurrentPosition =
   typeof polyTraderCurrentPositions.$inferInsert;
+export type PolyTraderUserPnlPoint =
+  typeof polyTraderUserPnlPoints.$inferSelect;
+export type NewPolyTraderUserPnlPoint =
+  typeof polyTraderUserPnlPoints.$inferInsert;

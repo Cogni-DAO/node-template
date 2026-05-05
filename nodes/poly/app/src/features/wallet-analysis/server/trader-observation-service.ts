@@ -3,14 +3,15 @@
 
 /**
  * Module: `@features/wallet-analysis/server/trader-observation-service`
- * Purpose: Live-forward observation service for configured Polymarket trader wallets.
+ * Purpose: Live-forward observation service for configured Polymarket trader wallets — fills, current positions, and (when `userPnlClient` is injected) user-pnl time-series for the page-load read model.
  * Scope: Feature service. Caller injects DB/client/logger; this module does not construct runtime dependencies or own scheduling.
  * Invariants:
  *   - LIVE_FORWARD_COLLECTION: polls `active_for_research` wallets and stores facts for later query windows.
  *   - SAME_OBSERVED_TRADE_TABLE: target and Cogni public wallet trades are both stored in `poly_trader_fills`.
  *   - WATERMARKED_INGESTION: reads newest-to-prior-watermark and advances cursor only after DB upserts complete.
- * Side-effects: IO through injected Data API client and injected DB.
- * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
+ *   - PNL_INGEST_INDEPENDENT: per-wallet user-pnl ingest runs after observation regardless of observe outcome; failures bump `errors` and continue. Retention prune runs once per tick after all wallets.
+ * Side-effects: IO through injected Data API client + optional user-pnl client + injected DB.
+ * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005, work/items/task.5012
  * @public
  */
 
@@ -32,11 +33,16 @@ import type {
 import {
   createPolymarketActivitySource,
   type PolymarketDataApiClient,
+  type PolymarketUserPnlClient,
   type PolymarketUserPosition,
 } from "@cogni/poly-market-provider/adapters/polymarket";
 import { and, eq, isNull, lt, notInArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import {
+  fetchAndPersistTradingWalletPnlHistory,
+  pruneOldTradingWalletPnlPoints,
+} from "./trading-wallet-overview-service";
 
 type Db =
   | NodePgDatabase<Record<string, unknown>>
@@ -54,6 +60,7 @@ const TENANT_TRADING_WALLET_LABEL = "Tenant trading wallet";
 export interface TraderObservationTickDeps {
   db: Db;
   client: PolymarketDataApiClient;
+  userPnlClient?: PolymarketUserPnlClient;
   logger: LoggerPort;
   metrics: MetricsPort;
   tradePageLimit?: number;
@@ -66,6 +73,8 @@ export interface TraderObservationTickResult {
   wallets: number;
   fills: number;
   positions: number;
+  pnlPoints: number;
+  prunedPnlPoints: number;
   errors: number;
 }
 
@@ -101,6 +110,7 @@ export async function runTraderObservationTick(
 
   let fills = 0;
   let positions = 0;
+  let pnlPoints = 0;
   let errors = 0;
 
   for (const wallet of wallets) {
@@ -122,6 +132,48 @@ export async function runTraderObservationTick(
       );
       await markCursorError(deps.db, wallet.id, err);
     }
+    if (deps.userPnlClient) {
+      try {
+        const pnlResult = await fetchAndPersistTradingWalletPnlHistory({
+          db: deps.db,
+          traderWalletId: wallet.id,
+          walletAddress: wallet.walletAddress as `0x${string}`,
+          client: deps.userPnlClient,
+          logger: log,
+          component: "trader-observation",
+        });
+        pnlPoints += pnlResult.inserted;
+      } catch (err: unknown) {
+        errors += 1;
+        log.error(
+          {
+            event: "poly.trader.observe",
+            phase: "user_pnl_error",
+            trader_wallet_id: wallet.id,
+            wallet: wallet.walletAddress,
+            err: err instanceof Error ? err.message : String(err),
+          },
+          "trader user-pnl ingest failed"
+        );
+      }
+    }
+  }
+
+  let prunedPnlPoints = 0;
+  if (deps.userPnlClient) {
+    try {
+      const prune = await pruneOldTradingWalletPnlPoints(deps.db);
+      prunedPnlPoints = prune.deleted;
+    } catch (err: unknown) {
+      log.warn(
+        {
+          event: "poly.trader.observe",
+          phase: "user_pnl_prune_error",
+          err: err instanceof Error ? err.message : String(err),
+        },
+        "trader user-pnl prune failed"
+      );
+    }
   }
 
   log.info(
@@ -131,12 +183,21 @@ export async function runTraderObservationTick(
       wallets: wallets.length,
       fills,
       positions,
+      pnl_points: pnlPoints,
+      pruned_pnl_points: prunedPnlPoints,
       errors,
     },
     "trader observation tick complete"
   );
 
-  return { wallets: wallets.length, fills, positions, errors };
+  return {
+    wallets: wallets.length,
+    fills,
+    positions,
+    pnlPoints,
+    prunedPnlPoints,
+    errors,
+  };
 }
 
 export async function refreshCurrentPositionsForWallet(params: {
