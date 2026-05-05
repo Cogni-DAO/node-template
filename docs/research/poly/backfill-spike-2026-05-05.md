@@ -205,6 +205,67 @@ In rough order of how soon someone needs to make a call:
 - **Should `bio` / `profileImage` Gamma profile fields be persisted?** They live on `/activity` rows redundantly. Probably no — store wallet identity once in `poly_trader_wallets`, not 6 M times in `poly_trader_fills`.
 - **Pre-position analytics view.** Once `poly_market_outcomes` populated, write the layering/hedging projection as a Drizzle SQL view in `@cogni/poly-db-schema`. Lazy materialization OK at v0.
 
+## Demo: 1-week RN1 backfill into candidate-a (2026-05-05 evening)
+
+End-to-end run that proved the pipeline against the real candidate-a `cogni_poly` Postgres (host `candidate-a.vm.cognidao.org:5432`, reachable on the wider Cogni network). Wallet UUIDs from `poly_trader_wallets` were already seeded by the live mirror's bootstrap; loader looks them up by address.
+
+**Step 1 — parallel walk** (`walk-windows.sh`, 4 monthly-style windows, 1500-page cap each):
+
+```
+[walk-windows] wallet=RN1 windows=4 span 2026-04-26..2026-05-03
+  [0] window 1777176000..1777327200  → ~42K rows / ~1727 r/s
+  [1] window 1777327200..1777478400  → ~42K rows / ~1741 r/s
+  [2] window 1777478400..1777629600  → ~42K rows / ~1755 r/s
+  [3] window 1777629600..1777780800  → ~42K rows / ~1770 r/s
+[collapse] 166,444 input rows -> 165,587 unique rows (0.5% boundary-dup)
+```
+
+153 MB NDJSON; **wall-clock ~24 s** (max of the 4 parallel walkers).
+
+**Step 2 — dry-run** (no `--apply`): mapped all 165,587 rows successfully, 0 dropped. Sample row carried `condition_id`, `token_id`, `side`, `price`, `shares`, `size_usdc`, `tx_hash`, `observed_at`, and the full enrichment in `raw` (matches the live tick's row shape exactly).
+
+**Step 3 — apply** (`load.ts --apply` against candidate-a `cogni_poly`):
+
+```
+[load] target wallet: RN1 (3dd04627-6be3-4b2a-ade5-d05ecfb58ff2)
+[load] parsed: total=165587 kept=165587 dropped=0
+  [load] 5000/165587   (inserted=4990 skipped=10)   920/s
+  [load] 50000/165587  (inserted=49990 skipped=10)  1599/s
+  [load] 100000/165587 (inserted=99990 skipped=10)  1639/s
+  [load] 165587/165587 (inserted=165577 skipped=10) 1665/s
+[load] done in 99.5s — inserted 165577, skipped 10 (already-present)
+```
+
+**Wall-clock 99 s** at sustained ~1665 rows/s through ON CONFLICT DO NOTHING.
+
+**Step 4 — verify in DB:**
+
+| day | total fills | from this backfill | unique markets |
+|---|---:|---:|---:|
+| 2026-04-26 | 29,813 | 29,813 | 772 |
+| 2026-04-27 | 20,451 | 20,451 | 288 |
+| 2026-04-28 | 24,198 | 24,198 | 265 |
+| 2026-04-29 | 23,803 | 23,803 | 345 |
+| 2026-04-30 | 23,256 | 23,256 | 311 |
+| 2026-05-01 | 14,093 | 14,093 | 390 |
+| 2026-05-02 | 27,746 | 27,746 | 957 |
+| 2026-05-03 | 5,619 | 2,227 | 216 |
+| 2026-05-04 | 17,983 | 0 (live tick) | 327 |
+| 2026-05-05 | 4,984 | 0 (live tick) | 75 |
+| **TOTAL** | **191,946** | **165,577** | **3,681** |
+
+**Step 5 — what the dashboard sees today:**
+
+| reader slice | source on `main` | renders backfilled data? |
+|---|---|---|
+| `?include=pnl` | `poly_trader_user_pnl_points` (CP1) | yes for the points the live tick wrote — but no historical `pnl_points` exist (separate backfill, future work) |
+| `?include=snapshot` | live Data API, capped at 500 trades | **no — shows `tradesPerDay30d: 16.67`, `uniqueMarkets: 21`** instead of 21K-trades / 3.6K-markets in DB |
+| `?include=distributions` (default `live`) | live Data API, capped at 500 | no — same cap |
+| `?include=distributions&distributionMode=historical` | `poly_trader_fills` (DB-backed!) | wired but **502s on big wallets** because it then fetches per-cid resolution from CLOB serially → overruns Caddy timeout. Fix: populate `poly_market_outcomes` (CP3 / `task.5018`) so resolution lookup hits DB. |
+| `?include=trades` (CP2 #1245) | `poly_trader_fills` after CP2 lands | **will render backfill once CP2 merges** — no further work needed on the writer side |
+
+**Conclusion of demo:** the writer side is functional. The full 1-year corpus for both wallets can be loaded with this same flow in **~30 min wall-clock** (12 monthly windows × 2 wallets). The dashboard will start consuming the corpus as CP2 / CP3 / CP4 / CP6 merge — backfilling more does not unblock those PRs, but having the corpus already resident means the user-facing render lights up the moment those readers ship.
+
 ## Validation
 
 `exercise:` Run `pnpm tsx scripts/experiments/poly-backfill/probe.sh` and `pnpm tsx scripts/experiments/poly-backfill/walk.ts --wallet RN1 --windows 12 --max-pages-per-window 5 --out /tmp/poly-backfill` from a clean worktree with `.env.local` sourced. Expect both wallets' NDJSON files to land in `/tmp/poly-backfill/` with non-zero row counts and timestamps spanning the requested windows. Inspect a sample row and confirm it carries `conditionId`, `title`, `outcome`, `usdcSize`.
