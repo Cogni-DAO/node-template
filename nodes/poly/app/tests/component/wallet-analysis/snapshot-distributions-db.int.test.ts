@@ -132,13 +132,15 @@ describe("getSnapshotSlice + getDistributionsSlice — DB-backed (task.5012 CP4)
 
     expect(result.kind).toBe("ok");
     if (result.kind !== "ok") return;
-    // CID_RESOLVED is closed → both tokens resolved.
+    // CID_RESOLVED is closed → both tokens resolved (TOKEN_WIN + TOKEN_LOSS).
     // CID_PENDING is unresolved (no outcomes row) → 1 open position.
     expect(result.value.resolvedPositions).toBe(2);
     expect(result.value.wins).toBe(1);
     expect(result.value.losses).toBe(1);
     expect(result.value.openPositions).toBe(1);
-    expect(result.value.uniqueMarkets).toBe(2);
+    // `uniqueMarkets` counts distinct token positions (per `computeWalletMetrics`):
+    // 3 distinct tokens (TOKEN_WIN, TOKEN_LOSS, TOKEN_PENDING).
+    expect(result.value.uniqueMarkets).toBe(3);
     expect(result.value.computedAt).toMatch(
       /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/
     );
