@@ -10,6 +10,7 @@
  *   - WS_LOOSE_PARSE — unknown event_type is logged at debug, never throws.
  *   - HEARTBEAT_10S — the underlying CLOB WS expects client `PING` text frames every 10s; missing pings trigger disconnect.
  *   - SHARED_ASSET_REFCOUNT — a single Polymarket socket is multiplexed across N per-wallet `WalletActivitySource` instances. The asset-subscription set is refcounted: a remote subscribe is sent only when the count goes 0→1 and a remote unsubscribe is sent only when it returns 1→0. Without this, two wallets holding the same outcome token would have one wallet's `unsubscribeAsset` silently kill the other wallet's subscription.
+ *   - IDLE_NO_RECONNECT — Polymarket's Market channel closes any socket that has not subscribed to at least one asset (~10s). Without this guard, a pod with zero active copy-trade tenants would loop connect→idle-close→reconnect forever, polluting Loki. So `scheduleReconnect` is a no-op while `assetRefCounts.size === 0`, and `subscribeAsset(first)` re-arms the connection if the socket has gone idle. Behavior with active subscriptions is unchanged.
  * Side-effects: opens a single TCP/TLS WS to `wss://ws-subscriptions-clob.polymarket.com/ws/market`; logger emissions; setInterval/setTimeout for heartbeat + backoff.
  * Links: docs https://docs.polymarket.com/developers/CLOB/websocket/wss-overview ; task.0322
  * @public
@@ -235,6 +236,17 @@ export function createPolymarketWsClient(
 
   function scheduleReconnect() {
     if (closed) return;
+    // IDLE_NO_RECONNECT — Polymarket closes empty subscriptions after ~10s.
+    // No point reconnecting until something is subscribed; the next
+    // `subscribeAsset(first)` call will re-arm the connection.
+    if (assetRefCounts.size === 0) {
+      reconnectAttempts = 0;
+      log.info(
+        { event: "poly.wallet_watch.ws.reconnect", phase: "skipped_idle" },
+        "ws idle (no subscriptions) — reconnect deferred until next subscribe"
+      );
+      return;
+    }
     reconnectAttempts += 1;
     const delay = Math.min(
       initialBackoff * 2 ** (reconnectAttempts - 1),
@@ -317,7 +329,17 @@ export function createPolymarketWsClient(
       assetRefCounts.set(assetId, next);
       // Only emit a remote subscribe on the 0→1 transition; subsequent
       // callers ride the existing subscription per SHARED_ASSET_REFCOUNT.
-      if (next === 1) sendSubscriptionUpdate("subscribe", [assetId]);
+      if (next !== 1) return;
+      // IDLE_NO_RECONNECT — re-arm the socket if it had been idled out.
+      // When already open we send the dynamic subscribe immediately; when
+      // a connect is in flight (`socket` set, not yet open OR a reconnect
+      // timer pending) the next `open` handler will pick this asset up
+      // through `sendInitialSubscribeFrame`.
+      if (socket && socket.readyState === 1) {
+        sendSubscriptionUpdate("subscribe", [assetId]);
+      } else if (!socket && !reconnectTimer && !closed) {
+        connect();
+      }
     },
     unsubscribeAsset(assetId) {
       const current = assetRefCounts.get(assetId);

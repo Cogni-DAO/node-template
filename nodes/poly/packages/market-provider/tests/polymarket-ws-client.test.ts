@@ -161,6 +161,42 @@ describe("createPolymarketWsClient", () => {
     await client.close();
   });
 
+  it("does not reconnect when no assets are subscribed (IDLE_NO_RECONNECT)", async () => {
+    // Polymarket closes empty-subscription sockets after ~10s. Without this
+    // guard, a pod with zero active copy-trade tenants would loop
+    // connect→idle-close→reconnect forever and pollute Loki.
+    vi.useFakeTimers();
+    const client = createPolymarketWsClient({
+      logger: noopLogger,
+      webSocketCtor: FakeWebSocket,
+      initialReconnectDelayMs: 100,
+    });
+    const socket = FakeWebSocket.instances[0];
+    if (!socket) throw new Error("socket was not constructed");
+
+    // Open + immediate close with empty subscription set — the idle timeout
+    // case. The next reconnect must NOT be scheduled.
+    socket.open();
+    socket.close();
+
+    // Push past any plausible backoff window — no second socket should appear.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(FakeWebSocket.instances).toHaveLength(1);
+
+    // Then a subscribe arrives — the client must lazily re-arm the socket.
+    client.subscribeAsset("asset-late");
+    expect(FakeWebSocket.instances).toHaveLength(2);
+    const socket2 = FakeWebSocket.instances[1];
+    if (!socket2) throw new Error("socket was not re-armed");
+    socket2.open();
+    expect(lastJson(socket2)).toEqual({
+      assets_ids: ["asset-late"],
+      type: "market",
+    });
+
+    await client.close();
+  });
+
   it("sends PING on the documented 10s heartbeat cadence by default", async () => {
     vi.useFakeTimers();
     const client = createPolymarketWsClient({
