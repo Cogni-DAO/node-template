@@ -442,6 +442,33 @@ services:
       - PROMETHEUS_USERNAME=${PROMETHEUS_USERNAME:-}
       - PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD:-}
 
+  alloy-k8s-events:
+    image: grafana/alloy:v1.9.2
+    restart: unless-stopped
+    network_mode: host
+    # k3s writes /etc/rancher/k3s/k3s.yaml with 0600 root-owned perms; the
+    # default alloy user (uid 473) cannot read it. Run as root so the
+    # read-only kubeconfig bind-mount is usable.
+    user: "0:0"
+    volumes:
+      - ./configs/alloy-config.k8s-events.alloy:/etc/alloy/config.alloy:ro
+      - alloy_k8s_events_data:/var/lib/alloy
+      - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy
+      # network_mode: host puts us on loopback alongside the main alloy
+      # container, which already binds the default 127.0.0.1:12345.
+      # Move our HTTP server (UI/healthcheck) + cluster advertise to 12346.
+      - --server.http.listen-addr=127.0.0.1:12346
+      - --cluster.advertise-address=127.0.0.1:12346
+    environment:
+      - DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+      - LOKI_WRITE_URL=${LOKI_WRITE_URL}
+      - LOKI_USERNAME=${LOKI_USERNAME}
+      - LOKI_PASSWORD=${LOKI_PASSWORD}
+
   # =============================================================================
   # Temporal Services (from temporalio/docker-compose v1.29.1, postgres-only)
   # Per SCHEDULER_SPEC.md: Required for schedule orchestration
@@ -754,6 +781,8 @@ volumes:
     name: doltgres_data
   alloy_data:
     name: alloy_data
+  alloy_k8s_events_data:
+    name: alloy_k8s_events_data
   temporal_postgres_data:
     name: temporal_postgres_data
   db_backups:
