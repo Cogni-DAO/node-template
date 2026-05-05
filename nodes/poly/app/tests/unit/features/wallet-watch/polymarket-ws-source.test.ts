@@ -685,6 +685,59 @@ describe("createPolymarketWsActivitySource", () => {
       source.stop();
     });
 
+    it("warn-logs `wake_callback_threw` with asset_id when a callback throws", async () => {
+      const ws = makeFakeWs();
+      const warnLogs: Array<Record<string, unknown>> = [];
+      const captureLogger = {
+        child: () => captureLogger,
+        debug: () => {},
+        info: () => {},
+        warn: (obj: Record<string, unknown>) => {
+          if (obj.event === "poly.wallet_watch.ws.wake_callback_threw") {
+            warnLogs.push(obj);
+          }
+        },
+        error: () => {},
+      } as unknown as Parameters<
+        typeof createPolymarketWsActivitySource
+      >[0]["logger"];
+
+      const source = createPolymarketWsActivitySource({
+        client: makeStubClient({
+          positions: [makePosition(ASSET_ID)],
+          trades: [],
+        }),
+        ws,
+        wallet: TARGET_WALLET,
+        logger: captureLogger,
+        metrics: createRecordingMetrics(),
+      });
+      await flushMicrotasks();
+
+      source.subscribeWake?.(() => {
+        throw new Error("kaboom");
+      });
+
+      ws.fireTrade({
+        event_type: "last_trade_price",
+        asset_id: ASSET_ID,
+        market: "",
+        side: "BUY",
+        price: 0.5,
+        size: 10,
+        timestamp: 1_700_000_500,
+        fee_rate_bps: 0,
+      });
+
+      expect(warnLogs).toHaveLength(1);
+      expect(warnLogs[0]).toMatchObject({
+        event: "poly.wallet_watch.ws.wake_callback_threw",
+        asset_id: ASSET_ID,
+        err: "kaboom",
+      });
+      source.stop();
+    });
+
     it("stop() clears wake listeners (no callback after stop)", async () => {
       const ws = makeFakeWs();
       const source = createPolymarketWsActivitySource({

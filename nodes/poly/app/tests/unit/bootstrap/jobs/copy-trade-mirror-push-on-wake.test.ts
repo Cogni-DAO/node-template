@@ -356,7 +356,8 @@ describe("startMirrorPoll — push-on-wake", () => {
     source.release();
     await flush();
 
-    // Startup tick was interval-driven (counts pollTicksTotal but not the wake counter).
+    // Startup tick was fired directly via `void tick()`, not through the wake
+    // IIFE — so the wake counter must still be 0 here.
     expect(metrics.countsByName(MIRROR_JOB_METRICS.wsWakeTickTotal)).toBe(0);
 
     source.fireWake();

@@ -137,8 +137,10 @@ export function createPolymarketWsActivitySource(
       "ws wake-up matched watched asset"
     );
     // Fan out to push-on-wake subscribers. Per-callback isolation: one bad
-    // subscriber must not break the others or escape `onTrade`.
-    for (const cb of wakeListeners) {
+    // subscriber must not break the others or escape `onTrade`. Snapshot the
+    // listener set first so a callback that synchronously (un)subscribes can
+    // not skip a sibling.
+    for (const cb of [...wakeListeners]) {
       try {
         cb();
       } catch (err) {
