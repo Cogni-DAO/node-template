@@ -62,10 +62,7 @@ type FakeFillRow = {
  * Identity-compare the table to dispatch fake rows; both terminal steps
  * (`.where(...)` and `.orderBy(...)`) resolve to the same row set.
  */
-function makeFakeDb(opts: {
-  positions: FakeDbRow[];
-  fills: FakeFillRow[];
-}) {
+function makeFakeDb(opts: { positions: FakeDbRow[]; fills: FakeFillRow[] }) {
   return {
     select() {
       let rows: unknown[] = [];
@@ -150,9 +147,7 @@ describe("getExecutionSlice — DB-backed live/closed split", () => {
     const db = makeFakeDb({
       positions: openAssets.map((asset) => makePosition(asset)),
       fills: [
-        ...openAssets.map((a) =>
-          makeFill(a, "BUY", new Date(NOW - 3_600_000))
-        ),
+        ...openAssets.map((a) => makeFill(a, "BUY", new Date(NOW - 3_600_000))),
         ...closedAssets.flatMap((a) => [
           makeFill(a, "BUY", new Date(NOW - 7_200_000)),
           makeFill(a, "SELL", new Date(NOW - 3_600_000), "10", "0.55"),

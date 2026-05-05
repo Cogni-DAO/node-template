@@ -428,8 +428,7 @@ function dbPositionToUserPosition(
   const currentValue = toFiniteNumber(row.currentValueUsdc);
   const avgPrice = toFiniteNumber(row.avgPrice);
   const rawCurPrice = readOptionalNumber(raw, "curPrice");
-  const curPrice =
-    rawCurPrice ?? (shares > 0 ? currentValue / shares : 0);
+  const curPrice = rawCurPrice ?? (shares > 0 ? currentValue / shares : 0);
   const cashPnl = currentValue - costBasis;
   const percentPnl = costBasis > 0 ? (cashPnl / costBasis) * 100 : 0;
   const redeemable = readOptionalBoolean(raw, "redeemable") ?? false;
