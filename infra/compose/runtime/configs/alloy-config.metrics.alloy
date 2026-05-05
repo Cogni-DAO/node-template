@@ -168,6 +168,16 @@ loki.process "k8s_pod_logs" {
   // Parse CRI log format (k3s/containerd: "timestamp stream flags message")
   stage.cri {}
 
+  // Grafana Cloud Loki rejects entries older than ~168h (7d) with HTTP 400
+  // "timestamp too old". On alloy cold-start (or a fresh positions file), the
+  // tail of long-lived pod log files (e.g. argocd-server, running 4+ weeks)
+  // re-emits 4-week-old lines and spams the deploy log + Loki with rejects.
+  // Drop them at parse time. (bug.5170)
+  stage.drop {
+    older_than          = "168h"
+    drop_counter_reason = "loki_reject_window_too_old"
+  }
+
   // Extract namespace, pod, container from /var/log/pods/<ns>_<pod>_<uid>/<container>/*.log
   stage.regex {
     source     = "filename"
