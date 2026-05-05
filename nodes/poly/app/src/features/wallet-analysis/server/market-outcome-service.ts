@@ -112,7 +112,12 @@ export async function runMarketOutcomeTick(
      AND m.token_id = a.token_id
     WHERE m.updated_at IS NULL
        OR m.updated_at < now() - INTERVAL '5 minutes'
-    ORDER BY a.condition_id, a.token_id
+    -- Oldest stale (or never-resolved) rows first so the historical
+    -- backfill drains progressively across ticks. Previously
+    -- ORDER BY condition_id meant the tick re-processed the same
+    -- alphabetically-first 100 every cycle, capping resolution at
+    -- one batch per pod restart regardless of how long the job ran.
+    ORDER BY m.updated_at ASC NULLS FIRST, a.condition_id, a.token_id
     LIMIT ${batchSize}
   `)) as unknown as ConditionTokenRow[];
 
