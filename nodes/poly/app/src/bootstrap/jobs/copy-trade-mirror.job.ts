@@ -21,7 +21,6 @@
  * @internal
  */
 
-import { EVENT_NAMES } from "@cogni/node-shared";
 import type {
   LoggerPort,
   MetricsPort,
@@ -42,14 +41,17 @@ import type {
 } from "@/features/copy-trade/types";
 import type { OrderLedger } from "@/features/trading";
 import type { WalletActivitySource } from "@/features/wallet-watch";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 export const MIRROR_JOB_METRICS = {
   /** `poly_mirror_poll_ticks_total` — one per successful tick. Alertable on rate from >1 pod (SINGLE_WRITER canary). */
   pollTicksTotal: "poly_mirror_poll_ticks_total",
   /** `poly_mirror_poll_tick_errors_total` — tick wrapper catches an escape. */
   pollTickErrorsTotal: "poly_mirror_poll_tick_errors_total",
-  /** `poly_mirror_ws_wake_tick_total{outcome}` — wake-driven tick fired (push-on-wake path). `outcome` ∈ `success|throw`. Push runs in addition to the safety-net `setInterval`. */
-  wsWakeTickTotal: "poly_mirror_ws_wake_tick_total",
+  /** `poly_mirror_ws_wake_ticks_total` — wake-driven tick fired (push-on-wake path). Push runs in addition to the safety-net `setInterval`. Use `rate(...)` to confirm push is producing signal in prod. */
+  wsWakeTicksTotal: "poly_mirror_ws_wake_ticks_total",
+  /** `poly_mirror_ws_wake_tick_errors_total` — wake IIFE wrapper caught an escape (paranoia counter; `tick()` already swallows). */
+  wsWakeTickErrorsTotal: "poly_mirror_ws_wake_tick_errors_total",
 } as const;
 
 /** How far back to initialize the first-tick cursor (seconds). */
@@ -422,13 +424,14 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
         do {
           queuedWakeup = false;
           const t0 = Date.now();
-          let outcome: "success" | "throw" = "success";
+          let threw = false;
           try {
             await tick();
           } catch (err: unknown) {
             // `tick()` already swallows everything; this is paranoia for a
             // future refactor that lets something escape.
-            outcome = "throw";
+            threw = true;
+            deps.metrics.incr(MIRROR_JOB_METRICS.wsWakeTickErrorsTotal, {});
             log.error(
               {
                 event: EVENT_NAMES.POLY_MIRROR_POLL_TICK_ERROR,
@@ -438,16 +441,15 @@ export function startMirrorPoll(deps: MirrorJobDeps): MirrorJobStopFn {
               "push-on-wake tick threw (continuing)"
             );
           }
-          deps.metrics.incr(MIRROR_JOB_METRICS.wsWakeTickTotal, { outcome });
-          // Inline event string (vs `EVENT_NAMES.*`) keeps this PR scoped to
-          // the poly node — `single-node-scope` would otherwise force a split
-          // for a one-line node-shared registry add.
+          if (!threw) {
+            deps.metrics.incr(MIRROR_JOB_METRICS.wsWakeTicksTotal, {});
+          }
           log.debug(
             {
-              event: "poly.mirror.wake_tick",
+              event: EVENT_NAMES.POLY_MIRROR_WAKE_TICK,
               duration_ms: Date.now() - t0,
               queued: queuedWakeup,
-              outcome,
+              threw,
             },
             "wake tick complete"
           );

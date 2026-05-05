@@ -337,7 +337,7 @@ describe("startMirrorPoll — push-on-wake", () => {
     stop();
   });
 
-  it("emits poly_mirror_ws_wake_tick_total{outcome=success} on a wake-driven tick", async () => {
+  it("emits poly_mirror_ws_wake_ticks_total on a wake-driven tick", async () => {
     vi.useFakeTimers();
     const source = makeControllableSource();
     const ledger = new FakeOrderLedger({ initial: [] });
@@ -358,14 +358,14 @@ describe("startMirrorPoll — push-on-wake", () => {
 
     // Startup tick was fired directly via `void tick()`, not through the wake
     // IIFE — so the wake counter must still be 0 here.
-    expect(metrics.countsByName(MIRROR_JOB_METRICS.wsWakeTickTotal)).toBe(0);
+    expect(metrics.countsByName(MIRROR_JOB_METRICS.wsWakeTicksTotal)).toBe(0);
 
     source.fireWake();
     await flush();
     source.release();
     await flush();
 
-    expect(metrics.countsByName(MIRROR_JOB_METRICS.wsWakeTickTotal)).toBe(1);
+    expect(metrics.countsByName(MIRROR_JOB_METRICS.wsWakeTicksTotal)).toBe(1);
 
     stop();
   });

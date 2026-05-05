@@ -15,7 +15,6 @@
  * @public
  */
 
-import { EVENT_NAMES } from "@cogni/node-shared";
 import type {
   Fill,
   LoggerPort,
@@ -28,6 +27,7 @@ import {
   type PolymarketWsClientHandle,
   type WsTradeEvent,
 } from "@cogni/poly-market-provider/adapters/polymarket";
+import { EVENT_NAMES } from "@/shared/observability/events";
 
 import {
   type NextFillsResult,
@@ -146,7 +146,7 @@ export function createPolymarketWsActivitySource(
       } catch (err) {
         log.warn(
           {
-            event: "poly.wallet_watch.ws.wake_callback_threw",
+            event: EVENT_NAMES.POLY_WALLET_WATCH_WS_WAKE_CALLBACK_THREW,
             asset_id: event.asset_id,
             err: err instanceof Error ? err.message : String(err),
           },
