@@ -206,9 +206,7 @@ export async function runPriceHistoryTick(
  * set; one mirror per asset.
  */
 async function listAssetsToPoll(db: Db): Promise<string[]> {
-  const cutoff = new Date(
-    Date.now() - RECENT_FILLS_WINDOW_DAYS * 86_400_000
-  );
+  const cutoff = new Date(Date.now() - RECENT_FILLS_WINDOW_DAYS * 86_400_000);
   const activeRows = await db
     .selectDistinct({ asset: polyTraderCurrentPositions.tokenId })
     .from(polyTraderCurrentPositions)

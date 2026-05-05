@@ -505,7 +505,8 @@ export async function getExecutionSlice(
      * page-load callers pass `container.serviceDb` (task.5018, CP7).
      * Refresh-style callers that already pass `includePriceHistory: false` need not pass `db`.
      */
-    db?: NodePgDatabase<Record<string, unknown>>
+    db?:
+      | NodePgDatabase<Record<string, unknown>>
       | PostgresJsDatabase<Record<string, unknown>>;
   } = {}
 ): Promise<PolyWalletExecutionOutput> {

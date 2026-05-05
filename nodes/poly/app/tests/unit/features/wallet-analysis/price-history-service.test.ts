@@ -62,22 +62,26 @@ function fakeDb(assets: readonly string[]) {
       }),
     })),
     insert: vi.fn().mockImplementation(() => ({
-      values: vi.fn().mockImplementation((rows: Array<{
-        asset: string;
-        fidelity: string;
-      }>) => ({
-        onConflictDoUpdate: vi.fn().mockImplementation(async () => {
-          const first = rows[0];
-          if (first !== undefined) {
-            upsertCalls.push({
-              asset: first.asset,
-              fidelity: first.fidelity,
-              rowCount: rows.length,
-            });
-          }
-          return { rowCount: rows.length };
-        }),
-      })),
+      values: vi.fn().mockImplementation(
+        (
+          rows: Array<{
+            asset: string;
+            fidelity: string;
+          }>
+        ) => ({
+          onConflictDoUpdate: vi.fn().mockImplementation(async () => {
+            const first = rows[0];
+            if (first !== undefined) {
+              upsertCalls.push({
+                asset: first.asset,
+                fidelity: first.fidelity,
+                rowCount: rows.length,
+              });
+            }
+            return { rowCount: rows.length };
+          }),
+        })
+      ),
     })),
     delete: vi.fn().mockImplementation(() => ({
       where: vi.fn().mockResolvedValue({ rowCount: 0 }),

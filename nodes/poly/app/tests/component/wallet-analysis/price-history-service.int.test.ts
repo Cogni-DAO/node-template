@@ -54,7 +54,10 @@ const metrics = {
 };
 
 function fakeClobClient(
-  series: Record<string, { hour: ClobPriceHistoryPoint[]; day: ClobPriceHistoryPoint[] }>
+  series: Record<
+    string,
+    { hour: ClobPriceHistoryPoint[]; day: ClobPriceHistoryPoint[] }
+  >
 ): PolymarketClobPublicClient {
   return {
     async getMarketResolution() {
@@ -122,10 +125,13 @@ describe("runPriceHistoryTick (component)", () => {
     });
 
     const baseTs = Math.floor(Date.now() / 1_000) - 3600;
-    const series: Record<string, {
-      hour: ClobPriceHistoryPoint[];
-      day: ClobPriceHistoryPoint[];
-    }> = {
+    const series: Record<
+      string,
+      {
+        hour: ClobPriceHistoryPoint[];
+        day: ClobPriceHistoryPoint[];
+      }
+    > = {
       [ASSET_A]: {
         hour: [
           { t: baseTs, p: 0.4 },
@@ -219,10 +225,13 @@ describe("runPriceHistoryTick (component)", () => {
     const startTs = Math.floor(Date.now() / 1_000) - 7200;
     const midTs = startTs + 3600;
     const endTs = startTs + 7200;
-    const series: Record<string, {
-      hour: ClobPriceHistoryPoint[];
-      day: ClobPriceHistoryPoint[];
-    }> = {
+    const series: Record<
+      string,
+      {
+        hour: ClobPriceHistoryPoint[];
+        day: ClobPriceHistoryPoint[];
+      }
+    > = {
       [ASSET_A]: {
         hour: [
           { t: startTs - 86_400, p: 0.3 }, // outside the read window
