@@ -107,7 +107,7 @@ export async function runPriceHistoryTick(
   };
 
   const assets = await listAssetsToPoll(deps.db);
-  let upserted = 0;
+  const upsertedPerCall: number[] = [];
   let errors = 0;
 
   await Promise.all(
@@ -119,11 +119,8 @@ export async function runPriceHistoryTick(
             { fidelity: 60, interval: "1m" },
             { logger: outboundLogger, component: "trader-price-history" }
           );
-          upserted += await upsertPriceHistory(
-            deps.db,
-            asset,
-            HOUR_FIDELITY,
-            hourPoints
+          upsertedPerCall.push(
+            await upsertPriceHistory(deps.db, asset, HOUR_FIDELITY, hourPoints)
           );
         } catch (err: unknown) {
           errors += 1;
@@ -143,11 +140,8 @@ export async function runPriceHistoryTick(
             { fidelity: 1440, interval: "max" },
             { logger: outboundLogger, component: "trader-price-history" }
           );
-          upserted += await upsertPriceHistory(
-            deps.db,
-            asset,
-            DAY_FIDELITY,
-            dayPoints
+          upsertedPerCall.push(
+            await upsertPriceHistory(deps.db, asset, DAY_FIDELITY, dayPoints)
           );
         } catch (err: unknown) {
           errors += 1;
@@ -164,6 +158,7 @@ export async function runPriceHistoryTick(
       })
     )
   );
+  const upserted = upsertedPerCall.reduce((sum, n) => sum + n, 0);
 
   let prunedHourPoints = 0;
   try {
