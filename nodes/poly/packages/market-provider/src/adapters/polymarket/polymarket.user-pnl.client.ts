@@ -67,6 +67,21 @@ export interface GetUserPnlParams {
   fidelity?: PolymarketUserPnlFidelity;
 }
 
+/**
+ * Optional structured-log hook. When supplied, the client emits one
+ * `poly.user-pnl.outbound` event per fetch — used to assert PAGE_LOAD_DB_ONLY
+ * (task.5012) by tagging caller component (e.g. `trader-observation`).
+ */
+export interface UserPnlOutboundLogger {
+  info(payload: {
+    event: "poly.user-pnl.outbound";
+    component: string;
+    wallet: string;
+    interval: PolymarketUserPnlInterval;
+    fidelity?: PolymarketUserPnlFidelity;
+  }): void;
+}
+
 export class PolymarketUserPnlClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -80,7 +95,8 @@ export class PolymarketUserPnlClient {
 
   async getUserPnl(
     wallet: string,
-    params: GetUserPnlParams
+    params: GetUserPnlParams,
+    opts?: { logger?: UserPnlOutboundLogger; component?: string }
   ): Promise<PolymarketUserPnlPoint[]> {
     assertWallet(wallet);
 
@@ -90,6 +106,14 @@ export class PolymarketUserPnlClient {
     if (params.fidelity) {
       url.searchParams.set("fidelity", params.fidelity);
     }
+
+    opts?.logger?.info({
+      event: "poly.user-pnl.outbound",
+      component: opts.component ?? "unknown",
+      wallet,
+      interval: params.interval,
+      ...(params.fidelity !== undefined ? { fidelity: params.fidelity } : {}),
+    });
 
     const json = await this.fetchJson(url);
     return PolymarketUserPnlResponseSchema.parse(json);

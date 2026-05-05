@@ -3,15 +3,16 @@
 
 /**
  * Module: `@features/wallet-analysis/server/wallet-analysis-service`
- * Purpose: Service layer feeding `/api/v1/poly/wallets/[addr]` (snapshot, trades, balance, pnl slices) and `/api/v1/poly/wallet/execution` (live/closed position split). Fetches via `PolymarketDataApiClient`, the public CLOB client, and Polymarket's public user-pnl service. All upstream calls are bounded by a process-wide `p-limit(4)` and per-(slice, addr) coalesced under a 30 s TTL.
+ * Purpose: Service layer feeding `/api/v1/poly/wallets/[addr]` (snapshot, trades, balance, pnl slices) and `/api/v1/poly/wallet/execution` (live/closed position split). Fetches via `PolymarketDataApiClient`, the public CLOB client, and the saved-observation `poly_trader_user_pnl_points` table. CLOB / Data API calls are bounded by a process-wide `p-limit(4)` and per-(slice, addr) coalesced under a 30 s TTL; the P/L slice is a pure DB read (PAGE_LOAD_DB_ONLY).
  * Scope: Compute + I/O only. Does not authenticate, does not parse HTTP. Returns Zod-validated slice values per the wallet-analysis v1 and execution v1 contracts.
  * Invariants:
  *   - REUSE_PACKAGE_CLIENTS: all upstream HTTP goes through `@cogni/poly-market-provider` clients — no fetch in this file.
  *   - DETERMINISTIC_METRICS: snapshot math is identical to `computeWalletMetrics` (spike.0323 v3) for the trade-derived fields it surfaces (winrate, duration, activity counts). PnL-class outputs (`realizedPnlUsdc` etc.) of `computeWalletMetrics` are deliberately not surfaced; PnL is sourced from the `pnl` slice (task.0389).
- *   - PNL_NOT_IN_SNAPSHOT: `getSnapshotSlice` does not return any PnL field. Headline PnL on the wallet research surface is derived from `getPnlSlice` (Polymarket `user-pnl-api`) — single source, reconciles with the chart by construction.
+ *   - PNL_NOT_IN_SNAPSHOT: `getSnapshotSlice` does not return any PnL field. Headline PnL on the wallet research surface is derived from `getPnlSlice` (DB-backed `poly_trader_user_pnl_points`, written by the trader-observation tick) — single source, reconciles with the chart by construction.
+ *   - PAGE_LOAD_DB_ONLY (task.5012): `getPnlSlice` performs no outbound HTTP. The trader-observation job is the only writer to the user-pnl read model.
  *   - PARTIAL_FAILURE_NEVER_THROWS: each slice returns a `{ value | warning }` result; the route surfaces warnings without 5xx-ing.
  *   - CLOB_HISTORY_OPEN_ONLY: `getPriceHistory` is fetched only for open/redeemable positions; closed positions use trade-derived timelines only.
- * Side-effects: IO (Polymarket Data API + Polymarket CLOB public + Polymarket user-pnl).
+ * Side-effects: IO (Polymarket Data API + Polymarket CLOB public + DB read for user-pnl).
  * Notes: Cache is process-scoped — see `instrumentation.ts` single-replica boot assert.
  * Links: docs/design/wallet-analysis-components.md, nodes/poly/packages/market-provider/src/analysis/wallet-metrics.ts, nodes/poly/packages/node-contracts/src/poly.wallet-analysis.v1.contract.ts, nodes/poly/packages/node-contracts/src/poly.wallet.execution.v1.contract.ts
  * @public
@@ -450,26 +451,24 @@ export async function getBalanceSlice(
   }
 }
 
-/** Profit/loss slice — Polymarket-native user P/L history for any wallet. */
+/**
+ * Profit/loss slice — DB-backed Polymarket user P/L history. Reads from
+ * `poly_trader_user_pnl_points`; the trader-observation tick is the only
+ * caller that hits the live `/user-pnl` API. PAGE_LOAD_DB_ONLY (task.5012).
+ */
 export async function getPnlSlice(
+  db: Db,
   addr: string,
   interval: PolyWalletOverviewInterval
 ): Promise<SliceResult<WalletAnalysisPnl>> {
   const computedAt = new Date().toISOString();
   try {
-    const history = await coalesce(
-      `pnl:${addr}:${interval}`,
-      () =>
-        upstreamLimit(() =>
-          getTradingWalletPnlHistory({
-            address: addr as `0x${string}`,
-            interval,
-            capturedAt: computedAt,
-          })
-        ),
-      SLICE_TTL_MS
-    );
-
+    const history = await getTradingWalletPnlHistory({
+      db,
+      address: addr as `0x${string}`,
+      interval,
+      capturedAt: computedAt,
+    });
     return {
       kind: "ok",
       value: {

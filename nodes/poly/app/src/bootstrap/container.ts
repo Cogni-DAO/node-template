@@ -1040,7 +1040,7 @@ function createContainer(): Container {
       const { startTraderObservationJob } = await import(
         "@/bootstrap/jobs/trader-observation.job"
       );
-      const { PolymarketDataApiClient } = await import(
+      const { PolymarketDataApiClient, PolymarketUserPnlClient } = await import(
         "@cogni/poly-market-provider/adapters/polymarket"
       );
       const { noopMetrics: noopMetricsForObservation } = await import(
@@ -1053,6 +1053,7 @@ function createContainer(): Container {
           Record<string, unknown>
         >,
         client: new PolymarketDataApiClient(),
+        userPnlClient: new PolymarketUserPnlClient(),
         logger: observerLogger,
         metrics: noopMetricsForObservation,
       });

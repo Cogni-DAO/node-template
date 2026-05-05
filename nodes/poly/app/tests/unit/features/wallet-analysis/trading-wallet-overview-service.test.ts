@@ -1,65 +1,142 @@
 // SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
-import { PolymarketUserPnlClient } from "@cogni/poly-market-provider/adapters/polymarket";
+/**
+ * Module: `@features/wallet-analysis/server/trading-wallet-overview-service` tests
+ * Purpose: Unit coverage for the writer's two-fidelity ingest call sequence and
+ *          outbound-logger forwarding (task.5012). DB-shape coverage lives in
+ *          the component test under `tests/component/wallet-analysis/`.
+ * @internal
+ */
+
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   __setTradingWalletOverviewUserPnlClientForTests,
-  getTradingWalletPnlHistory,
+  fetchAndPersistTradingWalletPnlHistory,
 } from "@/features/wallet-analysis/server/trading-wallet-overview-service";
 
-function jsonResponse(body: unknown): Response {
-  return {
-    ok: true,
-    status: 200,
-    statusText: "OK",
-    json: async () => body,
-  } as unknown as Response;
+const WALLET = "0x1111111111111111111111111111111111111111" as const;
+const TRADER_WALLET_ID = "00000000-0000-0000-0000-000000000001";
+
+function fakeDbForInsertOnly() {
+  const insertCalls: Array<{ fidelity: string; rowCount: number }> = [];
+  const db = {
+    insert: vi.fn().mockReturnValue({
+      values: vi
+        .fn()
+        .mockImplementation((rows: Array<{ fidelity: string }>) => {
+          if (rows.length > 0) {
+            insertCalls.push({
+              fidelity: rows[0]!.fidelity,
+              rowCount: rows.length,
+            });
+          }
+          return {
+            onConflictDoUpdate: vi
+              .fn()
+              .mockResolvedValue({ rowCount: rows.length }),
+          };
+        }),
+    }),
+  } as unknown as Parameters<
+    typeof fetchAndPersistTradingWalletPnlHistory
+  >[0]["db"];
+  return { db, insertCalls };
 }
 
-describe("trading-wallet-overview-service", () => {
+describe("fetchAndPersistTradingWalletPnlHistory", () => {
   afterEach(() => {
     __setTradingWalletOverviewUserPnlClientForTests(undefined);
   });
 
-  it("filters all-history points down to YTD", async () => {
-    const userPnl = new PolymarketUserPnlClient({
-      fetch: vi.fn().mockResolvedValue(
-        jsonResponse([
-          { t: 1735776000, p: 10 },
-          { t: 1738368000, p: 20 },
-          { t: 1740787200, p: 30 },
-        ])
-      ) as unknown as typeof fetch,
+  it("ingests at both fidelities (`1h@1w` then `1d@all`)", async () => {
+    const fake = fakeDbForInsertOnly();
+    const getUserPnl = vi.fn(async (_wallet, params) => {
+      if (params.fidelity === "1h") {
+        return [
+          { t: 1_745_280_000, p: 1.2 },
+          { t: 1_745_283_600, p: 1.3 },
+        ];
+      }
+      return [{ t: 1_700_000_000, p: -2.5 }];
     });
-    __setTradingWalletOverviewUserPnlClientForTests(userPnl);
+    const fakeClient = { getUserPnl } as unknown as Parameters<
+      typeof fetchAndPersistTradingWalletPnlHistory
+    >[0]["client"];
 
-    const history = await getTradingWalletPnlHistory({
-      address: "0x1111111111111111111111111111111111111111",
-      interval: "YTD",
-      capturedAt: "2025-04-22T12:00:00.000Z",
+    const result = await fetchAndPersistTradingWalletPnlHistory({
+      db: fake.db,
+      traderWalletId: TRADER_WALLET_ID,
+      walletAddress: WALLET,
+      client: fakeClient,
     });
 
-    expect(history).toEqual([
-      { ts: "2025-01-02T00:00:00.000Z", pnl: 10 },
-      { ts: "2025-02-01T00:00:00.000Z", pnl: 20 },
-      { ts: "2025-03-01T00:00:00.000Z", pnl: 30 },
+    expect(getUserPnl).toHaveBeenCalledTimes(2);
+    expect(getUserPnl).toHaveBeenNthCalledWith(
+      1,
+      WALLET,
+      expect.objectContaining({ interval: "1w", fidelity: "1h" }),
+      undefined
+    );
+    expect(getUserPnl).toHaveBeenNthCalledWith(
+      2,
+      WALLET,
+      expect.objectContaining({ interval: "all", fidelity: "1d" }),
+      undefined
+    );
+    expect(fake.insertCalls).toEqual([
+      { fidelity: "1h", rowCount: 2 },
+      { fidelity: "1d", rowCount: 1 },
     ]);
+    expect(result.inserted).toBe(3);
+    expect(result.fidelities).toEqual(["1h", "1d"]);
   });
 
-  it("preserves honest empty histories", async () => {
-    const userPnl = new PolymarketUserPnlClient({
-      fetch: vi
-        .fn()
-        .mockResolvedValue(jsonResponse([])) as unknown as typeof fetch,
-    });
-    __setTradingWalletOverviewUserPnlClientForTests(userPnl);
+  it("forwards the outbound logger so PAGE_LOAD_DB_ONLY violations are observable", async () => {
+    const fake = fakeDbForInsertOnly();
+    const getUserPnl = vi.fn().mockResolvedValue([{ t: 1, p: 0 }]);
+    const fakeClient = { getUserPnl } as unknown as Parameters<
+      typeof fetchAndPersistTradingWalletPnlHistory
+    >[0]["client"];
+    const logger = { info: vi.fn() };
 
-    await expect(
-      getTradingWalletPnlHistory({
-        address: "0x1111111111111111111111111111111111111111",
-        interval: "1W",
+    await fetchAndPersistTradingWalletPnlHistory({
+      db: fake.db,
+      traderWalletId: TRADER_WALLET_ID,
+      walletAddress: WALLET,
+      client: fakeClient,
+      logger,
+      component: "trader-observation",
+    });
+
+    expect(getUserPnl).toHaveBeenCalledWith(
+      WALLET,
+      expect.any(Object),
+      expect.objectContaining({
+        logger,
+        component: "trader-observation",
       })
-    ).resolves.toEqual([]);
+    );
+  });
+
+  it("skips a fidelity when upstream returns no points", async () => {
+    const fake = fakeDbForInsertOnly();
+    const getUserPnl = vi.fn(async (_wallet, params) => {
+      return params.fidelity === "1h" ? [] : [{ t: 1, p: 0 }];
+    });
+    const fakeClient = { getUserPnl } as unknown as Parameters<
+      typeof fetchAndPersistTradingWalletPnlHistory
+    >[0]["client"];
+
+    const result = await fetchAndPersistTradingWalletPnlHistory({
+      db: fake.db,
+      traderWalletId: TRADER_WALLET_ID,
+      walletAddress: WALLET,
+      client: fakeClient,
+    });
+
+    expect(fake.insertCalls).toEqual([{ fidelity: "1d", rowCount: 1 }]);
+    expect(result.inserted).toBe(1);
+    expect(result.fidelities).toEqual(["1d"]);
   });
 });

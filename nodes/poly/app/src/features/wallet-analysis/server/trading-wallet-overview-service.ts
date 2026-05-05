@@ -3,25 +3,52 @@
 
 /**
  * Module: `@features/wallet-analysis/server/trading-wallet-overview-service`
- * Purpose: Read Polymarket's native user P/L history for the dashboard wallet
- *          card without implying wallet NAV history.
- * Scope: Read-only I/O only. No auth or HTTP concerns.
+ * Purpose: DB-backed read of saved Polymarket user-pnl points + writer that
+ *          ingests live `/user-pnl` into the same table from the observation tick.
+ * Scope: Read + write + retention helpers. Reader is page-load safe (no outbound
+ *        HTTP). Writer runs in poll/refresh jobs only.
  * Invariants:
- *   - PNL_NOT_NAV: the returned series is Polymarket P/L, not reconstructed
- *     wallet balance.
- *   - EMPTY_IS_HONEST: an empty upstream array is preserved as-is.
- * Side-effects: IO (Polymarket user-pnl API).
+ *   - PNL_NOT_NAV: the returned series is Polymarket P/L, not reconstructed wallet balance.
+ *   - EMPTY_IS_HONEST: zero stored points returns `[]` — readers do not fall back to live HTTP.
+ *   - PAGE_LOAD_DB_ONLY: `getTradingWalletPnlHistory` is a pure DB read; only `fetchAndPersist*` calls `/user-pnl`.
+ *   - INTERVAL_DERIVED_FROM_TIMESERIES: rows are stored at two fidelities; the reader picks the densest fidelity covering the requested window.
+ *   - FIDELITY_PLAN: writer ingests `1h@1w` and `1d@all`. Reader maps `1D`/`1W` → `1h` rows and `1M`/`1Y`/`YTD`/`ALL` → `1d` rows.
+ *   - DEDUPE_BY_TS: PK `(trader_wallet_id, fidelity, ts)`; re-poll upserts pnl + observed_at.
+ *   - RETENTION_BOUNDED: `1h` rows >35d pruned by the same job; `1d` kept indefinitely.
+ * Side-effects:
+ *   - Reader: DB read.
+ *   - Writer: IO (Polymarket user-pnl API) + DB upsert.
+ * Links: nodes/poly/packages/db-schema/src/trader-activity.ts, work/items/task.5012
  * @public
  */
 
 import {
+  polyTraderUserPnlPoints,
+  polyTraderWallets,
+} from "@cogni/poly-db-schema/trader-activity";
+import {
   PolymarketUserPnlClient,
   type PolymarketUserPnlPoint,
+  type UserPnlOutboundLogger,
 } from "@cogni/poly-market-provider/adapters/polymarket";
 import type {
   PolyWalletOverviewInterval,
   PolyWalletOverviewPnlPoint,
 } from "@cogni/poly-node-contracts";
+import { and, asc, eq, lt, sql } from "drizzle-orm";
+import type { NodePgDatabase } from "drizzle-orm/node-postgres";
+import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+
+type Db =
+  | NodePgDatabase<Record<string, unknown>>
+  | PostgresJsDatabase<Record<string, unknown>>;
+
+type Fidelity = "1h" | "1d";
+const HOUR_FIDELITY: Fidelity = "1h";
+const DAY_FIDELITY: Fidelity = "1d";
+
+/** `1h` rows older than this are pruned by the writer's tick. */
+const HOUR_FIDELITY_RETENTION_DAYS = 35;
 
 let userPnlClient: PolymarketUserPnlClient | undefined;
 
@@ -36,54 +63,144 @@ export function __setTradingWalletOverviewUserPnlClientForTests(
   userPnlClient = client;
 }
 
+/** DB-backed page-load read. Empty array when no rows are stored. */
 export async function getTradingWalletPnlHistory(input: {
+  db: Db;
   address: `0x${string}`;
   interval: PolyWalletOverviewInterval;
   capturedAt?: string;
 }): Promise<PolyWalletOverviewPnlPoint[]> {
   const capturedAt = input.capturedAt ?? new Date().toISOString();
-  const points = await getUserPnlClient().getUserPnl(input.address, {
-    interval: toUserPnlInterval(input.interval),
-    fidelity: toUserPnlFidelity(input.interval),
-  });
+  const fidelity = readFidelityForInterval(input.interval);
+  const wallet = await input.db
+    .select({ id: polyTraderWallets.id })
+    .from(polyTraderWallets)
+    .where(eq(polyTraderWallets.walletAddress, input.address.toLowerCase()))
+    .limit(1);
+  const traderWalletId = wallet[0]?.id;
+  if (!traderWalletId) return [];
 
+  const rows = await input.db
+    .select({
+      ts: polyTraderUserPnlPoints.ts,
+      pnlUsdc: polyTraderUserPnlPoints.pnlUsdc,
+    })
+    .from(polyTraderUserPnlPoints)
+    .where(
+      and(
+        eq(polyTraderUserPnlPoints.traderWalletId, traderWalletId),
+        eq(polyTraderUserPnlPoints.fidelity, fidelity)
+      )
+    )
+    .orderBy(asc(polyTraderUserPnlPoints.ts));
+
+  const points: PolymarketUserPnlPoint[] = rows.map((row) => ({
+    t: Math.floor(row.ts.getTime() / 1_000),
+    p: Number(row.pnlUsdc),
+  }));
   return filterPnlHistory(points, input.interval, capturedAt).map((point) => ({
     ts: new Date(point.t * 1_000).toISOString(),
     pnl: roundUsd(point.p),
   }));
 }
 
-function toUserPnlInterval(
-  interval: PolyWalletOverviewInterval
-): "1d" | "1w" | "1m" | "all" {
-  switch (interval) {
-    case "1D":
-      return "1d";
-    case "1W":
-      return "1w";
-    case "1M":
-      return "1m";
-    case "1Y":
-    case "YTD":
-    case "ALL":
-      return "all";
+/** Writer: fetch live `/user-pnl` at both fidelities for one wallet and upsert. */
+export async function fetchAndPersistTradingWalletPnlHistory(input: {
+  db: Db;
+  traderWalletId: string;
+  walletAddress: `0x${string}`;
+  client?: PolymarketUserPnlClient;
+  logger?: UserPnlOutboundLogger;
+  component?: string;
+}): Promise<{ inserted: number; fidelities: Fidelity[] }> {
+  const client = input.client ?? getUserPnlClient();
+  const plans: Array<{
+    fidelity: Fidelity;
+    interval: "1w" | "all";
+    upstreamFidelity: "1h" | "1d";
+  }> = [
+    { fidelity: HOUR_FIDELITY, interval: "1w", upstreamFidelity: "1h" },
+    { fidelity: DAY_FIDELITY, interval: "all", upstreamFidelity: "1d" },
+  ];
+
+  let inserted = 0;
+  const fidelities: Fidelity[] = [];
+  for (const plan of plans) {
+    const points = await client.getUserPnl(
+      input.walletAddress,
+      {
+        interval: plan.interval,
+        fidelity: plan.upstreamFidelity,
+      },
+      input.logger
+        ? {
+            logger: input.logger,
+            component: input.component ?? "trader-observation",
+          }
+        : undefined
+    );
+    if (points.length === 0) continue;
+    const rows = points.map((point) => ({
+      traderWalletId: input.traderWalletId,
+      fidelity: plan.fidelity,
+      ts: new Date(point.t * 1_000),
+      pnlUsdc: roundUsd(point.p).toFixed(8),
+    }));
+    await input.db
+      .insert(polyTraderUserPnlPoints)
+      .values(rows)
+      .onConflictDoUpdate({
+        target: [
+          polyTraderUserPnlPoints.traderWalletId,
+          polyTraderUserPnlPoints.fidelity,
+          polyTraderUserPnlPoints.ts,
+        ],
+        set: {
+          pnlUsdc: sql`excluded.pnl_usdc`,
+          observedAt: sql`now()`,
+        },
+      });
+    inserted += rows.length;
+    fidelities.push(plan.fidelity);
   }
+  return { inserted, fidelities };
 }
 
-function toUserPnlFidelity(
+/** Retention helper: prune `1h` rows older than 35 days. `1d` kept indefinitely. */
+export async function pruneOldTradingWalletPnlPoints(
+  db: Db
+): Promise<{ deleted: number }> {
+  const cutoff = new Date(
+    Date.now() - HOUR_FIDELITY_RETENTION_DAYS * 86_400_000
+  );
+  const result = await db
+    .delete(polyTraderUserPnlPoints)
+    .where(
+      and(
+        eq(polyTraderUserPnlPoints.fidelity, HOUR_FIDELITY),
+        lt(polyTraderUserPnlPoints.ts, cutoff)
+      )
+    );
+  // drizzle returns driver-specific shapes; cast loosely for postgres-js / node-postgres parity.
+  const rowCount =
+    (result as unknown as { rowCount?: number; count?: number }).rowCount ??
+    (result as unknown as { rowCount?: number; count?: number }).count ??
+    0;
+  return { deleted: rowCount };
+}
+
+function readFidelityForInterval(
   interval: PolyWalletOverviewInterval
-): "1h" | "3h" | "18h" | "1d" {
+): Fidelity {
   switch (interval) {
     case "1D":
-      return "1h";
     case "1W":
-      return "3h";
+      return HOUR_FIDELITY;
     case "1M":
-      return "18h";
     case "1Y":
     case "YTD":
     case "ALL":
-      return "1d";
+      return DAY_FIDELITY;
   }
 }
 
@@ -92,26 +209,33 @@ function filterPnlHistory(
   interval: PolyWalletOverviewInterval,
   capturedAtIso: string
 ): PolymarketUserPnlPoint[] {
-  if (
-    interval === "ALL" ||
-    interval === "1D" ||
-    interval === "1W" ||
-    interval === "1M"
-  ) {
-    return [...points];
-  }
+  if (interval === "ALL") return [...points];
 
   const capturedAtMs = new Date(capturedAtIso).getTime();
   if (!Number.isFinite(capturedAtMs)) return [...points];
 
-  if (interval === "1Y") {
-    const startMs = capturedAtMs - 365 * 86_400_000;
-    return points.filter((point) => point.t * 1_000 >= startMs);
-  }
+  const startMs = windowStartMs(interval, capturedAtMs);
+  return points.filter((point) => point.t * 1_000 >= startMs);
+}
 
-  const now = new Date(capturedAtMs);
-  const yearStartMs = Date.UTC(now.getUTCFullYear(), 0, 1);
-  return points.filter((point) => point.t * 1_000 >= yearStartMs);
+function windowStartMs(
+  interval: Exclude<PolyWalletOverviewInterval, "ALL">,
+  capturedAtMs: number
+): number {
+  switch (interval) {
+    case "1D":
+      return capturedAtMs - 86_400_000;
+    case "1W":
+      return capturedAtMs - 7 * 86_400_000;
+    case "1M":
+      return capturedAtMs - 30 * 86_400_000;
+    case "1Y":
+      return capturedAtMs - 365 * 86_400_000;
+    case "YTD": {
+      const now = new Date(capturedAtMs);
+      return Date.UTC(now.getUTCFullYear(), 0, 1);
+    }
+  }
 }
 
 function roundUsd(value: number): number {

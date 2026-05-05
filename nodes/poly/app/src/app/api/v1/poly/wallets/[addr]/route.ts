@@ -83,7 +83,9 @@ export const GET = wrapRouteHandlerWithLogging<{
     const wantDistributions = include.includes("distributions");
     const wantBenchmark = include.includes("benchmark");
     const serviceDb =
-      wantBenchmark || (wantDistributions && distributionMode === "historical")
+      wantBenchmark ||
+      wantPnl ||
+      (wantDistributions && distributionMode === "historical")
         ? (resolveServiceDb() as unknown as import("drizzle-orm/node-postgres").NodePgDatabase<
             Record<string, unknown>
           >)
@@ -97,7 +99,7 @@ export const GET = wrapRouteHandlerWithLogging<{
         wantSnapshot ? getSnapshotSlice(addr) : null,
         wantTrades ? getTradesSlice(addr) : null,
         wantBalance ? getBalanceSlice(addr) : null,
-        wantPnl ? getPnlSlice(addr, interval) : null,
+        wantPnl && serviceDb ? getPnlSlice(serviceDb, addr, interval) : null,
         wantDistributions
           ? getDistributionsSlice(addr, distributionMode, {
               db: serviceDb ?? undefined,

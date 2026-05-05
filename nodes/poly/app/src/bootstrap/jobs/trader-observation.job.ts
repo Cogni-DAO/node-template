@@ -14,7 +14,10 @@
  */
 
 import type { LoggerPort, MetricsPort } from "@cogni/poly-market-provider";
-import type { PolymarketDataApiClient } from "@cogni/poly-market-provider/adapters/polymarket";
+import type {
+  PolymarketDataApiClient,
+  PolymarketUserPnlClient,
+} from "@cogni/poly-market-provider/adapters/polymarket";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { runTraderObservationTick } from "@/features/wallet-analysis/server/trader-observation-service";
@@ -30,6 +33,7 @@ export type TraderObservationJobStopFn = () => void;
 export interface TraderObservationJobDeps {
   db: Db;
   client: PolymarketDataApiClient;
+  userPnlClient?: PolymarketUserPnlClient;
   logger: LoggerPort;
   metrics: MetricsPort;
   pollMs?: number;

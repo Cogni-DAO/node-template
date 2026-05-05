@@ -225,6 +225,7 @@ export const GET = wrapRouteHandlerWithLogging(
     if (freshness === "live") {
       try {
         pnlHistory = await getTradingWalletPnlHistory({
+          db: container.serviceDb,
           address: balances.address,
           interval,
           capturedAt,

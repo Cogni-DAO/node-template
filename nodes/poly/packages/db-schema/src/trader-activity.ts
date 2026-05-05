@@ -304,6 +304,33 @@ export const polyCopyTradeAttribution = pgTable(
   ]
 );
 
+export const polyTraderUserPnlPoints = pgTable(
+  "poly_trader_user_pnl_points",
+  {
+    traderWalletId: uuid("trader_wallet_id")
+      .notNull()
+      .references(() => polyTraderWallets.id, { onDelete: "cascade" }),
+    fidelity: text("fidelity").notNull(),
+    ts: timestamp("ts", { withTimezone: true }).notNull(),
+    pnlUsdc: numeric("pnl_usdc", { precision: 20, scale: 8 }).notNull(),
+    observedAt: timestamp("observed_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.traderWalletId, table.fidelity, table.ts] }),
+    check(
+      "poly_trader_user_pnl_points_fidelity_check",
+      sql`${table.fidelity} IN ('1h','1d')`
+    ),
+    index("poly_trader_user_pnl_points_read_idx").on(
+      table.traderWalletId,
+      table.fidelity,
+      table.ts
+    ),
+  ]
+);
+
 export const polyMarketOutcomes = pgTable(
   "poly_market_outcomes",
   {
@@ -338,3 +365,7 @@ export type PolyTraderCurrentPosition =
   typeof polyTraderCurrentPositions.$inferSelect;
 export type NewPolyTraderCurrentPosition =
   typeof polyTraderCurrentPositions.$inferInsert;
+export type PolyTraderUserPnlPoint =
+  typeof polyTraderUserPnlPoints.$inferSelect;
+export type NewPolyTraderUserPnlPoint =
+  typeof polyTraderUserPnlPoints.$inferInsert;
