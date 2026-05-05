@@ -3,21 +3,23 @@
 
 /**
  * Module: `@app/api/v1/work/items/[id]/route`
- * Purpose: HTTP endpoints for getting and patching a single work item by ID.
- * Scope: Auth-protected GET (markdown ∪ Doltgres routed by ID range) and PATCH (Doltgres only).
- * Invariants: VALIDATE_IO, CONTRACTS_ARE_TRUTH, AUTH_VIA_GETSESSIONUSER, PATCH_ALLOWLIST.
- * Side-effects: IO (HTTP response, filesystem read via port, Doltgres read/write)
- * Links: contracts/work.items.{get,patch}.v1.contract, work/items/task.0423.doltgres-work-items-source-of-truth.md
+ * Purpose: HTTP endpoints for getting, patching, and deleting a single work item by ID.
+ * Scope: Auth-protected GET (markdown ∪ Doltgres routed by ID range), PATCH (Doltgres only), and DELETE (Doltgres hard-delete with dolt_log audit).
+ * Invariants: VALIDATE_IO, CONTRACTS_ARE_TRUTH, AUTH_VIA_GETSESSIONUSER, PATCH_ALLOWLIST, HARD_DELETE_RECOVERABLE_VIA_DOLT_REVERT.
+ * Side-effects: IO (HTTP response, filesystem read via port, Doltgres read/write/delete)
+ * Links: contracts/work.items.{get,patch,delete}.v1.contract
  * @public
  */
 
 import {
+  workItemsDeleteOperation,
   workItemsGetOperation,
   workItemsPatchOperation,
 } from "@cogni/node-contracts";
 import { NextResponse } from "next/server";
 
 import {
+  deleteWorkItem,
   getWorkItem,
   patchWorkItem,
   WorkItemNotFoundError,
@@ -103,6 +105,57 @@ export const PATCH = wrapRouteHandlerWithLogging<{
       if (e instanceof WorkItemNotFoundError) {
         return NextResponse.json({ error: e.message }, { status: 404 });
       }
+      if (e instanceof WorkItemsBackendNotReadyError) {
+        return NextResponse.json({ error: e.message }, { status: 503 });
+      }
+      throw e;
+    }
+  }
+);
+
+/**
+ * DELETE /api/v1/work/items/:id — Hard-delete a work item from Doltgres.
+ *
+ * The deletion is captured as a dolt_log commit; recovery via dolt_revert
+ * remains available. Idempotent at the contract level: a missing id returns 404,
+ * not 500. Returns `{id, deleted: true}` on success.
+ */
+export const DELETE = wrapRouteHandlerWithLogging<{
+  params: Promise<{ id: string }>;
+}>(
+  { routeId: "work.items.delete", auth: { mode: "required", getSessionUser } },
+  async (ctx, _request, sessionUser, context) => {
+    if (!context) throw new Error("context required for dynamic routes");
+    if (!sessionUser) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
+
+    const { id } = await context.params;
+
+    const inputParse = workItemsDeleteOperation.input.safeParse({ id });
+    if (!inputParse.success) {
+      return NextResponse.json(
+        { error: "invalid input", issues: inputParse.error.issues },
+        { status: 400 }
+      );
+    }
+
+    try {
+      const deleted = await deleteWorkItem(id, {
+        id: sessionUser.id,
+        displayName: sessionUser.displayName,
+      });
+      if (!deleted) {
+        return NextResponse.json(
+          { error: `Work item not found: ${id}` },
+          { status: 404 }
+        );
+      }
+      ctx.log.info({ workItemId: id }, "work.items.delete_success");
+      return NextResponse.json(
+        workItemsDeleteOperation.output.parse({ id, deleted: true })
+      );
+    } catch (e) {
       if (e instanceof WorkItemsBackendNotReadyError) {
         return NextResponse.json({ error: e.message }, { status: 503 });
       }
