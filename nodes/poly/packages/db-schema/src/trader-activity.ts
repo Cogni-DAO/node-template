@@ -356,11 +356,16 @@ export const polyMarketOutcomes = pgTable(
 );
 
 /**
- * Cached Polymarket Gamma `/markets/<conditionId>` metadata. One row per
- * market. Written by the trader-observation tick whenever it touches a
- * `condition_id`; readers JOIN here for `endDate`, titles, and slugs instead
- * of scraping `poly_trader_current_positions.raw` JSONB. Single-source-of-
- * truth for market metadata across the dashboard.
+ * Cached Polymarket market metadata. One row per `condition_id`. Written by
+ * the trader-observation tick as a SQL projection of
+ * `poly_trader_current_positions.raw` (the `/positions` JSONB we already
+ * poll). Readers JOIN here for `endDate`, titles, and slugs instead of
+ * scraping the position JSONB directly. Single-source-of-truth for market
+ * metadata across the dashboard.
+ *
+ * Note: `event_title` is currently always NULL — `/positions` exposes
+ * `eventSlug`/`eventId` but not `eventTitle`. Populating it requires a
+ * follow-up event-id-keyed metadata source.
  *
  * @public
  */
@@ -373,11 +378,11 @@ export const polyMarketMetadata = pgTable(
     eventSlug: text("event_slug"),
     marketTitle: text("market_title"),
     marketSlug: text("market_slug"),
-    /** Resolution time published by Gamma. Null for markets without a fixed close. */
+    /** Market resolution time. Null for markets without a fixed close. */
     endDate: timestamp("end_date", { withTimezone: true }),
-    /** Full Gamma response preserved for forward-compatible field access. */
+    /** Full position blob preserved for forward-compatible field access. */
     raw: jsonb("raw").$type<Record<string, unknown>>(),
-    /** Wall-clock time of the most recent successful Gamma fetch. */
+    /** Wall-clock time of the most recent projection. */
     fetchedAt: timestamp("fetched_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

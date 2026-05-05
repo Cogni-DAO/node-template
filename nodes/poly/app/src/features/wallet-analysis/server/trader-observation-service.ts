@@ -196,26 +196,12 @@ export async function runTraderObservationTick(
     }
   }
 
-  // Sweep Polymarket Gamma metadata for every condition the tick has
-  // observed across all wallets. Single canonical write into
-  // `poly_market_metadata`; readers JOIN there instead of scraping
-  // `poly_trader_current_positions.raw->>'endDate'`. Soft-failures so a
-  // bad Gamma response never aborts the wallet observation tick.
+  // Project the latest /positions raw JSONB into `poly_market_metadata` so
+  // readers JOIN one canonical typed row per market instead of scraping
+  // `poly_trader_current_positions.raw->>'endDate'`. Pure SQL — no HTTP.
+  // Soft-failures so a projection error never aborts the wallet tick.
   try {
-    const conditionRows = await deps.db
-      .selectDistinct({
-        conditionId: polyTraderCurrentPositions.conditionId,
-      })
-      .from(polyTraderCurrentPositions);
-    const conditionIds = conditionRows
-      .map((row) => row.conditionId)
-      .filter((id): id is string => typeof id === "string" && id.length > 0);
-    await refreshMarketMetadata({
-      db: deps.db,
-      client: deps.client,
-      conditionIds,
-      logger: log,
-    });
+    await refreshMarketMetadata({ db: deps.db, logger: log });
   } catch (err: unknown) {
     log.warn(
       {
