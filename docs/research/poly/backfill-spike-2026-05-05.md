@@ -266,6 +266,49 @@ End-to-end run that proved the pipeline against the real candidate-a `cogni_poly
 
 **Conclusion of demo:** the writer side is functional. The full 1-year corpus for both wallets can be loaded with this same flow in **~30 min wall-clock** (12 monthly windows × 2 wallets). The dashboard will start consuming the corpus as CP2 / CP3 / CP4 / CP6 merge — backfilling more does not unblock those PRs, but having the corpus already resident means the user-facing render lights up the moment those readers ship.
 
+## Architecture: SQL-aggregated wallet-analysis readers (the as-built fix)
+
+The first reflex was a 25K-row `LIMIT` band-aid on the unbounded fill reads. Reviewer + Derek both rejected: silently truncates whales to 3 % of their corpus, defeating the backfill goal. The architectural fix is to **aggregate in SQL and never load raw fills into V8**. Shipped in this PR for the snapshot slice; same pattern routed for distributions / execution as follow-up CPs.
+
+### Snapshot — fully SQL-aggregated (this PR)
+
+`getSnapshotSlice` now issues three small aggregating queries, each bounded by output-row count not input-row count:
+
+| helper                         |                          output rows | drives                                                                                          |
+| ------------------------------ | -----------------------------------: | ----------------------------------------------------------------------------------------------- |
+| `readPositionAggregatesFromDb` | unique-market count (≤ ~14K for RN1) | resolved/wins/losses/openPositions/openNetCostUsdc/medianDurationHours/uniqueMarkets/topMarkets |
+| `readDailyCountsFromDb`        |     ≤ 14 (one per UTC day in window) | dailyCounts                                                                                     |
+| `readActivityCountsFromDb`     |                                    1 | tradesPerDay30d, daysSinceLastTrade                                                             |
+
+Composer `composeSnapshotFromAggregates` mirrors the per-position math from `computeWalletMetrics` (lines 147–254 of `wallet-metrics.ts`) but operates on already-aggregated rows. Output is bit-equivalent to the JS function for the fields snapshot surfaces. `O(uniqueMarkets)` instead of `O(fills)` — scales to billions of fills.
+
+Unit test asserts a wallet with 100,000 distinct positions returns `kind: "ok"` with `uniqueMarkets: 100_000` — no truncation, no OOM.
+
+### Execution — SQL-bounded by current-position set (this PR)
+
+`getExecutionSlice` now reads fills via `readFillsForActivePositionsFromDb`, which filters at the SQL level: `WHERE condition_id IN (SELECT condition_id FROM poly_trader_current_positions WHERE trader_wallet_id = $)`. Bound by ≈ EXECUTION_OPEN_LIMIT + EXECUTION_HISTORY_LIMIT (~48 markets) regardless of total wallet fill count. The slice only renders per-position trade timelines for displayed positions, so fills outside that set were dead weight anyway. **Architecturally correct, no truncation cap.**
+
+### Distributions — temporary 25K cap (CP9)
+
+`getDistributionsSlice` still calls JS `summariseOrderFlow`, which computes per-fill histograms (`width_bucket` candidates) and per-group quantiles. Until that helper is rewritten against SQL `width_bucket` + `PERCENTILE_DISC`, the slice keeps a temporary 25K most-recent-fills cap (`DISTRIBUTIONS_FILLS_LIMIT_TODO_CP9`). Same memory shape as `getTradesSlice`'s 500-row silent cap. Marked `_TODO_CP9` so the constant grep-finds the follow-up. **Scope discipline: this PR ships the architectural pattern on snapshot + execution; distributions follows in a focused PR using the same recipe.**
+
+### Pattern recipe for CP9 (distributions) and beyond
+
+1. List the per-fill operations in the JS function (e.g. histograms, quantiles).
+2. For each, write a SQL aggregator returning bucketed counts/sums (`width_bucket` for histograms, `PERCENTILE_DISC` for quantiles, GROUP BY for group-level metrics).
+3. Write a small composer that reshapes the SQL results into the existing output type — no input from raw fills.
+4. Replace the slice body's `await readFills(...)` + `summariseOrderFlow(fills, ...)` with `await Promise.all([sqlAggs])` + `composeFromAggregates(...)`.
+5. Update tests with a `makeSqlAggregateFakeDb` that injects canned aggregate rows in call order.
+
+Snapshot's implementation in this PR is the reference: ~200 LOC of SQL + composer; pure unit-testable composer; integration via canned fake DB.
+
+### Rejected (band-aids and half-measures)
+
+- ❌ **25K LIMIT cap on raw-fill reads** (initial reflex). Silently shows 3 % of RN1 as the whole picture. Defeats the backfill goal.
+- ❌ **Bump `--max-old-space-size` to Tier 1** (768 MB). Buys a quarter-decade. Next backfill (5M-fill wallet) breaks again. Symptom, not cause.
+- ❌ **Stream raw fills via `pg` cursor + JS fold**. Same number of bytes traversed; quantiles can't stream cleanly. SQL aggregation is the same answer with less code.
+- ❌ **DELETE the spike.5024 backfill rows from candidate-a**. Loses the corpus and doesn't fix the underlying defect — the next backfill of any 100K+ wallet trips the same OOM unless the slice queries are bounded.
+
 ## Incident: OOM on RN1 dashboard after 825K-row backfill (2026-05-05 evening)
 
 After CP2–CP6 flighted to candidate-a, every wallet-analysis slice on `/research/w/RN1` returned 502. Loki:
