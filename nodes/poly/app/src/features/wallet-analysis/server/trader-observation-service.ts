@@ -42,6 +42,7 @@ import {
 import { and, eq, inArray, isNull, lt, notInArray, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { refreshMarketMetadata } from "./poly-market-metadata-service";
 import {
   fetchAndPersistTradingWalletPnlHistory,
   pruneOldTradingWalletPnlPoints,
@@ -193,6 +194,23 @@ export async function runTraderObservationTick(
         "trader user-pnl prune failed"
       );
     }
+  }
+
+  // Project the latest /positions raw JSONB into `poly_market_metadata` so
+  // readers JOIN one canonical typed row per market instead of scraping
+  // `poly_trader_current_positions.raw->>'endDate'`. Pure SQL — no HTTP.
+  // Soft-failures so a projection error never aborts the wallet tick.
+  try {
+    await refreshMarketMetadata({ db: deps.db, logger: log });
+  } catch (err: unknown) {
+    log.warn(
+      {
+        event: "poly.trader.observe",
+        phase: "market_metadata_error",
+        err: err instanceof Error ? err.message : String(err),
+      },
+      "market metadata refresh failed"
+    );
   }
 
   log.info(

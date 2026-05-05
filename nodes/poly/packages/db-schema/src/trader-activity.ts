@@ -355,6 +355,44 @@ export const polyMarketOutcomes = pgTable(
   ]
 );
 
+/**
+ * Cached Polymarket market metadata. One row per `condition_id`. Written by
+ * the trader-observation tick as a SQL projection of
+ * `poly_trader_current_positions.raw` (the `/positions` JSONB we already
+ * poll). Readers JOIN here for `endDate`, titles, and slugs instead of
+ * scraping the position JSONB directly. Single-source-of-truth for market
+ * metadata across the dashboard.
+ *
+ * Note: `event_title` is currently always NULL — `/positions` exposes
+ * `eventSlug`/`eventId` but not `eventTitle`. Populating it requires a
+ * follow-up event-id-keyed metadata source.
+ *
+ * @public
+ */
+export const polyMarketMetadata = pgTable(
+  "poly_market_metadata",
+  {
+    /** Polymarket conditionId; same shape used across all poly tables. */
+    conditionId: text("condition_id").primaryKey(),
+    eventTitle: text("event_title"),
+    eventSlug: text("event_slug"),
+    marketTitle: text("market_title"),
+    marketSlug: text("market_slug"),
+    /** Market resolution time. Null for markets without a fixed close. */
+    endDate: timestamp("end_date", { withTimezone: true }),
+    /** Full position blob preserved for forward-compatible field access. */
+    raw: jsonb("raw").$type<Record<string, unknown>>(),
+    /** Wall-clock time of the most recent projection. */
+    fetchedAt: timestamp("fetched_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("poly_market_metadata_event_slug_idx").on(table.eventSlug),
+    index("poly_market_metadata_end_date_idx").on(table.endDate),
+  ]
+);
+
 export const polyMarketPriceHistory = pgTable(
   "poly_market_price_history",
   {
@@ -400,3 +438,5 @@ export type PolyMarketPriceHistoryPoint =
   typeof polyMarketPriceHistory.$inferSelect;
 export type NewPolyMarketPriceHistoryPoint =
   typeof polyMarketPriceHistory.$inferInsert;
+export type PolyMarketMetadata = typeof polyMarketMetadata.$inferSelect;
+export type NewPolyMarketMetadata = typeof polyMarketMetadata.$inferInsert;
