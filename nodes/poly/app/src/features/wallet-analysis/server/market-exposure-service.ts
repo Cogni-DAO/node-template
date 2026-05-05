@@ -17,12 +17,20 @@
  *   - SERVER_SIDE_PIVOT: per-participant primary/hedge/net shape is computed
  *     here, never client-side. Same shape will feed Research views once
  *     `poly_market_outcomes` is populated.
- *   - LIFECYCLE_IS_ACTIVE_UNTIL_OUTCOMES_LAND: every leg is emitted with
- *     `lifecycle: "active"` because we only see currently-held positions
- *     here. Once `poly_market_outcomes` is populated (handoff item #4),
- *     resolved legs get joined in to promote `active` → `winner`/`loser`/
- *     `resolved`. The enum slot is reserved for that backfill.
- * Side-effects: DB read for copy-target current positions.
+ *   - ATTRIBUTION_OUTLIVES_TARGET_EXIT: every (target, condition) we ever
+ *     mirrored via `poly_copy_trade_fills` surfaces as a participant on the
+ *     market group, even after the target wallet has exited. Exited legs are
+ *     emitted with zero shares/value and `lifecycle: "inactive"` so the
+ *     dashboard can show "we copied this from <target>" for every position
+ *     we still hold. Set 1 (current target positions) merges with Set 2
+ *     (attribution-only legs) via UNION; NOT EXISTS prevents duplicates.
+ *   - SERVER_SIDE_LIFECYCLE: legs from `poly_trader_current_positions` are
+ *     emitted as `lifecycle: "active"`. Attribution-only legs are
+ *     `lifecycle: "inactive"`. Once `poly_market_outcomes` is populated
+ *     (handoff item #4), resolved legs get joined in to promote
+ *     `active`/`inactive` → `winner`/`loser`/`resolved`.
+ * Side-effects: DB read for copy-target current positions + copy-trade fills
+ *   (attribution).
  * Links: docs/design/poly-dashboard-market-aggregation.md,
  *        docs/design/poly-hedge-followup-policy.md,
  *        .context/market-aggregation-research-handoff.md
@@ -80,6 +88,7 @@ type TargetPositionRow = {
   current_value_usdc: string | number | null;
   avg_price: string | number | null;
   last_observed_at: Date | string | null;
+  lifecycle: string | null;
 };
 
 export async function buildMarketExposureGroups(params: {
@@ -145,6 +154,7 @@ async function readTargetLegs(params: {
     WITH active_targets AS (
       SELECT
         lower(t.target_wallet) AS wallet_address,
+        t.id AS copy_target_id,
         w.id AS trader_wallet_id,
         COALESCE(NULLIF(w.label, ''), 'Copy target') AS label
       FROM poly_copy_trade_targets t
@@ -152,28 +162,74 @@ async function readTargetLegs(params: {
       WHERE t.billing_account_id = ${params.billingAccountId}
         AND t.disabled_at IS NULL
         AND w.disabled_at IS NULL
+    ),
+    current_legs AS (
+      SELECT
+        a.wallet_address,
+        a.label,
+        a.trader_wallet_id,
+        p.condition_id,
+        p.token_id,
+        COALESCE(NULLIF(p.raw->>'title', ''), 'Polymarket') AS market_title,
+        NULLIF(p.raw->>'eventTitle', '') AS event_title,
+        NULLIF(p.raw->>'slug', '') AS market_slug,
+        NULLIF(p.raw->>'eventSlug', '') AS event_slug,
+        COALESCE(NULLIF(p.raw->>'outcome', ''), 'UNKNOWN') AS outcome,
+        p.shares::numeric AS shares,
+        p.cost_basis_usdc::numeric AS cost_basis_usdc,
+        p.current_value_usdc::numeric AS current_value_usdc,
+        p.avg_price::numeric AS avg_price,
+        p.last_observed_at,
+        'active'::text AS lifecycle
+      FROM poly_trader_current_positions p
+      JOIN active_targets a ON a.trader_wallet_id = p.trader_wallet_id
+      WHERE p.active = true
+        AND p.current_value_usdc > 0
+        AND p.condition_id IN (${conditionList})
+    ),
+    attribution_legs AS (
+      SELECT DISTINCT
+        a.wallet_address,
+        a.label,
+        a.trader_wallet_id,
+        f.market_id AS condition_id,
+        f.market_id AS token_id,
+        'Polymarket'::text AS market_title,
+        NULL::text AS event_title,
+        NULL::text AS market_slug,
+        NULL::text AS event_slug,
+        'UNKNOWN'::text AS outcome,
+        0::numeric AS shares,
+        0::numeric AS cost_basis_usdc,
+        0::numeric AS current_value_usdc,
+        NULL::numeric AS avg_price,
+        NULL::timestamptz AS last_observed_at,
+        'inactive'::text AS lifecycle
+      FROM active_targets a
+      JOIN poly_copy_trade_fills f ON f.target_id = a.copy_target_id
+      WHERE f.billing_account_id = ${params.billingAccountId}
+        AND f.market_id IN (${conditionList})
+        AND f.status IN ('filled', 'partial', 'open')
+        AND NOT EXISTS (
+          SELECT 1 FROM current_legs cl
+          WHERE cl.trader_wallet_id = a.trader_wallet_id
+            AND cl.condition_id = f.market_id
+        )
     )
     SELECT
-      a.wallet_address,
-      a.label,
-      p.condition_id,
-      p.token_id,
-      COALESCE(NULLIF(p.raw->>'title', ''), 'Polymarket') AS market_title,
-      NULLIF(p.raw->>'eventTitle', '') AS event_title,
-      NULLIF(p.raw->>'slug', '') AS market_slug,
-      NULLIF(p.raw->>'eventSlug', '') AS event_slug,
-      COALESCE(NULLIF(p.raw->>'outcome', ''), 'UNKNOWN') AS outcome,
-      p.shares::numeric AS shares,
-      p.cost_basis_usdc::numeric AS cost_basis_usdc,
-      p.current_value_usdc::numeric AS current_value_usdc,
-      p.avg_price::numeric AS avg_price,
-      p.last_observed_at
-    FROM poly_trader_current_positions p
-    JOIN active_targets a ON a.trader_wallet_id = p.trader_wallet_id
-    WHERE p.active = true
-      AND p.current_value_usdc > 0
-      AND p.condition_id IN (${conditionList})
-    ORDER BY p.current_value_usdc DESC
+      wallet_address, label, condition_id, token_id, market_title,
+      event_title, market_slug, event_slug, outcome,
+      shares, cost_basis_usdc, current_value_usdc, avg_price,
+      last_observed_at, lifecycle
+    FROM current_legs
+    UNION ALL
+    SELECT
+      wallet_address, label, condition_id, token_id, market_title,
+      event_title, market_slug, event_slug, outcome,
+      shares, cost_basis_usdc, current_value_usdc, avg_price,
+      last_observed_at, lifecycle
+    FROM attribution_legs
+    ORDER BY current_value_usdc DESC
   `)) as unknown as TargetPositionRow[];
 
   return rows.flatMap((row) => {
@@ -187,6 +243,8 @@ async function readTargetLegs(params: {
     const shares = toNumber(row.shares);
     const costBasisUsdc = toNumber(row.cost_basis_usdc);
     const avgPrice = nullableNumber(row.avg_price);
+    const lifecycle: WalletExecutionMarketLeg["lifecycle"] =
+      row.lifecycle === "inactive" ? "inactive" : "active";
     return [
       {
         side: "copy_target",
@@ -205,7 +263,7 @@ async function readTargetLegs(params: {
         currentValueUsdc: toNumber(row.current_value_usdc),
         vwap: positionVwap(costBasisUsdc, shares, avgPrice),
         avgPrice,
-        lifecycle: "active" as const,
+        lifecycle,
         lastObservedAt: isoOrNull(row.last_observed_at),
       },
     ];
