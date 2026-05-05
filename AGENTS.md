@@ -31,10 +31,12 @@ Two named human stops: `needs_review` post-`/design`, `needs_human_qa` post-flig
 - **Goal-driven execution.** Up front, with the user, identify the before/after I/O that will be clearly testable by a human or an agent. Before closing the work item, you must be able to prove the starting goal is met.
 - **Clean architecture.** Hexagonal layering. Strongly-typed boundaries (Zod). Systemic observability (Pino → Loki). Idempotent operations. Strict typing — no `any`.
 - **Purge legacy.** Backwards-compat shims are debt unless the user explicitly asks for them.
+- **Clarity, conciseness, syntropy.** Code and prose alike — fewer words, sharper meaning, aligned with what already exists. Entropy creeps in through volume.
 
 ## Anti-patterns
 
 - Adding backwards-compatibility unless specifically user-instructed. Purge legacy in place.
+- Inline comments narrating _what_ code does, or verbose prose. More text, more entropy — names + types are the docs.
 
 ## Pointers
 
