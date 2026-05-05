@@ -536,6 +536,59 @@ describe("poly wallet dashboard DB read routes", () => {
     );
   });
 
+  it("execution returns all live current-position rows", async () => {
+    mockListTenantPositions.mockResolvedValue([]);
+    mockCurrentPositionModel(
+      Array.from({ length: 100 }, (_, index) =>
+        makeCurrentExecutionPosition({
+          positionId: `open:${index}`,
+          conditionId: `0x${String(index + 1).padStart(64, "0")}`,
+          asset: `open-token-${index}`,
+          marketTitle: `Open market ${index}`,
+          currentValue: index + 1,
+        })
+      )
+    );
+    const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/poly/wallet/execution")
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.live_positions).toHaveLength(100);
+    expect(json.closed_positions).toEqual([]);
+  });
+
+  it("execution caps closed history rows from the current-position read model", async () => {
+    mockListTenantPositions.mockResolvedValue([]);
+    mockCurrentPositionModel(
+      Array.from({ length: 40 }, (_, index) =>
+        makeCurrentExecutionPosition({
+          positionId: `closed:${index}`,
+          conditionId: `0x${String(index + 1).padStart(64, "0")}`,
+          asset: `closed-token-${index}`,
+          marketTitle: `Closed market ${index}`,
+          status: "closed",
+          lifecycleState: "redeemed",
+          currentValue: 0,
+          closedAt: new Date(Date.now() - index * 60_000).toISOString(),
+        })
+      )
+    );
+    const { GET } = await import("@/app/api/v1/poly/wallet/execution/route");
+
+    const response = await GET(
+      new Request("http://localhost/api/v1/poly/wallet/execution")
+    );
+    const json = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(json.live_positions).toEqual([]);
+    expect(json.closed_positions).toHaveLength(30);
+  });
+
   it("execution read-model freshness skips live Polymarket positions", async () => {
     mockGetExecutionSlice.mockResolvedValue({
       address: FUNDER,
@@ -1483,7 +1536,11 @@ describe("poly wallet dashboard DB read routes", () => {
   });
 
   it("refresh keeps Data API-omitted above-floor chain balances actionable without writing shares as USDC", async () => {
-    mockListPositions.mockResolvedValue([]);
+    mockRefreshCurrentPositionsForWallet.mockResolvedValue({
+      positions: [],
+      positionRows: 0,
+      complete: true,
+    });
     mockListTenantPositions.mockResolvedValue([
       {
         ...row,
