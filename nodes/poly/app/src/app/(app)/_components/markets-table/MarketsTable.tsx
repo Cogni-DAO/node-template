@@ -53,8 +53,11 @@ import { Toggle } from "@/components/vendor/shadcn/toggle";
 
 import { makeColumns } from "./columns";
 
-/** Group is an "alpha leak": we are red, target is green. */
-function isAlphaLeak(group: WalletExecutionMarketGroup): boolean {
+/**
+ * Group is an "alpha leak": we are red, target is green.
+ * Exported so the predicate can be unit-tested without rendering React.
+ */
+export function isAlphaLeak(group: WalletExecutionMarketGroup): boolean {
   // edgeGapUsdc = targetPnl − ourPnl. So targetPnl = ourPnl + edgeGapUsdc.
   const targetPnl = group.pnlUsd + group.edgeGapUsdc;
   return group.pnlUsd < 0 && targetPnl > 0;
@@ -86,14 +89,13 @@ export function MarketsTable({
 }: MarketsTableProps): ReactElement {
   const allGroups = useMemo(() => (groups ? Array.from(groups) : []), [groups]);
   const [alphaLeakOnly, setAlphaLeakOnly] = useState(false);
-  const data = useMemo(
-    () => (alphaLeakOnly ? allGroups.filter(isAlphaLeak) : allGroups),
-    [allGroups, alphaLeakOnly]
-  );
-  const alphaLeakCount = useMemo(
-    () => allGroups.filter(isAlphaLeak).length,
-    [allGroups]
-  );
+  const { data, alphaLeakCount } = useMemo(() => {
+    const leaks = allGroups.filter(isAlphaLeak);
+    return {
+      data: alphaLeakOnly ? leaks : allGroups,
+      alphaLeakCount: leaks.length,
+    };
+  }, [allGroups, alphaLeakOnly]);
 
   const columns = useMemo(() => makeColumns(), []);
 
@@ -148,6 +150,7 @@ export function MarketsTable({
           variant="outline"
           pressed={alphaLeakOnly}
           onPressedChange={setAlphaLeakOnly}
+          disabled={isLoading || allGroups.length === 0}
           aria-label="Show only markets where we lost and the copy target won"
           title="Markets where we are red and the copy target is green"
           className="gap-1.5"
