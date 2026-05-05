@@ -67,7 +67,6 @@ For CI failures, use `env="ci"`:
 
    App + infra (host alloy ships Compose container stdout, allow-listed via
    `infra/compose/runtime/configs/alloy-config.{,metrics.}alloy`):
-
    - app pods: `app`, `scheduler-worker`, `migrate`, `migrate-doltgres`
    - infra/compose: `litellm`, `caddy`, `temporal`, `autoheal`, `db-backup`,
      `openclaw-gateway`, `llm-proxy-openclaw`, `alloy-k8s-events`
