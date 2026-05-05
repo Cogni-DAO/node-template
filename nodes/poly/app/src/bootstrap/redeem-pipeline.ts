@@ -277,7 +277,10 @@ async function startOneTenantPipeline(
   const catchupTimer = setInterval(() => {
     if (catchupInFlight) {
       log.warn(
-        { event: "poly.ctf.redeem.catchup_tick_skipped", reason: "in_flight" },
+        {
+          event: EVENT_NAMES.POLY_REDEEM_CATCHUP_TICK_SKIPPED,
+          reason: "in_flight",
+        },
         "redeem pipeline: skipping periodic catchup tick; previous run still in flight"
       );
       return;
