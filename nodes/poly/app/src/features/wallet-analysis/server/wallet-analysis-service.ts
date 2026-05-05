@@ -21,6 +21,7 @@
  */
 
 import {
+  polyMarketMetadata,
   polyMarketOutcomes,
   polyTraderCurrentPositions,
   polyTraderFills,
@@ -70,11 +71,11 @@ const SNAPSHOT_DAILY_WINDOW = 14;
 /** Top-markets count returned by `getSnapshotSlice`. */
 const SNAPSHOT_TOP_MARKETS = 4;
 /**
- * Overfetch buffer for the title-fetch query: we read titles for
- * `SNAPSHOT_TOP_MARKETS + this` candidate cids so the displayed list still
- * reaches `SNAPSHOT_TOP_MARKETS` even if a few candidate rows in
- * `poly_trader_current_positions` lack a title (e.g. a fill landed before
- * the trader-observation tick wrote that wallet's positions).
+ * Overfetch buffer for the title-fetch query: we look up titles for
+ * `SNAPSHOT_TOP_MARKETS + this` candidate cids in `poly_market_metadata` so
+ * the displayed list still reaches `SNAPSHOT_TOP_MARKETS` even if a few
+ * candidate cids haven't been projected yet (cold-start window between
+ * trader-observation tick writing fills and `refreshMarketMetadata` running).
  */
 const SNAPSHOT_TOP_MARKETS_OVERFETCH = 8;
 /**
@@ -252,14 +253,14 @@ export async function getSnapshotSlice(
     const cids = [...new Set(positions.map((p) => p.conditionId))];
     // Pick the most-recent candidate condition_ids for `topMarkets`; overfetch
     // a small buffer so the displayed list still reaches `topLimit` even when
-    // a few candidates have a missing title in current_positions.raw.
+    // a few candidates haven't been projected into poly_market_metadata yet.
     const topCidCandidates = pickTopMarketCandidateCids(
       positions,
       SNAPSHOT_TOP_MARKETS + SNAPSHOT_TOP_MARKETS_OVERFETCH
     );
     const [resolutions, titles] = await Promise.all([
       readResolutionsForConditions(db, cids),
-      readMarketTitlesForConditions(db, lower, topCidCandidates),
+      readMarketTitlesForConditions(db, topCidCandidates),
     ]);
 
     const m = composeSnapshotFromAggregates({
@@ -361,11 +362,11 @@ export async function getDistributionsSlice(
  * fill stream to a few thousand position rows before we ever touch JS heap.
  *
  * Numeric-only by design — the per-position market title is sourced from
- * `poly_trader_current_positions` (the wallet-scoped, bounded state store
- * written by the trader-observation tick), not from this fill-stream
- * aggregate. Pulling `MAX(raw->'attributes'->>'title')` here forced a full
- * TOAST-decompressed jsonb scan over every fill (~500 MB / 33 s on RN1's
- * 836 K rows) just to surface 4 strings — see `readMarketTitlesForConditions`.
+ * `poly_market_metadata` (the canonical per-conditionId metadata store, task
+ * 1265), not from this fill-stream aggregate. Pulling
+ * `MAX(raw->'attributes'->>'title')` here forced a full TOAST-decompressed
+ * jsonb scan over every fill (~500 MB / 33 s on RN1's 836 K rows) just to
+ * surface 4 strings — see `readMarketTitlesForConditions`.
  *
  * Exported for the parity test that asserts `composeSnapshotFromAggregates`
  * stays output-equivalent to `computeWalletMetrics` for the snapshot fields.
@@ -420,43 +421,30 @@ async function readPositionAggregatesFromDb(
 }
 
 /**
- * Resolve market titles for the given conditionIds from the wallet-scoped,
- * bounded `poly_trader_current_positions` table — the trader-observation
- * tick's canonical per-(wallet, condition, token) state store, written via
- * Polymarket Data API and persisted with `active=false` rows for closed
- * positions. Reading titles from here avoids:
- *   1. scanning the fill stream (`poly_trader_fills` is `O(fills)` per
- *      wallet — millions of rows),
- *   2. any heuristic recency window on `observed_at`.
+ * Resolve display titles for the given conditionIds from `poly_market_metadata`
+ * — the canonical per-conditionId metadata store written by `refreshMarketMetadata`
+ * (task 1265). One row per conditionId (PK), independent of wallet, so the IN-list
+ * reads exactly `conditionIds.length` rows.
  *
- * The query uses the primary key `(trader_wallet_id, condition_id, token_id)`,
- * so the IN-list reads exactly `O(candidates × tokens_per_market)` rows
- * (≈ 2 per cid). MAX collapses the two token rows of a binary market to one
- * title.
- *
- * The Polymarket Data API position payload stores the market title at
- * `raw->>'title'` (top-level), unlike the trade payload which nests it under
- * `attributes`. COALESCE both paths to stay robust if the upstream shape ever
- * shifts; mirrors the read shape used by `dbPositionToUserPosition`.
+ * Prefers `event_title` (parent event, e.g. "ATP Madrid R32") over `market_title`
+ * (the specific bet, e.g. "Shevche vs Added") because event titles are more
+ * readable for the snapshot's `topMarkets` headline; falls back to market_title
+ * when the row is missing event_title (the bug.5018 condition until that ships).
  */
 async function readMarketTitlesForConditions(
   db: Db,
-  walletAddrLower: string,
   conditionIds: ReadonlyArray<string>
 ): Promise<Map<string, string>> {
   if (conditionIds.length === 0) return new Map();
   const rows = (await db.execute(sql`
     SELECT
-      cp.condition_id AS "conditionId",
-      MAX(COALESCE(cp.raw->>'title', cp.raw->'attributes'->>'title')) AS "title"
-    FROM ${polyTraderCurrentPositions} cp
-    INNER JOIN ${polyTraderWallets} w ON w.id = cp.trader_wallet_id
-    WHERE w.wallet_address = ${walletAddrLower}
-      AND cp.condition_id IN (${sql.join(
-        conditionIds.map((c) => sql`${c}`),
-        sql`, `
-      )})
-    GROUP BY cp.condition_id
+      condition_id AS "conditionId",
+      COALESCE(NULLIF(event_title, ''), NULLIF(market_title, '')) AS "title"
+    FROM ${polyMarketMetadata}
+    WHERE condition_id IN (${sql.join(
+      conditionIds.map((c) => sql`${c}`),
+      sql`, `
+    )})
   `)) as unknown as { rows?: Array<Record<string, unknown>> };
   const list = Array.isArray(rows) ? rows : (rows.rows ?? []);
   const out = new Map<string, string>();
@@ -613,8 +601,8 @@ export function composeSnapshotFromAggregates(input: {
 
   // topMarkets: most-recently-touched conditionId, dedup'd by conditionId, capped.
   // Titles come from `input.titles` (resolved by `readMarketTitlesForConditions`
-  // against the wallet-scoped `poly_trader_current_positions` table) — keeps
-  // this composer pure and the hot aggregate path free of jsonb reads.
+  // against `poly_market_metadata`) — keeps this composer pure and the hot
+  // aggregate path free of jsonb reads.
   const byRecent = [...input.positions].sort((a, b) => b.lastTs - a.lastTs);
   const topMarkets: string[] = [];
   const seenCond = new Set<string>();
