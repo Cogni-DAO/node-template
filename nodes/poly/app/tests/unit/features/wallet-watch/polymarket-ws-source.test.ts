@@ -335,6 +335,182 @@ describe("createPolymarketWsActivitySource", () => {
     source.stop();
   });
 
+  it("safety-net drains when stale even with no WS wakeup", async () => {
+    // SAFETY_NET_DRAIN — without this, a target's first BUY into a market
+    // they don't already hold would not be detected for up to one
+    // asset-refresh interval (60s default), a regression vs the polling
+    // source. The safety net bounds worst-case detection latency.
+    vi.useFakeTimers();
+    const ws = makeFakeWs();
+    let drainCount = 0;
+    const client = {
+      async listUserPositions() {
+        return [makePosition(ASSET_ID)];
+      },
+      async listUserActivity() {
+        drainCount += 1;
+        return [];
+      },
+    } as unknown as PolymarketDataApiClient;
+    const source = createPolymarketWsActivitySource({
+      client,
+      ws,
+      wallet: TARGET_WALLET,
+      logger: noopLogger,
+      metrics: createRecordingMetrics(),
+      safetyNetDrainIntervalMs: 30_000,
+      heartbeatIntervalMs: 0,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    // Cold-start drain.
+    await source.fetchSince(0);
+    expect(drainCount).toBe(1);
+
+    // Within the safety-net window, no wake → fast path.
+    await vi.advanceTimersByTimeAsync(20_000);
+    await source.fetchSince(0);
+    expect(drainCount).toBe(1);
+
+    // Past the safety-net threshold, still no wake → forced drain.
+    await vi.advanceTimersByTimeAsync(15_000);
+    await source.fetchSince(0);
+    expect(drainCount).toBe(2);
+
+    source.stop();
+  });
+
+  it("WS wake resets the safety-net staleness clock", async () => {
+    vi.useFakeTimers();
+    const ws = makeFakeWs();
+    let drainCount = 0;
+    const client = {
+      async listUserPositions() {
+        return [makePosition(ASSET_ID)];
+      },
+      async listUserActivity() {
+        drainCount += 1;
+        return [];
+      },
+    } as unknown as PolymarketDataApiClient;
+    const source = createPolymarketWsActivitySource({
+      client,
+      ws,
+      wallet: TARGET_WALLET,
+      logger: noopLogger,
+      metrics: createRecordingMetrics(),
+      safetyNetDrainIntervalMs: 30_000,
+      heartbeatIntervalMs: 0,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    await source.fetchSince(0);
+    expect(drainCount).toBe(1);
+
+    // 25s in: WS wake fires + drain triggered by wake. lastDrainAt resets.
+    await vi.advanceTimersByTimeAsync(25_000);
+    ws.fireTrade({
+      event_type: "last_trade_price",
+      asset_id: ASSET_ID,
+      market: "",
+      side: "BUY",
+      price: 0.5,
+      size: 10,
+      timestamp: 1_700_000_500,
+      fee_rate_bps: 0,
+    });
+    await source.fetchSince(0);
+    expect(drainCount).toBe(2);
+
+    // 20s after the wake-driven drain — still inside the window. No safety-net.
+    await vi.advanceTimersByTimeAsync(20_000);
+    await source.fetchSince(0);
+    expect(drainCount).toBe(2);
+
+    source.stop();
+  });
+
+  it("emits a periodic heartbeat info log with rolling counters", async () => {
+    vi.useFakeTimers();
+    const ws = makeFakeWs();
+    const heartbeatLogs: Array<Record<string, unknown>> = [];
+    const captureLogger = {
+      child: () => captureLogger,
+      debug: () => {},
+      info: (obj: Record<string, unknown>) => {
+        if (obj.event === "poly.wallet_watch.ws.heartbeat") {
+          heartbeatLogs.push(obj);
+        }
+      },
+      warn: () => {},
+      error: () => {},
+    } as unknown as Parameters<
+      typeof createPolymarketWsActivitySource
+    >[0]["logger"];
+    const source = createPolymarketWsActivitySource({
+      client: makeStubClient({
+        positions: [makePosition(ASSET_ID)],
+        trades: [],
+      }),
+      ws,
+      wallet: TARGET_WALLET,
+      logger: captureLogger,
+      metrics: createRecordingMetrics(),
+      heartbeatIntervalMs: 60_000,
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(heartbeatLogs).toHaveLength(0);
+
+    // Fire a few WS events between heartbeats so the window counters are
+    // observable. Includes one matched + one non-matched asset.
+    ws.fireTrade({
+      event_type: "last_trade_price",
+      asset_id: ASSET_ID,
+      market: "",
+      side: "BUY",
+      price: 0.5,
+      size: 10,
+      timestamp: 1_700_000_500,
+      fee_rate_bps: 0,
+    });
+    ws.fireTrade({
+      event_type: "last_trade_price",
+      asset_id: "different-asset",
+      market: "",
+      side: "BUY",
+      price: 0.5,
+      size: 10,
+      timestamp: 1_700_000_501,
+      fee_rate_bps: 0,
+    });
+
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(heartbeatLogs).toHaveLength(1);
+    expect(heartbeatLogs[0]).toMatchObject({
+      event: "poly.wallet_watch.ws.heartbeat",
+      wallet: TARGET_WALLET,
+      frames_received_window: 2,
+      ws_wakes_window: 1,
+      owned_assets_count: 1,
+      heartbeat_interval_ms: 60_000,
+    });
+
+    // Counters reset between heartbeats — no new frames means zeros next time.
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(heartbeatLogs).toHaveLength(2);
+    expect(heartbeatLogs[1]).toMatchObject({
+      frames_received_window: 0,
+      ws_wakes_window: 0,
+    });
+
+    source.stop();
+  });
+
   it("stop() unsubscribes assets and removes the trade listener", async () => {
     const ws = makeFakeWs();
     const source = createPolymarketWsActivitySource({
