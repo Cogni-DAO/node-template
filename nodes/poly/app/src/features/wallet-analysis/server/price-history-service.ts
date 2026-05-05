@@ -131,12 +131,17 @@ export async function runPriceHistoryTick(
           { fidelity: 60, interval: "1m" },
           { logger: outboundLogger, component: "trader-price-history" }
         );
-        upserted += await upsertPriceHistory(
+        // Local-var-then-add: `upserted += await ...` reads `upserted` BEFORE
+        // the await, so concurrent workers stomp each other (race seen in
+        // CI's component test — only the last writer's count survived).
+        // Reading `upserted` post-await keeps the +=` synchronous-atomic.
+        const n = await upsertPriceHistory(
           deps.db,
           asset,
           HOUR_FIDELITY,
           hourPoints
         );
+        upserted += n;
       } catch (err: unknown) {
         errors += 1;
         log.error(
@@ -155,12 +160,13 @@ export async function runPriceHistoryTick(
           { fidelity: 1440, interval: "max" },
           { logger: outboundLogger, component: "trader-price-history" }
         );
-        upserted += await upsertPriceHistory(
+        const n = await upsertPriceHistory(
           deps.db,
           asset,
           DAY_FIDELITY,
           dayPoints
         );
+        upserted += n;
       } catch (err: unknown) {
         errors += 1;
         log.error(
