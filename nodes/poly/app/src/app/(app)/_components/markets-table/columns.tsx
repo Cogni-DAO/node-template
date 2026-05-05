@@ -33,6 +33,8 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
 import { Skeleton } from "@/components";
+import { Badge } from "@/components/reui/badge";
+import { DataGridColumnFilter } from "@/components/reui/data-grid/data-grid-column-filter";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import {
   Table,
@@ -78,6 +80,23 @@ function pnlClass(value: number): string {
   if (value > 0) return "text-success";
   if (value < 0) return "text-destructive";
   return "text-muted-foreground";
+}
+
+/**
+ * `edgeGapUsdc = targetPnl - ourPnl`. Positive = targets ahead of us
+ * (alpha leaking) → render as `destructive`. Negative = we are ahead → success.
+ * Same orientation for the percentage cell.
+ */
+function edgeGapClass(value: number): string {
+  if (value > 0) return "text-destructive";
+  if (value < 0) return "text-success";
+  return "text-muted-foreground";
+}
+
+function formatEdgeGapPct(value: number | null): string {
+  if (value === null) return "—";
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${(Math.abs(value) * 100).toFixed(1)}%`;
 }
 
 function groupLabel(group: WalletExecutionMarketGroup): string {
@@ -180,6 +199,83 @@ export function makeColumns(): AnyCol[] {
       meta: {
         headerTitle: "Targets",
         skeleton: <Skeleton className="ms-auto h-3.5 w-16" />,
+      },
+    }),
+    col.accessor((row) => row.status, {
+      id: "status",
+      header: ({ column }) => (
+        <DataGridColumnHeader
+          column={column}
+          title="Status"
+          visibility
+          filter={
+            <DataGridColumnFilter
+              column={column}
+              title="Status"
+              options={[
+                { label: "Live", value: "live" },
+                { label: "Closed", value: "closed" },
+              ]}
+            />
+          }
+        />
+      ),
+      size: 90,
+      cell: (info) => {
+        const status = info.getValue();
+        return (
+          <Badge
+            variant={status === "live" ? "success" : "secondary"}
+            size="xs"
+          >
+            {status === "live" ? "Live" : "Closed"}
+          </Badge>
+        );
+      },
+      filterFn: (row, _id, value: string[]) => {
+        if (!value || value.length === 0) return true;
+        return value.includes(row.getValue<string>("status"));
+      },
+      meta: {
+        headerTitle: "Status",
+        skeleton: <Skeleton className="h-4 w-12" />,
+      },
+    }),
+    col.accessor((row) => row.edgeGapPct, {
+      id: "edgeGap",
+      header: ({ column }) =>
+        rightHeader(
+          <DataGridColumnHeader column={column} title="Edge Gap" visibility />
+        ),
+      size: 110,
+      sortingFn: (left, right) => {
+        // Sort by edgeGapPct DESC = "biggest alpha leak first". Nulls sort last
+        // either direction so empty-cost-basis rows do not crowd the head.
+        const lv = left.original.edgeGapPct;
+        const rv = right.original.edgeGapPct;
+        if (lv === null && rv === null) return 0;
+        if (lv === null) return 1;
+        if (rv === null) return -1;
+        return lv - rv;
+      },
+      cell: ({ row }) => {
+        const pct = row.original.edgeGapPct;
+        const usdc = row.original.edgeGapUsdc;
+        return (
+          <div
+            className={cn(
+              "text-right text-sm tabular-nums",
+              edgeGapClass(usdc)
+            )}
+            title={`Target P/L − our P/L = ${formatSignedUsd(usdc)}`}
+          >
+            {formatEdgeGapPct(pct)}
+          </div>
+        );
+      },
+      meta: {
+        headerTitle: "Edge Gap",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-14" />,
       },
     }),
     col.accessor((row) => row.pnlUsd, {

@@ -45,6 +45,7 @@
 import type {
   WalletExecutionMarketGroup,
   WalletExecutionMarketLeg,
+  WalletExecutionMarketLineStatus,
   WalletExecutionMarketParticipantRow,
   WalletExecutionPosition,
 } from "@cogni/poly-node-contracts";
@@ -76,6 +77,11 @@ type RawLeg = {
   avgPrice: number | null;
   lifecycle: WalletExecutionMarketLeg["lifecycle"];
   lastObservedAt: string | null;
+  /**
+   * Status of the originating position when `side === "our_wallet"`.
+   * `null` for `copy_target` legs (they have no caller-position concept).
+   */
+  ourPositionStatus: WalletExecutionMarketLineStatus | null;
 };
 
 type TargetPositionRow = {
@@ -101,10 +107,17 @@ export async function buildMarketExposureGroups(params: {
   billingAccountId: string;
   walletAddress: string;
   livePositions: readonly WalletExecutionPosition[];
+  closedPositions?: readonly WalletExecutionPosition[];
 }): Promise<WalletExecutionMarketGroup[]> {
-  if (params.livePositions.length === 0) return [];
+  const closedPositions = params.closedPositions ?? [];
+  if (params.livePositions.length === 0 && closedPositions.length === 0) {
+    return [];
+  }
 
-  const ourLegs = buildOurLegs(params.livePositions, params.walletAddress);
+  const ourLegs = [
+    ...buildOurLegs(params.livePositions, params.walletAddress, "live"),
+    ...buildOurLegs(closedPositions, params.walletAddress, "closed"),
+  ];
   const targetLegs = await readTargetLegs({
     db: params.db,
     billingAccountId: params.billingAccountId,
@@ -116,7 +129,8 @@ export async function buildMarketExposureGroups(params: {
 
 function buildOurLegs(
   positions: readonly WalletExecutionPosition[],
-  walletAddress: string
+  walletAddress: string,
+  ourPositionStatus: WalletExecutionMarketLineStatus
 ): RawLeg[] {
   return positions.map((position) => {
     const costBasisUsdc = costBasisFromExecutionPosition(position);
@@ -138,8 +152,9 @@ function buildOurLegs(
       currentValueUsdc: position.currentValue,
       vwap,
       avgPrice: vwap,
-      lifecycle: "active",
+      lifecycle: ourPositionStatus === "closed" ? "inactive" : "active",
       lastObservedAt: position.openedAt,
+      ourPositionStatus,
     };
   });
 }
@@ -257,6 +272,7 @@ async function readTargetLegs(params: {
         avgPrice,
         lifecycle,
         lastObservedAt: isoOrNull(row.last_observed_at),
+        ourPositionStatus: null,
       },
     ];
   });
@@ -272,12 +288,15 @@ function groupParticipants(
     byCondition.set(leg.conditionId, list);
   }
 
+  type Line = WalletExecutionMarketGroup["lines"][number];
+  type LineWithMeta = { line: Line; ourCostBasisUsdc: number };
+
   const groupBuckets = new Map<
     string,
     {
       eventTitle: string | null;
       eventSlug: string | null;
-      lines: WalletExecutionMarketGroup["lines"];
+      lines: LineWithMeta[];
     }
   >();
 
@@ -293,26 +312,35 @@ function groupParticipants(
       ? `event:${eventSlug}`
       : `condition:${conditionId}`;
 
-    const ourValueUsdc = roundMoney(
-      sumValueBySide(conditionLegs, "our_wallet")
+    const ourLegs = conditionLegs.filter((leg) => leg.side === "our_wallet");
+    const targetLegsForLine = conditionLegs.filter(
+      (leg) => leg.side === "copy_target"
     );
-    const targetValueUsdc = roundMoney(
-      sumValueBySide(conditionLegs, "copy_target")
-    );
+    const ourValueUsdc = roundMoney(sumValue(ourLegs));
+    const targetValueUsdc = roundMoney(sumValue(targetLegsForLine));
+    const ourPnlUsdc = sumPnl(ourLegs);
+    const targetPnlUsdc = sumPnl(targetLegsForLine);
+    const ourCostBasisUsdc = sumCostBasis(ourLegs);
+    const edgeGapUsdc = roundMoney(targetPnlUsdc - ourPnlUsdc);
+    const edgeGapPct = pctOrNull(edgeGapUsdc, ourCostBasisUsdc);
+    const lineStatus: WalletExecutionMarketLineStatus = ourLegs.some(
+      (leg) => leg.ourPositionStatus === "live"
+    )
+      ? "live"
+      : "closed";
 
-    const line = {
+    const line: Line = {
       conditionId,
       marketTitle: anchor.marketTitle,
       marketSlug: anchor.marketSlug,
       resolvesAt: null,
+      status: lineStatus,
       ourValueUsdc,
       targetValueUsdc,
-      ourVwap: weightedVwap(
-        conditionLegs.filter((leg) => leg.side === "our_wallet")
-      ),
-      targetVwap: weightedVwap(
-        conditionLegs.filter((leg) => leg.side === "copy_target")
-      ),
+      ourVwap: weightedVwap(ourLegs),
+      targetVwap: weightedVwap(targetLegsForLine),
+      edgeGapUsdc,
+      edgeGapPct,
       hedgeCount: participants.filter((p) => p.hedge !== null).length,
       participants,
     };
@@ -320,23 +348,39 @@ function groupParticipants(
     const bucket = groupBuckets.get(groupKey) ?? {
       eventTitle,
       eventSlug,
-      lines: [],
+      lines: [] as LineWithMeta[],
     };
     if (bucket.eventTitle === null && eventTitle !== null) {
       bucket.eventTitle = eventTitle;
     }
-    bucket.lines.push(line);
+    bucket.lines.push({ line, ourCostBasisUsdc });
     groupBuckets.set(groupKey, bucket);
   }
 
   return [...groupBuckets.entries()]
     .map(([groupKey, bucket]) => {
-      const lines = bucket.lines.sort(compareLine);
+      const sorted = [...bucket.lines].sort((left, right) =>
+        compareLine(left.line, right.line)
+      );
+      const groupOurCostBasis = sorted.reduce(
+        (sum, entry) => sum + entry.ourCostBasisUsdc,
+        0
+      );
+      const groupEdgeGapUsdc = roundMoney(
+        sorted.reduce((sum, entry) => sum + entry.line.edgeGapUsdc, 0)
+      );
+      const groupStatus: WalletExecutionMarketLineStatus = sorted.some(
+        (entry) => entry.line.status === "live"
+      )
+        ? "live"
+        : "closed";
+      const lines = sorted.map((entry) => entry.line);
       return {
         groupKey,
         eventTitle: bucket.eventTitle,
         eventSlug: bucket.eventSlug,
         marketCount: lines.length,
+        status: groupStatus,
         ourValueUsdc: roundMoney(
           lines.reduce((sum, line) => sum + line.ourValueUsdc, 0)
         ),
@@ -353,6 +397,8 @@ function groupParticipants(
             0
           )
         ),
+        edgeGapUsdc: groupEdgeGapUsdc,
+        edgeGapPct: pctOrNull(groupEdgeGapUsdc, groupOurCostBasis),
         hedgeCount: lines.reduce((sum, line) => sum + line.hedgeCount, 0),
         lines,
       };
@@ -462,13 +508,24 @@ function pickAnchor(legs: readonly RawLeg[]): RawLeg | null {
   return legs.find((leg) => leg.side === "our_wallet") ?? legs[0] ?? null;
 }
 
-function sumValueBySide(
-  legs: readonly RawLeg[],
-  side: ParticipantSide
-): number {
-  return legs
-    .filter((leg) => leg.side === side)
-    .reduce((sum, leg) => sum + leg.currentValueUsdc, 0);
+function sumValue(legs: readonly RawLeg[]): number {
+  return legs.reduce((sum, leg) => sum + leg.currentValueUsdc, 0);
+}
+
+function sumPnl(legs: readonly RawLeg[]): number {
+  return legs.reduce(
+    (sum, leg) => sum + (leg.currentValueUsdc - leg.costBasisUsdc),
+    0
+  );
+}
+
+function sumCostBasis(legs: readonly RawLeg[]): number {
+  return legs.reduce((sum, leg) => sum + leg.costBasisUsdc, 0);
+}
+
+function pctOrNull(numerator: number, denominator: number): number | null {
+  if (denominator <= 0) return null;
+  return Math.round((numerator / denominator) * 10_000) / 10_000;
 }
 
 function compareParticipantRow(

@@ -237,6 +237,7 @@ export const GET = wrapRouteHandlerWithLogging(
       billingAccountId: account.id,
       walletAddress: address,
       livePositions,
+      closedPositions,
     }).catch((err: unknown) => {
       warnings.push({
         code: "market_exposure_unavailable",
