@@ -72,5 +72,5 @@ Revisit if drift becomes a recurring issue or if change frequency rises.
 
 - [docs/spec/node-ci-cd-contract.md](../../docs/spec/node-ci-cd-contract.md) — node sovereignty + merge-gate composition; this directory is referenced from the `## Repo Setup Fixture` section.
 - [docs/spec/merge-queue-config.md](../../docs/spec/merge-queue-config.md) — two-tier model design + the rejected Rulesets path + empirical findings.
-- [docs/spec/agentic-contribution-loop.md](../../docs/spec/agentic-contribution-loop.md) — where merge queue fits in the contributor flow.
+- [docs/spec/development-lifecycle.md](../../docs/spec/development-lifecycle.md) — where merge queue fits in the contributor flow.
 - [work/items/task.0391.enable-merge-queue.md](../../work/items/task.0391.enable-merge-queue.md) — original adoption rationale.

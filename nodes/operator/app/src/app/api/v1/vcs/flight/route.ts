@@ -17,7 +17,7 @@
  *     this route does not write a competing lease.
  * Side-effects: IO (GitHub REST API via VcsCapability)
  * Links: task.0361, packages/node-contracts/src/vcs.flight.v1.contract.ts,
- *   docs/spec/agentic-contribution-loop.md
+ *   docs/spec/development-lifecycle.md
  * @public
  */
 
