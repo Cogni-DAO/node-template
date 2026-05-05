@@ -794,12 +794,11 @@ function createContainer(): Container {
     // client, Drizzle queries) don't run on pods without Polymarket creds.
     void (async () => {
       try {
-        const { createPolymarketActivitySource } = await import(
+        const { createPolymarketWsActivitySource } = await import(
           "@/features/wallet-watch"
         );
-        const { PolymarketDataApiClient } = await import(
-          "@cogni/poly-market-provider/adapters/polymarket"
-        );
+        const { PolymarketDataApiClient, createPolymarketWsClient } =
+          await import("@cogni/poly-market-provider/adapters/polymarket");
         // noopMetrics for v0 — real prom-client wiring folds into a follow-up
         // once the `poly_mirror_*` series has a Grafana dashboard to back it.
         const { noopMetrics } = await import("@cogni/poly-market-provider");
@@ -815,6 +814,13 @@ function createContainer(): Container {
         // (debug/info/warn/error/child with object + optional msg).
         const mirrorLogger =
           log as unknown as import("@cogni/poly-market-provider").LoggerPort;
+
+        // task.0322 — single shared Polymarket Market-channel WebSocket per
+        // pod, multiplexed across all watched wallets. See WS_NO_WALLET_IDENTITY
+        // in features/wallet-watch/polymarket-ws-source.
+        const sharedWsClient = createPolymarketWsClient({
+          logger: mirrorLogger,
+        });
 
         // Ledger reconciler — syncs open/pending rows from CLOB getOrder,
         // dispatched per tenant. Each ledger row carries its
@@ -856,8 +862,9 @@ function createContainer(): Container {
               mirrorFilterPercentile: enumeratedTarget.mirrorFilterPercentile,
               mirrorMaxUsdcPerTrade: enumeratedTarget.mirrorMaxUsdcPerTrade,
             });
-            const source = createPolymarketActivitySource({
+            const source = createPolymarketWsActivitySource({
               client: dataApiClient,
+              ws: sharedWsClient,
               wallet: targetWallet,
               logger: mirrorLogger,
               metrics: noopMetrics,
@@ -874,50 +881,60 @@ function createContainer(): Container {
               return cachedExecutor;
             };
 
-            return startMirrorPoll({
-              target,
-              source,
-              ledger: orderLedger,
-              placeIntent: async (intent) => {
-                const executor = await getExecutor();
-                return executor.placeIntent(intent);
-              },
-              cancelOrder: async (orderId) => {
-                const executor = await getExecutor();
-                return executor.cancelOrder(orderId);
-              },
-              getMarketConstraints: async (tokenId) => {
-                const executor = await getExecutor();
-                return executor.getMarketConstraints(tokenId);
-              },
-              getTargetConditionPosition: async (params) => {
-                const positions = await dataApiClient.listUserPositions(
-                  params.targetWallet,
-                  {
-                    market: params.conditionId,
-                    sizeThreshold: 0,
-                  }
-                );
-                return targetConditionPositionFromDataApiPositions(
-                  params.conditionId,
-                  positions
-                );
-              },
-              closePosition: async (params) => {
-                const executor = await getExecutor();
-                return executor.closePosition(params);
-              },
-              getOperatorPositions: async () => {
-                const executor = await getExecutor();
-                const positions = await executor.listPositions();
-                return positions.map((p) => ({
-                  asset: p.asset,
-                  size: p.size,
-                }));
-              },
-              logger: mirrorLogger,
-              metrics: noopMetrics,
-            });
+            let stopPoll: (() => void) | null = null;
+            try {
+              stopPoll = startMirrorPoll({
+                target,
+                source,
+                ledger: orderLedger,
+                placeIntent: async (intent) => {
+                  const executor = await getExecutor();
+                  return executor.placeIntent(intent);
+                },
+                cancelOrder: async (orderId) => {
+                  const executor = await getExecutor();
+                  return executor.cancelOrder(orderId);
+                },
+                getMarketConstraints: async (tokenId) => {
+                  const executor = await getExecutor();
+                  return executor.getMarketConstraints(tokenId);
+                },
+                getTargetConditionPosition: async (params) => {
+                  const positions = await dataApiClient.listUserPositions(
+                    params.targetWallet,
+                    {
+                      market: params.conditionId,
+                      sizeThreshold: 0,
+                    }
+                  );
+                  return targetConditionPositionFromDataApiPositions(
+                    params.conditionId,
+                    positions
+                  );
+                },
+                closePosition: async (params) => {
+                  const executor = await getExecutor();
+                  return executor.closePosition(params);
+                },
+                getOperatorPositions: async () => {
+                  const executor = await getExecutor();
+                  const positions = await executor.listPositions();
+                  return positions.map((p) => ({
+                    asset: p.asset,
+                    size: p.size,
+                  }));
+                },
+                logger: mirrorLogger,
+                metrics: noopMetrics,
+              });
+            } catch (err) {
+              source.stop();
+              throw err;
+            }
+            return () => {
+              stopPoll?.();
+              source.stop();
+            };
           },
           logger: mirrorLogger,
         });

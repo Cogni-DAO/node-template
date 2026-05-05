@@ -162,6 +162,7 @@ export const EVENT_NAMES = {
   POLY_MIRROR_DECISION: "poly.mirror.decision",
   POLY_WALLET_WATCH_FETCH: "poly.wallet_watch.fetch",
   POLY_WALLET_WATCH_NORMALIZE_ERROR: "poly.wallet_watch.normalize_error",
+  POLY_WALLET_WATCH_WS_HEARTBEAT: "poly.wallet_watch.ws.heartbeat",
   POLY_WALLET_BALANCE_POLYGON_READ_FAILED:
     "poly.wallet.balance.polygon_read_failed",
   POLY_WALLET_BALANCE_OPEN_ORDERS_FAILED:
