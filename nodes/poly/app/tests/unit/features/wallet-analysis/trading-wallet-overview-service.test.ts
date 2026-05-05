@@ -25,9 +25,10 @@ function fakeDbForInsertOnly() {
       values: vi
         .fn()
         .mockImplementation((rows: Array<{ fidelity: string }>) => {
-          if (rows.length > 0) {
+          const first = rows[0];
+          if (first !== undefined) {
             insertCalls.push({
-              fidelity: rows[0]!.fidelity,
+              fidelity: first.fidelity,
               rowCount: rows.length,
             });
           }
