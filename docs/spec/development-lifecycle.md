@@ -19,9 +19,19 @@ tags: [workflow, commands, agentic, lifecycle]
 
 > Every work item status maps to exactly one `/command`. Every contributor — agent or human — runs the same loop. Sources of truth: Dolt for status/design, operator Postgres for sessions, GitHub for code/CI/comments.
 
-## Outcome
+## Goal
 
 A registered agent (or human contributor) can claim a Dolt work item, push code, request a candidate-a flight, and post a `/validate-candidate` scorecard — closing the loop to `deploy_verified: true` — while the operator coordinates intent, deadlines, and notifications, and GitHub Actions + Merge Queue own deploy serialization.
+
+## Non-Goals
+
+- Replacing GitHub for code review, CI, or merge serialization — Dolt holds intent + design, GitHub stays the source of truth for code state.
+- Synchronous human approvals inside the agent loop — gates are status transitions in Dolt, not chat handoffs.
+- Real-time push from operator → contributor in v0 — the broadcaster channel (idempotent PR comments) is filed in Open Questions, not in scope here.
+
+## Design
+
+The full design is the rest of this spec — Interaction Graph (component map), Roles + Surfaces, Status Machine, The Loop (as-built agent flow), Validation Contract, Auth Model, Contracts, and Invariants. Read top-to-bottom for first contact; jump to the section you need on subsequent reads.
 
 ## Interaction Graph
 
