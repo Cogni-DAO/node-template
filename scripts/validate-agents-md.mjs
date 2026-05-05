@@ -27,15 +27,6 @@ const REQ_HEADINGS = [
   "Notes",
 ];
 
-const ROOT_REQ_HEADINGS = [
-  "Mission",
-  "Workflow Guiding Principles",
-  "Agent Behavior",
-  "Environment",
-  "Pointers",
-  "Usage",
-];
-
 const PROHIBITED_WORDS = [
   "complete",
   "comprehensive",
@@ -316,36 +307,6 @@ function validateProhibitedWords(content) {
   return errors;
 }
 
-function validateRootAgents(file, content) {
-  const errors = [];
-
-  // 1. Check required headings (no order enforcement for root)
-  const headings = h(content);
-  for (const req of ROOT_REQ_HEADINGS) {
-    if (!headings.includes(req)) {
-      errors.push(`missing heading "${req}"`);
-    }
-  }
-
-  // 2. Validate scope line for root (warning only)
-  if (!/^> Scope: repository-wide/m.test(content)) {
-    console.warn(`${file}: Warning - missing or incorrect scope line`);
-  }
-
-  // 3. Basic Usage section validation (warning only)
-  const usageBlock = getBlockAfter(content, "Usage");
-  if (!/pnpm check/m.test(usageBlock)) {
-    console.warn(
-      `${file}: Warning - Usage section missing 'pnpm check' command`
-    );
-  }
-
-  // 4. Check for prohibited words
-  errors.push(...validateProhibitedWords(content));
-
-  return errors;
-}
-
 function validateSubdirAgents(file, content) {
   const errors = [];
 
@@ -392,19 +353,13 @@ function validateSubdirAgents(file, content) {
 
 function validate(file) {
   const md = readFileSync(file, "utf8");
-
-  // Route to appropriate validator based on file location
-  const fileErrors =
-    file === "AGENTS.md"
-      ? validateRootAgents(file, md)
-      : validateSubdirAgents(file, md);
-
-  // Prefix all errors with the file path
+  const fileErrors = validateSubdirAgents(file, md);
   return fileErrors.map((e) => `${file}: ${e}`);
 }
 
-// Find all tracked AGENTS.md files (git ls-files is ~2000x faster than filesystem glob)
-const files = execSync("git ls-files '*/AGENTS.md' 'AGENTS.md'", {
+// Find all tracked subdir AGENTS.md files. Root AGENTS.md is intentionally
+// not validated — it carries the agent contract, which is iterated freely.
+const files = execSync("git ls-files '*/AGENTS.md'", {
   encoding: "utf8",
 })
   .trim()
