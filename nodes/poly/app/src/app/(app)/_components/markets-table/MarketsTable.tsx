@@ -28,9 +28,11 @@
 
 import type { WalletExecutionMarketGroup } from "@cogni/poly-node-contracts";
 import {
+  type ColumnFiltersState,
   type ExpandedState,
   getCoreRowModel,
   getExpandedRowModel,
+  getFilteredRowModel,
   getPaginationRowModel,
   getSortedRowModel,
   type PaginationState,
@@ -60,6 +62,8 @@ const DEFAULT_VISIBILITY: VisibilityState = {
   market: true,
   ourValue: true,
   targets: true,
+  status: true,
+  edgeGap: true,
   pnl: true,
   hedges: true,
 };
@@ -77,6 +81,7 @@ export function MarketsTable({
 
   const [columnVisibility, setColumnVisibility] =
     useState<VisibilityState>(DEFAULT_VISIBILITY);
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: PAGE_SIZE,
@@ -106,11 +111,13 @@ export function MarketsTable({
     data,
     columns,
     getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
-    state: { columnVisibility, pagination, expanded },
+    state: { columnVisibility, columnFilters, pagination, expanded },
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
     onExpandedChange: setExpanded,
   });

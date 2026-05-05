@@ -193,16 +193,39 @@ export type WalletExecutionMarketParticipantRow = z.infer<
   typeof WalletExecutionMarketParticipantRowSchema
 >;
 
+/**
+ * Whether the row represents a market we still hold (`live`) or have already
+ * closed/redeemed (`closed`). Drives the dashboard status filter.
+ */
+export const WalletExecutionMarketLineStatusSchema = z.enum(["live", "closed"]);
+export type WalletExecutionMarketLineStatus = z.infer<
+  typeof WalletExecutionMarketLineStatusSchema
+>;
+
 export const WalletExecutionMarketLineSchema = z.object({
   conditionId: z.string(),
   marketTitle: z.string(),
   marketSlug: z.string().nullable(),
   resolvesAt: z.string().nullable(),
+  status: WalletExecutionMarketLineStatusSchema,
   ourValueUsdc: z.number().nonnegative(),
   targetValueUsdc: z.number().nonnegative(),
   ourVwap: z.number().min(0).nullable(),
   targetVwap: z.number().min(0).nullable(),
   hedgeCount: z.number().int().nonnegative(),
+  /**
+   * `targetPnlUsdc - ourPnlUsdc` summed across our_wallet + copy_target
+   * participants. Positive = targets are outperforming us on this market
+   * (the alpha-loss signal). Negative = we are ahead of (or equal to) the
+   * targets we copied.
+   */
+  edgeGapUsdc: z.number(),
+  /**
+   * `edgeGapUsdc` normalized by `|sum(ourCostBasisUsdc)|`. Null when our cost
+   * basis is zero (e.g. market never funded) so the UI can render `—` rather
+   * than a divide-by-zero.
+   */
+  edgeGapPct: z.number().nullable(),
   participants: z.array(WalletExecutionMarketParticipantRowSchema),
 });
 export type WalletExecutionMarketLine = z.infer<
@@ -214,9 +237,15 @@ export const WalletExecutionMarketGroupSchema = z.object({
   eventTitle: z.string().nullable(),
   eventSlug: z.string().nullable(),
   marketCount: z.number().int().nonnegative(),
+  /** `live` if any line in the group is still held, else `closed`. */
+  status: WalletExecutionMarketLineStatusSchema,
   ourValueUsdc: z.number().nonnegative(),
   targetValueUsdc: z.number().nonnegative(),
   pnlUsd: z.number(),
+  /** Sum of `edgeGapUsdc` across lines. */
+  edgeGapUsdc: z.number(),
+  /** `edgeGapUsdc` divided by group-level `|sum(ourCostBasisUsdc)|`. */
+  edgeGapPct: z.number().nullable(),
   hedgeCount: z.number().int().nonnegative(),
   lines: z.array(WalletExecutionMarketLineSchema),
 });
