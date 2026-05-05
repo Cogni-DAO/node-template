@@ -3,7 +3,7 @@
 
 /**
  * Module: `@features/wallet-analysis/server/wallet-analysis-service`
- * Purpose: Service layer feeding `/api/v1/poly/wallets/[addr]` (snapshot, trades, balance, pnl slices) and `/api/v1/poly/wallet/execution` (live/closed position split). Snapshot/trades/distributions(live) still call the public Data API + CLOB; balance, pnl, and execution read the DB-backed `poly_trader_*` mirrors. CLOB / Data API calls are bounded by a process-wide `p-limit(4)` and per-(slice, addr) coalesced under a 30 s TTL.
+ * Purpose: Service layer feeding `/api/v1/poly/wallets/[addr]` (snapshot, trades, balance, pnl slices) and `/api/v1/poly/wallet/execution` (live/closed position split). The `pnl`, `trades`, `balance`, and `execution` (positions+trades) slices are DB-only reads (PAGE_LOAD_DB_ONLY — task.5012 CP1/CP2/CP5). Snapshot and distributions(live) still hit Data API + CLOB; CP4 moves those to DB. CLOB `getPriceHistory` per open position remains live (`PAGE_LOAD_DB_ONLY_EXCEPT_PRICE_HISTORY`, closed by CP7).
  * Scope: Compute + I/O only. Does not authenticate, does not parse HTTP. Returns Zod-validated slice values per the wallet-analysis v1 and execution v1 contracts.
  * Invariants:
  *   - REUSE_PACKAGE_CLIENTS: all upstream HTTP goes through `@cogni/poly-market-provider` clients — no fetch in this file.
@@ -50,7 +50,7 @@ import type {
   WalletExecutionPosition,
   WalletExecutionWarning,
 } from "@cogni/poly-node-contracts";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, desc, eq } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import pLimit from "p-limit";
@@ -130,21 +130,48 @@ export function invalidateWalletAnalysisCaches(addr: string): void {
   }
 }
 
-/** Fetch + return the trades slice. Coalesced + p-limited. */
+/**
+ * DB-backed trades slice — reads `poly_trader_fills` (populated by the
+ * trader-observation tick). PAGE_LOAD_DB_ONLY (task.5012 CP2).
+ *
+ * Market title is recovered from the per-row `raw` jsonb that the writer
+ * preserves at ingest. When `raw.attributes.title` is absent or empty the
+ * recent-trade row falls back to `null` (chart already handles this).
+ */
 export async function getTradesSlice(
+  db: Db,
   addr: string
 ): Promise<SliceResult<WalletAnalysisTrades>> {
   try {
-    const trades = await coalesce(
-      `trades:${addr}`,
-      () =>
-        upstreamLimit(() =>
-          getDataApiClient().listUserActivity(addr, {
-            limit: TRADE_FETCH_LIMIT,
-          })
-        ),
-      SLICE_TTL_MS
-    );
+    const rows = await db
+      .select({
+        observedAt: polyTraderFills.observedAt,
+        side: polyTraderFills.side,
+        conditionId: polyTraderFills.conditionId,
+        tokenId: polyTraderFills.tokenId,
+        shares: polyTraderFills.shares,
+        price: polyTraderFills.price,
+        raw: polyTraderFills.raw,
+      })
+      .from(polyTraderFills)
+      .innerJoin(
+        polyTraderWallets,
+        eq(polyTraderFills.traderWalletId, polyTraderWallets.id)
+      )
+      .where(eq(polyTraderWallets.walletAddress, addr.toLowerCase()))
+      .orderBy(desc(polyTraderFills.observedAt))
+      .limit(TRADE_FETCH_LIMIT);
+
+    const trades = rows.map((row) => ({
+      timestamp: Math.floor(row.observedAt.getTime() / 1_000),
+      side: row.side as "BUY" | "SELL",
+      conditionId: row.conditionId,
+      asset: row.tokenId,
+      size: Number(row.shares),
+      price: Number(row.price),
+      title: extractTitle(row.raw),
+    }));
+
     const dailyCounts = buildDailyCounts(trades, 14);
     const topMarkets = buildTopMarkets(trades, 4);
     const recent = trades.slice(0, 50).map((t) => ({
@@ -171,6 +198,14 @@ export async function getTradesSlice(
       warning: warning("trades", err),
     };
   }
+}
+
+function extractTitle(raw: Record<string, unknown> | null): string {
+  if (!raw) return "";
+  const attrs = (raw as { attributes?: Record<string, unknown> }).attributes;
+  if (!attrs) return "";
+  const title = attrs.title;
+  return typeof title === "string" ? title : "";
 }
 
 /** Compute the snapshot (deterministic metrics) slice. Coalesced + p-limited. */

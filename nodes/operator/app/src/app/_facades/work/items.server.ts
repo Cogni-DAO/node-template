@@ -247,3 +247,21 @@ export async function patchWorkItem(
     throw e;
   }
 }
+
+export async function deleteWorkItem(
+  id: string,
+  sessionUser: { id: string; displayName: string | null }
+): Promise<boolean> {
+  const container = getContainer();
+  try {
+    return await container.doltgresWorkItems.delete(
+      toWorkItemId(id),
+      authorTagFromSession(sessionUser)
+    );
+  } catch (e) {
+    if ((e as Error)?.name === "DoltgresNotConfiguredError") {
+      throw new WorkItemsBackendNotReadyError((e as Error).message);
+    }
+    throw e;
+  }
+}

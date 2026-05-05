@@ -623,6 +623,7 @@ function createContainer(): Container {
       list: notConfigured,
       create: notConfigured,
       patch: notConfigured,
+      delete: notConfigured,
     };
   }
 

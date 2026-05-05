@@ -12,9 +12,13 @@
  */
 
 export {
-  createPolymarketActivitySource,
+  createPolymarketWsActivitySource,
+  type PolymarketWsActivitySource,
+  type PolymarketWsActivitySourceDeps,
+  WALLET_WATCH_WS_METRICS,
+} from "./polymarket-ws-source";
+export {
   type NextFillsResult,
-  type PolymarketActivitySourceDeps,
   WALLET_WATCH_METRICS,
   type WalletActivitySource,
-} from "./polymarket-source";
+} from "./types";
