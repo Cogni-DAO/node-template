@@ -585,7 +585,13 @@ describe("snapshot parity — SQL-aggregated path matches computeWalletMetrics",
     return [...byToken.values()];
   }
 
-  /** Build a {conditionId → title} map from raw fills (mirrors readTopMarketTitlesFromDb). */
+  /**
+   * Build a {conditionId → title} map for the parity oracle. Production
+   * sources titles from `poly_trader_current_positions` (one row per
+   * (wallet, condition, token) — bounded, persisted by the trader-observation
+   * tick). The oracle simulates that store with a per-cid lex-max over fills,
+   * which is equivalent for the test fixtures (consistent title per cid).
+   */
   function jsTitles(
     fills: ReadonlyArray<WalletTradeInput>
   ): Map<string, string> {
@@ -770,7 +776,7 @@ describe("snapshot parity — SQL-aggregated path matches computeWalletMetrics",
  *       1st call: positionAggs   (readPositionAggregatesFromDb)
  *       2nd call: dailyCounts    (readDailyCountsFromDb)
  *       3rd call: activity-row   (readActivityCountsFromDb)
- *       4th call: titles         (readTopMarketTitlesFromDb)
+ *       4th call: titles         (readMarketTitlesForConditions, current_positions)
  *   - db.select().from().where()  →  outcome rows (readResolutionsForConditions)
  * Order assumption matches the slice's call sequence:
  *   Promise.all([positions, dailyRows, activity])  →  Promise.all([resolutions, titles])
