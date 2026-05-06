@@ -12,6 +12,13 @@
  */
 
 export {
+  createPolymarketActivitySource,
+  type NextFillsResult,
+  POLYMARKET_ACTIVITY_SOURCE_METRICS,
+  type PolymarketActivitySourceDeps,
+  type WalletActivitySource,
+} from "./polymarket.activity-source.js";
+export {
   PolymarketAdapter,
   type PolymarketAdapterConfig,
 } from "./polymarket.adapter.js";
@@ -40,6 +47,7 @@ export {
   type ClobPriceHistoryParams,
   type ClobPriceHistoryPoint,
   PolymarketClobPublicClient,
+  type PriceHistoryOutboundLogger,
 } from "./polymarket.clob-public.client.js";
 export {
   normalizePolygonConditionId,
@@ -106,6 +114,15 @@ export {
   type PolymarketNormalizeSkipReason,
   polymarketDataApiFillId,
 } from "./polymarket.normalize-fill.js";
+export {
+  createPolymarketWsClient,
+  type PolymarketWsClientConfig,
+  type PolymarketWsClientHandle,
+  type WsConnectionState,
+  type WsLastTradePrice,
+  WsLastTradePriceSchema,
+  type WsTradeEvent,
+} from "./polymarket.ws.client.js";
 export { normalizePolymarketMarket } from "./polymarket.normalizer.js";
 export {
   type PolymarketRawMarket,
@@ -122,4 +139,5 @@ export {
   type PolymarketUserPnlPoint,
   PolymarketUserPnlPointSchema,
   PolymarketUserPnlResponseSchema,
+  type UserPnlOutboundLogger,
 } from "./polymarket.user-pnl.client.js";

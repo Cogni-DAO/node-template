@@ -46,4 +46,5 @@ export interface WorkItemsDoltgresPort {
     input: WorkItemsPatchInput,
     authorTag: string
   ): Promise<WorkItem | null>;
+  delete(id: WorkItemId, authorTag: string): Promise<boolean>;
 }

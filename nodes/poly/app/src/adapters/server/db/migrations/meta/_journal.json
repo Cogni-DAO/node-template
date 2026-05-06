@@ -281,6 +281,41 @@
       "when": 1778000400000,
       "tag": "0039_poly_copy_trade_closed_resting_idx",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1778000400001,
+      "tag": "0040_poly_trader_activity",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1778000500000,
+      "tag": "0041_poly_trader_current_positions_first_observed_at",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1778000600000,
+      "tag": "0042_freezing_quentin_quire",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1778000700000,
+      "tag": "0043_poly_market_price_history",
+      "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1778009698573,
+      "tag": "0044_glossy_hardball",
+      "breakpoints": true
     }
   ]
 }

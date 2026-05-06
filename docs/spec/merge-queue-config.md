@@ -20,7 +20,7 @@ tags:
 
 ## Context
 
-The merge queue's load-bearing job is **anchoring preview-environment image content to the merged tree** (see [agentic-contribution-loop.md](./agentic-contribution-loop.md) Step 8 + task.0391). PR #1083 (the merge-queue rollout) got stuck in the queue waiting for `CodeQL` and `Validate PR title` to report on the queue ref — they never did, because their workflows have no `merge_group:` trigger. The natural intuition was to express **two distinct gates** (full strictness for PR merge, narrow set for the queue) on the assumption that GitHub Rulesets supports event-specific required-checks lists. That assumption was tested and falsified.
+The merge queue's load-bearing job is **anchoring preview-environment image content to the merged tree** (see [development-lifecycle.md](./development-lifecycle.md) Step 8 + task.0391). PR #1083 (the merge-queue rollout) got stuck in the queue waiting for `CodeQL` and `Validate PR title` to report on the queue ref — they never did, because their workflows have no `merge_group:` trigger. The natural intuition was to express **two distinct gates** (full strictness for PR merge, narrow set for the queue) on the assumption that GitHub Rulesets supports event-specific required-checks lists. That assumption was tested and falsified.
 
 ## Goal
 
@@ -28,7 +28,7 @@ Define the required-status-checks policy that actually works on GitHub today, ca
 
 ## Non-Goals
 
-- Defining the candidate-a `deploy_verified` gate — see [agentic-contribution-loop.md](./agentic-contribution-loop.md).
+- Defining the candidate-a `deploy_verified` gate — see [development-lifecycle.md](./development-lifecycle.md).
 - Per-node merge queues — discarded after analysis (see task.0391); revisit if N > 5 nodes or queue depth becomes a real bottleneck.
 - Reconciler workflows that auto-apply the config — deferred until drift becomes a recurring issue.
 
@@ -159,7 +159,7 @@ The portability boundary stays clean: workflow YAML changes (per-trigger → per
 ## Related
 
 - [Repo Setup Fixture](./node-ci-cd-contract.md#repo-setup-fixture) — where this spec is referenced from the parent CI/CD contract.
-- [Agentic Contribution Loop](./agentic-contribution-loop.md) — Step 8 (request merge) + invariants `MERGE_QUEUE_DETERMINISM`, `NO_AGENTIC_REBASE`.
+- [Agentic Contribution Loop](./development-lifecycle.md) — Step 8 (request merge) + invariants `MERGE_QUEUE_DETERMINISM`, `NO_AGENTIC_REBASE`.
 - [task.0391.enable-merge-queue.md](../../work/items/task.0391.enable-merge-queue.md) — original merge-queue adoption rationale.
 - [GitHub Merge Queue docs](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/configuring-pull-request-merges/managing-a-merge-queue) — authoritative on queue + status-check semantics.
 - [GitLab Merge Trains](https://docs.gitlab.com/ee/ci/pipelines/merge_trains.html) — vFuture target.

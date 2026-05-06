@@ -61,9 +61,37 @@ nodes/poly/app/src/bootstrap/                   ← Factory + env wiring
 
 - **Three locations for one capability is more moving parts than an ideal single-package story.** The reason it isn't one package today is the `@cogni/poly-db-schema` dependency — if/when per-node DB schemas move into their own packages that shared packages can depend on, the adapter could move to `packages/poly-wallet/src/adapters/privy/`. Today it shouldn't.
 - **`biome-ignore lint/suspicious/noExplicitAny` on two sites in the adapter** — `createViemAccount` from `@privy-io/node/viem` ships its own viem (`2.48.1`) as a peer-dep; this app pins `2.39.3`. The shapes are runtime-identical but TypeScript rejects the assignment across the two installations. The exact same `const x: any = account` workaround is used in `nodes/poly/app/src/bootstrap/capabilities/poly-trade.ts:696-700` for the operator-wallet signer. Clean fix = unify viem versions, out of scope for this slice.
-- **Live CLOB creds now derive at provision time.** The bootstrap keeps `@polymarket/clob-client` at the existing `bootstrap/capabilities/poly-trade.ts` dynamic-import boundary and fails closed if `createOrDeriveApiKey()` cannot mint the tenant wallet's L2 creds. This proves credential bootstrapping, not full trade execution or allowances.
+- **Live CLOB creds now derive at provision time.** The bootstrap keeps `@polymarket/clob-client@5.8.1` isolated in `bootstrap/capabilities/poly-clob-creds.ts` and fails closed if `createOrDeriveApiKey()` cannot mint the tenant wallet's L2 creds. This proves credential bootstrapping, not full trade execution or allowances.
 - **`provision` generates the row id via a Postgres roundtrip** (`SELECT gen_random_uuid()::text`) instead of `crypto.randomUUID()`. Noise, should be removed in the test PR.
 - **One component test now exists, but only at the adapter / DB layer.** It proves the tenant-safe wallet lifecycle and caught the missing `0030` journal entry. It does **not** prove trade placement, funding, or allowances; live validation on candidate-a is still required.
+
+## Manual green chain for CLOB provisioning
+
+This path is the source of truth for wallet provisioning. Do not replace the
+provisioning CLOB boundary unless this manual chain is green with candidate
+Privy credentials and the code path matches it.
+
+| Step                                      | Manual green validation                                                                                                                                                              | Code validation                                                                                                                        |
+| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------- |
+| 1. Load candidate user-wallet Privy env   | `.env.candidate-a` provides the user-wallet `PRIVY_USER_WALLETS_*` app id, secret, and signing key.                                                                                  | `getPolyTraderWalletAdapter` reads the same env names and fails closed as `WalletAdapterUnconfiguredError` when missing.               |
+| 2. Create or select a Privy server wallet | Privy `walletApi.create` returns an Ethereum wallet address.                                                                                                                         | `PrivyPolyTraderWalletAdapter.provision` creates the tenant wallet before deriving CLOB creds.                                         |
+| 3. Prove the wallet can sign typed data   | `@privy-io/node/viem` account signs a small EIP-712 payload successfully.                                                                                                            | `createViemAccount` is the signer source passed into `createOrDerivePolymarketApiKeyForSigner`.                                        |
+| 4. Build a viem wallet client on Polygon  | `createWalletClient({ account, chain: polygon, transport: http(POLYGON_RPC_URL) })` succeeds.                                                                                        | `createOrDerivePolymarketApiKeyForSigner` constructs the same viem wallet client.                                                      |
+| 5. Derive Polymarket L2 API-key creds     | `@polymarket/clob-client@5.8.1` with `new ClobClient(host, 137, walletClient, ..., useServerTime=true, ..., throwOnError=true)` returns non-empty `key`, `secret`, and `passphrase`. | Unit coverage asserts the provisioning factory uses the v1 positional constructor and normalizes the returned creds before encryption. |
+| 6. Reject poisoned credential shapes      | Empty or error-shaped CLOB responses are treated as failure, not stored.                                                                                                             | `normalizePolymarketApiKeyCreds` rejects missing `key`/`secret`/`passphrase`.                                                          |
+
+Known regression boundary:
+
+- The original PR #968 green path used `@polymarket/clob-client@5.8.1` for
+  L1 API-key creation.
+- PR #1118 moved the provisioning function to
+  `@polymarket/clob-client-v2`. With candidate Privy creds, manual validation
+  shows that v2 fails before usable creds are produced (`POST /auth/api-key`
+  returns upstream 403; `GET /auth/derive-api-key` returns 400), while the v1
+  client returns `{key, secret, passphrase}` for the same Privy signing chain.
+- Therefore, provisioning must keep the v1 client boundary until v2 is manually
+  green for this exact chain. Trading/order placement can still use the v2
+  adapter independently.
 
 ## Candidate-a exercise path
 
@@ -93,9 +121,10 @@ gh secret set PRIVY_USER_WALLETS_APP_SECRET --env candidate-a
 gh secret set PRIVY_USER_WALLETS_SIGNING_KEY --env candidate-a
 gh secret set POLY_WALLET_AEAD_KEY_HEX --env candidate-a
 gh secret set POLY_WALLET_AEAD_KEY_ID --env candidate-a
+gh secret set POLY_CLOB_GEO_BLOCK_TOKEN --env candidate-a
 ```
 
-Those 5 are the only new secrets for this slice. If any are missing, `getPolyTraderWalletAdapter` throws `WalletAdapterUnconfiguredError` and the route returns 503 cleanly. No panic.
+The first 5 secrets enable wallet creation and encrypted CLOB credential storage. `POLY_CLOB_GEO_BLOCK_TOKEN` is optional, but candidate-a needs it if Polymarket Cloudflare blocks server-side `/auth/api-key` calls; without it, `/api/v1/poly/wallet/connect` returns `error_code: clob_cloudflare_blocked`.
 
 ### 4. Flight to candidate-a
 

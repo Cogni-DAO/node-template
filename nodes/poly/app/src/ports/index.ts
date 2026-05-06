@@ -108,6 +108,11 @@ export {
   normalizeErrorToExecutionCode,
 } from "./llm.port";
 export type {
+  MarketOutcomeKind,
+  MarketOutcomesPort,
+  MarketOutcomeUpsertInput,
+} from "./market-outcomes.port";
+export type {
   InstantQueryParams,
   MetricsQueryPort,
   MetricTemplate,
@@ -162,6 +167,7 @@ export type {
 export {
   type EnqueueRedeemJobInput,
   type EnqueueRedeemJobResult,
+  type KnownRedeemCondition,
   RedeemJobNotFoundPortError,
   type RedeemJobsPort,
   type RedeemSubscriptionId,

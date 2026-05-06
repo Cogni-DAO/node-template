@@ -92,9 +92,6 @@ jobs:
       SCHEDULER_API_TOKEN: ${{ secrets.SCHEDULER_API_TOKEN }}
       BILLING_INGEST_TOKEN: ${{ secrets.BILLING_INGEST_TOKEN }}
       INTERNAL_OPS_TOKEN: ${{ secrets.INTERNAL_OPS_TOKEN }}
-      WORK_ITEMS_NOTION_TOKEN: ${{ secrets.WORK_ITEMS_NOTION_TOKEN }}
-      WORK_ITEMS_NOTION_DATA_SOURCE_ID: ${{ secrets.WORK_ITEMS_NOTION_DATA_SOURCE_ID }}
-      WORK_ITEMS_NOTION_VERSION: ${{ secrets.WORK_ITEMS_NOTION_VERSION }}
       OPENCLAW_GATEWAY_TOKEN: ${{ secrets.OPENCLAW_GATEWAY_TOKEN }}
       OPENCLAW_GITHUB_RW_TOKEN: ${{ secrets.OPENCLAW_GITHUB_RW_TOKEN }}
       DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
@@ -127,6 +124,7 @@ jobs:
       PRIVY_USER_WALLETS_SIGNING_KEY: ${{ secrets.PRIVY_USER_WALLETS_SIGNING_KEY }}
       POLY_WALLET_AEAD_KEY_HEX: ${{ secrets.POLY_WALLET_AEAD_KEY_HEX }}
       POLY_WALLET_AEAD_KEY_ID: ${{ secrets.POLY_WALLET_AEAD_KEY_ID }}
+      POLY_CLOB_GEO_BLOCK_TOKEN: ${{ secrets.POLY_CLOB_GEO_BLOCK_TOKEN }}
       CONNECTIONS_ENCRYPTION_KEY: ${{ secrets.CONNECTIONS_ENCRYPTION_KEY }}
       POSTHOG_API_KEY: ${{ secrets.POSTHOG_API_KEY }}
       POSTHOG_HOST: ${{ secrets.POSTHOG_HOST }}
@@ -193,6 +191,40 @@ jobs:
       - name: Provision Grafana Postgres datasources
         if: env.VM_HOST != ''
         run: bash scripts/ci/provision-grafana-postgres-datasources.sh
+
+      - name: Dump alloy-k8s-events state (post-deploy diagnostics)
+        if: env.VM_HOST != ''
+        run: |
+          set +e
+          SSH="ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=accept-new"
+          COMPOSE="docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml"
+          echo "=== alloy-k8s-events ps ==="
+          $SSH root@"$VM_HOST" "$COMPOSE ps alloy-k8s-events 2>&1 || true"
+          echo
+          echo "=== alloy-k8s-events container state (raw) ==="
+          $SSH root@"$VM_HOST" 'docker inspect cogni-runtime-alloy-k8s-events-1 --format "{{json .State}}" 2>&1 || true'
+          echo
+          echo "=== alloy-k8s-events logs (tail 200) ==="
+          $SSH root@"$VM_HOST" "$COMPOSE logs --tail 200 alloy-k8s-events 2>&1 || true"
+
+      - name: Verify db-backup Loki logs
+        if: env.VM_HOST != '' && env.GRAFANA_URL != '' && env.GRAFANA_SERVICE_ACCOUNT_TOKEN != ''
+        run: |
+          set -euo pipefail
+          query='{env="candidate-a",service="db-backup"} | json | event="db_backup.completed"'
+          for attempt in $(seq 1 12); do
+            result=$(scripts/loki-query.sh "$query" 600 200)
+            app_count=$(jq '[.data.result[].values[][1] | fromjson? | select(.cluster == "app")] | length' <<<"$result")
+            temporal_count=$(jq '[.data.result[].values[][1] | fromjson? | select(.cluster == "temporal")] | length' <<<"$result")
+            if [ "$app_count" -gt 0 ] && [ "$temporal_count" -gt 0 ]; then
+              echo "db-backup Loki verification passed: app=${app_count}, temporal=${temporal_count}"
+              exit 0
+            fi
+            echo "db-backup Loki logs not visible yet (attempt ${attempt}/12): app=${app_count}, temporal=${temporal_count}"
+            sleep 15
+          done
+          echo "::error::db-backup.completed logs did not appear in Loki for both app and temporal clusters"
+          exit 1
 
       - name: Trigger work-items Notion sync
         if: env.VM_HOST != '' && env.WORK_ITEMS_NOTION_TOKEN != ''

@@ -77,6 +77,13 @@ services:
       - PRIVY_APP_ID
       - PRIVY_APP_SECRET
       - PRIVY_SIGNING_KEY
+      # Privy + Polymarket CLOB (per-tenant Poly trading wallets)
+      - PRIVY_USER_WALLETS_APP_ID
+      - PRIVY_USER_WALLETS_APP_SECRET
+      - PRIVY_USER_WALLETS_SIGNING_KEY
+      - POLY_WALLET_AEAD_KEY_HEX
+      - POLY_WALLET_AEAD_KEY_ID
+      - POLY_CLOB_GEO_BLOCK_TOKEN
       # BYO-AI: Connection encryption (optional — BYO-AI disabled when unset)
       - CONNECTIONS_ENCRYPTION_KEY
       # Prometheus query (for analytics/AI tools) - read-only credentials
@@ -255,6 +262,38 @@ services:
       postgres:
         condition: service_healthy
 
+  db-backup:
+    image: postgres:15
+    profiles: ["backup"]
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp
+    networks:
+      - internal
+    environment:
+      POSTGRES_ROOT_USER: ${POSTGRES_ROOT_USER}
+      POSTGRES_ROOT_PASSWORD: ${POSTGRES_ROOT_PASSWORD}
+      TEMPORAL_DB_USER: ${TEMPORAL_DB_USER:-temporal}
+      TEMPORAL_DB_PASSWORD: ${TEMPORAL_DB_PASSWORD:-temporal}
+      DB_BACKUP_INTERVAL_SECONDS: ${DB_BACKUP_INTERVAL_SECONDS:-86400}
+      DB_BACKUP_RETENTION_DAYS: ${DB_BACKUP_RETENTION_DAYS:-14}
+      DB_BACKUP_OBSERVABILITY_GRACE_SECONDS: ${DB_BACKUP_OBSERVABILITY_GRACE_SECONDS:-90}
+    volumes:
+      - ./db-backup/backup.sh:/usr/local/bin/db-backup.sh:ro
+      - db_backups:/backups
+    command: ["/usr/local/bin/db-backup.sh", "once"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      temporal-postgres:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+
   db-migrate:
     # task.0370 step 1: same image as the app, invoking the bundled migrate.mjs.
     image: ${APP_IMAGE?APP_IMAGE is required}
@@ -404,6 +443,33 @@ services:
       - PROMETHEUS_REMOTE_WRITE_URL=${PROMETHEUS_REMOTE_WRITE_URL:-}
       - PROMETHEUS_USERNAME=${PROMETHEUS_USERNAME:-}
       - PROMETHEUS_PASSWORD=${PROMETHEUS_PASSWORD:-}
+
+  alloy-k8s-events:
+    image: grafana/alloy:v1.9.2
+    restart: unless-stopped
+    network_mode: host
+    # k3s writes /etc/rancher/k3s/k3s.yaml with 0600 root-owned perms; the
+    # default alloy user (uid 473) cannot read it. Run as root so the
+    # read-only kubeconfig bind-mount is usable.
+    user: "0:0"
+    volumes:
+      - ./configs/alloy-config.k8s-events.alloy:/etc/alloy/config.alloy:ro
+      - alloy_k8s_events_data:/var/lib/alloy
+      - /etc/rancher/k3s/k3s.yaml:/etc/rancher/k3s/k3s.yaml:ro
+    command:
+      - run
+      - /etc/alloy/config.alloy
+      - --storage.path=/var/lib/alloy
+      # network_mode: host puts us on loopback alongside the main alloy
+      # container, which already binds the default 127.0.0.1:12345.
+      # Move our HTTP server (UI/healthcheck) + cluster advertise to 12346.
+      - --server.http.listen-addr=127.0.0.1:12346
+      - --cluster.advertise-address=127.0.0.1:12346
+    environment:
+      - DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
+      - LOKI_WRITE_URL=${LOKI_WRITE_URL}
+      - LOKI_USERNAME=${LOKI_USERNAME}
+      - LOKI_PASSWORD=${LOKI_PASSWORD}
 
   pdc-agent:
     image: grafana/pdc-agent:0.0.57@sha256:541e46e2c404686b881c8c9e633a0242b5d7b714c945b186d0e581fb568e509e
@@ -732,8 +798,12 @@ volumes:
     name: doltgres_data
   alloy_data:
     name: alloy_data
+  alloy_k8s_events_data:
+    name: alloy_k8s_events_data
   temporal_postgres_data:
     name: temporal_postgres_data
+  db_backups:
+    name: db_backups
   repo_data:
     name: repo_data
   pnpm_store:

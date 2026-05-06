@@ -87,6 +87,13 @@ export interface PolymarketDataApiClientConfig {
 
 const DEFAULT_TIMEOUT_MS = 5000;
 
+/** `/positions` page ceiling enforced by the API (verified 2026-05). */
+const LIST_ALL_POSITIONS_PAGE_SIZE = 500;
+/** Hard upper bound on `listAllUserPositions` pages — defends against a server
+ * that always returns a full page. 50 × 500 = 25k rows; well above the largest
+ * funder we have observed (~150). */
+const LIST_ALL_POSITIONS_MAX_PAGES = 50;
+
 export interface ListTopTradersParams {
   /** Rolling time window honored by the API. `ALL` is all-time. */
   timePeriod?: PolymarketLeaderboardTimePeriod;
@@ -99,6 +106,8 @@ export interface ListTopTradersParams {
 export interface ListUserActivityParams {
   /** Rows per page (API caps at ~500). Default: 100. */
   limit?: number;
+  /** Optional offset for pagination. */
+  offset?: number;
   /** Only return trades at or after this unix-seconds timestamp. */
   sinceTs?: number;
 }
@@ -106,6 +115,8 @@ export interface ListUserActivityParams {
 export interface ListUserTradesParams {
   /** Rows per page. Default: 20. Polymarket's `/trades` cache appears to serve a stale page at limits >20 (verified 2026-05-01: limit=1000 was 2min behind limit=20 for an active trader). Callers needing deeper history should paginate or accept staleness. */
   limit?: number;
+  /** Optional offset for pagination. */
+  offset?: number;
   /** Only return trades at or after this unix-seconds timestamp. */
   sinceTs?: number;
   /** When true, only include fills where the user was the TAKER. Default: false (includes maker fills — required for position tracking). */
@@ -223,6 +234,9 @@ export class PolymarketDataApiClient {
       "takerOnly",
       params?.takerOnly === true ? "true" : "false"
     );
+    if (params?.offset !== undefined) {
+      url.searchParams.set("offset", String(params.offset));
+    }
 
     const json = await this.fetchJson(url);
     const trades = PolymarketUserTradesResponseSchema.parse(json);
@@ -254,6 +268,35 @@ export class PolymarketDataApiClient {
 
     const json = await this.fetchJson(url);
     return PolymarketUserPositionsResponseSchema.parse(json);
+  }
+
+  /**
+   * Walk every page of `/positions` for `wallet` and return the concatenated
+   * result. The single-call `listUserPositions` silently caps at ~100 rows
+   * (Polymarket's default page); callers that need full enumeration (boot
+   * backfill, recovery sweeps) must paginate or they will miss everything
+   * past page 1 (bug.5027).
+   *
+   * Pages at `LIST_ALL_POSITIONS_PAGE_SIZE` (500, the API ceiling) and stops
+   * when a page returns fewer rows than requested. Hard-bounded to
+   * `LIST_ALL_POSITIONS_MAX_PAGES` to defend against a misbehaving server
+   * that always returns full pages.
+   */
+  async listAllUserPositions(
+    wallet: string,
+    baseParams?: Omit<ListUserPositionsParams, "limit" | "offset">
+  ): Promise<PolymarketUserPosition[]> {
+    const all: PolymarketUserPosition[] = [];
+    for (let page = 0; page < LIST_ALL_POSITIONS_MAX_PAGES; page += 1) {
+      const rows = await this.listUserPositions(wallet, {
+        ...baseParams,
+        limit: LIST_ALL_POSITIONS_PAGE_SIZE,
+        offset: page * LIST_ALL_POSITIONS_PAGE_SIZE,
+      });
+      all.push(...rows);
+      if (rows.length < LIST_ALL_POSITIONS_PAGE_SIZE) return all;
+    }
+    return all;
   }
 
   /**

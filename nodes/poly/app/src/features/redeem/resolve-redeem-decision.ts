@@ -27,6 +27,7 @@ import {
   POLYGON_CONDITIONAL_TOKENS,
   POLYGON_USDC_E,
   type PolymarketDataApiClient,
+  type PolymarketUserPosition,
 } from "@cogni/poly-market-provider/adapters/polymarket";
 import {
   decideRedeem,
@@ -52,6 +53,14 @@ export interface ResolvedRedeemCandidate {
   decision: RedeemDecision;
   /** Collateral that minted this position; forwarded to `redeemPositions`. bug.0428. */
   collateralToken: `0x${string}`;
+  /**
+   * Chain-read payout numerator for this outcome. `null` when the read failed.
+   * Carried so callers can populate `poly_market_outcomes` without re-reading
+   * the chain. `> 0` ⇒ winner; `=== 0n` ⇒ loser.
+   */
+  payoutNumerator: bigint | null;
+  /** Chain-read payout denominator (same condition for all outcomes). */
+  payoutDenominator: bigint | null;
 }
 
 /**
@@ -87,14 +96,17 @@ export async function resolveRedeemCandidatesForCondition(deps: {
   conditionId: `0x${string}` | string;
   publicClient: PublicClient;
   dataApiClient: PolymarketDataApiClient;
+  positions?: readonly PolymarketUserPosition[];
 }): Promise<ResolvedRedeemCandidate[]> {
   const conditionId = normalizePolygonConditionId(
     typeof deps.conditionId === "string" ? deps.conditionId : deps.conditionId
   );
 
-  const allPositions = await deps.dataApiClient.listUserPositions(
-    deps.funderAddress
-  );
+  const allPositions =
+    deps.positions ??
+    (await deps.dataApiClient.listUserPositions(deps.funderAddress, {
+      market: conditionId,
+    }));
   const matches = allPositions.filter((p) => {
     try {
       return normalizePolygonConditionId(p.conditionId) === conditionId;
@@ -178,6 +190,10 @@ export async function resolveRedeemCandidatesForCondition(deps: {
       negativeRisk,
       decision,
       collateralToken,
+      payoutNumerator:
+        reads[1]?.status === "success" ? (reads[1].result as bigint) : null,
+      payoutDenominator:
+        reads[2]?.status === "success" ? (reads[2].result as bigint) : null,
     });
   }
   return out;

@@ -65,6 +65,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
   - `/api/v1/work/items` [GET] - list work items with optional filters (SIWE auth)
   - `/api/v1/work/items/[id]` [GET] - get single work item by ID (SIWE auth)
   - `/api/v1/poly/copy-trade/orders` [GET] - recent order ledger rows with `synced_at` + `staleness_ms` (session auth)
+  - `/api/v1/poly/research/target-overlap` [GET] - RN1/swisstony shared-vs-solo active-market overlap from saved observed trader facts (session auth)
   - `/api/v1/poly/wallet/connect` [POST] - provision the calling user's dedicated Polymarket trading wallet (session auth)
   - `/api/v1/poly/wallet/status` [GET] - read whether the calling user already has a resolvable dedicated Polymarket trading wallet (session auth)
   - `/api/v1/poly/wallet/balances` [GET] - read USDC.e + POL balances on the calling user's dedicated Polymarket trading wallet (session auth, distinct from legacy operator-only `/balance`)
@@ -72,6 +73,7 @@ HTTP API endpoints using Next.js App Router. Contract-validated entry points tha
   - `/api/v1/poly/wallet/refresh` [POST] - force-refresh process-local Polymarket wallet caches and warm non-CLOB execution data for the caller's trading wallet (session auth)
   - `/api/v1/poly/wallet/positions/close` [POST] - CLOB SELL-to-close an open position for the caller's wallet (`token_id`; session auth)
   - `/api/v1/poly/wallet/positions/redeem` [POST] - CTF redeemPositions after resolution (`condition_id`; session auth)
+  - `/api/v1/poly/research/trader-comparison` [GET] - compare up to three research wallets by Polymarket P/L and saved-observation trade flow (session auth)
   - `/api/v1/poly/internal/sync-health` [GET] - aggregate sync-freshness stats for the reconciler (no auth; aggregate-only)
 - **Files considered API:** v1/_/route.ts, admin/_/route.ts
 

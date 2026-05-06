@@ -36,8 +36,8 @@ Production runtime configuration directory copied to VM hosts for container orch
 
 - **Exports:** none
 - **CLI (if any):** docker-compose commands
-- **Env/Config keys:** `APP_IMAGE`, `MIGRATOR_IMAGE`, `APP_ENV`, `DEPLOY_ENVIRONMENT`, `COGNI_REPO_URL` (git-sync), `COGNI_REPO_REF` (git-sync, pinned SHA), `GIT_READ_USERNAME` (git-sync), `GIT_READ_TOKEN` (git-sync, Contents:Read PAT), `COGNI_REPO_PATH` (app, `/repo/current`), `COGNI_REPO_SHA` (app), `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_SERVICE_USER`, `APP_DB_SERVICE_PASSWORD`, `APP_DB_READONLY_USER`, `APP_DB_READONLY_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL` (explicit DSN, app_user), `DATABASE_SERVICE_URL` (explicit DSN, app_service), `DOLTGRES_PASSWORD` / `DOLTGRES_READER_PASSWORD` / `DOLTGRES_WRITER_PASSWORD` (provisioning; derived deterministically from `POSTGRES_ROOT_PASSWORD` in deploy-infra.sh), `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (derived from DEPLOY_ENVIRONMENT), `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `GRAFANA_PDC_SIGNING_TOKEN`, `GRAFANA_PDC_HOSTED_GRAFANA_ID`, `GRAFANA_PDC_CLUSTER`, `GRAFANA_PDC_NETWORK_ID`, `METRICS_TOKEN` (app+alloy), `BILLING_INGEST_TOKEN` (app+litellm, callback auth), `INTERNAL_OPS_TOKEN` (app internal ops auth), `COGNI_NODE_ENDPOINTS` (litellm, per-node callback routing), `PROMETHEUS_REMOTE_WRITE_URL` (alloy), `PROMETHEUS_USERNAME` (alloy), `PROMETHEUS_PASSWORD` (alloy), `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD`, `TEMPORAL_DB_HOST`, `TEMPORAL_DB_PORT`
-- **Files considered API:** `docker-compose.yml`, `postgres-init/*.sh`, `configs/alloy-config.alloy`, `sandbox-proxy/nginx-gateway.conf.template`, `openclaw/openclaw-gateway.json`
+- **Env/Config keys:** `APP_IMAGE`, `MIGRATOR_IMAGE`, `APP_ENV`, `DEPLOY_ENVIRONMENT`, `COGNI_REPO_URL` (git-sync), `COGNI_REPO_REF` (git-sync, pinned SHA), `GIT_READ_USERNAME` (git-sync), `GIT_READ_TOKEN` (git-sync, Contents:Read PAT), `COGNI_REPO_PATH` (app, `/repo/current`), `COGNI_REPO_SHA` (app), `POSTGRES_ROOT_USER`, `POSTGRES_ROOT_PASSWORD`, `APP_DB_USER`, `APP_DB_PASSWORD`, `APP_DB_SERVICE_USER`, `APP_DB_SERVICE_PASSWORD`, `APP_DB_READONLY_USER`, `APP_DB_READONLY_PASSWORD`, `APP_DB_NAME`, `DATABASE_URL` (explicit DSN, app_user), `DATABASE_SERVICE_URL` (explicit DSN, app_service), `DB_BACKUP_INTERVAL_SECONDS`, `DB_BACKUP_RETENTION_DAYS`, `DB_BACKUP_OBSERVABILITY_GRACE_SECONDS`, `DOLTGRES_PASSWORD` / `DOLTGRES_READER_PASSWORD` / `DOLTGRES_WRITER_PASSWORD` (provisioning; derived deterministically from `POSTGRES_ROOT_PASSWORD` in deploy-infra.sh), `APP_BASE_URL`, `NEXTAUTH_URL`, `AUTH_SECRET`, `LITELLM_MASTER_KEY`, `OPENROUTER_API_KEY`, `LITELLM_DATABASE_URL`, `LANGFUSE_PUBLIC_KEY`, `LANGFUSE_SECRET_KEY`, `LANGFUSE_BASE_URL`, `LANGFUSE_TRACING_ENVIRONMENT` (derived from DEPLOY_ENVIRONMENT), `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY`, `GRAFANA_PDC_SIGNING_TOKEN`, `GRAFANA_PDC_HOSTED_GRAFANA_ID`, `GRAFANA_PDC_CLUSTER`, `GRAFANA_PDC_NETWORK_ID`, `GRAFANA_PDC_NETWORK_UUID`, `METRICS_TOKEN` (app+alloy), `BILLING_INGEST_TOKEN` (app+litellm, callback auth), `INTERNAL_OPS_TOKEN` (app internal ops auth), `COGNI_NODE_ENDPOINTS` (litellm, per-node callback routing), `PROMETHEUS_REMOTE_WRITE_URL` (alloy), `PROMETHEUS_USERNAME` (alloy), `PROMETHEUS_PASSWORD` (alloy), `TEMPORAL_ADDRESS`, `TEMPORAL_NAMESPACE`, `TEMPORAL_TASK_QUEUE`, `TEMPORAL_DB_USER`, `TEMPORAL_DB_PASSWORD`, `TEMPORAL_DB_HOST`, `TEMPORAL_DB_PORT`
+- **Files considered API:** `docker-compose.yml`, `db-backup/*.sh`, `postgres-init/*.sh`, `configs/alloy-config.alloy`, `sandbox-proxy/nginx-gateway.conf.template`, `openclaw/openclaw-gateway.json`
 
 ## Responsibilities
 
@@ -84,12 +84,13 @@ docker compose --project-name cogni-runtime logs -f app
 - Database security uses two-user model (root + app credentials)
 - Init scripts run only on first postgres container startup
 - `NEXTAUTH_URL` env var provided with shell fallback to `APP_BASE_URL`; Auth.js uses `trustHost: true` (safe behind Caddy)
-- Log collection: Alloy scrapes Docker containers (JSON stdout), applies strict label cardinality (app, env, service, stream); suppresses successful health-check/metrics-scrape log noise at pipeline level
+- Log collection: Alloy scrapes Docker containers (JSON stdout), tails k3s pod logs from `/var/log/pods`, and ships Kubernetes Events through `alloy-k8s-events`; applies strict label cardinality (app, env, service, stream/source plus low-cardinality event reason/type/kind); suppresses successful health-check/metrics-scrape log noise at pipeline level
 - Alloy infra metrics: cAdvisor (container memory/CPU/OOM/network/disk) + node exporter (host memory/CPU/filesystem/network) → Grafana Cloud Mimir via strict 18-metric allowlist
 - Alloy host mounts: `/proc:/host/proc:ro`, `/sys:/host/sys:ro`, `/:/host/root:ro` (required for node exporter)
 - Alloy UI exposed at 127.0.0.1:12345 (internal only)
-- `DEPLOY_ENVIRONMENT` must be set (local|preview|production) - used for env label, fail-closed validation
+- `DEPLOY_ENVIRONMENT` must be set (local|candidate-a|preview|production) - used for env label, fail-closed validation
 - `db-migrate` service runs via `--profile bootstrap`, receives only DB env vars (least-secret exposure)
+- `db-backup` is a `--profile backup` one-shot service, scheduled on deployed VMs by the host `cogni-db-backup.timer`; it runs `pg_dump`/`pg_dumpall --globals-only` against app Postgres and Temporal Postgres every `DB_BACKUP_INTERVAL_SECONDS` (default 24h), waits briefly for Alloy log collection via `DB_BACKUP_OBSERVABILITY_GRACE_SECONDS` (default 90s), and dumps live in the persistent `db_backups` volume with `DB_BACKUP_RETENTION_DAYS` retention (default 14d)
 - `MIGRATOR_IMAGE` required in production compose (no fallback), derived from APP_IMAGE with `-migrate` suffix
 - `git-sync` runs as bootstrap profile service (prod) or regular service (dev), populates `repo_data` volume at `/repo/current` via atomic symlink
 - App reads `COGNI_REPO_PATH=/repo/current` in all environments; `COGNI_REPO_REF` pins to deploy commit SHA
@@ -122,7 +123,7 @@ docker compose --project-name cogni-runtime logs -f app
 
 **Doltgres (knowledge plane):**
 
-- `doltgres`: Postgres-wire-compatible Dolt server, port 127.0.0.1:5435→5432, volume `doltgres_data`
+- `doltgres`: Postgres-wire-compatible Dolt server, host port 5435→5432, volume `doltgres_data`. Public-NIC traffic on 5435 is dropped by `DOCKER-USER` chain (see `infra/provision/cherry/harden-docker-public-ports.sh`); k3s pods on `10.42.0.0/16` reach it via the EndpointSlice node IP.
 - `doltgres-provision` (profile: bootstrap): creates roles + per-node `knowledge_<node>` databases via `doltgres-init/provision.sh`. Schema owned by drizzle-kit (k8s PreSync Job), not this script
 - Doltgres 0.56 RBAC is non-functional — runtime `DOLTGRES_URL_*` in k8s secrets connects as `postgres` superuser. Writer role is provisioned but vestigial until upstream GRANT works
 - See [knowledge data plane spec](../../../docs/spec/knowledge-data-plane.md)
@@ -133,7 +134,7 @@ docker compose --project-name cogni-runtime logs -f app
 - `temporal`: Temporal server with auto-setup (handles schema migrations), pinned to v1.29.1
 - `temporal-ui`: Web UI for debugging schedules (localhost:8233)
 - Namespace auto-created via `DEFAULT_NAMESPACE=cogni-{APP_ENV}`
-- Port forwarding: 127.0.0.1:7233 (gRPC), 127.0.0.1:8233 (UI)
+- Port forwarding: host port 7233 (gRPC) — public-NIC traffic dropped by `DOCKER-USER` (see `infra/provision/cherry/harden-docker-public-ports.sh`); k3s pods reach via node IP. UI on 127.0.0.1:8233.
 
 **Playwright MCP (profile: mcp-playwright, dev-only):**
 

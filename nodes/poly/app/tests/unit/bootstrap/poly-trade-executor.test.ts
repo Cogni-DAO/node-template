@@ -15,6 +15,8 @@ const writeContract = vi.fn();
 const waitForTransactionReceipt = vi.fn();
 const multicall = vi.fn();
 const readContract = vi.fn();
+const createOrDeriveApiKey = vi.fn();
+const clobClientV1Constructor = vi.fn();
 
 vi.mock("@cogni/poly-market-provider/adapters/polymarket", () => {
   class FakePolymarketClobAdapter {
@@ -39,9 +41,20 @@ vi.mock("@cogni/poly-market-provider/adapters/polymarket", () => {
     POLYGON_USDC_E: "0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174" as const,
     PolymarketClobAdapter: FakePolymarketClobAdapter,
     PolymarketDataApiClient: FakePolymarketDataApiClient,
+    withSanitizedClobSdkConsoleErrors: <T>(fn: () => T) => fn(),
     polymarketCtfRedeemAbi: [],
   };
 });
+
+vi.mock("@polymarket/clob-client", () => ({
+  ClobClient: class FakeClobClient {
+    constructor(...args: unknown[]) {
+      clobClientV1Constructor(...args);
+    }
+
+    createOrDeriveApiKey = createOrDeriveApiKey;
+  },
+}));
 
 vi.mock("viem", () => ({
   createWalletClient: vi.fn(() => ({ writeContract })),
@@ -61,6 +74,11 @@ vi.mock("viem/chains", () => ({
   polygon: { id: 137 },
 }));
 
+import {
+  classifyClobCredentialRotationError,
+  createOrDerivePolymarketApiKeyForSigner,
+  normalizePolymarketApiKeyCreds,
+} from "@/bootstrap/capabilities/poly-clob-creds";
 import { createPolyTradeExecutorFactory } from "@/bootstrap/capabilities/poly-trade-executor";
 
 const BILLING_ACCOUNT_ID = "billing-account-1";
@@ -144,6 +162,8 @@ describe("createPolyTradeExecutorFactory", () => {
     getOrder.mockReset();
     getMarketConstraints.mockReset();
     listOpenOrders.mockReset();
+    createOrDeriveApiKey.mockReset();
+    clobClientV1Constructor.mockReset();
     writeContract.mockReset();
     waitForTransactionReceipt.mockReset();
     multicall.mockReset();
@@ -240,9 +260,61 @@ describe("createPolyTradeExecutorFactory", () => {
     expect(listUserPositions).toHaveBeenCalledTimes(1);
   });
 
-  it("exitPosition falls back to on-chain CTF balance when Data API omits a legacy holding", async () => {
+  it("exitPosition reads on-chain CTF balance when Data API omits a legacy holding", async () => {
     listUserPositions.mockResolvedValue([]);
     readContract.mockResolvedValue(4_898_000n);
+    const receipt: OrderReceipt = {
+      order_id: "0xexit",
+      client_order_id: "0xclient",
+      status: "filled",
+      filled_size_usdc: 4.8,
+      submitted_at: "2026-04-23T00:00:00.000Z",
+    };
+    sellPositionAtMarket.mockResolvedValue(receipt);
+    const walletPort = makeWalletPort();
+
+    const factory = createPolyTradeExecutorFactory({
+      walletPort,
+      logger: makeLogger() as never,
+      metrics: makeMetrics() as never,
+      host: "https://clob.polymarket.com",
+      polygonRpcUrl: "https://polygon.example",
+    });
+    const executor = await factory.getPolyTradeExecutorFor(BILLING_ACCOUNT_ID);
+
+    const result = await executor.exitPosition({
+      tokenId: "123",
+      client_order_id: "0xclient",
+    });
+
+    expect(result).toEqual(receipt);
+    expect(readContract).toHaveBeenCalledWith(
+      expect.objectContaining({
+        functionName: "balanceOf",
+        args: [FUNDER, 123n],
+      })
+    );
+    expect(sellPositionAtMarket).toHaveBeenCalledWith({
+      tokenId: "123",
+      shares: 4.898,
+      client_order_id: "0xclient",
+      orderType: "FAK",
+    });
+  });
+
+  it("exitPosition reads on-chain CTF balance when Data API reports sub-floor shares", async () => {
+    listUserPositions.mockResolvedValue([
+      {
+        asset: "123",
+        size: 0.67,
+        curPrice: 0.25,
+        conditionId: CONDITION_ID,
+        outcome: "YES",
+        redeemable: false,
+      },
+    ]);
+    readContract.mockResolvedValue(4_898_000n);
+    getMarketConstraints.mockResolvedValue({ minShares: 1 });
     const receipt: OrderReceipt = {
       order_id: "0xexit",
       client_order_id: "0xclient",
@@ -386,5 +458,104 @@ describe("createPolyTradeExecutorFactory", () => {
       size_usdc: 1,
     });
     expect(walletPort.authorizeIntent).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("createOrDerivePolymarketApiKeyForSigner", () => {
+  it("uses the manually verified v1 CLOB client boundary for provisioning credentials", async () => {
+    createOrDeriveApiKey.mockResolvedValue({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+
+    await expect(
+      createOrDerivePolymarketApiKeyForSigner({
+        signer: { address: FUNDER } as never,
+        polygonRpcUrl: "https://polygon.example",
+        geoBlockToken: "geo-token",
+        host: "https://clob.polymarket.com",
+      })
+    ).resolves.toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+
+    expect(clobClientV1Constructor).toHaveBeenCalledWith(
+      "https://clob.polymarket.com",
+      137,
+      { writeContract },
+      undefined,
+      undefined,
+      undefined,
+      "geo-token",
+      true,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      true
+    );
+    expect(createOrDeriveApiKey).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("classifyClobCredentialRotationError", () => {
+  it("classifies Polymarket Cloudflare blocks distinctly from normal 403s", () => {
+    const err = Object.assign(
+      new Error(
+        'Sorry, you have been blocked. Cloudflare Ray ID: <strong class="font-semibold">9f63041f8df7cc1e</strong>'
+      ),
+      { status: 403 }
+    );
+
+    expect(classifyClobCredentialRotationError(err)).toEqual({
+      reasonCode: "clob_cloudflare_blocked",
+      httpStatus: 403,
+      errorClass: "Error",
+      cloudflareRayId: "9f63041f8df7cc1e",
+    });
+  });
+});
+
+describe("normalizePolymarketApiKeyCreds", () => {
+  it("keeps plain v2 SDK credentials JSON-serializable before storage", () => {
+    expect(
+      normalizePolymarketApiKeyCreds({
+        key: "key",
+        secret: "secret",
+        passphrase: "passphrase",
+      })
+    ).toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+  });
+
+  it("accepts raw REST credential shape and maps apiKey to key", () => {
+    expect(
+      normalizePolymarketApiKeyCreds({
+        apiKey: "key",
+        secret: "secret",
+        passphrase: "passphrase",
+      })
+    ).toEqual({
+      key: "key",
+      secret: "secret",
+      passphrase: "passphrase",
+    });
+  });
+
+  it("rejects error-shaped or empty credential responses before encryption", () => {
+    expect(() =>
+      normalizePolymarketApiKeyCreds({ error: "could not derive api key" })
+    ).toThrow(
+      "Polymarket CLOB API credentials response missing key, secret, or passphrase"
+    );
+    expect(() => normalizePolymarketApiKeyCreds({})).toThrow(
+      "Polymarket CLOB API credentials response missing key, secret, or passphrase"
+    );
   });
 });

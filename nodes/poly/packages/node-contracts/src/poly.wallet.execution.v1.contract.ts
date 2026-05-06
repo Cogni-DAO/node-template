@@ -120,6 +120,183 @@ export type WalletExecutionPosition = z.infer<
   typeof WalletExecutionPositionSchema
 >;
 
+export const WalletExecutionMarketPositionSourceSchema = z.enum([
+  "ledger",
+  "trader_current_positions",
+]);
+export const WalletExecutionMarketPositionSideSchema = z.enum([
+  "our_wallet",
+  "copy_target",
+]);
+
+/**
+ * Per-condition lifecycle for a single token leg. `unknown` is the v0 default
+ * until `poly_market_outcomes` is populated; once that backfill lands, joined
+ * outcome rows promote `unknown` to `winner`/`loser`/`resolved`. `inactive`
+ * means the leg dropped out of the latest complete position fetch but is
+ * retained for historical context.
+ */
+export const WalletExecutionMarketLegLifecycleSchema = z.enum([
+  "active",
+  "inactive",
+  "resolved",
+  "winner",
+  "loser",
+  "unknown",
+]);
+export type WalletExecutionMarketLegLifecycle = z.infer<
+  typeof WalletExecutionMarketLegLifecycleSchema
+>;
+
+/**
+ * One token leg of a participant's exposure to a single condition. A
+ * participant has up to two legs per condition (primary + optional hedge).
+ */
+export const WalletExecutionMarketLegSchema = z.object({
+  tokenId: z.string(),
+  outcome: z.string(),
+  shares: z.number().nonnegative(),
+  currentValueUsdc: z.number().nonnegative(),
+  costBasisUsdc: z.number().nonnegative(),
+  vwap: z.number().min(0).nullable(),
+  pnlUsdc: z.number(),
+  lifecycle: WalletExecutionMarketLegLifecycleSchema,
+});
+export type WalletExecutionMarketLeg = z.infer<
+  typeof WalletExecutionMarketLegSchema
+>;
+
+/**
+ * One row per (wallet, conditionId): the participant's primary leg + optional
+ * hedge leg pivoted onto a single shape so the dashboard can render value,
+ * VWAP, and P/L for both legs side-by-side and a `net` summary across them.
+ * Hedge classification is current-state only (smaller cost-basis leg of a
+ * two-leg condition). Server-side pivot per
+ * docs/design/poly-dashboard-market-aggregation.md.
+ */
+export const WalletExecutionMarketParticipantRowSchema = z.object({
+  side: WalletExecutionMarketPositionSideSchema,
+  source: WalletExecutionMarketPositionSourceSchema,
+  label: z.string(),
+  walletAddress: PolyAddressSchema,
+  conditionId: z.string(),
+  primary: WalletExecutionMarketLegSchema.nullable(),
+  hedge: WalletExecutionMarketLegSchema.nullable(),
+  net: z.object({
+    currentValueUsdc: z.number().nonnegative(),
+    costBasisUsdc: z.number().nonnegative(),
+    pnlUsdc: z.number(),
+    /**
+     * Round-trip USDC return on this participant's deployed capital for
+     * this condition, computed Modified-Dietz-style from fills (same
+     * formula as the per-line `ourReturnPct` / `targetReturnPct`). Lets
+     * the expansion grid surface a winner-loser split when the line's
+     * blended `targetReturnPct` hides one. Null when the participant has
+     * no observed buy notional. See §3.5 of the redesign brief.
+     */
+    roundTripReturnPct: z.number().nullable(),
+  }),
+  lastObservedAt: z.string().nullable(),
+});
+export type WalletExecutionMarketParticipantRow = z.infer<
+  typeof WalletExecutionMarketParticipantRowSchema
+>;
+
+/**
+ * Whether the row represents a market we still hold (`live`) or have already
+ * closed/redeemed (`closed`). Drives the dashboard status filter.
+ */
+export const WalletExecutionMarketLineStatusSchema = z.enum(["live", "closed"]);
+export type WalletExecutionMarketLineStatus = z.infer<
+  typeof WalletExecutionMarketLineStatusSchema
+>;
+
+export const WalletExecutionMarketLineSchema = z.object({
+  conditionId: z.string(),
+  marketTitle: z.string(),
+  marketSlug: z.string().nullable(),
+  resolvesAt: z.string().nullable(),
+  status: WalletExecutionMarketLineStatusSchema,
+  ourValueUsdc: z.number().nonnegative(),
+  targetValueUsdc: z.number().nonnegative(),
+  ourVwap: z.number().min(0).nullable(),
+  targetVwap: z.number().min(0).nullable(),
+  hedgeCount: z.number().int().nonnegative(),
+  /**
+   * Cost-basis-deployed return on our position for this condition,
+   * computed Modified-Dietz-style with V_begin = 0:
+   *   (realizedCash + currentMarkValue − totalBuyNotional) / totalBuyNotional
+   * Null when our totalBuyNotional ≤ 0 (no comparable buy fills).
+   * See docs/design/poly-markets-aggregation-redesign.md §3.1.
+   */
+  ourReturnPct: z.number().nullable(),
+  /**
+   * Cost-basis-weighted blend across all active copy-target legs on this
+   * line. Each target's per-position return is weighted by its
+   * totalBuyNotional. Null when no target leg has positive buy notional.
+   * Per-target rows in `participants` carry the unblended values.
+   * See §3.5.
+   */
+  targetReturnPct: z.number().nullable(),
+  /**
+   * `targetReturnPct − ourReturnPct`. Positive = target ahead = alpha
+   * leaking from us. Null when either side is null.
+   * Size-independent pick-quality signal — comparable across markets
+   * regardless of either trader's deployment.
+   */
+  rateGapPct: z.number().nullable(),
+  /**
+   * `rateGapPct × ourTotalBuyNotional`. Dollar cost denominated in OUR
+   * book — not target's whale book. Null when rate-gap is undefined or
+   * our totalBuyNotional ≤ 0. Default sort column for the Markets table.
+   */
+  sizeScaledGapUsdc: z.number().nullable(),
+  participants: z.array(WalletExecutionMarketParticipantRowSchema),
+});
+export type WalletExecutionMarketLine = z.infer<
+  typeof WalletExecutionMarketLineSchema
+>;
+
+export const WalletExecutionMarketGroupSchema = z.object({
+  groupKey: z.string(),
+  eventTitle: z.string().nullable(),
+  eventSlug: z.string().nullable(),
+  marketCount: z.number().int().nonnegative(),
+  /** `live` if any line in the group is still held, else `closed`. */
+  status: WalletExecutionMarketLineStatusSchema,
+  ourValueUsdc: z.number().nonnegative(),
+  targetValueUsdc: z.number().nonnegative(),
+  pnlUsd: z.number(),
+  /**
+   * Cost-basis-weighted aggregate of `ourReturnPct` across lines in the
+   * group, weighted by each line's our `totalBuyNotional`. Null when no
+   * line has positive our-side buy notional.
+   */
+  ourReturnPct: z.number().nullable(),
+  /**
+   * Cost-basis-weighted aggregate of `targetReturnPct` across lines in
+   * the group. Null when no target leg with positive buy notional exists
+   * on any line.
+   */
+  targetReturnPct: z.number().nullable(),
+  /**
+   * `targetReturnPct − ourReturnPct` at the group level. Same
+   * size-independent pick-quality signal as the per-line metric.
+   */
+  rateGapPct: z.number().nullable(),
+  /**
+   * Sum of per-line `sizeScaledGapUsdc` across lines that have it
+   * defined. Group-level "what is target ahead by, on our book." Default
+   * sort column for the Markets table.
+   */
+  sizeScaledGapUsdc: z.number().nullable(),
+  hedgeCount: z.number().int().nonnegative(),
+  lines: z.array(WalletExecutionMarketLineSchema),
+});
+export type WalletExecutionMarketGroup = z.infer<
+  typeof WalletExecutionMarketGroupSchema
+>;
+
 export const WalletExecutionWarningSchema = z.object({
   code: z.string(),
   message: z.string(),
@@ -143,6 +320,8 @@ export const PolyWalletExecutionOutputSchema = z.object({
   dailyTradeCounts: z.array(WalletExecutionDailyCountSchema),
   /** Currently held positions (status open or redeemable). Powers the Open tab. */
   live_positions: z.array(WalletExecutionPositionSchema),
+  /** Event/market grouped exposure for comparing our positions with active copy targets. */
+  market_groups: z.array(WalletExecutionMarketGroupSchema),
   /** Trade-derived closed position history. Powers the Position History tab. */
   closed_positions: z.array(WalletExecutionPositionSchema),
   warnings: z.array(WalletExecutionWarningSchema),

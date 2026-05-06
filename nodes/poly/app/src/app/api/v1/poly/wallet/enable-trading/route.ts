@@ -40,6 +40,7 @@ import {
   getPolyTraderWalletAdapter,
   WalletAdapterUnconfiguredError,
 } from "@/bootstrap/poly-trader-wallet";
+import { EVENT_NAMES, logEvent } from "@/shared/observability";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,7 @@ export const POST = wrapRouteHandlerWithLogging(
     auth: { mode: "required", getSessionUser },
   },
   async (ctx, _request, sessionUser) => {
+    const startedAtMs = performance.now();
     if (!sessionUser) throw new Error("sessionUser required");
 
     const container = getContainer();
@@ -61,6 +63,18 @@ export const POST = wrapRouteHandlerWithLogging(
       adapter = getPolyTraderWalletAdapter(ctx.log);
     } catch (err) {
       if (err instanceof WalletAdapterUnconfiguredError) {
+        logEvent(ctx.log, EVENT_NAMES.POLY_WALLET_ENABLE_TRADING_COMPLETE, {
+          reqId: ctx.reqId,
+          routeId: ctx.routeId,
+          status: 503,
+          durationMs: Math.round(performance.now() - startedAtMs),
+          outcome: "error",
+          errorCode: "wallet_adapter_unconfigured",
+          billing_account_id: account.id,
+          connection_id: null,
+          ready: false,
+          steps: 0,
+        });
         return NextResponse.json(
           { error: "wallet_adapter_unconfigured" },
           { status: 503 }
@@ -71,6 +85,18 @@ export const POST = wrapRouteHandlerWithLogging(
 
     try {
       const result = await adapter.ensureTradingApprovals(account.id);
+      logEvent(ctx.log, EVENT_NAMES.POLY_WALLET_ENABLE_TRADING_COMPLETE, {
+        reqId: ctx.reqId,
+        routeId: ctx.routeId,
+        status: 200,
+        durationMs: Math.round(performance.now() - startedAtMs),
+        outcome: result.ready ? "success" : "error",
+        errorCode: result.ready ? null : "approval_step_failed",
+        billing_account_id: account.id,
+        connection_id: null,
+        ready: result.ready,
+        steps: result.steps.length,
+      });
       const payload: PolyWalletEnableTradingOutput = {
         ready: result.ready,
         address: result.address,
@@ -93,23 +119,83 @@ export const POST = wrapRouteHandlerWithLogging(
       // Pre-flight errors are throwns from the adapter with a `.code` tag.
       const code =
         (err as { code?: string } | undefined)?.code ?? "unknown_error";
+      const connectionId =
+        (err as { connectionId?: string } | undefined)?.connectionId ?? null;
       if (code === "no_connection") {
+        logEvent(ctx.log, EVENT_NAMES.POLY_WALLET_ENABLE_TRADING_COMPLETE, {
+          reqId: ctx.reqId,
+          routeId: ctx.routeId,
+          status: 409,
+          durationMs: Math.round(performance.now() - startedAtMs),
+          outcome: "error",
+          errorCode: "no_connection",
+          billing_account_id: account.id,
+          connection_id: connectionId,
+          ready: false,
+          steps: 0,
+        });
         return NextResponse.json(
-          { error: "no_active_wallet_connection" },
+          { error: "no_active_wallet_connection", reason: "no_connection" },
           { status: 409 }
         );
       }
       if (code === "polygon_rpc_unconfigured") {
+        logEvent(ctx.log, EVENT_NAMES.POLY_WALLET_ENABLE_TRADING_COMPLETE, {
+          reqId: ctx.reqId,
+          routeId: ctx.routeId,
+          status: 503,
+          durationMs: Math.round(performance.now() - startedAtMs),
+          outcome: "error",
+          errorCode: "polygon_rpc_unconfigured",
+          billing_account_id: account.id,
+          connection_id: connectionId,
+          ready: false,
+          steps: 0,
+        });
         return NextResponse.json(
           { error: "polygon_rpc_unconfigured" },
           { status: 503 }
         );
       }
+      if (
+        code === "tenant_mismatch" ||
+        code === "clob_creds_invalid" ||
+        code === "wallet_account_unavailable" ||
+        code === "backend_unreachable"
+      ) {
+        logEvent(ctx.log, EVENT_NAMES.POLY_WALLET_ENABLE_TRADING_COMPLETE, {
+          reqId: ctx.reqId,
+          routeId: ctx.routeId,
+          status: 500,
+          durationMs: Math.round(performance.now() - startedAtMs),
+          outcome: "error",
+          errorCode: code,
+          billing_account_id: account.id,
+          connection_id: connectionId,
+          ready: false,
+          steps: 0,
+        });
+        return NextResponse.json(
+          { error: "wallet_signing_context_unavailable", reason: code },
+          { status: 500 }
+        );
+      }
+      logEvent(ctx.log, EVENT_NAMES.POLY_WALLET_ENABLE_TRADING_COMPLETE, {
+        reqId: ctx.reqId,
+        routeId: ctx.routeId,
+        status: 500,
+        durationMs: Math.round(performance.now() - startedAtMs),
+        outcome: "error",
+        errorCode: "unknown_error",
+        billing_account_id: account.id,
+        connection_id: connectionId,
+        ready: false,
+        steps: 0,
+      });
       ctx.log.error(
         {
           billing_account_id: account.id,
-          err: err instanceof Error ? err.message : String(err),
-          code,
+          errorCode: "unknown_error",
         },
         "poly.wallet.enable_trading.error"
       );

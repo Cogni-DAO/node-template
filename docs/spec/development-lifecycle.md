@@ -5,53 +5,93 @@ title: Development Lifecycle
 status: draft
 spec_state: proposed
 trust: draft
-summary: Status-driven development lifecycle with deterministic command dispatch
-read_when: Starting new work, understanding the development flow, reviewing PRs
+summary: Single source of truth for how work moves from idea → deploy_verified. Status machine + as-built agent loop + contributor↔operator↔GitHub interaction graph.
+read_when: Starting any contribution (agent or human), reviewing PRs, wiring a new agent client.
 implements: proj.development-workflows
 owner: derekg1729
 created: 2026-02-05
-verified: 2026-02-18
-tags: [workflow, commands]
+updated: 2026-05-04
+verified: 2026-05-04
+tags: [workflow, commands, agentic, lifecycle]
 ---
 
 # Development Lifecycle
 
-> Every work item status maps to exactly one `/command`. Automation picks the next item, dispatches the matching command, and commits the result. No ambiguity, no status rot.
+> Every work item status maps to exactly one `/command`. Every contributor — agent or human — runs the same loop. Sources of truth: Dolt for status/design, operator Postgres for sessions, GitHub for code/CI/comments.
 
-### Key References
+## Goal
 
-|             |                                                                                           |                              |
-| ----------- | ----------------------------------------------------------------------------------------- | ---------------------------- |
-| **Spec**    | [Docs + Work System](./docs-work-system.md)                                               | Type taxonomy and ownership  |
-| **Project** | [proj.docs-system-infrastructure](../../work/projects/proj.docs-system-infrastructure.md) | Tooling roadmap (CI, MkDocs) |
-| **Guide**   | [Work Management Guide](../../work/README.md)                                             | Front door to `/work`        |
+A registered agent (or human contributor) can claim a Dolt work item, push code, request a candidate-a flight, and post a `/validate-candidate` scorecard — closing the loop to `deploy_verified: true` — while the operator coordinates intent, deadlines, and notifications, and GitHub Actions + Merge Queue own deploy serialization.
+
+## Non-Goals
+
+- Replacing GitHub for code review, CI, or merge serialization — Dolt holds intent + design, GitHub stays the source of truth for code state.
+- Synchronous human approvals inside the agent loop — gates are status transitions in Dolt, not chat handoffs.
+- Real-time push from operator → contributor in v0 — the broadcaster channel (idempotent PR comments) is filed in Open Questions, not in scope here.
 
 ## Design
 
-### Status Enum
+The full design is the rest of this spec — Interaction Graph (component map), Roles + Surfaces, Status Machine, The Loop (as-built agent flow), Validation Contract, Auth Model, Contracts, and Invariants. Read top-to-bottom for first contact; jump to the section you need on subsequent reads.
 
-9 values. Every `needs_*` status has exactly one command that resolves it.
+## Interaction Graph
 
-#### Command-driven (automation dispatches these)
+```
+              ┌──────── DOLT ────────┐    SoT for design + status
+              │  work_items, designs │
+              │  (revision history)  │
+              └──────────────────────┘
+                  ▲              ▲
+        PATCH    ║  /implement   ║   /review-implementation
+        status   ║               ║   (vNext: HUMAN required at gates)
+                  ║              ║
+┌──────────────────────────────────────────────┐
+│            CONTRIBUTOR (agent or human)      │
+│  /idea → /triage → /design → /implement →    │
+│  /closeout → /validate-candidate             │
+└──────────────────────────────────────────────┘
+   │   ▲           │   ▲                │   ▲
+   │   │ nextAction│   │ comment         │   │ comment
+   │   │ (poll)    │   │ (push, vNext)   │   │ (scorecard)
+   ▼   │           ▼   │                ▼   │
+┌──────────────────────────────────────────────┐
+│         OPERATOR (Postgres)                  │
+│  sessions: claim, heartbeat, pr_number       │
+│  policy: nextActionForWorkItem(...)          │
+│  vNext: PR-comment broadcaster               │
+└──────────────────────────────────────────────┘
+                       │
+                       │ gh comment / gh pr view
+                       ▼
+              ┌── GITHUB PR + CI ────┐
+              │  branch, head SHA    │
+              │  required checks     │
+              │  PR comments (nudge) │
+              └──────────────────────┘
+                       ▲
+                       │  visual review (vNext: HUMAN)
+                       │  /promote prod (HUMAN today)
+                  ┌────────┐
+                  │ HUMAN  │  required at: design approval (vNext),
+                  │        │  validate-candidate visual eyes,
+                  └────────┘  prod promote, security
+```
 
-| Status            | Command                  | What happens                                                        |
-| ----------------- | ------------------------ | ------------------------------------------------------------------- |
-| `needs_triage`    | `/triage`                | Routes item; stories → `done`; tasks/bugs → next status             |
-| `needs_research`  | `/research`              | Executes spike; spike → `done`; creates follow-up items             |
-| `needs_design`    | `/design`                | Writes/updates spec; task/bug → `needs_implement`                   |
-| `needs_implement` | `/implement`             | Writes code on branch                                               |
-| `needs_closeout`  | `/closeout`              | Docs/headers pass + creates PR                                      |
-| `needs_merge`     | `/review-implementation` | Reviews PR; APPROVE → `done` or REQUEST CHANGES → `needs_implement` |
+## Roles + Surfaces
 
-#### Terminal
+PR comments are **notifications**, never state of record. Design decisions live in Dolt `designs`. Status lives in Dolt `work_items`. Deploy state lives in `/version.buildSha`. Coordination state lives in operator Postgres.
 
-| Status      | Meaning                                                          |
-| ----------- | ---------------------------------------------------------------- |
-| `done`      | PR merged. `deploy_verified` field tracks prod deploy separately |
-| `blocked`   | Cannot proceed. `blocked_by:` field required                     |
-| `cancelled` | Abandoned, won't do                                              |
+| Surface                                | Carries                                          | Mutated by                                                                            |
+| -------------------------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------- |
+| Dolt `work_items`, `designs`           | status, design, outcome, validation block        | `/idea`, `/triage`, `/design`, `/implement`, `/closeout`, `/review-implementation`    |
+| Operator Postgres `work_item_sessions` | claim, heartbeat, deadline, branch, pr_number    | `POST /claims`, `/heartbeat`, `/pr`                                                   |
+| GitHub PR + CI                         | code, head SHA, required checks, merge state     | `git push`, `gh pr create`, GitHub Merge Queue                                        |
+| GitHub PR comments                     | scorecards, operator nudges (vNext: broadcaster) | `/validate-candidate`, `cogni-git-review`, agent (rare), operator broadcaster (vNext) |
 
-### Workflow
+If something proposes a design change in a PR comment, that's a bug — capture it in Dolt via `/design` first.
+
+## Status Machine
+
+9 status values. Every `needs_*` status has exactly one command that resolves it.
 
 ```mermaid
 graph LR
@@ -69,84 +109,28 @@ graph LR
   needs_merge -->|"REQUEST CHANGES"| needs_implement
 ```
 
-### Transition Rules
+| Status            | Command                  | What happens                                                        |
+| ----------------- | ------------------------ | ------------------------------------------------------------------- |
+| `needs_triage`    | `/triage`                | Routes item; stories → `done`; tasks/bugs → next status             |
+| `needs_research`  | `/research`              | Executes spike; spike → `done`; creates follow-up items             |
+| `needs_design`    | `/design`                | Writes/updates spec; task/bug → `needs_implement`                   |
+| `needs_implement` | `/implement`             | Writes code on branch                                               |
+| `needs_closeout`  | `/closeout`              | Docs/headers pass + creates PR                                      |
+| `needs_merge`     | `/review-implementation` | Reviews PR; APPROVE → `done` or REQUEST CHANGES → `needs_implement` |
 
-```
-/idea or /bug       → item created at needs_triage
+Terminal: `done` (PR merged; `deploy_verified` tracked separately), `blocked` (`blocked_by:` required), `cancelled`.
 
-/triage on story    → story: done (intake complete); may create task/bug items
-/triage on bug      → needs_implement | needs_design | needs_research
-/triage on task     → needs_implement | needs_design | needs_research
-                      // route to needs_design when ANY of:
-                      //   - touches >1 module/package boundary
-                      //   - introduces a new port, schema column, or HTTP contract
-                      //   - root cause unclear (the bug body doesn't prescribe the fix)
-                      //   - >1 reasonable implementation exists and the choice matters
-                      // route directly to needs_implement when ALL of:
-                      //   - surgical / single-file / fix is in the bug body
-                      //   - no contract, schema, or invariant change
-                      //   - test reproducing the bug is obvious
-/triage on spike    → needs_research
+### Triage routing
 
-/research           → item: done; creates follow-up task/bug/spike items as needed
+- `/triage` on **story** → story `done` (intake complete); may create task/bug items.
+- `/triage` on **bug/task** routes to `needs_design` when ANY of: touches >1 module/package boundary; introduces a new port/schema column/HTTP contract; root cause unclear; >1 reasonable implementation exists. Otherwise → `needs_implement` directly.
+- `/triage` on **spike** → `needs_research`.
 
-/design on task/bug → same item: needs_implement (writes spec, may create additional tasks)
-/design on story    → story: done (intake); creates task items at needs_implement
+### Loop limit
 
-/implement          → needs_closeout
-/closeout           → needs_merge (PR created, pr: field set)
-/review-impl        → done (APPROVE) | needs_implement + revision++ (REQUEST CHANGES)
-```
+`revision: 0` field on the work item. Incremented each time `/review-implementation` sends an item back to `needs_implement`. `revision >= 5` → auto-set `blocked` with note "Review loop limit — escalate to human."
 
-### Commands
-
-| Command                  | Entry Status      | Exit Status                 | Creates/Updates                         | Purpose                                                    |
-| ------------------------ | ----------------- | --------------------------- | --------------------------------------- | ---------------------------------------------------------- |
-| `/idea`                  | —                 | `needs_triage`              | `story.*` item (+ `spike.*` if unclear) | Entry point: new feature concept                           |
-| `/bug`                   | —                 | `needs_triage`              | `bug.*` item                            | Entry point: something is broken                           |
-| `/triage`                | `needs_triage`    | varies by type              | updates item                            | Route to project or leave standalone                       |
-| `/research`              | `needs_research`  | `done`                      | `docs/research/*.md` + follow-up items  | Execute a spike: research + proposed layout                |
-| `/design`                | `needs_design`    | `needs_implement`           | spec + task items (optional)            | Write spec contract; task/bug stays as lifecycle carrier   |
-| `/task`                  | —                 | `needs_implement`           | `task.*` item                           | Decompose into PR-sized work (utility, not lifecycle gate) |
-| `/implement`             | `needs_implement` | `needs_closeout`            | code changes                            | Execute a task/bug: clean code, checkpointed, spec-aligned |
-| `/closeout`              | `needs_closeout`  | `needs_merge`               | docs + PR                               | Docs pass + PR creation; sets `pr:` field                  |
-| `/review-implementation` | `needs_merge`     | `done` or `needs_implement` | —                                       | Critical code review; APPROVE or REQUEST CHANGES           |
-| `/pull-request`          | any               | —                           | PR                                      | Standalone PR creation (manual workflow)                   |
-
-### Automation Dispatch
-
-The governance runner selects and dispatches work items in a deterministic loop:
-
-```
-SELECT item WHERE
-  type IN (task, bug, spike)
-  AND status NOT IN (done, blocked, cancelled)
-  AND claimed_by_run IS NULL
-ORDER BY priority ASC, selection_weight DESC
-
-DISPATCH based on status:
-  needs_merge           → /review-implementation  (weight: 6)
-  needs_closeout        → /closeout               (weight: 5)
-  needs_implement       → /implement              (weight: 4)
-  needs_design          → /design                 (weight: 3)
-  needs_research        → /research               (weight: 2)
-  needs_triage          → /triage                 (weight: 1)
-
-PRE-DISPATCH:
-  SET claimed_by_run = <run_id>, claimed_at = <now>
-
-POST-DISPATCH:
-  COMMIT work item changes
-  CLEAR claimed_by_run, claimed_at
-```
-
-Items closer to `done` get higher selection weight, ensuring near-complete work finishes before new work starts.
-
-### Loop Detection
-
-`revision: 0` field in frontmatter. Incremented each time `/review-implementation` sends an item back to `needs_implement`. If `revision >= 3` → auto-set `blocked` with note "Review loop limit — escalate to human."
-
-### Spec State Lifecycle
+### Spec state lifecycle
 
 | State        | Meaning                          | Required                                              |
 | ------------ | -------------------------------- | ----------------------------------------------------- |
@@ -155,44 +139,175 @@ Items closer to `done` get higher selection weight, ensuring near-complete work 
 | `active`     | Matches code. Enforced.          | Open Questions empty. `verified:` current.            |
 | `deprecated` | No longer authoritative.         | Points to replacement spec.                           |
 
-### Workflows
+## The Loop — As Built (Agent Contribution)
 
-**Bug (simple fix):**
+External AI agent: discover → register → claim → push → flight → self-validate. No human required for routine merges.
 
-```
-/bug → needs_triage → /triage → needs_implement → /implement → needs_closeout → /closeout → needs_merge → /review-implementation → done
-```
+### 1. Discover
 
-**Story (new idea, spawns tasks):**
-
-```
-/idea → needs_triage → /triage → story: done + task created at needs_design
-→ /design → task: needs_implement → /implement → needs_closeout → /closeout → needs_merge → /review-implementation → done
+```bash
+BASE=https://test.cognidao.org
+curl $BASE/.well-known/agent.json | jq .endpoints
 ```
 
-**Spike (unknown design space):**
+The well-known doc is the only hard-coded URL. Everything else is discovered from it.
 
-```
-/idea (creates spike) → needs_triage → /triage → needs_research → /research → spike: done (+ follow-up items)
-```
+### 2. Register
 
-**Design-required task:**
-
-```
-needs_design → /design (writes spec, same item stays carrier) → needs_implement → /implement → ...
+```bash
+API_KEY=$(curl -s -X POST $BASE/api/v1/agent/register \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-agent"}' | jq -r .apiKey)
 ```
 
-### When to Create What
+Bearer token. Same `SessionUser.id` shape as a SIWE-authed human.
 
-| Situation                           | Flow                                                                        |
-| ----------------------------------- | --------------------------------------------------------------------------- |
-| Small fix, no behavior change       | `/bug` → `/triage` → `/implement` → `/closeout` → `/review-implementation`  |
-| Single PR, clear scope              | `/idea` → `/triage` → `/implement` → `/closeout` → `/review-implementation` |
-| Multi-PR effort                     | `/idea` → `/triage` → `/design` → `/implement`(s) → `/closeout` → `/review` |
-| Unknown design space, need research | `/idea` → `/triage` → `/research` → follow-up tasks                         |
-| Architecture decision               | ADR in `docs/decisions/adr/`                                                |
+### 3. Adopt + claim a work item
 
-### PR Body Format
+Adopt **exactly one** work item (1 work item ≈ 1 PR). Prefer adopting an existing `needs_implement`/`needs_design` item over creating a new one.
+
+```bash
+# claim — once
+curl -s -X POST $BASE/api/v1/work/items/$ID/claims \
+  -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+  -d '{"lastCommand":"/implement"}'
+
+# heartbeat — every 5–10 min while active; deadline is 30 min
+curl -s -X POST $BASE/api/v1/work/items/$ID/heartbeat \
+  -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+  -d '{"lastCommand":"/implement"}'
+
+# poll coordination — operator's pushback channel; obey nextAction
+curl -s $BASE/api/v1/work/items/$ID/coordination \
+  -H "Authorization: Bearer $API_KEY" | jq .nextAction
+```
+
+The operator does **not** accept patches/diffs. Agents push their own branches via standard git.
+
+### 4. Push branch + open PR + link
+
+```bash
+git push origin feat/my-change
+gh pr create --title "feat: my change" --body "Opened by my-agent." --base main
+PR_NUMBER=<number from gh output>
+
+curl -s -X POST $BASE/api/v1/work/items/$ID/pr \
+  -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+  -d "{\"branch\":\"feat/my-change\",\"prNumber\":$PR_NUMBER}"
+```
+
+`POST /pr` links the PR to both the operator session **and** the durable Dolt work item. The agent does not run `gh pr ready` here — PRs are not "ready for review" until step 7.
+
+### 5. Wait for CI green
+
+Watch required checks (`unit`, `component`, `static`, `manifest`) on the PR head SHA. Until they're green, the flight endpoint will reject with 422.
+
+### 6. Request candidate-a flight
+
+```bash
+curl -s -X POST $BASE/api/v1/vcs/flight \
+  -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+  -d "{\"prNumber\": $PR_NUMBER}"
+```
+
+Response includes `slot`, `headSha`, `workflowUrl`. Endpoint is a thin gate: it verifies CI green and dispatches `candidate-flight.yml`. The candidate slot lease is owned by the workflow itself ([candidate-slot-controller](./candidate-slot-controller.md)) — the endpoint does not replicate that lease.
+
+### 7. Self-validate
+
+After successful flight, hit your feature endpoint on `test.cognidao.org` (the candidate-a URL for operator) and confirm behavior. Run `/validate-candidate` — it owns the impact-matrix-and-Loki-marker scorecard. Post the scorecard as a PR comment.
+
+This is the **real** validation gate (`SELF_VALIDATE` invariant). `status: done` is just the code gate; `deploy_verified: true` is the signal that the feature actually works on the deployed build.
+
+### 8. Request merge
+
+When validation passes, mark the PR ready and enqueue:
+
+- `gh pr merge --auto --squash` (or UI "Merge when ready").
+- GitHub Merge Queue rebases onto current `main`, re-runs the required checks, and merges deterministically. Agents never rebase.
+- Required checks must fire on **both** `pull_request:` and `merge_group:` triggers (`REPORT_OR_DON'T_REQUIRE` invariant — see [merge-queue-config](./merge-queue-config.md)).
+
+The agentic contribution loop terminates here. Post-merge, `push:main` triggers `flight-preview`, which auto-promotes the merged SHA to preview.
+
+## Multi-Agent Roles
+
+Distinct specialized agents own each lifecycle stage. No single agent runs the full loop.
+
+| Agent             | Owns                                                                                                     |
+| ----------------- | -------------------------------------------------------------------------------------------------------- |
+| `pr-manager`      | VCS orchestration: listPrs, getCiStatus, flightCandidate, monitor Argo, verify SHA, request merge        |
+| `gov-engineering` | Dispatch loop: reads work queue → invokes `/design`, `/implement`, `/closeout`, `/review-implementation` |
+| `pr-review`       | Code-quality review on PR open/update (cogni-git-review GitHub App)                                      |
+| `qa-agent`        | Post-flight feature validation (task.0309) — manual predecessor is `/validate-candidate`                 |
+| `frontend-tester` | Playwright click-through (delegated by qa-agent for UI paths)                                            |
+
+`POST /api/v1/vcs/flight` is the **primitive** (deterministic dispatch — agent knows CI is green, wants to fly now). `pr-manager` is the **policy** layer (decides when to fly, monitors rollout, verifies SHA, requests merge). Do not add policy logic to the REST endpoint.
+
+| Responsibility            | `POST /api/v1/vcs/flight` | `pr-manager`          |
+| ------------------------- | ------------------------- | --------------------- |
+| Verify CI green           | ✅                        | ✅                    |
+| Dispatch candidate-flight | ✅                        | ✅                    |
+| Acquire slot lease        | ❌ (workflow owns it)     | ❌ (workflow owns it) |
+| Monitor Argo rollout      | ❌                        | ✅                    |
+| Verify deployed SHA       | ❌                        | ✅                    |
+| Exercise feature + Loki   | ❌                        | ✅ (validate step)    |
+| Request merge (enqueue)   | ❌                        | ✅                    |
+| Rebase + retest + merge   | ❌ (merge queue owns)     | ❌ (merge queue owns) |
+
+## Validation Contract
+
+Every task and bug **must** include a `## Validation` section before `/closeout` creates the PR (`VALIDATION_REQUIRED`):
+
+```markdown
+## Validation
+
+exercise: |
+POST https://test.cognidao.org/api/v1/<feature>
+Authorization: Bearer <CANDIDATE_TOKEN>
+body: {...}
+assert: response.status == 200, body matches <shape>
+
+observability: |
+{namespace="cogni-candidate-a"} | json | msg="<feature-specific-event>"
+expect: ≥1 entry within 60s of exercise
+
+smoke_cmd: |
+curl -sf https://test.cognidao.org/api/v1/health | jq '.status == "ok"'
+```
+
+`exercise:` + `observability:` are the qa-agent's test specification (`QA_READS_TASK`). `smoke_cmd:` is an optional shell fallback. Generic `/readyz` traffic is not proof (`FEATURE_LOG_PROOF`).
+
+## Deploy Verification
+
+`status: done` = PR merged (code gate — unchanged).
+
+`deploy_verified: true` = qa-agent / `/validate-candidate` confirmed post-flight (set autonomously when):
+
+1. `candidate-flight` status = success on PR head SHA
+2. Health scorecard returns: restarts=0, memory < 90% of limit, oom_kills=0
+3. Feature exercise from the work item's `## Validation` block passes against the deployed URL
+4. Observability signal confirmed in Loki at the deployed SHA
+
+E2E success: one work item reaches `deploy_verified=true` via fully automated pipeline.
+
+## Auth Model
+
+| Method       | Source                        | Scope                                      |
+| ------------ | ----------------------------- | ------------------------------------------ |
+| Bearer token | `POST /api/v1/agent/register` | Machine agent; read/write to own resources |
+| SIWE session | Browser wallet sign-in        | Human operator; same route access          |
+
+All contribution endpoints require auth (`AUTH_REQUIRED`). No publicly writable endpoints.
+
+## Contracts
+
+| Contract                                                             | Location                                                             |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `POST /api/v1/vcs/flight`                                            | `packages/node-contracts/src/vcs.flight.v1.contract.ts`              |
+| Agent registration                                                   | `packages/node-contracts/src/agent-register.v1.contract.ts`          |
+| Work-item sessions (`/claims`, `/heartbeat`, `/pr`, `/coordination`) | `nodes/operator/app/src/contracts/work-item-sessions.v1.contract.ts` |
+| Work items (CRUD + PATCH)                                            | `packages/node-contracts/src/work.items.*.v1.contract.ts`            |
+
+## PR Body Format
 
 ```markdown
 ## References
@@ -201,134 +316,70 @@ Work: task.0042
 Spec: docs/spec/feature.md#invariants (or Spec-Impact: none)
 ```
 
-- Missing `Work:` → merge blocked
-- Missing `Spec:` → warning (blocked if behavior/security/interface change)
-
-## Multi-Agent Pipeline
-
-Distinct specialized agents own each lifecycle stage. No single agent runs the full loop.
-
-```
-pr-manager      — VCS orchestration (listPrs, getCiStatus, flightCandidate)
-gov-engineering — dispatch loop: reads work queue → invokes /design, /implement, /closeout, /review-implementation
-pr-review       — code quality review on PR open/update
-qa-agent        — post-flight feature validation (task.0309)
-frontend-tester — Playwright click-through (delegated by qa-agent for UI paths)
-```
-
-**Post-merge flow (pr-manager + qa-agent):**
-
-```
-/review-implementation → done (PR merged)
-        ↓
-flightCandidate(pr_number)     [task.0297]
-        ↓
-candidate-a deployed (Argo syncs deploy branch)
-        ↓
-qa-agent:
-  getCandidateHealth()         [task.0308] → memory%, restarts, OOM scorecard
-  exercise: feature API call   [from work item ## Validation]
-  query Loki: observability    [confirm feature log signal at deployed SHA]
-        ↓
-deploy_verified = true         [set on work item by qa-agent]
-```
-
-### Feature Validation Contract
-
-Every task and bug **must** include a `## Validation` section before `/closeout` creates the PR:
-
-```markdown
-## Validation
-
-exercise: |
-POST https://test.cognidao.org/api/v1/ai/chat
-Authorization: Bearer <CANDIDATE_TOKEN>
-body: {"messages":[{"role":"user","content":"ping"}],"model":"gpt-4o-mini"}
-assert: response.status == 200, body contains "content"
-
-observability: |
-{namespace="cogni-candidate-a"} | json | msg="ai.llm_call_completed"
-expect: ≥1 entry within 60s of exercise
-
-smoke_cmd: |
-curl -sf https://test.cognidao.org/api/v1/health | jq '.status == "ok"'
-```
-
-The `exercise:` and `observability:` fields are the qa-agent's test specification. `smoke_cmd:` is optional CI shell fallback.
-
-### Deploy Verification
-
-`status: done` = PR merged (code gate — unchanged).
-
-`deploy_verified: true` = qa-agent confirmed post-flight (new — set autonomously):
-
-1. `candidate-flight` status = success on PR head SHA
-2. `getCandidateHealth()` returns: restarts=0, memory < 90% of limit, oom_kills=0
-3. Feature exercise passed (`exercise:` from work item)
-4. Observability signal confirmed in Loki at deployed SHA
-
-**E2E success for proj.cicd-services-gitops:** one work item reaches `deploy_verified=true` via fully automated pipeline. See [proj.cicd-services-gitops](../../work/projects/proj.cicd-services-gitops.md).
-
-## Goal
-
-Define a status-driven lifecycle where every `needs_*` status maps to exactly one `/command`, enabling deterministic automation dispatch.
-
-## Non-Goals
-
-- Type taxonomy (see [docs-work-system](./docs-work-system.md))
-- Project management methodology
-- CI implementation details
-- QA agent implementation (task.0309), flight tool (task.0297), health scorecard (task.0308)
+Missing `Work:` → merge blocked. Missing `Spec:` → warning (blocked if behavior/security/interface change).
 
 ## Invariants
 
-| Rule                     | Constraint                                                                                                                 |
-| ------------------------ | -------------------------------------------------------------------------------------------------------------------------- |
-| STATUS_COMMAND_MAP       | Every `needs_*` status has exactly one command. No ambiguity.                                                              |
-| BRANCH_REQUIRED          | `branch:` must be set when status ∈ {`needs_implement`, `needs_closeout`, `needs_merge`}. `/implement` creates if missing. |
-| PR_EVIDENCE_REQUIRED     | `pr:` must be set before entering `needs_merge`.                                                                           |
-| BLOCKED_EVIDENCE         | `blocked_by:` must be set when status = `blocked`.                                                                         |
-| CLEAN_WORKTREE_ON_EXIT   | `/implement` and `/closeout` must end with clean `git status`.                                                             |
-| COMMIT_ON_PROGRESS       | Commands that change repo files must end with ≥1 commit. Review-only commands are exempt.                                  |
-| CLAIM_REQUIRED           | Governance runner must set `claimed_by_run` before acting. Prevents double-dispatch.                                       |
-| LOOP_LIMIT               | `revision >= 5` → `blocked` with escalation note.                                                                          |
-| STORIES_ARE_INTAKE       | Stories go `done` after triage. Never enter implementation lifecycle.                                                      |
-| DEPLOY_VERIFIED_SEPARATE | `done` = merged (code gate). `deploy_verified` = qa-agent confirmed post-flight. Never conflate.                           |
-| VALIDATION_REQUIRED      | Every task/bug must have `## Validation` with `exercise:` + `observability:` before `/closeout` creates PR.                |
-| FEATURE_SMOKE_SCOPED     | qa-agent validation must exercise the specific feature, not just generic `/readyz`.                                        |
-| QA_READS_TASK            | qa-agent derives its test from the work item `## Validation` block — not from a separate test file.                        |
-| PR_LINKS_ITEM            | Every code PR references exactly one primary work item (`task.*` or `bug.*`) and at least one spec, or `Spec-Impact: none` |
-| TRIAGE_OWNS_ROUTING      | Only `/triage` sets or changes the `project:` linkage on an idea or bug                                                    |
-| SPEC_NO_EXEC_PLAN        | Specs never contain roadmap, phases, tasks, owners, or timelines. At any `spec_state`                                      |
-| SPEC_STATE_LIFECYCLE     | `draft` → `proposed` → `active` → `deprecated`. No skipping                                                                |
-| ACTIVE_MEANS_CLEAN       | `spec_state: active` requires Open Questions empty and `verified:` current                                                 |
-| REVIEW_BEFORE_MERGE      | `/review-implementation` runs at `needs_merge` (reviews the PR, not pre-PR code)                                           |
+| Rule                        | Constraint                                                                                                                            |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `STATUS_COMMAND_MAP`        | Every `needs_*` status has exactly one command. No ambiguity.                                                                         |
+| `BRANCH_REQUIRED`           | `branch:` must be set when status ∈ {`needs_implement`, `needs_closeout`, `needs_merge`}. `/implement` creates if missing.            |
+| `PR_EVIDENCE_REQUIRED`      | `pr:` must be set before entering `needs_merge`.                                                                                      |
+| `BLOCKED_EVIDENCE`          | `blocked_by:` must be set when status = `blocked`.                                                                                    |
+| `CLEAN_WORKTREE_ON_EXIT`    | `/implement` and `/closeout` must end with clean `git status`.                                                                        |
+| `COMMIT_ON_PROGRESS`        | Commands that change repo files must end with ≥1 commit. Review-only commands are exempt.                                             |
+| `CLAIM_REQUIRED`            | Governance runner sets `claimed_by_run` before acting. Prevents double-dispatch.                                                      |
+| `LOOP_LIMIT`                | `revision >= 5` → `blocked` with escalation note.                                                                                     |
+| `STORIES_ARE_INTAKE`        | Stories go `done` after triage. Never enter implementation lifecycle.                                                                 |
+| `DEPLOY_VERIFIED_SEPARATE`  | `done` = merged (code gate). `deploy_verified` = qa-agent confirmed post-flight. Never conflate.                                      |
+| `VALIDATION_REQUIRED`       | Every task/bug must have `## Validation` with `exercise:` + `observability:` before `/closeout` creates PR.                           |
+| `FEATURE_SMOKE_SCOPED`      | qa-agent validation must exercise the specific feature, not just generic `/readyz`.                                                   |
+| `QA_READS_TASK`             | qa-agent derives its test from the work item `## Validation` block — not from a separate test file.                                   |
+| `PR_LINKS_ITEM`             | Every code PR references exactly one primary work item (`task.*` or `bug.*`) and at least one spec, or `Spec-Impact: none`.           |
+| `TRIAGE_OWNS_ROUTING`       | Only `/triage` sets or changes the `project:` linkage on an idea or bug.                                                              |
+| `SPEC_NO_EXEC_PLAN`         | Specs never contain roadmap, phases, tasks, owners, or timelines. At any `spec_state`.                                                |
+| `SPEC_STATE_LIFECYCLE`      | `draft` → `proposed` → `active` → `deprecated`. No skipping.                                                                          |
+| `ACTIVE_MEANS_CLEAN`        | `spec_state: active` requires Open Questions empty and `verified:` current.                                                           |
+| `REVIEW_BEFORE_MERGE`       | `/review-implementation` runs at `needs_merge` (reviews the PR, not pre-PR code).                                                     |
+| `MACHINE_READABLE_ENTRY`    | All endpoints discoverable via `/.well-known/agent.json`; no hardcoded URLs in agent code.                                            |
+| `AUTH_REQUIRED`             | No contribution endpoint is publicly writable.                                                                                        |
+| `CI_GATE`                   | `/api/v1/vcs/flight` verifies CI is green for the exact PR head SHA before dispatching.                                               |
+| `NO_LEASE_SPLIT_BRAIN`      | Slot lease lives on the deploy branch (candidate-slot-controller); the flight endpoint does not write a competing lease.              |
+| `PRIMITIVE_OVER_POLICY`     | `/api/v1/vcs/flight` is a primitive action; pr-manager is the policy layer; do not add flight logic to the REST endpoint.             |
+| `OSS_FOR_CODE_WORK`         | Agents use standard git + `gh pr create` for code contribution; the operator provides only the flight gate and the coordination port. |
+| `SELF_VALIDATE`             | Agents validate their own changes on candidate-a; `deploy_verified: true` is the real gate, not `status: done`.                       |
+| `FEATURE_LOG_PROOF`         | Post-flight validation must tie Loki evidence to the exercised feature route/tool/graph, not ambient pod traffic.                     |
+| `MERGE_QUEUE_DETERMINISM`   | Rebase + retest + merge is owned by GitHub Merge Queue; agents only request merge.                                                    |
+| `NO_AGENTIC_REBASE`         | No LLM in the merge path; rebase is a vendor primitive (GH Merge Queue) so the merge sequence is auditable and reproducible.          |
+| `COMMENTS_ARE_NOTIFICATION` | GitHub PR comments carry scorecards + nudges. Design decisions and status mutations belong in Dolt, never in comment threads.         |
 
-### File Pointers
+## File Pointers
 
-| File                                        | Purpose                                     |
-| ------------------------------------------- | ------------------------------------------- |
-| `.claude/commands/idea.md`                  | `/idea` command definition                  |
-| `.claude/commands/research.md`              | `/research` command definition              |
-| `.claude/commands/bug.md`                   | `/bug` command definition                   |
-| `.claude/commands/triage.md`                | `/triage` command definition                |
-| `.claude/commands/project.md`               | `/project` command definition               |
-| `.claude/commands/spec.md`                  | `/spec` command definition                  |
-| `.claude/commands/design.md`                | `/design` command definition                |
-| `.claude/commands/task.md`                  | `/task` command definition                  |
-| `.claude/commands/implement.md`             | `/implement` command definition             |
-| `.claude/commands/review-implementation.md` | `/review-implementation` command definition |
-| `.claude/commands/closeout.md`              | `/closeout` command definition              |
-| `.claude/commands/pull-request.md`          | `/pull-request` command definition          |
-| `.openclaw/skills/gov-engineering/SKILL.md` | ENGINEERING governance dispatch loop        |
-| `scripts/validate-docs-metadata.mjs`        | Frontmatter and heading validation          |
+| File                                                                                                               | Purpose                                         |
+| ------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------- |
+| `.claude/commands/{idea,bug,triage,research,design,task,implement,closeout,review-implementation,pull-request}.md` | Slash command definitions                       |
+| `.claude/skills/contribute-to-cogni/SKILL.md`                                                                      | Executable contributor wrapper                  |
+| `.claude/skills/validate-candidate/SKILL.md`                                                                       | Post-flight validation procedure                |
+| `nodes/operator/app/src/features/work-item-sessions/session-policy.ts`                                             | `nextActionForWorkItem` + session deadline math |
+| `nodes/operator/app/src/contracts/work-item-sessions.v1.contract.ts`                                               | Sessions API Zod contracts                      |
+| `nodes/operator/app/src/app/api/v1/work/items/[id]/{claims,heartbeat,pr,coordination}/route.ts`                    | Sessions REST endpoints                         |
+| `nodes/operator/app/src/app/api/v1/vcs/flight/route.ts`                                                            | Flight primitive                                |
+| `nodes/operator/app/src/app/.well-known/agent.json/route.ts`                                                       | Agent discovery doc                             |
+| `scripts/validate-docs-metadata.mjs`                                                                               | Frontmatter and heading validation              |
+| `infra/github/`                                                                                                    | Merge queue + branch protection fixtures        |
 
 ## Open Questions
 
-- [ ] Should we lint specs for roadmap/phase language?
-- [ ] CI enforcement of PR body format (Work: / Spec: lines)
+- [ ] Operator broadcaster v0 (push nudges via PR comments using `<!-- cogni-coord-v0 -->` marker). Designed in [`docs/design/operator-dev-lifecycle-coordinator.md`](../design/operator-dev-lifecycle-coordinator.md). Until built, the loop closes only when contributors poll `GET /coordination`.
+- [ ] Migrate this spec into the Dolt knowledge port (task.0001). Until then, it lives in markdown.
+- [ ] CI enforcement of PR body format (`Work:` / `Spec:` lines).
+- [ ] Lint specs for roadmap/phase language (`SPEC_NO_EXEC_PLAN` enforcement).
 
 ## Related
 
-- [Docs + Work System](./docs-work-system.md) — type taxonomy and ownership
-- [Work Management Guide](../../work/README.md)
+- [`docs/spec/ci-cd.md`](./ci-cd.md) — environment model, deploy branches, source-sha map, candidate-flight workflow
+- [`docs/spec/candidate-slot-controller.md`](./candidate-slot-controller.md) — slot lease semantics
+- [`docs/spec/merge-queue-config.md`](./merge-queue-config.md) — required checks, `REPORT_OR_DON'T_REQUIRE`
+- [`docs/spec/docs-work-system.md`](./docs-work-system.md) — type taxonomy and ownership
+- [`docs/design/operator-dev-lifecycle-coordinator.md`](../design/operator-dev-lifecycle-coordinator.md) — coordinator design (Phase 1 done; Phase 2/3 deferred until v0 broadcaster lands)
+- [`work/README.md`](../../work/README.md) — work management front door

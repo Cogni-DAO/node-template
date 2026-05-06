@@ -15,7 +15,7 @@ tags: [agent-api, validation, candidate-a, billing]
 # Agent-First API Validation (Candidate-A + Local)
 
 This guide is a **route exercise recipe**, not the full contribution lifecycle.
-For the lifecycle, use [`docs/spec/agentic-contribution-loop.md`](../spec/agentic-contribution-loop.md).
+For the lifecycle, use [`docs/spec/development-lifecycle.md`](../spec/development-lifecycle.md).
 For post-flight PR validation, use [`.claude/skills/validate-candidate`](../../.claude/skills/validate-candidate/SKILL.md); it owns the scorecard and Loki evidence format.
 
 ## Prereqs

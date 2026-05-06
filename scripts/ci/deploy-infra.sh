@@ -332,6 +332,7 @@ OPTIONAL_SECRETS=(
     "PRIVY_USER_WALLETS_SIGNING_KEY"
     "POLY_WALLET_AEAD_KEY_HEX"
     "POLY_WALLET_AEAD_KEY_ID"
+    "POLY_CLOB_GEO_BLOCK_TOKEN"
     "CONNECTIONS_ENCRYPTION_KEY"
     # bug.0344: required for Argo CD Image Updater git write-back to main.
     # Optional (warn-only) during rollout — Step 7b skips gracefully if unset so
@@ -450,6 +451,17 @@ if command -v systemctl &>/dev/null && ! systemctl is-active --quiet docker; the
 fi
 
 echo -e "\033[0;32m[INFO]\033[0m Docker prerequisites verified"
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# Firewall: close Docker-published internal ports to public internet
+# (idempotent; safe to re-run on every deploy). See bug.5167.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+if [ -f /tmp/harden-docker-public-ports.sh ]; then
+  echo -e "\033[0;32m[INFO]\033[0m Hardening Docker-published ports (DOCKER-USER chain)..."
+  bash /tmp/harden-docker-public-ports.sh
+else
+  echo -e "\033[1;33m[WARN]\033[0m harden-docker-public-ports.sh missing — skipping firewall hardening"
+fi
 
 # Compose shortcuts (explicit project names, no global export)
 EDGE_COMPOSE="docker compose --project-name cogni-edge -f /opt/cogni-template-edge/docker-compose.yml"
@@ -656,9 +668,6 @@ append_env_if_set "$RUNTIME_ENV" METRICS_TOKEN "${METRICS_TOKEN-}"
 append_env_if_set "$RUNTIME_ENV" SCHEDULER_API_TOKEN "${SCHEDULER_API_TOKEN-}"
 append_env_if_set "$RUNTIME_ENV" BILLING_INGEST_TOKEN "${BILLING_INGEST_TOKEN-}"
 append_env_if_set "$RUNTIME_ENV" INTERNAL_OPS_TOKEN "${INTERNAL_OPS_TOKEN-}"
-append_env_if_set "$RUNTIME_ENV" WORK_ITEMS_NOTION_TOKEN "${WORK_ITEMS_NOTION_TOKEN-}"
-append_env_if_set "$RUNTIME_ENV" WORK_ITEMS_NOTION_DATA_SOURCE_ID "${WORK_ITEMS_NOTION_DATA_SOURCE_ID-}"
-append_env_if_set "$RUNTIME_ENV" WORK_ITEMS_NOTION_VERSION "${WORK_ITEMS_NOTION_VERSION-}"
 # Prometheus write path (Alloy)
 append_env_if_set "$RUNTIME_ENV" PROMETHEUS_REMOTE_WRITE_URL "${PROMETHEUS_REMOTE_WRITE_URL-}"
 append_env_if_set "$RUNTIME_ENV" PROMETHEUS_USERNAME "${PROMETHEUS_USERNAME-}"
@@ -694,6 +703,7 @@ append_env_if_set "$RUNTIME_ENV" PRIVY_USER_WALLETS_APP_SECRET "${PRIVY_USER_WAL
 append_env_if_set "$RUNTIME_ENV" PRIVY_USER_WALLETS_SIGNING_KEY "${PRIVY_USER_WALLETS_SIGNING_KEY-}"
 append_env_if_set "$RUNTIME_ENV" POLY_WALLET_AEAD_KEY_HEX "${POLY_WALLET_AEAD_KEY_HEX-}"
 append_env_if_set "$RUNTIME_ENV" POLY_WALLET_AEAD_KEY_ID "${POLY_WALLET_AEAD_KEY_ID-}"
+append_env_if_set "$RUNTIME_ENV" POLY_CLOB_GEO_BLOCK_TOKEN "${POLY_CLOB_GEO_BLOCK_TOKEN-}"
 # BYO-AI: Connection encryption
 append_env_if_set "$RUNTIME_ENV" CONNECTIONS_ENCRYPTION_KEY "${CONNECTIONS_ENCRYPTION_KEY-}"
 # Grafana observability (for OpenClaw grafana-health skill)
@@ -712,6 +722,11 @@ LITELLM_NODE_ENDPOINTS="4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://${LITELLM_NO
 printf '%s=%s\n' COGNI_NODE_ENDPOINTS "$LITELLM_NODE_ENDPOINTS" >> "$RUNTIME_ENV"
 # Multi-node DB provisioning
 append_env_if_set "$RUNTIME_ENV" COGNI_NODE_DBS "${COGNI_NODE_DBS-}"
+# Database backup cadence. A systemd timer runs the Compose db-backup profile as
+# a one-shot container; defaults avoid requiring new GitHub Environment secrets.
+printf '%s=%s\n' DB_BACKUP_INTERVAL_SECONDS "${DB_BACKUP_INTERVAL_SECONDS:-86400}" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DB_BACKUP_RETENTION_DAYS "${DB_BACKUP_RETENTION_DAYS:-14}" >> "$RUNTIME_ENV"
+printf '%s=%s\n' DB_BACKUP_OBSERVABILITY_GRACE_SECONDS "${DB_BACKUP_OBSERVABILITY_GRACE_SECONDS:-90}" >> "$RUNTIME_ENV"
 
 # ── Derived database credentials ─────────────────────────────────────────
 # Derived deterministically from POSTGRES_ROOT_PASSWORD + salt so no new GitHub
@@ -884,12 +899,17 @@ emit_deployment_event "infra_deployment.stack_up_started" "in_progress" "Startin
 # (autoheal can restart a container between compose stop and remove)
 $RUNTIME_COMPOSE stop autoheal 2>/dev/null || true
 
-# Infra services only — excludes app, scheduler-worker, db-migrate
+# Infra services only — excludes app, scheduler-worker, db-migrate, and one-shot backup jobs
 INFRA_SERVICES="postgres litellm redis alloy temporal-postgres temporal temporal-ui autoheal repo-init git-sync"
 # Doltgres is optional — only include if it's in the compose file for this env.
 if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^doltgres$'; then
   INFRA_SERVICES="$INFRA_SERVICES doltgres"
 fi
+# alloy-k8s-events is optional — only include if defined in this compose file.
+if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^alloy-k8s-events$'; then
+  INFRA_SERVICES="$INFRA_SERVICES alloy-k8s-events"
+fi
+
 pdc_enabled=false
 if [[ -n "${GRAFANA_PDC_SIGNING_TOKEN:-}" && -n "${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}" && -n "${GRAFANA_PDC_CLUSTER:-}" ]]; then
   INFRA_SERVICES="$INFRA_SERVICES pdc-agent"
@@ -897,6 +917,7 @@ if [[ -n "${GRAFANA_PDC_SIGNING_TOKEN:-}" && -n "${GRAFANA_PDC_HOSTED_GRAFANA_ID
 else
   log_warn "Grafana PDC agent not started: GRAFANA_PDC_SIGNING_TOKEN, GRAFANA_PDC_HOSTED_GRAFANA_ID, or GRAFANA_PDC_CLUSTER is unset"
 fi
+
 if $pdc_enabled; then
   COMPOSE_PROFILES=pdc $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
   sleep 5
@@ -919,6 +940,89 @@ fi
 
 log_info "[$(date -u +%H:%M:%S)] Infra stack up complete"
 emit_deployment_event "infra_deployment.stack_up_complete" "success" "Infrastructure services started"
+
+ALLOY_CONFIG="/opt/cogni-template-runtime/configs/alloy-config.metrics.alloy"
+ALLOY_HASH_FILE="/var/lib/cogni/alloy-config.sha256"
+if [[ -f "$ALLOY_CONFIG" ]]; then
+  mkdir -p /var/lib/cogni
+  NEW_ALLOY_HASH=$(hash_file "$ALLOY_CONFIG")
+  OLD_ALLOY_HASH=$(cat "$ALLOY_HASH_FILE" 2>/dev/null || echo "none")
+  if [[ "$NEW_ALLOY_HASH" != "$OLD_ALLOY_HASH" && "$NEW_ALLOY_HASH" != "no-hash-tool" ]]; then
+    log_info "Alloy config changed (hash: ${NEW_ALLOY_HASH:0:12}...), restarting container..."
+    $RUNTIME_COMPOSE restart alloy
+    echo "$NEW_ALLOY_HASH" > "$ALLOY_HASH_FILE"
+    log_info "Alloy restarted with new config"
+  else
+    log_info "Alloy config unchanged (hash: ${NEW_ALLOY_HASH:0:12}...), no restart needed"
+  fi
+else
+  log_warn "Alloy config missing at $ALLOY_CONFIG, skipping restart check"
+fi
+
+log_info "[$(date -u +%H:%M:%S)] Installing db-backup systemd timer..."
+$RUNTIME_COMPOSE --profile backup stop db-backup 2>/dev/null || true
+$RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+DOCKER_BIN=$(command -v docker)
+BACKUP_INTERVAL_SECONDS="${DB_BACKUP_INTERVAL_SECONDS:-86400}"
+cat >/etc/systemd/system/cogni-db-backup.service <<SYSTEMD_SERVICE_EOF
+[Unit]
+Description=Cogni runtime Postgres logical backup
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/cogni-template-runtime
+ExecStart=${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
+ExecStartPost=-${DOCKER_BIN} compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml --profile backup rm -f db-backup
+TimeoutStartSec=2h
+SYSTEMD_SERVICE_EOF
+
+cat >/etc/systemd/system/cogni-db-backup.timer <<SYSTEMD_TIMER_EOF
+[Unit]
+Description=Run Cogni runtime Postgres logical backup
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec=${BACKUP_INTERVAL_SECONDS}s
+AccuracySec=5min
+RandomizedDelaySec=5min
+Persistent=true
+Unit=cogni-db-backup.service
+
+[Install]
+WantedBy=timers.target
+SYSTEMD_TIMER_EOF
+
+systemctl daemon-reload
+systemctl enable --now cogni-db-backup.timer
+systemctl reset-failed cogni-db-backup.service 2>/dev/null || true
+log_info "db-backup timer installed with interval ${BACKUP_INTERVAL_SECONDS}s"
+
+log_info "Running db-backup validation backup..."
+# `up --force-recreate` keeps the Exited container briefly so alloy scrapes
+# `db_backup.completed` into Loki (relied on by candidate-flight-infra). The
+# explicit `rm -f` after prevents the next timer fire from colliding on the
+# container name; the systemd unit's ExecStartPost mirrors this for the timer.
+# A pre-cleanup at line ~888 + the existing top-level [FATAL] ERR trap handle
+# the case where validation aborts mid-flight and leaves a leftover. (bug.5169)
+$RUNTIME_COMPOSE --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
+$RUNTIME_COMPOSE --profile backup logs --tail 80 db-backup | grep 'db_backup.completed' || {
+  $RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+  log_error "db-backup completed logs missing after validation backup"
+  exit 1
+}
+$RUNTIME_COMPOSE --profile backup run --rm --no-deps --entrypoint bash db-backup -lc '
+  set -euo pipefail
+  for cluster in app temporal; do
+    latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
+    test -n "$latest"
+    test -s "${latest}/MANIFEST.sha256"
+    echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
+  done
+'
+$RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+emit_deployment_event "infra_deployment.db_backup_scheduled" "success" "db-backup timer installed and validation backup completed"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6.6a: Checksum-gated restart for LiteLLM config changes
@@ -1064,9 +1168,6 @@ OPENCLAW_GITHUB_RW_TOKEN=${OPENCLAW_GITHUB_RW_TOKEN:-}
 SCHEDULER_API_TOKEN=${SCHEDULER_API_TOKEN:-}
 BILLING_INGEST_TOKEN=${BILLING_INGEST_TOKEN:-}
 INTERNAL_OPS_TOKEN=${INTERNAL_OPS_TOKEN:-}
-WORK_ITEMS_NOTION_TOKEN=${WORK_ITEMS_NOTION_TOKEN:-}
-WORK_ITEMS_NOTION_DATA_SOURCE_ID=${WORK_ITEMS_NOTION_DATA_SOURCE_ID:-}
-WORK_ITEMS_NOTION_VERSION=${WORK_ITEMS_NOTION_VERSION:-}
 METRICS_TOKEN=${METRICS_TOKEN:-}
 CONNECTIONS_ENCRYPTION_KEY=${CONNECTIONS_ENCRYPTION_KEY:-}
 GH_OAUTH_CLIENT_ID=${GH_OAUTH_CLIENT_ID:-}
@@ -1087,6 +1188,7 @@ PRIVY_USER_WALLETS_APP_SECRET=${PRIVY_USER_WALLETS_APP_SECRET:-}
 PRIVY_USER_WALLETS_SIGNING_KEY=${PRIVY_USER_WALLETS_SIGNING_KEY:-}
 POLY_WALLET_AEAD_KEY_HEX=${POLY_WALLET_AEAD_KEY_HEX:-}
 POLY_WALLET_AEAD_KEY_ID=${POLY_WALLET_AEAD_KEY_ID:-}
+POLY_CLOB_GEO_BLOCK_TOKEN=${POLY_CLOB_GEO_BLOCK_TOKEN:-}
 GH_WEBHOOK_SECRET=${GH_WEBHOOK_SECRET:-}
 GH_REVIEW_APP_ID=${GH_REVIEW_APP_ID:-}
 GH_REVIEW_APP_PRIVATE_KEY_BASE64=${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}
@@ -1285,7 +1387,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
     echo "    $REPO_ROOT/infra/compose/runtime/             → root@$VM_HOST:/opt/cogni-template-runtime/"
     echo "    $REPO_ROOT/infra/k8s/argocd/image-updater/    → root@$VM_HOST:/opt/cogni-template-argocd-updater/  (bug.0344)"
     echo "Remote script:      $ARTIFACT_DIR/deploy-infra-remote.sh → /tmp/deploy-infra-remote.sh"
-    echo "Infra services managed by remote script: postgres, litellm, temporal, alloy, caddy (plus healthchecks)"
+    echo "Infra services managed by remote script: postgres, litellm, temporal, alloy, caddy (plus db-backup timer and healthchecks)"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     log_info "Dry run complete — exiting before any VM contact"
     exit 0
@@ -1326,6 +1428,7 @@ scp $SSH_OPTS "$ARTIFACT_DIR/deploy-infra-remote.sh" root@"$VM_HOST":/tmp/deploy
 scp $SSH_OPTS \
   "$REPO_ROOT/scripts/ci/seed-pnpm-store.sh" \
   "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" \
+  "$REPO_ROOT/infra/provision/cherry/harden-docker-public-ports.sh" \
   root@"$VM_HOST":/tmp/
 scp $SSH_OPTS \
   "$REPO_ROOT/services/sandbox-openclaw/seed-pnpm-store.sh" \
@@ -1349,7 +1452,7 @@ log_info "deploy-infra-remote.sh verified on VM (sha256 match)"
 # Execute remote script with env vars
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_READONLY_USER='${APP_DB_READONLY_USER:-}' APP_DB_READONLY_PASSWORD='${APP_DB_READONLY_PASSWORD:-}' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' POLYGON_RPC_URL='$POLYGON_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN:-}' INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN:-}' WORK_ITEMS_NOTION_TOKEN='${WORK_ITEMS_NOTION_TOKEN:-}' WORK_ITEMS_NOTION_DATA_SOURCE_ID='${WORK_ITEMS_NOTION_DATA_SOURCE_ID:-}' WORK_ITEMS_NOTION_VERSION='${WORK_ITEMS_NOTION_VERSION:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' OPENCLAW_GITHUB_RW_TOKEN='${OPENCLAW_GITHUB_RW_TOKEN:-}' GRAFANA_URL='${GRAFANA_URL:-}' GRAFANA_SERVICE_ACCOUNT_TOKEN='${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}' GRAFANA_PDC_SIGNING_TOKEN='${GRAFANA_PDC_SIGNING_TOKEN:-}' GRAFANA_PDC_HOSTED_GRAFANA_ID='${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}' GRAFANA_PDC_CLUSTER='${GRAFANA_PDC_CLUSTER:-}' GRAFANA_PDC_NETWORK_ID='${GRAFANA_PDC_NETWORK_ID:-}' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' TAVILY_API_KEY='${TAVILY_API_KEY:-}' DISCORD_BOT_TOKEN='${DISCORD_BOT_TOKEN:-}' GH_OAUTH_CLIENT_ID='${GH_OAUTH_CLIENT_ID:-}' GH_OAUTH_CLIENT_SECRET='${GH_OAUTH_CLIENT_SECRET:-}' DISCORD_OAUTH_CLIENT_ID='${DISCORD_OAUTH_CLIENT_ID:-}' DISCORD_OAUTH_CLIENT_SECRET='${DISCORD_OAUTH_CLIENT_SECRET:-}' GOOGLE_OAUTH_CLIENT_ID='${GOOGLE_OAUTH_CLIENT_ID:-}' GOOGLE_OAUTH_CLIENT_SECRET='${GOOGLE_OAUTH_CLIENT_SECRET:-}' GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' GH_REPOS='${GH_REPOS:-}' GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' PRIVY_APP_ID='${PRIVY_APP_ID:-}' PRIVY_APP_SECRET='${PRIVY_APP_SECRET:-}' PRIVY_SIGNING_KEY='${PRIVY_SIGNING_KEY:-}' PRIVY_USER_WALLETS_APP_ID='${PRIVY_USER_WALLETS_APP_ID:-}' PRIVY_USER_WALLETS_APP_SECRET='${PRIVY_USER_WALLETS_APP_SECRET:-}' PRIVY_USER_WALLETS_SIGNING_KEY='${PRIVY_USER_WALLETS_SIGNING_KEY:-}' POLY_WALLET_AEAD_KEY_HEX='${POLY_WALLET_AEAD_KEY_HEX:-}' POLY_WALLET_AEAD_KEY_ID='${POLY_WALLET_AEAD_KEY_ID:-}' CONNECTIONS_ENCRYPTION_KEY='${CONNECTIONS_ENCRYPTION_KEY:-}' COGNI_NODE_DBS='${COGNI_NODE_DBS:-}' ACTIONS_AUTOMATION_BOT_PAT='${ACTIONS_AUTOMATION_BOT_PAT:-}' LITELLM_IMAGE='${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-template:litellm-b6e4e942cb23}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-infra-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_READONLY_USER='${APP_DB_READONLY_USER:-}' APP_DB_READONLY_PASSWORD='${APP_DB_READONLY_PASSWORD:-}' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' POLYGON_RPC_URL='$POLYGON_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN:-}' INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN:-}' WORK_ITEMS_NOTION_TOKEN='${WORK_ITEMS_NOTION_TOKEN:-}' WORK_ITEMS_NOTION_DATA_SOURCE_ID='${WORK_ITEMS_NOTION_DATA_SOURCE_ID:-}' WORK_ITEMS_NOTION_VERSION='${WORK_ITEMS_NOTION_VERSION:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' OPENCLAW_GITHUB_RW_TOKEN='${OPENCLAW_GITHUB_RW_TOKEN:-}' GRAFANA_URL='${GRAFANA_URL:-}' GRAFANA_SERVICE_ACCOUNT_TOKEN='${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}' GRAFANA_PDC_SIGNING_TOKEN='${GRAFANA_PDC_SIGNING_TOKEN:-}' GRAFANA_PDC_HOSTED_GRAFANA_ID='${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}' GRAFANA_PDC_CLUSTER='${GRAFANA_PDC_CLUSTER:-}' GRAFANA_PDC_NETWORK_ID='${GRAFANA_PDC_NETWORK_ID:-}' GRAFANA_PDC_NETWORK_UUID='${GRAFANA_PDC_NETWORK_UUID:-}' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' TAVILY_API_KEY='${TAVILY_API_KEY:-}' DISCORD_BOT_TOKEN='${DISCORD_BOT_TOKEN:-}' GH_OAUTH_CLIENT_ID='${GH_OAUTH_CLIENT_ID:-}' GH_OAUTH_CLIENT_SECRET='${GH_OAUTH_CLIENT_SECRET:-}' DISCORD_OAUTH_CLIENT_ID='${DISCORD_OAUTH_CLIENT_ID:-}' DISCORD_OAUTH_CLIENT_SECRET='${DISCORD_OAUTH_CLIENT_SECRET:-}' GOOGLE_OAUTH_CLIENT_ID='${GOOGLE_OAUTH_CLIENT_ID:-}' GOOGLE_OAUTH_CLIENT_SECRET='${GOOGLE_OAUTH_CLIENT_SECRET:-}' GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' GH_REPOS='${GH_REPOS:-}' GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' PRIVY_APP_ID='${PRIVY_APP_ID:-}' PRIVY_APP_SECRET='${PRIVY_APP_SECRET:-}' PRIVY_SIGNING_KEY='${PRIVY_SIGNING_KEY:-}' PRIVY_USER_WALLETS_APP_ID='${PRIVY_USER_WALLETS_APP_ID:-}' PRIVY_USER_WALLETS_APP_SECRET='${PRIVY_USER_WALLETS_APP_SECRET:-}' PRIVY_USER_WALLETS_SIGNING_KEY='${PRIVY_USER_WALLETS_SIGNING_KEY:-}' POLY_WALLET_AEAD_KEY_HEX='${POLY_WALLET_AEAD_KEY_HEX:-}' POLY_WALLET_AEAD_KEY_ID='${POLY_WALLET_AEAD_KEY_ID:-}' POLY_CLOB_GEO_BLOCK_TOKEN='${POLY_CLOB_GEO_BLOCK_TOKEN:-}' CONNECTIONS_ENCRYPTION_KEY='${CONNECTIONS_ENCRYPTION_KEY:-}' COGNI_NODE_DBS='${COGNI_NODE_DBS:-}' ACTIONS_AUTOMATION_BOT_PAT='${ACTIONS_AUTOMATION_BOT_PAT:-}' LITELLM_IMAGE='${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-template:litellm-b6e4e942cb23}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-infra-remote.sh"
 
 emit_deployment_event "infra_deployment.complete" "success" "Infrastructure deployment completed"
 log_info "Infrastructure deployment complete!"

@@ -21,13 +21,12 @@ import type { Logger } from "pino";
 import type { LocalAccount } from "viem";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { PrivyPolyTraderWalletAdapter } from "@/adapters/server/wallet";
-// Re-homed to `poly-trade-executor.ts` so Stage 4's purge of
-// `poly-trade.ts` does not break provisioning. (C7 design-review concern.)
 import {
   classifyClobCredentialRotationError,
   createOrDerivePolymarketApiKeyForSigner,
+  normalizePolymarketApiKeyCreds,
   rotatePolymarketApiKeyForSigner,
-} from "@/bootstrap/capabilities/poly-trade-executor";
+} from "@/bootstrap/capabilities/poly-clob-creds";
 import { serverEnv } from "@/shared/env/server-env";
 
 export class WalletAdapterUnconfiguredError extends Error {
@@ -44,14 +43,17 @@ let cached: PrivyPolyTraderWalletAdapter | null = null;
 export function createRealClobCredsFactory({
   logger,
   polygonRpcUrl,
+  geoBlockToken,
   deriveCreds = createOrDerivePolymarketApiKeyForSigner,
   rotateCreds = rotatePolymarketApiKeyForSigner,
 }: {
   logger: Logger;
   polygonRpcUrl?: string | undefined;
+  geoBlockToken?: string | undefined;
   deriveCreds?: (input: {
     signer: LocalAccount;
     polygonRpcUrl?: string | undefined;
+    geoBlockToken?: string | undefined;
   }) => Promise<{
     key: string;
     secret: string;
@@ -70,7 +72,9 @@ export function createRealClobCredsFactory({
   return {
     derive: async (signer: LocalAccount) => {
       try {
-        return await deriveCreds({ signer, polygonRpcUrl });
+        return normalizePolymarketApiKeyCreds(
+          await deriveCreds({ signer, polygonRpcUrl, geoBlockToken })
+        );
       } catch (err) {
         const failure = classifyClobCredentialRotationError(err);
         logger.error(
@@ -80,6 +84,7 @@ export function createRealClobCredsFactory({
             reason_code: failure.reasonCode,
             http_status: failure.httpStatus,
             error_class: failure.errorClass,
+            cloudflare_ray_id: failure.cloudflareRayId,
           },
           "poly.wallet.provision failed to derive live CLOB creds"
         );
@@ -96,7 +101,9 @@ export function createRealClobCredsFactory({
       currentCreds: { key: string; secret: string; passphrase: string }
     ) => {
       try {
-        return await rotateCreds({ signer, currentCreds, polygonRpcUrl });
+        return normalizePolymarketApiKeyCreds(
+          await rotateCreds({ signer, currentCreds, polygonRpcUrl })
+        );
       } catch (err) {
         const failure = classifyClobCredentialRotationError(err);
         logger.error(
@@ -106,6 +113,7 @@ export function createRealClobCredsFactory({
             reason_code: failure.reasonCode,
             http_status: failure.httpStatus,
             error_class: failure.errorClass,
+            cloudflare_ray_id: failure.cloudflareRayId,
           },
           "poly.wallet.rotate failed to rotate live CLOB creds"
         );
@@ -169,6 +177,7 @@ export function getPolyTraderWalletAdapter(
   const clobCreds = createRealClobCredsFactory({
     logger,
     polygonRpcUrl: env.POLYGON_RPC_URL,
+    geoBlockToken: env.POLY_CLOB_GEO_BLOCK_TOKEN,
   });
 
   cached = new PrivyPolyTraderWalletAdapter({

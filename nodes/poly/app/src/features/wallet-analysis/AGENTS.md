@@ -31,7 +31,7 @@ Shared shape `WalletAnalysisData` mirrors the v1 wallet-analysis HTTP contract t
 
 ## Public Surface
 
-- **Exports:** `WalletAnalysisView`, `WalletAnalysisSurface`, `WalletIdentityHeader`, `StatGrid`, `BalanceBar`, `BalanceOverTimeChart`, `TimeWindowHeader`, `WalletProfitLossCard`, `TradesPerDayChart`, `RecentTradesTable`, `PositionTimelineChart`, `TopMarketsList`, `EdgeHypothesis`, `DistributionsBlock`, type `WalletAnalysisData` and supporting types (`WalletDistributionsViewMode`, `WalletDistributionsRangeMode`). The `PositionsTable` organism lives at `app/(app)/_components/positions-table/` (next to the sibling `wallets-table/`); consumers import from there directly.
+- **Exports:** `WalletAnalysisView`, `WalletAnalysisSurface`, `WalletIdentityHeader`, `StatGrid`, `BalanceBar`, `BalanceOverTimeChart`, `TimeWindowHeader`, `WalletProfitLossCard`, `TradesPerDayChart`, `RecentTradesTable`, `PositionTimelineChart`, `TopMarketsList`, `EdgeHypothesis`, `DistributionsBlock`, `DistributionComparisonBlock`, `TraderComparisonBlock`, `TargetOverlapBlock`, type `WalletAnalysisData` and supporting types (`WalletDistributionsViewMode`, `WalletDistributionsRangeMode`). The `PositionsTable` organism lives at `app/(app)/_components/positions-table/` (next to the sibling `wallets-table/`); consumers import from there directly.
 - **Routes:** none directly; consumed by `/research`, `/research/w/[addr]` (Checkpoint B), and the dashboard drawer (Checkpoint C).
 - **Files considered API:** `index.ts`, `types/wallet-analysis.ts`.
 
@@ -54,8 +54,8 @@ Shared shape `WalletAnalysisData` mirrors the v1 wallet-analysis HTTP contract t
 
 ## Notes
 
-- `useWalletAnalysis` fans out to `snapshot`, `trades`, `balance`, `pnl`, and (opt-in via `includeDistributions`) `distributions` slices; `WalletAnalysisSurface` threads the selected interval through the page and drawer and only requests `distributions` for the page variant.
+- `useWalletAnalysis` fans out to `snapshot`, `trades`, `balance`, `pnl`, and (opt-in via `includeDistributions`) `distributions` slices; `WalletAnalysisSurface` threads the selected interval through the page and drawer. Page + compact research surfaces request distributions; drawer stays light.
 - `DistributionsBlock` renders the `distributions` slice as six histograms (DCA depth, trade size, entry price, DCA window, hour-of-day; plus flat event clustering) with a count↔USDC toolbar; per-fill bars are stacked won/lost/pending. The component never recomputes buckets — it renders what the server returned.
-- **PnL is owned by the `pnl` slice only** (Polymarket `user-pnl-api`). `WalletProfitLossCard` renders the windowed delta `last.pnl − first.pnl`; `StatGrid` carries trade-derived metrics (winrate, duration, activity) and has no PnL/ROI/drawdown cell. Reintroducing bespoke realized-PnL math on this surface is a review-blocking violation (task.0389).
+- **PnL is owned by the `pnl` slice only** (DB-backed `poly_trader_user_pnl_points`, written by the trader-observation tick from Polymarket's `user-pnl-api`; page-load reads are PAGE_LOAD_DB_ONLY per task.5012). `WalletProfitLossCard` renders the windowed delta `last.pnl − first.pnl`; `StatGrid` carries trade-derived metrics (winrate, duration, activity) and has no PnL/ROI/drawdown cell. Reintroducing bespoke realized-PnL math on this surface is a review-blocking violation (task.0389).
 - Position lifecycle visuals are reusable UI primitives first. Dashboard-specific execution fetching belongs in app routes/services, not on the wallet-analysis public barrel.
 - `PositionsTable` accepts `variant?: "default" | "history"`. Default shows Current value + Action columns. History variant shows a Closed timestamp column and omits action buttons — used by the dashboard Position History tab.

@@ -34,6 +34,7 @@ import type {
 import type {
   EnqueueRedeemJobInput,
   EnqueueRedeemJobResult,
+  KnownRedeemCondition,
   RedeemJobsPort,
   RedeemSubscriptionId,
 } from "@/ports";
@@ -83,7 +84,7 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
   async enqueue(input: EnqueueRedeemJobInput): Promise<EnqueueRedeemJobResult> {
     // UPSERT on the unique `(funder_address, condition_id)` key. ON CONFLICT
     // DO NOTHING + RETURNING gives back only the inserted row; if the row
-    // already existed, a current winner decision may revive stale skipped
+    // already existed, a current winner decision may revive stale terminal
     // read-model rows before we fall back to SELECTing the existing id.
     const inserted = await this.db
       .insert(polyRedeemJobs)
@@ -125,11 +126,14 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
           collateralToken: input.collateralToken,
           expectedShares: input.expectedShares,
           expectedPayoutUsdc: input.expectedPayoutUsdc,
+          txHashes: sql`ARRAY[]::text[]`,
+          attemptCount: 0,
           lastError: null,
           errorClass: null,
           lifecycleState: "winner",
           receiptBurnObserved: null,
           submittedAtBlock: null,
+          enqueuedAt: new Date(),
           submittedAt: null,
           confirmedAt: null,
           abandonedAt: null,
@@ -138,7 +142,7 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
         .where(
           sql`${polyRedeemJobs.funderAddress} = ${input.funderAddress}
             AND ${polyRedeemJobs.conditionId} = ${input.conditionId}
-            AND ${polyRedeemJobs.status} = 'skipped'`
+            AND ${polyRedeemJobs.status} IN ('skipped', 'confirmed', 'abandoned')`
         )
         .returning({ id: polyRedeemJobs.id });
 
@@ -364,6 +368,24 @@ export class DrizzleRedeemJobsAdapter implements RedeemJobsPort {
       .from(polyRedeemJobs)
       .where(eq(polyRedeemJobs.funderAddress, funderAddress));
     return rows.map(mapRow);
+  }
+
+  async listKnownConditionsForFunder(
+    funderAddress: `0x${string}`
+  ): Promise<readonly KnownRedeemCondition[]> {
+    const rows = await this.db
+      .select({
+        conditionId: polyRedeemJobs.conditionId,
+        lifecycleState: polyRedeemJobs.lifecycleState,
+        enqueuedAt: polyRedeemJobs.enqueuedAt,
+      })
+      .from(polyRedeemJobs)
+      .where(eq(polyRedeemJobs.funderAddress, funderAddress));
+    return rows.map((r) => ({
+      conditionId: r.conditionId as `0x${string}`,
+      lifecycleState: r.lifecycleState as RedeemLifecycleState,
+      enqueuedAt: r.enqueuedAt,
+    }));
   }
 
   async getLastProcessedBlock(

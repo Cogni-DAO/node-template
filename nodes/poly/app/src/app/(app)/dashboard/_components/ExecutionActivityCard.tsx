@@ -19,8 +19,10 @@
 
 "use client";
 
+import type { WalletExecutionMarketGroup } from "@cogni/poly-node-contracts";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { type ReactElement, useCallback, useMemo, useState } from "react";
+import { MarketsTable } from "@/app/(app)/_components/markets-table";
 import { PositionsTable } from "@/app/(app)/_components/positions-table";
 import {
   Card,
@@ -38,7 +40,7 @@ import {
 } from "../_api/fetchPositionActions";
 import { useDashboardExecution } from "../_hooks/useDashboardExecution";
 
-type ExecutionView = "open" | "history";
+type ExecutionView = "open" | "markets" | "history";
 
 export function ExecutionActivityCard(): ReactElement {
   const queryClient = useQueryClient();
@@ -68,9 +70,8 @@ export function ExecutionActivityCard(): ReactElement {
       const shouldSuppress =
         vars.kind === "redeem"
           ? "tx_hash" in result
-          : "filled_size_usdc" in result &&
-            result.status === "filled" &&
-            result.filled_size_usdc > 0;
+          : "kind" in result &&
+            (result.kind === "order" || result.kind === "classified");
       if (shouldSuppress) {
         setRecentlyClosedIds(
           (prev) => new Set([...prev, vars.position.positionId])
@@ -177,6 +178,9 @@ export function ExecutionActivityCard(): ReactElement {
             <ToggleGroupItem value="open" className="px-3 text-xs">
               Open
             </ToggleGroupItem>
+            <ToggleGroupItem value="markets" className="px-3 text-xs">
+              Markets
+            </ToggleGroupItem>
             <ToggleGroupItem value="history" className="px-3 text-xs">
               History
             </ToggleGroupItem>
@@ -195,6 +199,13 @@ export function ExecutionActivityCard(): ReactElement {
             pendingActionPositionId={pendingActionPositionId}
             positionActionError={positionActionError}
           />
+        ) : view === "markets" ? (
+          <MarketGroupsPanel
+            groups={executionData?.market_groups ?? []}
+            warnings={executionData?.warnings ?? []}
+            isLoading={isExecutionLoading}
+            isError={isExecutionError}
+          />
         ) : (
           <ClosedPositionsPanel
             positions={closedPositions}
@@ -204,6 +215,44 @@ export function ExecutionActivityCard(): ReactElement {
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function MarketGroupsPanel({
+  groups,
+  warnings,
+  isLoading,
+  isError,
+}: {
+  groups: readonly WalletExecutionMarketGroup[];
+  warnings: readonly { code: string; message: string }[];
+  isLoading: boolean;
+  isError: boolean;
+}): ReactElement {
+  if (isError) {
+    return (
+      <p className="px-5 py-6 text-center text-muted-foreground text-sm">
+        Failed to load market exposure. Try again shortly.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-3 px-5 pb-4">
+      <div className="space-y-2">
+        <h3 className="font-semibold text-muted-foreground text-xs uppercase tracking-wider">
+          Markets
+        </h3>
+        {warnings.some(
+          (warning) => warning.code === "market_exposure_unavailable"
+        ) ? (
+          <p className="text-muted-foreground text-xs">
+            Copy-target overlays are temporarily unavailable.
+          </p>
+        ) : null}
+        <MarketsTable groups={groups} isLoading={isLoading} />
+      </div>
+    </div>
   );
 }
 

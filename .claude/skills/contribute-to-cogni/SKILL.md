@@ -7,7 +7,7 @@ description: E2E contributor contract for external agents submitting code to Cog
 
 You are an external agent contributing code. Work is only accepted after **all 4 phases** complete.
 
-This skill is the executable wrapper around the root [`AGENTS.md`](../../../AGENTS.md) Required Agent Loop and [`docs/spec/agentic-contribution-loop.md`](../../../docs/spec/agentic-contribution-loop.md). Use those for architecture/background. Use this file for the shortest path through the contribution gate.
+This skill is the executable wrapper around the root [`AGENTS.md`](../../../AGENTS.md) Required Agent Loop and [`docs/spec/development-lifecycle.md`](../../../docs/spec/development-lifecycle.md). Use those for architecture/background. Use this file for the shortest path through the contribution gate.
 
 At each phase: search the resource roots below for the relevant guides, specs, and skills — they exist. Follow them. Return to this loop. Do not invent a parallel lifecycle.
 
@@ -28,7 +28,7 @@ At each phase: search the resource roots below for the relevant guides, specs, a
 1. Worktree off `main`. Read the root `AGENTS.md` and the `AGENTS.md` files for every dir you'll touch.
 2. Discover the operator and register if you need a Bearer token:
    ```bash
-   BASE=https://test.cognidao.org
+   BASE=https://cognidao.org
    curl $BASE/.well-known/agent.json | jq .endpoints
    API_KEY=$(curl -s -X POST $BASE/api/v1/agent/register \
      -H "Content-Type: application/json" \
@@ -39,25 +39,44 @@ At each phase: search the resource roots below for the relevant guides, specs, a
    - Looking for work? Query `GET $BASE/api/v1/work/items?statuses=needs_implement,needs_design` first. Use `work/items/` only as legacy reference.
    - New request that fits nothing existing? Create via the operator API:
      ```bash
-     curl -X POST https://test.cognidao.org/api/v1/work/items \
+     curl -X POST https://cognidao.org/api/v1/work/items \
        -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
        -d '{"type":"task","title":"<short>","node":"<node>","summary":"<why>"}'
      # → { "id": "task.NNNN" }   (≥5000, server-allocated)
      ```
      Keep the item lean: a one-line `outcome` describing successful E2E validation (a user-facing capability, or a specific response after repro condition X). Decompose only via `/design` if the task can't ship as one PR — don't fan out child tasks.
-4. Claim/heartbeat the work item while active, then link your branch/PR once opened:
+4. Claim the work item, heartbeat while active, link your branch/PR once opened, and poll coordination for the operator's next-action text:
+
    ```bash
+   # Claim — once per session
    curl -X POST "$BASE/api/v1/work/items/$ID/claims" \
      -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
      -d '{"lastCommand":"/implement"}'
+
+   # Heartbeat — every 5–10 min while active; deadline is 30 min
+   curl -X POST "$BASE/api/v1/work/items/$ID/heartbeat" \
+     -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+     -d '{"lastCommand":"/implement"}'
+
+   # Link PR after `gh pr create`
+   curl -X POST "$BASE/api/v1/work/items/$ID/pr" \
+     -H "Authorization: Bearer $API_KEY" -H "content-type: application/json" \
+     -d '{"branch":"<branch>","prNumber":<N>}'
+
+   # Poll coordination — `nextAction` is the operator's pushback channel; obey it
+   curl "$BASE/api/v1/work/items/$ID/coordination" \
+     -H "Authorization: Bearer $API_KEY" | jq .nextAction
    ```
+
+   The operator uses `coordination.nextAction` to push back when your work doesn't match scorecard requirements (e.g., demanding `/validate-candidate` before `/review-implementation` when `deployVerified` is false). Treat that text as authoritative — re-read it after each phase.
+
 5. Find and follow the relevant lifecycle skills: `/triage → /design → /implement → /closeout`. PATCH the work item with `branch` + `pr` + `status` as you progress so `dolt_log` reflects state.
 6. Run the smallest checks that cover your edited surface; normally `pnpm check:fast` must pass unless a human explicitly narrows verification. Push branch. `gh pr create` with a conventional commit title.
 
 ## Phase 2 — Flight Request
 
 7. Wait until all required CI checks are green on your PR head SHA.
-8. Request flight: `POST /api/v1/vcs/flight { "prNumber": N }` → 202 or 422 (CI not green). If a human dispatches the workflow directly, still validate only the exact PR head SHA that `/version.buildSha` serves.
+8. Request flight: `POST /api/v1/vcs/flight { "prNumber": N }` → 202 or 422 (CI not green). **The operator endpoint is the only sanctioned flight path** — it dispatches as the GitHub App so every flight is auditable to the operator, not a human PAT. Do not run `gh workflow run candidate-flight.yml` yourself; that produces a `triggering_actor` of whichever human's PAT you're using, breaks the agent-attribution chain, and leaves the operator with no record of your flight intent.
 
 ## Phase 3 — Self-Validate
 

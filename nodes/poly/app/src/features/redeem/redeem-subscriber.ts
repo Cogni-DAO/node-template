@@ -27,13 +27,14 @@ import {
   POLYGON_CONDITIONAL_TOKENS,
   POLYGON_NEG_RISK_ADAPTER,
   type PolymarketDataApiClient,
+  type PolymarketUserPosition,
   polymarketCtfEventsAbi,
   polymarketNegRiskAdapterAbi,
 } from "@cogni/poly-market-provider/adapters/polymarket";
 import { decodeEventLog, type Log, type PublicClient } from "viem";
 
 import { transition } from "@/core";
-import type { RedeemJobsPort } from "@/ports";
+import type { MarketOutcomesPort, RedeemJobsPort } from "@/ports";
 
 import { decisionToEnqueueInput } from "./decision-to-enqueue-input";
 import {
@@ -41,6 +42,7 @@ import {
   mirrorRedeemLifecycleToLedger,
 } from "./mirror-ledger-lifecycle";
 import {
+  type ResolvedRedeemCandidate,
   resolveRedeemCandidatesForCondition,
   sortRedeemCandidatesForEnqueue,
 } from "./resolve-redeem-decision";
@@ -53,6 +55,13 @@ interface LoggerLike {
 
 export interface RedeemSubscriberDeps {
   redeemJobs: RedeemJobsPort;
+  /**
+   * Chain-resolution authority writer. Populated from the same chain reads the
+   * subscriber already does to evaluate `decideRedeem`; never written from
+   * Data-API. Read-joined by the dashboard current-position read model so the
+   * UI never reads `raw.redeemable` for classification. (bug.5008)
+   */
+  marketOutcomes: MarketOutcomesPort;
   orderLedger: LedgerLifecycleMirrorPort;
   billingAccountId: string;
   publicClient: PublicClient;
@@ -151,7 +160,10 @@ export class RedeemSubscriber {
   }
 
   /** Public entrypoint reused by catch-up replay. */
-  async enqueueForCondition(conditionId: `0x${string}`): Promise<void> {
+  async enqueueForCondition(
+    conditionId: `0x${string}`,
+    positions?: readonly PolymarketUserPosition[]
+  ): Promise<void> {
     this.deps.logger.info(
       {
         event: "poly.ctf.subscriber.condition_resolution_observed",
@@ -166,6 +178,7 @@ export class RedeemSubscriber {
         conditionId,
         publicClient: this.deps.publicClient,
         dataApiClient: this.deps.dataApiClient,
+        ...(positions !== undefined ? { positions } : {}),
       })
     );
     for (const c of candidates) {
@@ -183,10 +196,15 @@ export class RedeemSubscriber {
         },
         "redeem-subscriber: policy decision"
       );
+      await this.persistMarketOutcome(c);
       const enqueueInput = decisionToEnqueueInput(this.deps.funderAddress, c);
       if (enqueueInput === null) continue;
       const result = await this.deps.redeemJobs.enqueue(enqueueInput);
-      if (!result.alreadyExisted || enqueueInput.status === "skipped") {
+      if (
+        !result.alreadyExisted ||
+        enqueueInput.status === "skipped" ||
+        enqueueInput.lifecycleState === "winner"
+      ) {
         await mirrorRedeemLifecycleToLedger(
           {
             orderLedger: this.deps.orderLedger,
@@ -216,6 +234,59 @@ export class RedeemSubscriber {
           collateral_token: c.collateralToken,
         },
         "redeem-subscriber: job enqueued"
+      );
+    }
+  }
+
+  /**
+   * UPSERT `poly_market_outcomes` for a single (`conditionId`, `tokenId`)
+   * derived from chain `payoutNumerator`. The dashboard read model joins this
+   * table to classify rows as `winner | loser` without consulting Polymarket
+   * Data-API `raw.redeemable`. (bug.5008)
+   */
+  private async persistMarketOutcome(
+    c: ResolvedRedeemCandidate
+  ): Promise<void> {
+    const numerator = c.payoutNumerator;
+    const denominator = c.payoutDenominator;
+    // denominator === null OR === 0n means the chain doesn't yet report a
+    // resolved payout for this condition (multicall partial failure or a
+    // genuinely-unresolved market replayed by catchup). Persist 'unknown'
+    // rather than writing a misleading 'loser' from a 0/0 numerator.
+    const outcome =
+      numerator === null || denominator === null || denominator === 0n
+        ? "unknown"
+        : numerator > 0n
+          ? "winner"
+          : "loser";
+    const payout =
+      numerator !== null && denominator !== null && denominator > 0n
+        ? (Number(numerator) / Number(denominator)).toString()
+        : null;
+    try {
+      await this.deps.marketOutcomes.upsert({
+        conditionId: c.conditionId,
+        tokenId: c.positionId.toString(),
+        outcome,
+        payout,
+        resolvedAt: new Date(),
+        raw: {
+          outcome_index: c.outcomeIndex,
+          negative_risk: c.negativeRisk,
+          payout_numerator: numerator !== null ? numerator.toString() : null,
+          payout_denominator:
+            denominator !== null ? denominator.toString() : null,
+        },
+      });
+    } catch (err) {
+      this.deps.logger.warn(
+        {
+          event: "poly.ctf.market_outcomes_upsert_failed",
+          condition_id: c.conditionId,
+          token_id: c.positionId.toString(),
+          err: String(err),
+        },
+        "redeem-subscriber: market outcomes upsert failed (non-fatal)"
       );
     }
   }

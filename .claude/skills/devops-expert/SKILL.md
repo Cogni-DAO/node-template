@@ -120,12 +120,20 @@ Support:
 
 The sanctioned path — and the only one an agent should rely on — is what [`docs/guides/multi-node-deploy.md`](../../../docs/guides/multi-node-deploy.md) documents: `scripts/setup/provision-test-vm.sh` writes the SSH private key + VM IP to `.local/` (gitignored) at provision time.
 
-| File                  | Purpose                            |
-| --------------------- | ---------------------------------- |
-| `.local/{env}-vm-key` | SSH private key for `root@<VM_IP>` |
-| `.local/{env}-vm-ip`  | VM IP address (single line)        |
+| File                          | Purpose                                                       |
+| ----------------------------- | ------------------------------------------------------------- |
+| `.local/{env}-vm-key`         | SSH private key (ed25519) for `root@<VM_IP>`                  |
+| `.local/{env}-vm-ip`          | VM IP address (single line)                                   |
+| `.local/{env}-vm-secrets.env` | Provision-time secrets (Argo bootstrap, sealed-secrets, etc.) |
+| `.local/{env}-vm-age-key`     | age key for sealed-secrets / sops on the VM                   |
+
+`{env}` matches `DEPLOY_ENV` in `provision-test-vm.sh` — currently `candidate-a`, `preview`, `production`, `test`. The provisioner public key is committed at `infra/provision/cherry/base/keys/cogni_{env}_deploy.pub`.
 
 Usage (candidate-a only; read-only): `ssh -i .local/candidate-a-vm-key root@$(cat .local/candidate-a-vm-ip) "kubectl -n argocd get applications"`.
+
+**`.local/` lives on the provisioner device, not in worktrees.** It's gitignored, so a freshly cloned worktree (anything under a conductor / agent workspace path) will not have it. The canonical copy lives in the dev's primary cogni-template clone — reach for keys there, not in the active worktree. If you don't know your own primary-clone path, ask the human running the device; never hard-code home-directory paths into committed files (this skill is in a public repo).
+
+**Legacy `canary` naming.** Keys provisioned before the canary→candidate-a rename are still on disk under `.local/canary-vm-*` and are what the live VM accepts today. A re-provision under `DEPLOY_ENV=candidate-a` would write `candidate-a-vm-*` and rotate the authorized key. Until that re-provision lands, treat `canary-vm-key` / `canary-vm-ip` as the authoritative candidate-a coordinates.
 
 If `.local/{env}-vm-key` isn't present for the env you need, this device isn't the provisioner for that env. Do not improvise — don't source shell aliases from personal dotfiles, don't paste IPs from Slack, don't copy keys from a teammate. Either re-run `provision-test-vm.sh` (candidate-a only) or drive the change through the pipeline.
 
@@ -159,3 +167,4 @@ When reviewing code that touches CI/CD, deploy, or infra:
 - **Step-level `if:` for verification gates.** GitHub treats a skipped _step_ inside a running job as contributing to job success. When a verification should be allowed to skip (e.g. empty `promoted_apps`), model it as a _job-level_ gate with `needs:` and `if:` — the job then surfaces as visibly skipped (grey in the checks list), not green. Step-level `if: promoted_apps != ''` is the silent-green primitive that bug.0321 hunted down.
 - **Gate-ordering by convention, not by runtime.** "X must run before Y" embedded in a comment rots at the next refactor. Enforce it structurally: the upstream script writes a marker to `$GITHUB_ENV` (e.g. `ARGOCD_SYNC_VERIFIED=true`); the downstream script refuses to run without it. `wait-for-argocd.sh` → `wait-for-candidate-ready.sh` is the reference pattern (bug.0321 Fix 4).
 - **Cross-PR contract verification via overlay inspection alone.** Production promotions copy preview's overlays, which can mix digests from different PR head SHAs (affected-only CI). A single `EXPECTED_BUILDSHA` is meaningless there. The canonical pattern: write a per-app `source_sha` map to `.promote-state/source-sha-by-app.json` at promotion time, copy it forward preview → production, read it in the verifier. Artifact provenance travels with the artifact.
+- **Deploy workflows triggering app-level business logic.** `candidate-flight-infra.yml` / `deploy-infra.sh` / `promote-and-deploy.yml` exist to reconcile infrastructure state — Compose stacks, k8s overlays, image digests. They MUST NOT `curl` an app endpoint to kick off business work (data sync, cache warm, third-party mirror, index rebuild). When the deploy script becomes a cron, every property of the deploy pipeline (lease semantics, retry budget, timeout, secret blast radius, "you can't dispatch infra without WORK_ITEMS_NOTION_TOKEN") is now coupled to whatever app feature added the curl. Apps schedule themselves — internal cron, scheduler-worker job, on-startup hook, or a dedicated workflow with its own trigger. Reference incident: PR #1177 added a Notion mirror sync as a post-deploy `curl` step in `candidate-flight-infra.yml`; reverted in full because "env-gated, no impact" is a lie when the gate is in the deploy pipeline. **devops-expert MUST be a required code reviewer on any PR touching `.github/workflows/*`, `scripts/ci/**`, `infra/**`, or `deploy/\*` — including PRs whose primary purpose is an app feature that just "happens to" add an env var or a curl step to a deploy file.**

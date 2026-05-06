@@ -361,7 +361,9 @@ const NODES_PREFIX = "nodes/";
  * - `work/**`: per-task work items, projects, charters; high merge-conflict +
  *   index-regen churn. Ride-along until task tracking moves to Dolt.
  * - `docs/**`: cross-cutting prose updates that accompany a node change.
- * - `.claude/skills/poly-dev-manager/SKILL.md`: poly-node manager status card.
+ * - `.claude/skills/**`: agent-facing skill docs that codify the principle a
+ *   node-scoped fix demonstrates; treated like docs/ — prose riding along
+ *   with the implementing code.
  * - Exact single-node-scope policy maintenance files: the workflow gate,
  *   reference classifier, repo-spec resolver, parity fixtures, and narrow tests.
  */
@@ -369,7 +371,7 @@ const RIDE_ALONG_PATTERNS: ReadonlyArray<(p: string) => boolean> = [
   (p) => p === "pnpm-lock.yaml",
   (p) => p.startsWith("work/"),
   (p) => p.startsWith("docs/"),
-  (p) => p === ".claude/skills/poly-dev-manager/SKILL.md",
+  (p) => p.startsWith(".claude/skills/"),
   (p) => p === ".github/workflows/ci.yaml",
   (p) => p === "packages/repo-spec/AGENTS.md",
   (p) => p === "packages/repo-spec/src/accessors.ts",

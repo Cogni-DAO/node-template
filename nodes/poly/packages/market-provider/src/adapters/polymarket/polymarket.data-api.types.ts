@@ -252,3 +252,4 @@ export const GammaPublicSearchResponseSchema = z
     profiles: z.array(GammaProfileSchema).optional().default([]),
   })
   .passthrough();
+

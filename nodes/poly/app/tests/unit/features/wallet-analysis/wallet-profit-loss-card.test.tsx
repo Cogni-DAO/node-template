@@ -19,8 +19,9 @@
  * @internal
  */
 
-import { cleanup, render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { TimeWindowHeader } from "@/features/wallet-analysis/components/TimeWindowHeader";
 import {
   computeWindowedPnl,
   WalletProfitLossCard,
@@ -55,6 +56,30 @@ describe("WalletProfitLossCard", () => {
 
     expect(screen.getByText("+$3.50")).toBeInTheDocument();
     expect(screen.queryByText("+$103.50")).not.toBeInTheDocument();
+  });
+});
+
+describe("TimeWindowHeader", () => {
+  afterEach(() => {
+    cleanup();
+  });
+
+  it("renders the shared interval selector and forwards interval changes", () => {
+    const onIntervalChange = vi.fn();
+
+    render(
+      <TimeWindowHeader
+        interval="ALL"
+        onIntervalChange={onIntervalChange}
+        pnlHistory={[
+          { ts: "2026-04-20T00:00:00.000Z", pnl: 100 },
+          { ts: "2026-04-21T00:00:00.000Z", pnl: 103.5 },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByText("1W"));
+    expect(onIntervalChange).toHaveBeenCalledWith("1W");
   });
 });
 

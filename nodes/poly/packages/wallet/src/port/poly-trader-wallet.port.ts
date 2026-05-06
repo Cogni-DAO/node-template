@@ -158,6 +158,9 @@ export interface TradingApprovalsState {
  */
 export type EnableTradingPreflightError =
   | "no_connection"
+  | "tenant_mismatch"
+  | "clob_creds_invalid"
+  | "wallet_account_unavailable"
   | "polygon_rpc_unconfigured"
   | "backend_unreachable";
 
@@ -381,9 +384,7 @@ export interface PolyTraderWalletPort {
    * Privy backend down). The job's tick handler converts thrown errors to a
    * counter increment + log line, never escapes the interval.
    */
-  wrapIdleUsdcE(
-    billingAccountId: string
-  ): Promise<WrapIdleUsdcEResult>;
+  wrapIdleUsdcE(billingAccountId: string): Promise<WrapIdleUsdcEResult>;
 
   /**
    * task.0429 — grant the tenant's consent to the auto-wrap loop.

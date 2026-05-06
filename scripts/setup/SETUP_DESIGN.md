@@ -141,22 +141,25 @@ pnpm setup github --env production
        - See [VCS Integration Spec](../../docs/spec/vcs-integration.md) for app permissions and setup
      - **GitHub repos for ingestion:**
        - `GH_REPOS` (comma-separated, e.g. `Cogni-DAO/node-template` — set as GitHub Actions **variable**, not secret)
-   - **Grafana (optional):**
-     - `GRAFANA_URL` (Grafana instance URL)
-     - `GRAFANA_SERVICE_ACCOUNT_TOKEN` (Grafana stack service-account token, usually `glsa_`, with `datasources:read`, `datasources:query`, `datasources:create`, and `datasources:write` when setup/deploy provisions datasources; do not use a Grafana Cloud access-policy token prefixed `glc_`; use Grafana Cloud PDC or another private path for database datasources, never public inbound Postgres)
-     - `GRAFANA_PDC_SIGNING_TOKEN` (the only generated PDC secret; from Connections → Private data source connections → Configuration Details → Generate token)
-   - **Privy — Operator Wallet (optional — skipped if missing):**
-     - `PRIVY_APP_ID` (from privy.io → App Settings)
-     - `PRIVY_APP_SECRET` (from privy.io → App Settings)
-     - `PRIVY_SIGNING_KEY` (`wallet-auth:...` authorization key — from privy.io → Settings → Authorization)
-   - **Privy — Poly per-tenant trading wallets (optional for now; required to exercise task.0318 Phase B on candidate/preview/prod):**
-     - `PRIVY_USER_WALLETS_APP_ID` (dedicated Privy app for user trading wallets)
-     - `PRIVY_USER_WALLETS_APP_SECRET` (from the user-wallets Privy app)
-     - `PRIVY_USER_WALLETS_SIGNING_KEY` (`wallet-auth:...` authorization key — from the user-wallets app)
-     - `POLY_WALLET_AEAD_KEY_HEX` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
-     - `POLY_WALLET_AEAD_KEY_ID` (key-ring label, e.g. `v1`)
-   - **BYO-AI — Connection Encryption (optional — BYO-AI disabled when unset):**
-     - `CONNECTIONS_ENCRYPTION_KEY` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
+     - **Grafana (optional):**
+       - `GRAFANA_URL` (Grafana instance URL)
+       - `GRAFANA_SERVICE_ACCOUNT_TOKEN` (Grafana stack service-account token, usually `glsa_`, with `datasources:read`, `datasources:query`, `datasources:create`, and `datasources:write` when setup/deploy provisions datasources; do not use a Grafana Cloud access-policy token prefixed `glc_`; use Grafana Cloud PDC or another private path for database datasources, never public inbound Postgres)
+       - `GRAFANA_PDC_SIGNING_TOKEN` (the only generated PDC secret; from Connections → Private data source connections → Configuration Details → Generate token)
+       - `GRAFANA_PDC_HOSTED_GRAFANA_ID`, `GRAFANA_PDC_CLUSTER` (copy from the same Docker snippet that produced the signing token; stable per Grafana org)
+       - `GRAFANA_PDC_NETWORK_UUID` (internal Grafana UUID for the PDC network; read once via `curl $GRAFANA_URL/api/datasources/uid/<any-bound-datasource> | jq -r .jsonData.secureSocksProxyUsername`)
+     - **Privy — Operator Wallet (optional — skipped if missing):**
+       - `PRIVY_APP_ID` (from privy.io → App Settings)
+       - `PRIVY_APP_SECRET` (from privy.io → App Settings)
+       - `PRIVY_SIGNING_KEY` (`wallet-auth:...` authorization key — from privy.io → Settings → Authorization)
+     - **Privy — Poly per-tenant trading wallets (optional for now; required to exercise task.0318 Phase B on candidate/preview/prod):**
+       - `PRIVY_USER_WALLETS_APP_ID` (dedicated Privy app for user trading wallets)
+       - `PRIVY_USER_WALLETS_APP_SECRET` (from the user-wallets Privy app)
+       - `PRIVY_USER_WALLETS_SIGNING_KEY` (`wallet-auth:...` authorization key — from the user-wallets app)
+       - `POLY_WALLET_AEAD_KEY_HEX` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
+       - `POLY_WALLET_AEAD_KEY_ID` (key-ring label, e.g. `v1`)
+       - `POLY_CLOB_GEO_BLOCK_TOKEN` (optional; Polymarket-provided `geo_block_token` for CLOB API-key provisioning from deployed runtimes)
+     - **BYO-AI — Connection Encryption (optional — BYO-AI disabled when unset):**
+       - `CONNECTIONS_ENCRYPTION_KEY` (64 hex chars / 32 bytes — generate with `openssl rand -hex 32`)
    - **Deployment secrets:** From previous steps
      - `SSH_DEPLOY_KEY` (from `~/.ssh/cogni_template_<env>_deploy`)
      - `VM_HOST` (from `.env.<env>` file)

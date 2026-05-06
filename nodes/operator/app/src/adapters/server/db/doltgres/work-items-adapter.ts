@@ -373,4 +373,16 @@ export class DoltgresOperatorWorkItemAdapter implements WorkItemsDoltgresPort {
 
     return rowToWorkItem(row);
   }
+
+  async delete(id: WorkItemId, authorTag: string): Promise<boolean> {
+    const deleted = (await this.sql.unsafe(
+      `DELETE FROM work_items WHERE id = ${escapeValue(id as string)} RETURNING id`
+    )) as ReadonlyArray<Record<string, unknown>>;
+    if (deleted.length === 0) return false;
+
+    await this.sql.unsafe(
+      `SELECT dolt_commit('-Am', ${escapeValue(`task.5013: delete ${id as string} by ${authorTag}`)})`
+    );
+    return true;
+  }
 }

@@ -21,6 +21,7 @@ describe("createRealClobCredsFactory", () => {
     const factory = createRealClobCredsFactory({
       logger: makeNoopLogger(),
       polygonRpcUrl: "https://polygon.example",
+      geoBlockToken: "geo-token",
       deriveCreds,
     });
 
@@ -33,6 +34,7 @@ describe("createRealClobCredsFactory", () => {
     expect(deriveCreds).toHaveBeenCalledWith({
       signer: SIGNER,
       polygonRpcUrl: "https://polygon.example",
+      geoBlockToken: "geo-token",
     });
   });
 
@@ -40,6 +42,18 @@ describe("createRealClobCredsFactory", () => {
     const deriveCreds = vi
       .fn()
       .mockRejectedValue(new Error("clob unavailable"));
+    const factory = createRealClobCredsFactory({
+      logger: makeNoopLogger(),
+      deriveCreds,
+    });
+
+    await expect(factory.derive(SIGNER)).rejects.toThrow(
+      "Failed to derive Polymarket CLOB API credentials for the tenant wallet"
+    );
+  });
+
+  it("rejects empty CLOB credential responses instead of storing them", async () => {
+    const deriveCreds = vi.fn().mockResolvedValue({});
     const factory = createRealClobCredsFactory({
       logger: makeNoopLogger(),
       deriveCreds,
@@ -78,5 +92,23 @@ describe("createRealClobCredsFactory", () => {
       currentCreds,
       polygonRpcUrl: "https://polygon.example",
     });
+  });
+
+  it("rejects empty rotation responses instead of overwriting stored creds", async () => {
+    const rotateCreds = vi.fn().mockResolvedValue({});
+    const factory = createRealClobCredsFactory({
+      logger: makeNoopLogger(),
+      rotateCreds,
+    });
+
+    await expect(
+      factory.rotate(SIGNER, {
+        key: "old-key",
+        secret: "old-secret",
+        passphrase: "old-passphrase",
+      })
+    ).rejects.toThrow(
+      "Failed to rotate Polymarket CLOB API credentials for the tenant wallet"
+    );
   });
 });
