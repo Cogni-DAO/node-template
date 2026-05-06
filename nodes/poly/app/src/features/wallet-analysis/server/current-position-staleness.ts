@@ -27,7 +27,7 @@
  */
 
 import { polyTraderCurrentPositions } from "@cogni/poly-db-schema/trader-activity";
-import { type SQL, and, eq, gte, sql } from "drizzle-orm";
+import { and, eq, gte, type SQL, sql } from "drizzle-orm";
 
 /**
  * Maximum age of a `last_observed_at` timestamp before a row is considered
