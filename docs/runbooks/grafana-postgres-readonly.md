@@ -70,7 +70,6 @@ UI:
 4. Token name: `<env>-postgres-YYYYMMDD` (descriptive only; routing does not use this name).
 5. Expiration: `No expiry` is acceptable for v0; rotate on a calendar otherwise.
 6. **Create token**, then immediately copy three things from the generated Docker snippet — Grafana shows the token value once:
-
    - `glc_…` value (after `-token`) — store as `GRAFANA_PDC_SIGNING_TOKEN`
    - integer (after `-gcloud-hosted-grafana-id`) — store as `GRAFANA_PDC_HOSTED_GRAFANA_ID`
    - region string (after `-cluster`) — store as `GRAFANA_PDC_CLUSTER`
@@ -100,11 +99,11 @@ Then run the env's infra deploy. CI:
 
 After this step, all three signals must be green:
 
-| Signal | Where | Expected |
-| --- | --- | --- |
-| Tunnel up | workflow output | `Authenticated to private-datasource-connect…` |
-| Datasource exists + PDC-bound | `GET /api/datasources/uid/cogni-<env>-<node>-postgres` | HTTP 200, `jsonData.pdcInjected: true` |
-| Datasource validates | provision script log | `validated cogni-<env>-<node>-postgres: PDC routing reachable, app_readonly auth OK` |
+| Signal                        | Where                                                  | Expected                                                                             |
+| ----------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| Tunnel up                     | workflow output                                        | `Authenticated to private-datasource-connect…`                                       |
+| Datasource exists + PDC-bound | `GET /api/datasources/uid/cogni-<env>-<node>-postgres` | HTTP 200, `jsonData.pdcInjected: true`                                               |
+| Datasource validates          | provision script log                                   | `validated cogni-<env>-<node>-postgres: PDC routing reachable, app_readonly auth OK` |
 
 If validation fails, the workflow exits non-zero — there is no longer a "warn-and-continue" carve-out, because PDC-binding-via-API is now the canonical path. Common causes:
 
