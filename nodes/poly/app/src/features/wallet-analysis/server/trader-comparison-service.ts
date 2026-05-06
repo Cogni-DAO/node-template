@@ -90,6 +90,16 @@ type ResolutionReader = (
 const SIZE_BUCKET_STEP = 5;
 const SIZE_BUCKET_COUNT = 100 / SIZE_BUCKET_STEP;
 
+/**
+ * Hard cap on the windowed-buys SELECT in `readTradeSizePnl`. The bucket
+ * assignment is a 20-bin size-percentile histogram; 50k samples is far more
+ * than needed for stable percentile bins, and it bounds V8 memory regardless
+ * of how many fills the wallet accumulates over the window. Full SQL
+ * histogram (NTILE / width_bucket) is the proper fix; this LIMIT defuses the
+ * OOM crashloop bug.5012-redux surfaced on candidate-a (PR #1273 / RN1).
+ */
+const WINDOWED_BUYS_LIMIT = 50_000;
+
 export async function getTraderComparison(
   db: Db,
   wallets: readonly TraderComparisonInput[],
@@ -181,6 +191,7 @@ async function readTradeSizePnl(
       AND f.side = 'BUY'
       AND f.observed_at >= ${windowStartIso}::timestamptz
     ORDER BY f.size_usdc::numeric ASC
+    LIMIT ${WINDOWED_BUYS_LIMIT}
   `)) as unknown as WindowedBuyRow[];
   const windowedBuys = windowedBuyRows.flatMap(toWindowedBuy);
 
