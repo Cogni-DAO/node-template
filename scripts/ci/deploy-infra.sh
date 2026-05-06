@@ -562,19 +562,15 @@ derive_pdc_defaults_from_token() {
   decoded="$(base64url_decode "${GRAFANA_PDC_SIGNING_TOKEN#glc_}" 2>/dev/null || true)"
   [[ -n "$decoded" ]] || return 0
 
-  local network_id cluster hosted_id
+  local network_id cluster
   network_id="$(json_string_field "$decoded" n)"
   cluster="$(printf '%s' "$decoded" | sed -n 's/.*"m"[[:space:]]*:[[:space:]]*{[^}]*"r"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
-  hosted_id="$(json_string_field "$decoded" o)"
 
   if missing_or_placeholder "${GRAFANA_PDC_NETWORK_ID:-}" && [[ -n "$network_id" ]]; then
     GRAFANA_PDC_NETWORK_ID="$network_id"
   fi
   if missing_or_placeholder "${GRAFANA_PDC_CLUSTER:-}" && [[ -n "$cluster" ]]; then
     GRAFANA_PDC_CLUSTER="$cluster"
-  fi
-  if missing_or_placeholder "${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}" && [[ -n "$hosted_id" ]]; then
-    GRAFANA_PDC_HOSTED_GRAFANA_ID="$hosted_id"
   fi
 }
 
@@ -909,6 +905,12 @@ if $pdc_enabled; then
     $RUNTIME_COMPOSE logs --tail=80 pdc-agent || true
     exit 1
   fi
+  # Always tail recent pdc-agent logs so SSH-tunnel failures are visible even
+  # when the container itself is "Up". The SSH cert exchange happens at startup;
+  # success looks like "level=info msg=... connected" and any "invalid
+  # credentials" / "key signing request failed" surfaces here.
+  log_info "Grafana pdc-agent recent logs:"
+  $RUNTIME_COMPOSE logs --tail=40 pdc-agent || true
 else
   $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
 fi
