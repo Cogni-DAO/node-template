@@ -29,36 +29,38 @@ The PDC signing token is not an agent read credential. It is a deploy-time tunne
 
 ## Bootstrap: PDC for a New Environment
 
-Bootstrapping Grafana Cloud Postgres read access for an environment (`candidate-a`, `preview`, `production`) is a **three-stage** flow. Skipping any stage produces a connected agent that Grafana cannot route to. The error you see when stage 3 is missing is `socks connect ... ->postgres:5432: unknown error network unreachable`.
+Bootstrapping Grafana Cloud Postgres read access for `candidate-a`, `preview`, or `production` is **two human-touch steps** plus an infra deploy. There is no per-datasource UI click.
 
 ```
-┌──────────────────────────────────────────────────────────────────────┐
-│ Stage 1: Mint a PDC signing token                       (Grafana UI)  │
-│ Stage 2: Drop secrets into env + run infra deploy       (CLI + CI)    │
-│ Stage 3: Bind each datasource to the PDC network        (Grafana UI)  │
-└──────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│ 1. Mint a PDC signing token                       (Grafana UI)  │
+│ 2. Run setup:secrets, dispatch the env's infra deploy  (CLI)    │
+│ (CI provisions all node datasources, validates each end-to-end) │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Stable concepts
+### Stable per Grafana org (set once, reused per environment)
 
-These don't change between environments and don't need to be re-derived:
+These don't change between environments and don't need to be re-copied per env:
 
-- **PDC network** — one per Grafana org by default. For this org: `pdc-derekg1729-default`. Multiple environments can share one network; they are distinguished by separate signing tokens, not separate networks.
+- **PDC network** — one per Grafana org by default. For this org: `pdc-derekg1729-default`.
 - **`GRAFANA_PDC_HOSTED_GRAFANA_ID`** — stable per Grafana org. Copy from the Docker snippet on the **Configuration Details** tab of the PDC network.
 - **`GRAFANA_PDC_CLUSTER`** — stable per Grafana org region (e.g. `prod-ap-southeast-1`). Copy from the same Docker snippet.
+- **`GRAFANA_PDC_NETWORK_UUID`** — stable per PDC network. The internal Grafana UUID that `secureSocksProxyUsername` must equal for the datasource to route through PDC. Discover by binding ONE datasource via the UI as a one-time bootstrap, then read `.jsonData.secureSocksProxyUsername` from `/api/datasources/uid/<uid>` and store it as the GitHub env secret. Same value across every env that shares this PDC network.
 
-These vary per environment:
+### Per-environment
 
-- **`GRAFANA_PDC_SIGNING_TOKEN`** — generate one fresh `glc_…` per environment so tokens can be revoked independently.
-- The runtime `pdc-agent` container — runs in each env's Compose stack, on the `internal` network alongside `postgres`.
+- **`GRAFANA_PDC_SIGNING_TOKEN`** — mint a fresh `glc_…` per environment so tokens can be revoked independently.
+- The runtime `pdc-agent` container — runs in each env's Compose stack on the `internal` network alongside `postgres`.
 
 ### Footguns proven in the field
 
 - The token JWT payload's `.n` field is the **token name**, not the network identifier. Do not feed it to anything as a network id.
-- `GRAFANA_PDC_HOSTED_GRAFANA_ID` cannot be derived from the token payload — it does not appear there. Always copy it from the Docker snippet.
-- `secureSocksProxyUsername` set on a datasource via the API is **not sufficient**. Grafana Cloud routes by the datasource ↔ PDC binding established through the Connection > **Private data source connect** dropdown on the datasource page (Stage 3 below). Without that, the agent connects, the SOCKS gateway is reachable, and queries still fail with `network unreachable`.
+- `GRAFANA_PDC_HOSTED_GRAFANA_ID` cannot be derived from the token payload — it does not appear there. Always copy from the Docker snippet.
+- The datasource `type` must be `grafana-postgresql-datasource`. Legacy `postgres` does not route correctly through PDC on Grafana Cloud.
+- `secureSocksProxyUsername` must be the network **UUID** (e.g. `5ff531a0-…`), not the network name. Setting it to the network name silently fails with `socks connect ... -> postgres:5432: unknown error network unreachable` even though the agent and signer are healthy.
 
-### Stage 1 — Mint a signing token
+### Step 1 — Mint a signing token
 
 UI:
 
@@ -73,7 +75,7 @@ UI:
    - integer (after `-gcloud-hosted-grafana-id`) — store as `GRAFANA_PDC_HOSTED_GRAFANA_ID`
    - region string (after `-cluster`) — store as `GRAFANA_PDC_CLUSTER`
 
-### Stage 2 — Drop secrets into the env and deploy
+### Step 2 — Drop secrets into the env and deploy
 
 ```bash
 pnpm setup:secrets --env <env> --only GRAFANA_PDC --all
@@ -81,56 +83,66 @@ pnpm setup:secrets --env <env> --only GRAFANA_PDC --all
 
 This writes both the GitHub `<env>` environment secrets and the local `.env.<env>` file. Do not store the signing token in `.env.cogni`; that file is for agent-read credentials only.
 
-Preflight the token before triggering CI (catches a bad token in 2 seconds rather than 5 minutes):
+Preflight the token (catches a bad token in 2 seconds rather than 5 minutes of CI):
 
 ```bash
 COGNI_ENV_FILE=.env.<env> bash scripts/grafana-pdc-token-preflight.sh
 ```
 
-Expected: `[grafana-pdc-preflight] signer preflight passed: HTTP 200`. HTTP 401 means the signing token + hosted-grafana-id pair is wrong; redo Stage 1.
+Expected: `signer preflight passed: HTTP 200`. HTTP 401 means the signing token + hosted-grafana-id pair is wrong; redo Step 1.
 
-Then run the env's infra deploy (for `candidate-a`, `gh workflow run candidate-flight-infra.yml --ref <branch>`; for `preview`/`production`, the standard promote/deploy path). The deploy:
+Then run the env's infra deploy. CI:
 
+- runs the same preflight as a workflow gate,
 - starts the `pdc-agent` Compose service alongside the existing infra,
 - prints the agent's first ~40 log lines into the workflow output (look for `Authenticated to private-datasource-connect…` and `This is Grafana Private Datasource Connect!`),
-- runs `scripts/ci/provision-grafana-postgres-datasources.sh` to create one datasource per node DB.
+- runs `scripts/ci/provision-grafana-postgres-datasources.sh` which creates one datasource per `COGNI_NODE_DBS` entry, binds each to the PDC network via API (`secureSocksProxyUsername=$GRAFANA_PDC_NETWORK_UUID`, `pdcInjected: true`), then validates each with `select current_user`.
 
-After this stage, two of three signals are green:
+After this step, all three signals must be green:
 
 | Signal | Where | Expected |
 | --- | --- | --- |
-| Tunnel up | workflow output | `connected` / `Authenticated` lines |
-| Datasource exists | `GET /api/datasources/uid/cogni-<env>-<node>-postgres` | HTTP 200 |
-| Datasource ↔ PDC bound | UI dropdown on datasource page | **not yet** |
+| Tunnel up | workflow output | `Authenticated to private-datasource-connect…` |
+| Datasource exists + PDC-bound | `GET /api/datasources/uid/cogni-<env>-<node>-postgres` | HTTP 200, `jsonData.pdcInjected: true` |
+| Datasource validates | provision script log | `validated cogni-<env>-<node>-postgres: PDC routing reachable, app_readonly auth OK` |
 
-The provision script's `select current_user` validation will **fail with `network unreachable`** until Stage 3 is done. That is expected — proceed.
+If validation fails, the workflow exits non-zero — there is no longer a "warn-and-continue" carve-out, because PDC-binding-via-API is now the canonical path. Common causes:
 
-### Stage 3 — Bind each datasource to the PDC network (Grafana UI)
-
-For each datasource the provision script created:
-
-1. Open the datasource edit page:
-   `<grafana-url>/connections/datasources/edit/cogni-<env>-<node>-postgres`
-2. Scroll to the **Connection** section.
-3. Set the **Private data source connect** dropdown to **`pdc-derekg1729-default`**.
-4. Click **Save & test**. Expect: green `Database Connection OK`. The datasource will now appear under "Data sources using this network" on the PDC network's Overview tab.
-
-This step is currently manual because Grafana Cloud writes additional internal state when the dropdown is set that the public API does not (yet) accept on a JSON `PUT`. Until that is captured and reproduced in `provision-grafana-postgres-datasources.sh`, the bootstrap is two-clicks-per-datasource at the end.
+- `GRAFANA_PDC_NETWORK_UUID` not set or stale — refresh from any working datasource's `.jsonData.secureSocksProxyUsername`.
+- `pdc-agent` container down or token revoked — see workflow log dump or Loki `{service="pdc-agent"}`.
+- Postgres `app_readonly` password drift — `db-provision` runs idempotently every deploy, so this resolves on the next clean run.
 
 ### Verify end-to-end (agent-side, no SSH)
 
 ```bash
-COGNI_ENV_FILE=/path/to/.env.cogni \
-  scripts/grafana-postgres-query.sh \
-    'select current_user, count(*)::int as fills from poly_copy_trade_fills' \
-    cogni-<env>-poly-postgres | jq .
+# .env.cogni provides GRAFANA_URL; .env.<env> provides GRAFANA_SERVICE_ACCOUNT_TOKEN
+set -a
+. /path/to/.env.cogni
+. ./.env.<env>
+set +a
+
+scripts/grafana-postgres-query.sh \
+  'select current_user, current_database()' \
+  cogni-<env>-poly-postgres | jq -r '.results.A | "current_user=\(.frames[0].data.values[0][0])  database=\(.frames[0].data.values[1][0])"'
 ```
 
-Expected: `current_user = app_readonly`, `fills` is an integer.
+Expected: `current_user=app_readonly  database=cogni_poly`.
+
+Verify write denial:
+
+```bash
+# Hit /api/ds/query with a write SQL — Postgres role-level read-only catches it
+curl -sS -X POST "${GRAFANA_URL%/}/api/ds/query" \
+  -H "Authorization: Bearer ${GRAFANA_SERVICE_ACCOUNT_TOKEN}" \
+  -H 'content-type: application/json' \
+  --data '{"queries":[{"refId":"A","datasource":{"uid":"cogni-<env>-operator-postgres","type":"grafana-postgresql-datasource"},"rawSql":"create table grafana_write_probe(id int)","format":"table"}],"from":"now-5m","to":"now"}'
+```
+
+Expected error: `cannot execute CREATE TABLE in a read-only transaction (SQLSTATE 25006)`.
 
 ### Recovery: `key signing request failed: invalid credentials`
 
-This is a stale or wrong-paired signing token. Mint a fresh one (Stage 1), preflight, re-run Stage 2 only — Stage 3 bindings persist across token rotations because they bind to the network, not the token.
+Stale or wrong-paired signing token. Mint a fresh one (Step 1), preflight, re-run the deploy.
 
 ## Provision
 

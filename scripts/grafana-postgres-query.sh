@@ -22,10 +22,12 @@ if [[ -z "$SQL" ]]; then
 fi
 
 if [[ -z "${GRAFANA_URL:-}" || -z "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+  # Source every present file in priority order — any single file may hold only
+  # part of the credential set (e.g. .env.cogni has GRAFANA_URL while
+  # .env.<env> holds the env-scoped GRAFANA_SERVICE_ACCOUNT_TOKEN).
   for candidate in "${COGNI_ENV_FILE:-}" ./.env.cogni ./.env.canary ./.env.local; do
     if [[ -n "$candidate" && -f "$candidate" ]]; then
       set -a; . "$candidate"; set +a
-      break
     fi
   done
 fi
@@ -48,7 +50,7 @@ payload=$(
       queries: [
         {
           refId: "A",
-          datasource: { uid: $uid, type: "postgres" },
+          datasource: { uid: $uid, type: "grafana-postgresql-datasource" },
           rawSql: $sql,
           format: "table",
           maxDataPoints: 1000,
