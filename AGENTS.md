@@ -37,6 +37,7 @@ Two named human stops: `needs_review` post-`/design`, `needs_human_qa` post-flig
 
 - Adding backwards-compatibility unless specifically user-instructed. Purge legacy in place.
 - Inline comments narrating _what_ code does, or verbose prose. More text, more entropy — names + types are the docs.
+- Ending a turn before `deploy_verified` without an armed `Monitor`/`ScheduleWakeup` on the gating signal (CI, flight, `/version`). Silent end-of-turn = work lost.
 
 ## Pointers
 
