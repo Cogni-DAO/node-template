@@ -32,16 +32,9 @@ import { type ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
-import {
-  Skeleton,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components";
+import { Skeleton } from "@/components";
 import { Badge } from "@/components/reui/badge";
+import { useDataGrid } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnFilter } from "@/components/reui/data-grid/data-grid-column-filter";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { cn } from "@/shared/util/cn";
@@ -219,7 +212,7 @@ export function makeColumns(): AnyCol[] {
             event.stopPropagation();
             row.toggleExpanded();
           }}
-          className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted/40 hover:text-foreground"
+          className="text-muted-foreground hover:bg-muted/40 hover:text-foreground inline-flex size-6 items-center justify-center rounded-md"
         >
           {row.getIsExpanded() ? (
             <ChevronDown className="size-4" aria-hidden="true" />
@@ -264,12 +257,12 @@ export function makeColumns(): AnyCol[] {
                 target="_blank"
                 rel="noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="font-medium text-sm underline-offset-4 hover:underline"
+                className="text-sm font-medium underline-offset-4 hover:underline"
               >
                 {label}
               </a>
             ) : (
-              <span className="font-medium text-sm">{label}</span>
+              <span className="text-sm font-medium">{label}</span>
             )}
             <span className="text-muted-foreground text-xs">
               {group.marketCount} line{group.marketCount === 1 ? "" : "s"}
@@ -307,7 +300,7 @@ export function makeColumns(): AnyCol[] {
         ),
       size: 120,
       cell: (info) => (
-        <div className="text-right text-muted-foreground text-sm tabular-nums">
+        <div className="text-muted-foreground text-right text-sm tabular-nums">
           {formatUsd(info.getValue())}
         </div>
       ),
@@ -484,7 +477,7 @@ export function makeColumns(): AnyCol[] {
         ),
       size: 90,
       cell: (info) => (
-        <div className="text-right text-muted-foreground text-sm tabular-nums">
+        <div className="text-muted-foreground text-right text-sm tabular-nums">
           {info.getValue()}
         </div>
       ),
@@ -502,7 +495,7 @@ function MarketGroupExpandedBody({
   group: WalletExecutionMarketGroup;
 }): ReactElement {
   return (
-    <div className="space-y-4 bg-muted/10 px-4 py-3">
+    <div className="bg-muted/10 space-y-4 px-4 py-3">
       {group.lines.map((line) => (
         <MarketLineBlock
           key={line.conditionId}
@@ -532,12 +525,12 @@ function MarketLineBlock({
               target="_blank"
               rel="noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="block truncate font-medium text-sm underline-offset-4 hover:underline"
+              className="block truncate text-sm font-medium underline-offset-4 hover:underline"
             >
               {line.marketTitle}
             </a>
           ) : (
-            <p className="truncate font-medium text-sm">{line.marketTitle}</p>
+            <p className="truncate text-sm font-medium">{line.marketTitle}</p>
           )}
           <p className="text-muted-foreground text-xs">
             {line.participants.length} trader
@@ -552,167 +545,248 @@ function MarketLineBlock({
           {formatUsd(line.targetValueUsdc)}
         </div>
       </div>
-      <ParticipantsTable line={line} />
+      <ParticipantsAlignedGrid line={line} />
     </div>
   );
 }
 
-function ParticipantsTable({
+/**
+ * Renders one row per (trader × leg) inside the expansion. Each row is a
+ * CSS grid whose `gridTemplateColumns` is read from the outer DataGrid's
+ * visible-leaf-columns, so the trader-leg cells slot **directly** under
+ * the parent table's columns. No more inner `<table>` with its own
+ * widths fighting the outer; no more floating Primary/Hedge/Net
+ * sub-headers.
+ *
+ * Cells are dispatched per outer column id — when the column doesn't
+ * apply to a given (trader, leg) (e.g. `Tgt $` on an our-wallet row),
+ * the cell renders an em-dash so the visual columns stay legible.
+ */
+function ParticipantsAlignedGrid({
   line,
 }: {
   line: WalletExecutionMarketLine;
 }): ReactElement {
+  // Build (trader × leg) rows. Solo positions emit one row, hedged two.
+  const rows: {
+    key: string;
+    participant: WalletExecutionMarketParticipantRow;
+    leg: WalletExecutionMarketLeg;
+    isHedge: boolean;
+    /** Our wallet's same-outcome VWAP, for cheaper-entry coloring. */
+    ourSameSideVwap: number | null;
+  }[] = [];
+  const ourByOutcome = new Map<string, number | null>();
+  const ours = line.participants.find((p) => p.side === "our_wallet");
+  if (ours) {
+    if (ours.primary) ourByOutcome.set(ours.primary.outcome, ours.primary.vwap);
+    if (ours.hedge) ourByOutcome.set(ours.hedge.outcome, ours.hedge.vwap);
+  }
+  for (const p of line.participants) {
+    if (p.primary) {
+      rows.push({
+        key: `${p.walletAddress}:primary`,
+        participant: p,
+        leg: p.primary,
+        isHedge: false,
+        ourSameSideVwap: ourByOutcome.get(p.primary.outcome) ?? null,
+      });
+    }
+    if (p.hedge) {
+      rows.push({
+        key: `${p.walletAddress}:hedge`,
+        participant: p,
+        leg: p.hedge,
+        isHedge: true,
+        ourSameSideVwap: ourByOutcome.get(p.hedge.outcome) ?? null,
+      });
+    }
+  }
+
   return (
-    <div className="overflow-hidden rounded-md border bg-background">
-      <Table className="text-xs">
-        <TableHeader>
-          <TableRow className="bg-muted/40">
-            <TableHead className="h-8 px-2">Trader</TableHead>
-            <TableHead
-              className="h-8 px-2 text-right"
-              colSpan={3}
-              aria-label="Primary leg"
-            >
-              <div className="flex flex-col items-end">
-                <span className="font-medium text-foreground">Primary</span>
-                <span className="font-normal text-[var(--text-xs)] text-muted-foreground">
-                  Value · VWAP · P/L
-                </span>
-              </div>
-            </TableHead>
-            <TableHead
-              className="h-8 px-2 text-right"
-              colSpan={3}
-              aria-label="Hedge leg"
-            >
-              <div className="flex flex-col items-end">
-                <span className="font-medium text-foreground">Hedge</span>
-                <span className="font-normal text-[var(--text-xs)] text-muted-foreground">
-                  Value · VWAP · P/L
-                </span>
-              </div>
-            </TableHead>
-            <TableHead
-              className="h-8 px-2 text-right"
-              colSpan={3}
-              aria-label="Net across legs"
-            >
-              <div className="flex flex-col items-end">
-                <span className="font-medium text-foreground">Net</span>
-                <span className="font-normal text-[var(--text-xs)] text-muted-foreground">
-                  Value · P/L · Return%
-                </span>
-              </div>
-            </TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {line.participants.map((participant) => (
-            <ParticipantRow
-              key={`${participant.walletAddress}:${participant.conditionId}`}
-              participant={participant}
-            />
-          ))}
-        </TableBody>
-      </Table>
+    <div className="bg-background/40 rounded-md border">
+      {rows.map((row) => (
+        <ParticipantAlignedRow key={row.key} row={row} line={line} />
+      ))}
     </div>
   );
 }
 
-function ParticipantRow({
-  participant,
+function ParticipantAlignedRow({
+  row,
+  line,
 }: {
-  participant: WalletExecutionMarketParticipantRow;
+  row: {
+    participant: WalletExecutionMarketParticipantRow;
+    leg: WalletExecutionMarketLeg;
+    isHedge: boolean;
+    ourSameSideVwap: number | null;
+  };
+  line: WalletExecutionMarketLine;
 }): ReactElement {
+  const { table } = useDataGrid();
+  const visibleCols = table.getVisibleLeafColumns();
+  const gridTemplateColumns = visibleCols
+    .map((c) => `${c.getSize()}px`)
+    .join(" ");
+
   return (
-    <TableRow>
-      <TableCell className="py-1.5 align-top">
-        <div className="flex flex-col gap-0.5">
-          <span className="font-medium text-sm">
-            {participant.side === "our_wallet"
-              ? "Our wallet"
-              : participant.label}
+    <div
+      className="hover:bg-muted/20 grid items-center border-b last:border-b-0"
+      style={{ gridTemplateColumns }}
+    >
+      {visibleCols.map((column) => (
+        <ParticipantAlignedCell
+          key={column.id}
+          columnId={column.id}
+          row={row}
+          line={line}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ParticipantAlignedCell({
+  columnId,
+  row,
+  line,
+}: {
+  columnId: string;
+  row: {
+    participant: WalletExecutionMarketParticipantRow;
+    leg: WalletExecutionMarketLeg;
+    isHedge: boolean;
+    ourSameSideVwap: number | null;
+  };
+  line: WalletExecutionMarketLine;
+}): ReactElement | null {
+  const { participant, leg, isHedge, ourSameSideVwap } = row;
+  const isOurs = participant.side === "our_wallet";
+  const isTarget = participant.side === "copy_target";
+
+  switch (columnId) {
+    case "expand":
+      // Empty cell — the chevron lives only on the parent row.
+      return <div className="px-2 py-1.5" />;
+
+    case "market": {
+      const traderLabel = isOurs ? "Our wallet" : participant.label;
+      const cheaper =
+        isTarget &&
+        leg.vwap !== null &&
+        ourSameSideVwap !== null &&
+        leg.vwap < ourSameSideVwap;
+      return (
+        <div className="flex flex-col gap-0.5 py-1.5 ps-8 pe-2">
+          <span className="text-sm font-medium">{traderLabel}</span>
+          <span className="text-muted-foreground text-xs tabular-nums">
+            {isHedge ? `${leg.outcome} (hedge)` : leg.outcome} · VWAP{" "}
+            <span
+              className={cn(
+                cheaper && "text-destructive font-medium",
+                !cheaper && isOurs && "text-foreground/80"
+              )}
+              title={
+                cheaper
+                  ? "Target entered at a lower VWAP than us — pricing alpha source"
+                  : "Volume-weighted average entry price"
+              }
+            >
+              {formatPrice(leg.vwap)}
+            </span>{" "}
+            · {formatShares(leg.shares)} sh
           </span>
-          {participant.primary ? (
-            <span className="text-[var(--text-xs)] text-muted-foreground">
-              {participant.primary.outcome}
-              {" · "}
-              {formatShares(participant.primary.shares)} sh
-            </span>
-          ) : null}
         </div>
-      </TableCell>
-      <LegTriple leg={participant.primary} />
-      <LegTriple leg={participant.hedge} />
-      <NetPair net={participant.net} />
-    </TableRow>
-  );
-}
+      );
+    }
 
-function LegTriple({
-  leg,
-}: {
-  leg: WalletExecutionMarketLeg | null;
-}): ReactElement {
-  if (leg === null) {
-    return (
-      <>
-        <TableCell className="py-1.5 text-right text-muted-foreground tabular-nums">
-          —
-        </TableCell>
-        <TableCell className="py-1.5 text-right text-muted-foreground tabular-nums">
-          —
-        </TableCell>
-        <TableCell className="py-1.5 text-right text-muted-foreground tabular-nums">
-          —
-        </TableCell>
-      </>
-    );
+    case "ourValue":
+      return (
+        <div className="px-2 py-1.5 text-right text-sm tabular-nums">
+          {isOurs ? formatUsd(leg.currentValueUsdc) : "—"}
+        </div>
+      );
+
+    case "targets":
+      return (
+        <div className="text-muted-foreground px-2 py-1.5 text-right text-sm tabular-nums">
+          {isTarget ? formatUsd(leg.currentValueUsdc) : "—"}
+        </div>
+      );
+
+    case "ourReturn": {
+      // Show this trader's per-condition return on the primary leg row only;
+      // hedge row skips it (it's the same value).
+      if (!isOurs || isHedge)
+        return (
+          <div className="text-muted-foreground px-2 py-1.5 text-right">—</div>
+        );
+      const v = participant.net.roundTripReturnPct;
+      return (
+        <div
+          className={cn(
+            "px-2 py-1.5 text-right text-sm tabular-nums",
+            returnClass(v)
+          )}
+        >
+          {formatReturnPct(v)}
+        </div>
+      );
+    }
+
+    case "targetReturn": {
+      if (!isTarget || isHedge)
+        return (
+          <div className="text-muted-foreground px-2 py-1.5 text-right">—</div>
+        );
+      const v = participant.net.roundTripReturnPct;
+      return (
+        <div
+          className={cn(
+            "px-2 py-1.5 text-right text-sm tabular-nums",
+            returnClass(v)
+          )}
+        >
+          {formatReturnPct(v)}
+        </div>
+      );
+    }
+
+    case "rateGap": {
+      // Per-target rate gap: target's return − our line return, in pp.
+      // Only on target primary-leg rows.
+      if (!isTarget || isHedge)
+        return (
+          <div className="text-muted-foreground px-2 py-1.5 text-right">—</div>
+        );
+      const t = participant.net.roundTripReturnPct;
+      const u = line.ourReturnPct;
+      const v =
+        t === null || u === null ? null : Math.round((t - u) * 10_000) / 10_000;
+      return (
+        <div
+          className={cn(
+            "px-2 py-1.5 text-right text-sm tabular-nums",
+            gapClass(v)
+          )}
+          title="This target's return − our return for this condition"
+        >
+          {formatRateGapPp(v)}
+        </div>
+      );
+    }
+
+    case "sizeScaledGap":
+    case "pnl":
+    case "hedges":
+    case "status":
+      // Group-level only — leave child cells blank to preserve alignment.
+      return (
+        <div className="text-muted-foreground px-2 py-1.5 text-right">—</div>
+      );
+
+    default:
+      return <div className="px-2 py-1.5" />;
   }
-  return (
-    <>
-      <TableCell className="py-1.5 text-right tabular-nums">
-        {formatUsd(leg.currentValueUsdc)}
-      </TableCell>
-      <TableCell className="py-1.5 text-right text-muted-foreground tabular-nums">
-        {formatPrice(leg.vwap)}
-      </TableCell>
-      <TableCell
-        className={cn("py-1.5 text-right tabular-nums", pnlClass(leg.pnlUsdc))}
-      >
-        {formatSignedUsd(leg.pnlUsdc)}
-      </TableCell>
-    </>
-  );
-}
-
-function NetPair({
-  net,
-}: {
-  net: WalletExecutionMarketParticipantRow["net"];
-}): ReactElement {
-  return (
-    <>
-      <TableCell className="py-1.5 text-right font-medium tabular-nums">
-        {formatUsd(net.currentValueUsdc)}
-      </TableCell>
-      <TableCell
-        className={cn(
-          "py-1.5 text-right font-medium tabular-nums",
-          pnlClass(net.pnlUsdc)
-        )}
-      >
-        {formatSignedUsd(net.pnlUsdc)}
-      </TableCell>
-      <TableCell
-        className={cn(
-          "py-1.5 text-right font-medium tabular-nums",
-          returnClass(net.roundTripReturnPct)
-        )}
-        title="Round-trip USDC return on this trader's deployed capital for this market"
-      >
-        {formatReturnPct(net.roundTripReturnPct)}
-      </TableCell>
-    </>
-  );
 }
