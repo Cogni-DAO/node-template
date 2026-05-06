@@ -36,6 +36,7 @@ import {
   getPaginationRowModel,
   getSortedRowModel,
   type PaginationState,
+  type SortingState,
   useReactTable,
   type VisibilityState,
 } from "@tanstack/react-table";
@@ -43,27 +44,37 @@ import { Flame } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 
+import { Toggle } from "@/components";
 import {
   DataGrid,
   DataGridContainer,
 } from "@/components/reui/data-grid/data-grid";
 import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
-import { Toggle } from "@/components/vendor/shadcn/toggle";
 
 import { makeColumns } from "./columns";
 
 /**
- * Group is an "alpha leak": we are red, target is green. Null `edgeGapUsdc`
- * means we have no target legs to compare against — that's not a leak, it's
- * a solo market.
+ * Threshold for "this is a meaningful pick-quality gap, not noise."
+ * 5 percentage points. Exposed for the test suite to lock the constant.
+ */
+export const ALPHA_LEAK_RATE_GAP_THRESHOLD = 0.05;
+
+/**
+ * Group is an "alpha leak" when targets are ahead of us by both:
+ *   - a meaningful rate-of-return gap (>= 5pp pick-quality signal), AND
+ *   - a positive dollar gap on our book (some real money is at stake).
+ *
+ * Both gates are required so we don't flag $0.10 leaks on a +0.01pp gap or
+ * 50pp gaps where our position size is zero. Either-side null → not a leak
+ * (no target legs / undefined comparison).
+ *
  * Exported so the predicate can be unit-tested without rendering React.
  */
 export function isAlphaLeak(group: WalletExecutionMarketGroup): boolean {
-  if (group.edgeGapUsdc === null) return false;
-  // edgeGapUsdc = targetPnl − ourPnl. So targetPnl = ourPnl + edgeGapUsdc.
-  const targetPnl = group.pnlUsd + group.edgeGapUsdc;
-  return group.pnlUsd < 0 && targetPnl > 0;
+  const { rateGapPct, sizeScaledGapUsdc } = group;
+  if (rateGapPct === null || sizeScaledGapUsdc === null) return false;
+  return rateGapPct >= ALPHA_LEAK_RATE_GAP_THRESHOLD && sizeScaledGapUsdc > 0;
 }
 
 export type MarketsTableProps = {
@@ -77,11 +88,16 @@ const DEFAULT_VISIBILITY: VisibilityState = {
   market: true,
   ourValue: true,
   targets: true,
-  status: true,
-  edgeGap: true,
-  pnl: true,
-  hedges: true,
+  ourReturn: true,
+  targetReturn: true,
+  rateGap: true,
+  sizeScaledGap: true,
+  // Tertiary, hidden by default per redesign §4.4 (visual rules).
+  status: false,
+  pnl: false,
+  hedges: false,
 };
+const DEFAULT_SORT: SortingState = [{ id: "sizeScaledGap", desc: true }];
 const PAGE_SIZE = 25;
 const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 
@@ -105,6 +121,7 @@ export function MarketsTable({
   const [columnVisibility, setColumnVisibility] =
     useState<VisibilityState>(DEFAULT_VISIBILITY);
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
+  const [sorting, setSorting] = useState<SortingState>(DEFAULT_SORT);
   const [pagination, setPagination] = useState<PaginationState>({
     pageIndex: 0,
     pageSize: PAGE_SIZE,
@@ -138,9 +155,10 @@ export function MarketsTable({
     getPaginationRowModel: getPaginationRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getExpandedRowModel: getExpandedRowModel(),
-    state: { columnVisibility, columnFilters, pagination, expanded },
+    state: { columnVisibility, columnFilters, sorting, pagination, expanded },
     onColumnVisibilityChange: setColumnVisibility,
     onColumnFiltersChange: setColumnFilters,
+    onSortingChange: setSorting,
     onPaginationChange: setPagination,
     onExpandedChange: setExpanded,
   });

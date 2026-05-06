@@ -393,8 +393,8 @@ function SizePnlSvg({
         role="img"
         aria-label={`${trader.label} ${yAxisLabel} by buy-size percentile bucket`}
         viewBox={`0 0 ${width} ${height}`}
-        className="w-full"
-        style={{ height: "520px" }}
+        preserveAspectRatio="xMidYMid meet"
+        className="aspect-video w-full"
       >
         <line
           x1={left}

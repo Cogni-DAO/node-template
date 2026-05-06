@@ -32,18 +32,18 @@ import { type ColumnDef, createColumnHelper } from "@tanstack/react-table";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 
-import { Skeleton } from "@/components";
-import { Badge } from "@/components/reui/badge";
-import { DataGridColumnFilter } from "@/components/reui/data-grid/data-grid-column-filter";
-import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import {
+  Skeleton,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/vendor/shadcn/table";
+} from "@/components";
+import { Badge } from "@/components/reui/badge";
+import { DataGridColumnFilter } from "@/components/reui/data-grid/data-grid-column-filter";
+import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { cn } from "@/shared/util/cn";
 
 // biome-ignore lint/suspicious/noExplicitAny: heterogeneous TanStack column array
@@ -83,22 +83,62 @@ function pnlClass(value: number): string {
 }
 
 /**
- * `edgeGapUsdc = targetPnl - ourPnl`. Positive = targets ahead of us
- * (alpha leaking) → render as `destructive`. Negative = we are ahead → success.
- * Null = no target legs to compare against → muted (rendered as `—`).
- * Same orientation for the percentage cell.
+ * Sign convention (per docs/design/poly-markets-aggregation-redesign.md §3.2):
+ *   positive = target ahead = alpha leaking from us → destructive
+ *   negative = we are ahead → success
+ *   null     = undefined comparison → muted
+ * Applied uniformly to `rateGapPct` and `sizeScaledGapUsdc`.
  */
-function edgeGapClass(value: number | null): string {
+function gapClass(value: number | null): string {
   if (value === null) return "text-muted-foreground";
   if (value > 0) return "text-destructive";
   if (value < 0) return "text-success";
   return "text-muted-foreground";
 }
 
-function formatEdgeGapPct(value: number | null): string {
+function formatReturnPct(value: number | null): string {
   if (value === null) return "—";
   const sign = value > 0 ? "+" : value < 0 ? "-" : "";
   return `${sign}${(Math.abs(value) * 100).toFixed(1)}%`;
+}
+
+function formatRateGapPp(value: number | null): string {
+  if (value === null) return "—";
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${(Math.abs(value) * 100).toFixed(1)}pp`;
+}
+
+/**
+ * Returns and dollar-deltas use the same sign-aware coloring as the gap
+ * columns: green when we're ahead (positive own-return; negative own loss),
+ * red when behind. For pure return cells without a comparison axis, this
+ * keeps directionality consistent with the rest of the row.
+ */
+function returnClass(value: number | null): string {
+  if (value === null) return "text-muted-foreground";
+  if (value > 0) return "text-success";
+  if (value < 0) return "text-destructive";
+  return "text-muted-foreground";
+}
+
+/**
+ * TanStack sortingFn for a nullable numeric accessor. Nulls always sort to
+ * the tail regardless of direction so unmatched markets don't crowd the head.
+ */
+function nullableNumberSort(
+  pick: (row: WalletExecutionMarketGroup) => number | null
+) {
+  return (
+    left: { original: WalletExecutionMarketGroup },
+    right: { original: WalletExecutionMarketGroup }
+  ) => {
+    const lv = pick(left.original);
+    const rv = pick(right.original);
+    if (lv === null && rv === null) return 0;
+    if (lv === null) return 1;
+    if (rv === null) return -1;
+    return lv - rv;
+  };
 }
 
 /**
@@ -316,45 +356,104 @@ export function makeColumns(): AnyCol[] {
         skeleton: <Skeleton className="h-4 w-12" />,
       },
     }),
-    col.accessor((row) => row.edgeGapPct, {
-      id: "edgeGap",
+    col.accessor((row) => row.ourReturnPct, {
+      id: "ourReturn",
       header: ({ column }) =>
         rightHeader(
-          <DataGridColumnHeader column={column} title="Edge Gap" visibility />
+          <DataGridColumnHeader column={column} title="Our ret%" visibility />
         ),
-      size: 110,
-      sortingFn: (left, right) => {
-        // Sort by edgeGapPct DESC = "biggest alpha leak first". Nulls sort last
-        // either direction so empty-cost-basis rows do not crowd the head.
-        const lv = left.original.edgeGapPct;
-        const rv = right.original.edgeGapPct;
-        if (lv === null && rv === null) return 0;
-        if (lv === null) return 1;
-        if (rv === null) return -1;
-        return lv - rv;
-      },
+      size: 100,
+      sortingFn: nullableNumberSort((g) => g.ourReturnPct),
       cell: ({ row }) => {
-        const pct = row.original.edgeGapPct;
-        const usdc = row.original.edgeGapUsdc;
-        const tooltip =
-          usdc === null
-            ? "No copy-target legs in this market"
-            : `Target P/L − our P/L = ${formatSignedUsd(usdc)}`;
+        const v = row.original.ourReturnPct;
         return (
           <div
-            className={cn(
-              "text-right text-sm tabular-nums",
-              edgeGapClass(usdc)
-            )}
-            title={tooltip}
+            className={cn("text-right text-sm tabular-nums", returnClass(v))}
+            title="Round-trip USDC return on our deployed capital for this market"
           >
-            {formatEdgeGapPct(pct)}
+            {formatReturnPct(v)}
           </div>
         );
       },
       meta: {
-        headerTitle: "Edge Gap",
-        skeleton: <Skeleton className="ms-auto h-3.5 w-14" />,
+        headerTitle: "Our ret%",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-12" />,
+      },
+    }),
+    col.accessor((row) => row.targetReturnPct, {
+      id: "targetReturn",
+      header: ({ column }) =>
+        rightHeader(
+          <DataGridColumnHeader column={column} title="Tgt ret%" visibility />
+        ),
+      size: 100,
+      sortingFn: nullableNumberSort((g) => g.targetReturnPct),
+      cell: ({ row }) => {
+        const v = row.original.targetReturnPct;
+        return (
+          <div
+            className={cn("text-right text-sm tabular-nums", returnClass(v))}
+            title="Cost-basis-weighted blend across active copy-target legs"
+          >
+            {formatReturnPct(v)}
+          </div>
+        );
+      },
+      meta: {
+        headerTitle: "Tgt ret%",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-12" />,
+      },
+    }),
+    col.accessor((row) => row.rateGapPct, {
+      id: "rateGap",
+      header: ({ column }) =>
+        rightHeader(
+          <DataGridColumnHeader column={column} title="Rate gap" visibility />
+        ),
+      size: 100,
+      sortingFn: nullableNumberSort((g) => g.rateGapPct),
+      cell: ({ row }) => {
+        const v = row.original.rateGapPct;
+        return (
+          <div
+            className={cn("text-right text-sm tabular-nums", gapClass(v))}
+            title="Target return − our return. Positive = target ahead = alpha leak"
+          >
+            {formatRateGapPp(v)}
+          </div>
+        );
+      },
+      meta: {
+        headerTitle: "Rate gap",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-12" />,
+      },
+    }),
+    col.accessor((row) => row.sizeScaledGapUsdc, {
+      id: "sizeScaledGap",
+      header: ({ column }) =>
+        rightHeader(
+          <DataGridColumnHeader
+            column={column}
+            title="$ gap on us"
+            visibility
+          />
+        ),
+      size: 110,
+      sortingFn: nullableNumberSort((g) => g.sizeScaledGapUsdc),
+      cell: ({ row }) => {
+        const v = row.original.sizeScaledGapUsdc;
+        return (
+          <div
+            className={cn("text-right text-sm tabular-nums", gapClass(v))}
+            title="Rate gap × our buy notional. Dollar cost on OUR book"
+          >
+            {v === null ? "—" : formatSignedUsd(v)}
+          </div>
+        );
+      },
+      meta: {
+        headerTitle: "$ gap on us",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-16" />,
       },
     }),
     col.accessor((row) => row.pnlUsd, {
@@ -476,7 +575,7 @@ function ParticipantsTable({
             >
               <div className="flex flex-col items-end">
                 <span className="font-medium text-foreground">Primary</span>
-                <span className="font-normal text-[10px] text-muted-foreground">
+                <span className="font-normal text-[var(--text-xs)] text-muted-foreground">
                   Value · VWAP · P/L
                 </span>
               </div>
@@ -488,7 +587,7 @@ function ParticipantsTable({
             >
               <div className="flex flex-col items-end">
                 <span className="font-medium text-foreground">Hedge</span>
-                <span className="font-normal text-[10px] text-muted-foreground">
+                <span className="font-normal text-[var(--text-xs)] text-muted-foreground">
                   Value · VWAP · P/L
                 </span>
               </div>
@@ -500,7 +599,7 @@ function ParticipantsTable({
             >
               <div className="flex flex-col items-end">
                 <span className="font-medium text-foreground">Net</span>
-                <span className="font-normal text-[10px] text-muted-foreground">
+                <span className="font-normal text-[var(--text-xs)] text-muted-foreground">
                   Value · P/L
                 </span>
               </div>
@@ -535,7 +634,7 @@ function ParticipantRow({
               : participant.label}
           </span>
           {participant.primary ? (
-            <span className="text-[11px] text-muted-foreground">
+            <span className="text-[var(--text-xs)] text-muted-foreground">
               {participant.primary.outcome}
               {" · "}
               {formatShares(participant.primary.shares)} sh
