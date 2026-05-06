@@ -34,11 +34,11 @@ const TONE_ICON_CLASS: Record<ToolCardTone, string> = {
 
 export interface ToolCardProps {
   readonly icon: LucideIcon;
-  readonly iconClassName?: string;
-  readonly tone?: ToolCardTone;
+  readonly iconClassName?: string | undefined;
+  readonly tone?: ToolCardTone | undefined;
   readonly title: ReactNode;
-  readonly details?: ReactNode;
-  readonly defaultOpen?: boolean;
+  readonly details?: ReactNode | undefined;
+  readonly defaultOpen?: boolean | undefined;
 }
 
 export function ToolCard({

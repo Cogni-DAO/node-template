@@ -18,12 +18,12 @@ import type { ReactNode } from "react";
 export interface ToolChipProps {
   readonly children: ReactNode;
   /** Render inner text as monospace (branches, sha, file paths). */
-  readonly mono?: boolean;
+  readonly mono?: boolean | undefined;
   /** External link href. Renders as <a target=_blank>. */
-  readonly href?: string;
+  readonly href?: string | undefined;
   /** Tooltip / full value for truncated chips (e.g., full sha). */
-  readonly title?: string;
-  readonly className?: string;
+  readonly title?: string | undefined;
+  readonly className?: string | undefined;
 }
 
 export function ToolChip({
