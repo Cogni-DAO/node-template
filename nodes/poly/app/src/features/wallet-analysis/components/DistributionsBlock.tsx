@@ -27,6 +27,7 @@ import { type ReactElement, type ReactNode, useState } from "react";
 
 import { cn } from "@/shared/util/cn";
 import type { WalletDistributionsViewMode } from "../types/wallet-analysis";
+import { IntervalToggle } from "./IntervalToggle";
 import { TargetOverlapBlock } from "./TargetOverlapBlock";
 import {
   TRADER_COMPARISON_INTERVALS,
@@ -218,13 +219,6 @@ export function DistributionComparisonBlock({
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            {isTargetOverlapView ? (
-              <IntervalToggle
-                interval={targetOverlapInterval}
-                intervals={TARGET_OVERLAP_INTERVALS}
-                onChange={onTargetOverlapIntervalChange}
-              />
-            ) : null}
             {activeTraderView || isTraderSizePnlView ? (
               <IntervalToggle
                 interval={traderInterval}
@@ -247,6 +241,8 @@ export function DistributionComparisonBlock({
               data={targetOverlap}
               isLoading={targetOverlapLoading}
               isError={targetOverlapError}
+              interval={targetOverlapInterval}
+              onIntervalChange={onTargetOverlapIntervalChange}
             />
           ) : null}
           {isTraderPnlView ? (
@@ -364,36 +360,6 @@ function ViewModeToggle({
           )}
         >
           {m === "count" ? "Count" : "USDC"}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function IntervalToggle({
-  interval,
-  intervals,
-  onChange,
-}: {
-  interval: PolyWalletOverviewInterval;
-  intervals: readonly PolyWalletOverviewInterval[];
-  onChange: (interval: PolyWalletOverviewInterval) => void;
-}): ReactElement {
-  return (
-    <div className="inline-flex rounded border bg-muted p-0.5 text-xs">
-      {intervals.map((option) => (
-        <button
-          key={option}
-          type="button"
-          onClick={() => onChange(option)}
-          className={cn(
-            "rounded px-2 py-1 font-medium uppercase tracking-wider transition-colors",
-            interval === option
-              ? "bg-background text-foreground shadow-sm"
-              : "text-muted-foreground hover:text-foreground"
-          )}
-        >
-          {option}
         </button>
       ))}
     </div>
@@ -537,13 +503,6 @@ const TRADER_COMPARISON_VIEWS = [
   { key: "traderFills", label: "Fills", mode: "count" },
   { key: "traderFlow", label: "USDC", mode: "flow" },
 ] satisfies readonly TraderComparisonView[];
-
-const TARGET_OVERLAP_INTERVALS = [
-  "1D",
-  "1W",
-  "1M",
-  "ALL",
-] satisfies readonly PolyWalletOverviewInterval[];
 
 const DISTRIBUTION_COMPARISON_VIEWS = [
   {

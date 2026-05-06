@@ -15,16 +15,24 @@
  *     start at the left edge so width directly means larger.
  *   - METRIC_TABS_SHARE_AXES: active USDC, fill volume, PnL, markets, and
  *     positions reuse the same bucket structure so the user can compare dimensions.
+ *   - WINDOW_TOGGLE_FOLLOWS_METRIC: the time-window toggle only renders when
+ *     the active metric is windowed (Fill volume). Snapshot metrics
+ *     (Active USDC / Active PnL / Markets / Positions) carry a caption so
+ *     the user knows the number is a current snapshot, not a windowed delta.
  * Side-effects: none
  * @public
  */
 
 "use client";
 
-import type { PolyResearchTargetOverlapResponse } from "@cogni/poly-node-contracts";
+import type {
+  PolyResearchTargetOverlapResponse,
+  PolyWalletOverviewInterval,
+} from "@cogni/poly-node-contracts";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import { cn } from "@/shared/util/cn";
+import { IntervalToggle, TARGET_OVERLAP_INTERVALS } from "./IntervalToggle";
 
 type MetricKey = "value" | "volume" | "pnl" | "markets" | "positions";
 type Bucket = PolyResearchTargetOverlapResponse["buckets"][number];
@@ -35,18 +43,45 @@ type MetricDef = {
   label: string;
   unit: string;
   formatter: (value: number) => string;
+  /** True iff the time-window toggle drives this metric server-side. */
+  windowed: boolean;
 };
 
 const METRICS = [
-  { key: "value", label: "Active USDC", unit: "USDC", formatter: formatUsd },
-  { key: "volume", label: "Fill volume", unit: "USDC", formatter: formatUsd },
-  { key: "pnl", label: "Active PnL", unit: "PnL", formatter: formatSignedUsd },
-  { key: "markets", label: "Markets", unit: "markets", formatter: formatCount },
+  {
+    key: "value",
+    label: "Active USDC",
+    unit: "USDC",
+    formatter: formatUsd,
+    windowed: false,
+  },
+  {
+    key: "volume",
+    label: "Fill volume",
+    unit: "USDC",
+    formatter: formatUsd,
+    windowed: true,
+  },
+  {
+    key: "pnl",
+    label: "Active PnL",
+    unit: "PnL",
+    formatter: formatSignedUsd,
+    windowed: false,
+  },
+  {
+    key: "markets",
+    label: "Markets",
+    unit: "markets",
+    formatter: formatCount,
+    windowed: false,
+  },
   {
     key: "positions",
     label: "Positions",
     unit: "positions",
     formatter: formatCount,
+    windowed: false,
   },
 ] satisfies readonly MetricDef[];
 
@@ -72,10 +107,14 @@ export function TargetOverlapBlock({
   data,
   isLoading,
   isError,
+  interval,
+  onIntervalChange,
 }: {
   data?: PolyResearchTargetOverlapResponse | undefined;
   isLoading?: boolean | undefined;
   isError?: boolean | undefined;
+  interval: PolyWalletOverviewInterval;
+  onIntervalChange: (interval: PolyWalletOverviewInterval) => void;
 }): ReactElement {
   const [metric, setMetric] = useState<MetricKey>("value");
   const metricDef = METRIC_BY_KEY[metric];
@@ -98,7 +137,7 @@ export function TargetOverlapBlock({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex rounded border bg-muted p-0.5 text-xs">
           {METRICS.map((item) => (
             <button
@@ -116,6 +155,17 @@ export function TargetOverlapBlock({
             </button>
           ))}
         </div>
+        {metricDef.windowed ? (
+          <IntervalToggle
+            interval={interval}
+            intervals={TARGET_OVERLAP_INTERVALS}
+            onChange={onIntervalChange}
+          />
+        ) : (
+          <span className="text-muted-foreground text-xs">
+            Current snapshot — {metricDef.label} is not windowed.
+          </span>
+        )}
       </div>
 
       <div className="divide-y">
