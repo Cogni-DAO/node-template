@@ -26,7 +26,7 @@ At each phase: search the resource roots below for the relevant guides, specs, a
 ## Phase 1 — Implement
 
 1. Worktree off `main`. Read the root `AGENTS.md` and the `AGENTS.md` files for every dir you'll touch.
-2. Discover the operator and register if you need a Bearer token. **Production (`https://cognidao.org`) is the canonical operator** — file all work items there. `test.cognidao.org` is the candidate-a slot used for `/version.buildSha` checks during flight + validation; it is NOT a parallel work-item store.
+2. Discover the operator and register if you need a Bearer token:
    ```bash
    BASE=https://cognidao.org
    curl $BASE/.well-known/agent.json | jq .endpoints
