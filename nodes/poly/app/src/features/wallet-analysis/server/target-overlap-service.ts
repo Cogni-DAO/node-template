@@ -12,23 +12,34 @@
  *     currently have any active saved position for the same condition_id.
  *   - SOLO_BUCKET_METRICS_ARE_OWNER_ONLY: RN1-only and swisstony-only buckets
  *     aggregate fill volume only for the wallet that currently owns the bucket.
- *   - WINDOW_ONLY_APPLIES_TO_VOLUME: active value and PnL are current-position
- *     facts; fill volume is filtered by the selected interval.
+ *   - WINDOW_ONLY_APPLIES_TO_VOLUME: active USDC is a current-position fact;
+ *     fill volume is filtered by the selected interval.
+ *   - LIVE_POSITION_ONLY: aggregations include only positions that are
+ *     `active=true AND shares>0 AND last_observed_at >= NOW() - 6h` —
+ *     `liveCurrentPositionSql` from `current-position-staleness.ts`.
+ *   - NO_BUCKET_PNL: this slice intentionally does not emit per-bucket PnL.
+ *     Unrealized P/L on currently-open positions misleads next to the P/L
+ *     tab line chart's net (realized + unrealized) cumulative from
+ *     `poly_trader_user_pnl_points` — two metrics labeled "PnL" disagreeing
+ *     erodes trust in adjacent numbers (bug.5020). Net P/L is per-wallet;
+ *     bucketing it by condition_id is structurally meaningless. This
+ *     surface reports exposure (USDC, markets, positions) and fill volume
+ *     only. Net P/L lives on the P/L tab.
  * Side-effects: DB reads only.
- * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
+ * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/bug.5020
  * @public
  */
 
 import { polyTraderWallets } from "@cogni/poly-db-schema/trader-activity";
 import type {
   PolyResearchTargetOverlapBucket,
-  PolyResearchTargetOverlapPolicy,
   PolyResearchTargetOverlapResponse,
   PolyWalletOverviewInterval,
 } from "@cogni/poly-node-contracts";
 import { eq, sql } from "drizzle-orm";
 import type { NodePgDatabase } from "drizzle-orm/node-postgres";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import { liveCurrentPositionSql } from "./current-position-staleness";
 
 type Db =
   | NodePgDatabase<Record<string, unknown>>
@@ -50,18 +61,14 @@ type OverlapAggRow = {
   market_count: string | number | null;
   position_count: string | number | null;
   current_value_usdc: string | number | null;
-  cost_basis_usdc: string | number | null;
-  pnl_usdc: string | number | null;
   fill_volume_usdc: string | number | null;
   rn1_market_count: string | number | null;
   rn1_position_count: string | number | null;
   rn1_current_value_usdc: string | number | null;
-  rn1_pnl_usdc: string | number | null;
   rn1_fill_volume_usdc: string | number | null;
   swisstony_market_count: string | number | null;
   swisstony_position_count: string | number | null;
   swisstony_current_value_usdc: string | number | null;
-  swisstony_pnl_usdc: string | number | null;
   swisstony_fill_volume_usdc: string | number | null;
 };
 
@@ -89,7 +96,6 @@ export async function getTargetOverlapSlice(
       swisstony: { ...SWISSTONY, observed: swisstony !== null },
     },
     buckets,
-    policy: buildTargetOverlapPolicy(buckets),
   };
 }
 
@@ -120,11 +126,9 @@ async function readOverlapRows(
         END AS wallet_key,
         p.condition_id,
         p.token_id,
-        p.current_value_usdc::numeric AS current_value_usdc,
-        p.cost_basis_usdc::numeric AS cost_basis_usdc,
-        (p.current_value_usdc::numeric - p.cost_basis_usdc::numeric) AS pnl_usdc
+        p.current_value_usdc::numeric AS current_value_usdc
       FROM poly_trader_current_positions p
-      WHERE p.active = true
+      WHERE ${liveCurrentPositionSql("p")}
         AND p.trader_wallet_id IN (${rn1WalletId}, ${swisstonyWalletId})
     ),
     markets AS (
@@ -141,12 +145,8 @@ async function readOverlapRows(
         COUNT(*) FILTER (WHERE wallet_key = 'rn1') AS rn1_position_count,
         COUNT(*) FILTER (WHERE wallet_key = 'swisstony') AS swisstony_position_count,
         COALESCE(SUM(current_value_usdc), 0) AS current_value_usdc,
-        COALESCE(SUM(cost_basis_usdc), 0) AS cost_basis_usdc,
-        COALESCE(SUM(pnl_usdc), 0) AS pnl_usdc,
         COALESCE(SUM(current_value_usdc) FILTER (WHERE wallet_key = 'rn1'), 0) AS rn1_current_value_usdc,
-        COALESCE(SUM(pnl_usdc) FILTER (WHERE wallet_key = 'rn1'), 0) AS rn1_pnl_usdc,
-        COALESCE(SUM(current_value_usdc) FILTER (WHERE wallet_key = 'swisstony'), 0) AS swisstony_current_value_usdc,
-        COALESCE(SUM(pnl_usdc) FILTER (WHERE wallet_key = 'swisstony'), 0) AS swisstony_pnl_usdc
+        COALESCE(SUM(current_value_usdc) FILTER (WHERE wallet_key = 'swisstony'), 0) AS swisstony_current_value_usdc
       FROM current_positions
       WHERE wallet_key IS NOT NULL
       GROUP BY condition_id
@@ -181,18 +181,14 @@ async function readOverlapRows(
       COUNT(*) AS market_count,
       COALESCE(SUM(m.position_count), 0) AS position_count,
       COALESCE(SUM(m.current_value_usdc), 0) AS current_value_usdc,
-      COALESCE(SUM(m.cost_basis_usdc), 0) AS cost_basis_usdc,
-      COALESCE(SUM(m.pnl_usdc), 0) AS pnl_usdc,
       COALESCE(MAX(v.fill_volume_usdc), 0) AS fill_volume_usdc,
       COUNT(*) FILTER (WHERE m.rn1_active) AS rn1_market_count,
       COALESCE(SUM(m.rn1_position_count), 0) AS rn1_position_count,
       COALESCE(SUM(m.rn1_current_value_usdc), 0) AS rn1_current_value_usdc,
-      COALESCE(SUM(m.rn1_pnl_usdc), 0) AS rn1_pnl_usdc,
       COALESCE(MAX(v.rn1_fill_volume_usdc), 0) AS rn1_fill_volume_usdc,
       COUNT(*) FILTER (WHERE m.swisstony_active) AS swisstony_market_count,
       COALESCE(SUM(m.swisstony_position_count), 0) AS swisstony_position_count,
       COALESCE(SUM(m.swisstony_current_value_usdc), 0) AS swisstony_current_value_usdc,
-      COALESCE(SUM(m.swisstony_pnl_usdc), 0) AS swisstony_pnl_usdc,
       COALESCE(MAX(v.swisstony_fill_volume_usdc), 0) AS swisstony_fill_volume_usdc
     FROM markets m
     LEFT JOIN volumes v ON v.bucket = m.bucket
@@ -217,65 +213,21 @@ function buildBuckets(
       marketCount: int(row?.market_count),
       positionCount: int(row?.position_count),
       currentValueUsdc: number(row?.current_value_usdc),
-      costBasisUsdc: number(row?.cost_basis_usdc),
-      pnlUsdc: number(row?.pnl_usdc),
       fillVolumeUsdc: number(row?.fill_volume_usdc),
       rn1: {
         marketCount: int(row?.rn1_market_count),
         positionCount: int(row?.rn1_position_count),
         currentValueUsdc: number(row?.rn1_current_value_usdc),
-        pnlUsdc: number(row?.rn1_pnl_usdc),
         fillVolumeUsdc: number(row?.rn1_fill_volume_usdc),
       },
       swisstony: {
         marketCount: int(row?.swisstony_market_count),
         positionCount: int(row?.swisstony_position_count),
         currentValueUsdc: number(row?.swisstony_current_value_usdc),
-        pnlUsdc: number(row?.swisstony_pnl_usdc),
         fillVolumeUsdc: number(row?.swisstony_fill_volume_usdc),
       },
     };
   });
-}
-
-export function buildTargetOverlapPolicy(
-  buckets: readonly PolyResearchTargetOverlapBucket[]
-): PolyResearchTargetOverlapPolicy {
-  const shared = buckets.find((bucket) => bucket.key === "shared");
-  const solo = buckets.filter((bucket) => bucket.key !== "shared");
-  const sharedRate = pnlPerDollar(shared);
-  const soloCost = solo.reduce((sum, bucket) => sum + bucket.costBasisUsdc, 0);
-  const soloPnl = solo.reduce((sum, bucket) => sum + bucket.pnlUsdc, 0);
-  const soloRate = soloCost > 0 ? soloPnl / soloCost : null;
-  if (sharedRate === null || soloRate === null) {
-    return {
-      signal: "insufficient",
-      sharedPnlPerDollar: sharedRate,
-      soloPnlPerDollar: soloRate,
-      note: "Need active shared and solo exposure before policy comparison.",
-    };
-  }
-  if (sharedRate > soloRate) {
-    return {
-      signal: "shared_outperforms",
-      sharedPnlPerDollar: sharedRate,
-      soloPnlPerDollar: soloRate,
-      note: "Shared active markets are outperforming solo exposure.",
-    };
-  }
-  return {
-    signal: "solo_outperforms",
-    sharedPnlPerDollar: sharedRate,
-    soloPnlPerDollar: soloRate,
-    note: "Solo active markets are outperforming shared exposure.",
-  };
-}
-
-function pnlPerDollar(
-  bucket: PolyResearchTargetOverlapBucket | undefined
-): number | null {
-  if (!bucket || bucket.costBasisUsdc <= 0) return null;
-  return bucket.pnlUsdc / bucket.costBasisUsdc;
 }
 
 function windowStartFor(interval: PolyWalletOverviewInterval): Date {

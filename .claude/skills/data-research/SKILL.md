@@ -15,7 +15,24 @@ The fix that landed was _not_ a `LIMIT N` band-aid — it was decomposing every 
 
 The Research tab will host 100+ views over time (see `nodes/poly/app/src/app/(app)/research/`): target-overlap, P/L curves, fills histograms, USDC-flow, size-vs-P/L, trade-size distributions, entry-price quantiles, time-in-position, entries-by-outcome, hour-of-day, bets-per-market. Every one of those is an aggregation over millions of rows. **Every one of them must follow this skill or the next bug.5012 ships itself.**
 
-## Core principle: aggregations belong in SQL
+## Core principle 1: dashboards read from our DB, never from upstream on render
+
+`PAGE_LOAD_DB_ONLY` and `SAVED_FACTS_ONLY` are non-negotiable invariants on every research/dashboard route. A research-view request handler may **only** read from our own Postgres tables (`poly_trader_fills`, `poly_trader_position_snapshots`, `poly_trader_current_positions`, `poly_trader_user_pnl_points`, `poly_market_outcomes`, `poly_market_metadata`, `poly_market_price_history`, etc.). It must not fan out to Polymarket's CLOB, Data API, Gamma, or any other upstream during the render path.
+
+Upstream is hit exactly once, in one place: the **trader-observation tick** (and adjacent ingestion jobs) that polls Polymarket on a schedule, persists the response, and exits. Everything else — every wallet drawer, every research panel, every comparison chart — reads the saved facts.
+
+Why this rule:
+
+- **Page latency is bounded by Postgres, not by Polymarket.** A flaky upstream can't 502 the dashboard. A slow upstream can't make page load take 8 seconds.
+- **Per-render fan-out is a quadratic load source.** N concurrent users × M positions per page × upstream rate-limits = page rot. The observation tick polls once per N seconds for the wallet population, regardless of who's looking.
+- **A single source of truth is auditable.** When a number on the page disagrees with another number, the question "did one of these reach upstream and the other didn't?" has a definitive answer: no, both came from the DB, so the divergence is a code bug we can localize.
+- **The persisted payload often already contains what JS is about to derive.** When upstream returns a structured row (e.g., Polymarket `/positions` returns `cashPnl`, `percentPnl`, `redeemable`, `curPrice`), persist the full payload as `raw jsonb` and read fields back via `(raw->>'…')::type` instead of recomputing. JS-side derivation invents a metric; the persisted vendor field is the metric. (bug.5020 was exactly this failure: derived `currentValue − costBasis` instead of reading `raw->>'cashPnl'`.)
+
+If a render-path read needs data we haven't persisted yet, the right answer is: **add a column or extend the observation writer**, then read from the DB. Never reach for an upstream client in a route handler "just this once."
+
+The wallet-analysis services already encode this — every server-side service file has a `PAGE_LOAD_DB_ONLY` invariant in its module docstring. New services must do the same. Routes that violate it will fail review.
+
+## Core principle 2: aggregations belong in SQL
 
 Postgres can do every aggregation a JS reduce can do, against the indexed table, at constant memory cost. V8 cannot — every row crossing the wire becomes a hydrated object whose footprint is many times larger than the row's storage size.
 
@@ -121,14 +138,16 @@ The Research tab pattern is **comparative + time-windowed**: most views show 2�
 
 ### 8. Avoid the band-aids you'll be tempted to use
 
-| Band-aid                                                 | Why it's wrong                                                                                           | Real fix                                  |
-| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `.limit(N)` on raw fills                                 | Silently truncates power-traders to most-recent-N. Defeats the backfill goal.                            | SQL aggregation.                          |
-| `--max-old-space-size` bump                              | Buys a quarter-decade. Next backfill breaks.                                                             | SQL aggregation.                          |
-| Streaming pg cursor + JS fold                            | Works for sums; breaks on quantiles, sorts, medians. Same byte cost.                                     | SQL aggregation.                          |
-| Pre-aggregate to per-position synthetic rows then run JS | Bypasses dailyCounts, tradesLast30 — still need SQL for those. More code, no win.                        | SQL aggregation, fully.                   |
-| Cache the aggregate result client-side or in Redis       | Adds invalidation as a new bug class. The query is fast in SQL — cache only when EXPLAIN says you can't. | EXPLAIN first; cache only as proven need. |
-| Bump container Tier                                      | See heap bump.                                                                                           | SQL aggregation.                          |
+| Band-aid                                                 | Why it's wrong                                                                                           | Real fix                                                           |
+| -------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| Call Polymarket (CLOB / Data API / Gamma) from a route   | Violates `PAGE_LOAD_DB_ONLY`. Couples page latency + uptime to a vendor. Per-user fan-out scales badly.  | Persist via observation tick, read DB.                             |
+| Re-derive a metric the vendor already returns            | If `cashPnl`, `redeemable`, `curPrice`, etc. are in the response, derivation invents drift (bug.5020).   | Persist full payload as `raw jsonb`, read `(raw->>'field')::type`. |
+| `.limit(N)` on raw fills                                 | Silently truncates power-traders to most-recent-N. Defeats the backfill goal.                            | SQL aggregation.                                                   |
+| `--max-old-space-size` bump                              | Buys a quarter-decade. Next backfill breaks.                                                             | SQL aggregation.                                                   |
+| Streaming pg cursor + JS fold                            | Works for sums; breaks on quantiles, sorts, medians. Same byte cost.                                     | SQL aggregation.                                                   |
+| Pre-aggregate to per-position synthetic rows then run JS | Bypasses dailyCounts, tradesLast30 — still need SQL for those. More code, no win.                        | SQL aggregation, fully.                                            |
+| Cache the aggregate result client-side or in Redis       | Adds invalidation as a new bug class. The query is fast in SQL — cache only when EXPLAIN says you can't. | EXPLAIN first; cache only as proven need.                          |
+| Bump container Tier                                      | See heap bump.                                                                                           | SQL aggregation.                                                   |
 
 If you find yourself reaching for any of these without first writing the SQL aggregation, stop. The SQL is almost always shorter and always more correct.
 
@@ -136,6 +155,8 @@ If you find yourself reaching for any of these without first writing the SQL agg
 
 Before opening a research-view PR, the author confirms:
 
+- [ ] **No upstream call on the render path.** Route handler imports only DB-reading services. No CLOB / Data-API / Gamma client appears in the import graph reachable from the route. Module docstring carries `PAGE_LOAD_DB_ONLY` (and `SAVED_FACTS_ONLY` if the data is observed).
+- [ ] **Vendor-published metrics are read, not re-derived.** If the field exists in the persisted `raw` payload, the SQL extracts it (e.g., `(raw->>'cashPnl')::numeric`) instead of computing a substitute.
 - [ ] No raw-row read whose cardinality scales with N reaches V8.
 - [ ] EXPLAIN ANALYZE captured for each new query against worst-case wallet (currently RN1 ~825k fills); plan and total-runtime in PR body.
 - [ ] Each new query under 200ms p95 against that worst case.
@@ -151,8 +172,11 @@ Before opening a research-view PR, the author confirms:
 - Adding any new view under `app/(app)/research/` or `app/api/v1/poly/research/`
 - Adding any new aggregate to `wallet-analysis-service.ts` or any feature-service that reads `poly_trader_fills`, `poly_trader_position_snapshots`, `poly_copy_trade_fills`, `poly_market_outcomes`
 - Reviewing a PR that adds a new SELECT against a 100k-plus-row table
+- Reviewing a PR that imports a Polymarket / CLOB / Data-API / Gamma client from anywhere reachable by a route handler — `PAGE_LOAD_DB_ONLY` is the load-bearing rule
+- Considering a derived metric (`currentValue − costBasis`, hand-rolled win-rate, JS-side P/L roll-up) when the vendor already publishes the field in a payload we persist
 - Migrating existing JS-side aggregation to SQL
 - Investigating an OOM whose stack trace ends in V8 row hydration
+- Investigating any divergence between two PnL/notional/count numbers shown on the same page (mismatched sources is the antipattern)
 - Anyone proposing a `LIMIT N` cap as a "fix" for an OOMing read path
 - Designing a new comparison / scorecard / chart view, regardless of how the user phrases the request
 

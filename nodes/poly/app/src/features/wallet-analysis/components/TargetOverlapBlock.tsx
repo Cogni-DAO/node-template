@@ -11,10 +11,16 @@
  *     RN1 only → shared → swisstony only.
  *   - SOLO_BUCKETS_ARE_OWNER_ONLY: solo rows render the active owner only;
  *     shared renders RN1 and swisstony as stacked account rows.
- *   - ONLY_PNL_IS_DIVERGING: PnL is zero-centered; all positive-only metrics
- *     start at the left edge so width directly means larger.
- *   - METRIC_TABS_SHARE_AXES: active USDC, fill volume, PnL, markets, and
+ *   - METRIC_TABS_SHARE_AXES: active USDC, fill volume, markets, and
  *     positions reuse the same bucket structure so the user can compare dimensions.
+ *   - NO_PNL_TAB: per-bucket PnL is intentionally absent (bug.5020). Net
+ *     P/L lives on the P/L tab line chart, sourced from
+ *     `poly_trader_user_pnl_points`. Two metrics labeled "PnL" disagreeing
+ *     on the same page erodes trust in adjacent numbers.
+ *   - PAGE_LEVEL_INTERVAL: time-window control is the page-level
+ *     IntervalToggle (rendered by DistributionsBlock at top right, the same
+ *     control surface every other research tab uses). This block does not
+ *     render its own toggle.
  * Side-effects: none
  * @public
  */
@@ -26,7 +32,7 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 import { cn } from "@/shared/util/cn";
 
-type MetricKey = "value" | "volume" | "pnl" | "markets" | "positions";
+type MetricKey = "value" | "volume" | "markets" | "positions";
 type Bucket = PolyResearchTargetOverlapResponse["buckets"][number];
 type AccountKey = "rn1" | "swisstony";
 
@@ -37,10 +43,12 @@ type MetricDef = {
   formatter: (value: number) => string;
 };
 
+// Active PnL was deliberately removed — it conflicted with the P/L tab's
+// vendor-authoritative net cumulative PnL (bug.5020). Two metrics labeled
+// "PnL" disagreeing on the same page erodes trust in adjacent numbers.
 const METRICS = [
   { key: "value", label: "Active USDC", unit: "USDC", formatter: formatUsd },
   { key: "volume", label: "Fill volume", unit: "USDC", formatter: formatUsd },
-  { key: "pnl", label: "Active PnL", unit: "PnL", formatter: formatSignedUsd },
   { key: "markets", label: "Markets", unit: "markets", formatter: formatCount },
   {
     key: "positions",
@@ -181,7 +189,6 @@ function SoloTargetOverlapRow({
 }): ReactElement {
   const meta = ACCOUNT_META[account];
   const value = sideMetricValue(bucket[account], metric);
-  const valueClassName = metricValueClassName(metric, value);
 
   return (
     <div className="grid gap-3 py-4 md:grid-cols-5 md:items-center">
@@ -195,15 +202,12 @@ function SoloTargetOverlapRow({
       <div className="flex flex-col gap-2 md:col-span-3">
         <div className="flex items-center justify-between gap-3 text-xs">
           <span className="text-muted-foreground">{meta.label}</span>
-          <span className={cn("font-mono", valueClassName)}>
-            {metricDef.formatter(value)}
-          </span>
+          <span className="font-mono">{metricDef.formatter(value)}</span>
         </div>
         <TargetMetricBar
           account={account}
           className="h-8"
           max={max}
-          metric={metric}
           value={value}
         />
       </div>
@@ -243,14 +247,12 @@ function SharedTargetOverlapRow({
         <SharedAccountBar
           account="rn1"
           max={max}
-          metric={metric}
           metricDef={metricDef}
           value={rn1}
         />
         <SharedAccountBar
           account="swisstony"
           max={max}
-          metric={metric}
           metricDef={metricDef}
           value={swisstony}
         />
@@ -269,13 +271,11 @@ function SharedTargetOverlapRow({
 function SharedAccountBar({
   account,
   value,
-  metric,
   metricDef,
   max,
 }: {
   account: AccountKey;
   value: number;
-  metric: MetricKey;
   metricDef: MetricDef;
   max: number;
 }): ReactElement {
@@ -285,15 +285,12 @@ function SharedAccountBar({
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="truncate text-muted-foreground">{meta.label}</span>
-        <span className={cn("font-mono", metricValueClassName(metric, value))}>
-          {metricDef.formatter(value)}
-        </span>
+        <span className="font-mono">{metricDef.formatter(value)}</span>
       </div>
       <TargetMetricBar
         account={account}
         className="h-4"
         max={max}
-        metric={metric}
         value={value}
       />
     </div>
@@ -303,45 +300,14 @@ function SharedAccountBar({
 function TargetMetricBar({
   account,
   value,
-  metric,
   max,
   className,
 }: {
   account: AccountKey;
   value: number;
-  metric: MetricKey;
   max: number;
   className: string;
 }): ReactElement {
-  if (metric === "pnl") {
-    const pct = max > 0 ? Math.min(100, (Math.abs(value) / max) * 100) : 0;
-    return (
-      <div
-        className={cn(
-          "flex w-full overflow-hidden rounded border bg-muted/30",
-          className
-        )}
-      >
-        <div className="flex flex-1 justify-end border-r">
-          {value < 0 ? (
-            <div
-              className="h-full bg-destructive/70 transition-all"
-              style={{ width: `${pct}%` }}
-            />
-          ) : null}
-        </div>
-        <div className="flex-1">
-          {value > 0 ? (
-            <div
-              className="h-full bg-success/70 transition-all"
-              style={{ width: `${pct}%` }}
-            />
-          ) : null}
-        </div>
-      </div>
-    );
-  }
-
   const pct = max > 0 ? Math.min(100, (Math.max(0, value) / max) * 100) : 0;
   return (
     <div
@@ -367,8 +333,6 @@ function sideMetricValue(side: Bucket["rn1"], metric: MetricKey): number {
       return side.currentValueUsdc;
     case "volume":
       return side.fillVolumeUsdc;
-    case "pnl":
-      return side.pnlUsdc;
     case "markets":
       return side.marketCount;
     case "positions":
@@ -408,16 +372,6 @@ function detailForBucket(bucket: Bucket, metric: MetricKey): string {
   return `${bucket.marketCount.toLocaleString()} markets`;
 }
 
-function metricValueClassName(
-  metric: MetricKey,
-  value: number
-): string | undefined {
-  if (metric !== "pnl") return undefined;
-  if (value > 0) return "text-success";
-  if (value < 0) return "text-destructive";
-  return "text-muted-foreground";
-}
-
 function assertNever(value: never): never {
   throw new Error(`Unhandled target overlap metric: ${value}`);
 }
@@ -428,12 +382,6 @@ function formatUsd(value: number): string {
     currency: "USD",
     maximumFractionDigits: 0,
   });
-}
-
-function formatSignedUsd(value: number): string {
-  if (Math.abs(value) < 0.005) return "$0";
-  const formatted = formatUsd(Math.abs(value));
-  return value > 0 ? `+${formatted}` : `-${formatted}`;
 }
 
 function formatCount(value: number): string {
