@@ -368,6 +368,25 @@ const SECRETS: Secret[] = [
     generate: () => randHex(24),
   },
   {
+    name: "APP_DB_READONLY_USER",
+    required: false,
+    category: "Database",
+    source: "agent",
+    description: "Read-only Postgres user for Grafana/agent support queries",
+    steps: ['Convention: "app_readonly"'],
+    generate: () => "app_readonly",
+  },
+  {
+    name: "APP_DB_READONLY_PASSWORD",
+    required: false,
+    category: "Database",
+    source: "agent",
+    description:
+      "Read-only Postgres password; deploy-infra derives one from POSTGRES_ROOT_PASSWORD when unset",
+    steps: ["Optional override for the derived read-only credential"],
+    generate: () => randHex(24),
+  },
+  {
     name: "TEMPORAL_DB_USER",
     required: true,
     category: "Database",
@@ -536,12 +555,74 @@ const SECRETS: Secret[] = [
     required: false,
     category: "Observability (Grafana Cloud)",
     source: "human",
-    description: "Grafana service account token (Viewer role)",
+    description:
+      "Grafana service account token for observability reads and reproducible datasource provisioning",
     steps: [
       "Grafana instance",
       "Administration -> Service Accounts",
-      "Add service account (Viewer role)",
+      "Add service account with datasource read/query plus datasource create/write for setup runs",
+      "Required permissions: datasources:read, datasources:query, datasources:create, datasources:write",
+      "Use a stack service-account token, usually prefixed glsa_; Grafana Cloud access-policy tokens prefixed glc_ do not authorize the Grafana instance HTTP API",
+      "Use Grafana Cloud Private Data Source Connect (PDC) for private databases; do not expose Postgres publicly",
       "Add token, copy it",
+    ],
+  },
+  {
+    name: "GRAFANA_PDC_SIGNING_TOKEN",
+    required: false,
+    category: "Observability (Grafana Cloud)",
+    source: "human",
+    description:
+      "Per-environment Grafana PDC signing token; authenticates the runtime pdc-agent SSH client",
+    steps: [
+      "Grafana instance",
+      "Connections -> Private data source connections",
+      "Open the org's PDC network (one network can serve multiple environments via separate tokens)",
+      "Configuration Details -> Use a PDC signing token -> Create a new token",
+      "Token name: <env>-postgres-YYYYMMDD (the name is just a label; Grafana does not route by token name)",
+      "Copy the value labeled GCLOUD_PDC_SIGNING_TOKEN (begins with glc_); Grafana shows it once",
+      "Cluster + hosted-grafana-id are also printed in the same Docker command snippet — capture them in the next two prompts",
+    ],
+  },
+  {
+    name: "GRAFANA_PDC_HOSTED_GRAFANA_ID",
+    required: false,
+    category: "Observability (Grafana Cloud)",
+    source: "human",
+    description:
+      "Hosted Grafana ID — stable per Grafana org/instance; copy from the PDC Docker snippet, do not decode the token payload",
+    steps: [
+      "Same Configuration Details -> Docker panel that produced the signing token",
+      "Copy the integer value after -gcloud-hosted-grafana-id",
+      "This number is stable per Grafana org and is reused across every environment's pdc-agent",
+    ],
+  },
+  {
+    name: "GRAFANA_PDC_CLUSTER",
+    required: false,
+    category: "Observability (Grafana Cloud)",
+    source: "human",
+    description:
+      "Grafana PDC cluster — stable per Grafana org region; copy from the PDC Docker snippet",
+    steps: [
+      "Same Configuration Details -> Docker panel that produced the signing token",
+      "Copy the value after -cluster (e.g. prod-ap-southeast-1)",
+      "This value is stable per Grafana org region and is reused across every environment's pdc-agent",
+    ],
+  },
+  {
+    name: "GRAFANA_PDC_NETWORK_UUID",
+    required: false,
+    category: "Observability (Grafana Cloud)",
+    source: "human",
+    description:
+      "Internal Grafana UUID for the PDC network — what Grafana Cloud routes by; stable per network",
+    steps: [
+      "First-time bootstrap: bind ONE Postgres datasource to the PDC network through the Grafana UI (datasource page -> Connection -> Private data source connect dropdown -> Save & test).",
+      "Then read the UUID from that datasource's stored config:",
+      'curl -H "Authorization: Bearer $GRAFANA_SERVICE_ACCOUNT_TOKEN" "$GRAFANA_URL/api/datasources/uid/<uid>" | jq -r .jsonData.secureSocksProxyUsername',
+      "Paste the UUID (looks like 5ff531a0-3ed3-4460-8281-be08184816c3) — it's the same value for every environment that shares this PDC network.",
+      "After this is stored, future `provision-grafana-postgres-datasources.sh` runs bind datasources to PDC purely via API; no UI clicks needed.",
     ],
   },
   {

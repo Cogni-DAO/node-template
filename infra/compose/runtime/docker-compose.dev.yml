@@ -370,6 +370,8 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       APP_DB_SERVICE_USER: ${APP_DB_SERVICE_USER}
       APP_DB_SERVICE_PASSWORD: ${APP_DB_SERVICE_PASSWORD}
+      APP_DB_READONLY_USER: ${APP_DB_READONLY_USER:-app_readonly}
+      APP_DB_READONLY_PASSWORD: ${APP_DB_READONLY_PASSWORD:-readonly_password}
       LITELLM_DB_NAME: litellm_dev
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro
@@ -491,10 +493,13 @@ services:
       - "127.0.0.1:3001:3000"
     volumes:
       - ./configs/grafana-provisioning:/etc/grafana/provisioning:ro
+      - ../../grafana/dashboards:/var/lib/grafana/dashboards/cogni:ro
       - grafana_data:/var/lib/grafana
     environment:
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - APP_DB_READONLY_USER=${APP_DB_READONLY_USER:-app_readonly}
+      - APP_DB_READONLY_PASSWORD=${APP_DB_READONLY_PASSWORD:-readonly_password}
     depends_on:
       - loki
 

@@ -77,8 +77,10 @@ shared/observability/           # → @cogni/node-shared/observability
 
 **Infrastructure:**
 
-- `infra/compose/configs/alloy-config.alloy` - Logs only (local dev)
-- `infra/compose/configs/alloy-config.metrics.alloy` - Logs + metrics (preview/prod)
+- `infra/grafana/dashboards/` - Grafana Cloud dashboard JSON, synced by Grafana Git Sync
+- `infra/grafana/alerts/` - Grafana alerting resources as code; Git Sync does not support alerts yet
+- `infra/compose/runtime/configs/alloy-config.alloy` - Logs only (local dev)
+- `infra/compose/runtime/configs/alloy-config.metrics.alloy` - Logs + metrics (preview/prod)
 - `infra/compose/runtime/docker-compose.yml` - Prod stack (uses metrics config)
 - `infra/compose/runtime/docker-compose.dev.yml` - Dev stack (uses logs-only config)
 - `.mcp.json` - Grafana MCP servers for log querying

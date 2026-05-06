@@ -546,6 +546,46 @@ append_env_if_set() {
     if [[ -n "$val" ]]; then printf '%s=%s\n' "$key" "$val" >> "$file"; fi
 }
 
+missing_or_placeholder() {
+  [[ -z "${1:-}" || "$1" == *"<"* || "$1" == *">"* || "$1" == *" "* ]]
+}
+
+base64url_decode() {
+  local value="${1//-/+}"
+  value="${value//_/\/}"
+  while (( ${#value} % 4 != 0 )); do
+    value="${value}="
+  done
+  if ! printf '%s' "$value" | base64 -d 2>/dev/null; then
+    printf '%s' "$value" | base64 -D
+  fi
+}
+
+json_string_field() {
+  local json="$1" field="$2"
+  printf '%s' "$json" | sed -n "s/.*\"${field}\"[[:space:]]*:[[:space:]]*\"\\([^\"]*\\)\".*/\\1/p"
+}
+
+derive_pdc_defaults_from_token() {
+  [[ -n "${GRAFANA_PDC_SIGNING_TOKEN:-}" ]] || return 0
+  [[ "$GRAFANA_PDC_SIGNING_TOKEN" == glc_* ]] || return 0
+
+  local decoded
+  decoded="$(base64url_decode "${GRAFANA_PDC_SIGNING_TOKEN#glc_}" 2>/dev/null || true)"
+  [[ -n "$decoded" ]] || return 0
+
+  local network_id cluster
+  network_id="$(json_string_field "$decoded" n)"
+  cluster="$(printf '%s' "$decoded" | sed -n 's/.*"m"[[:space:]]*:[[:space:]]*{[^}]*"r"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
+
+  if missing_or_placeholder "${GRAFANA_PDC_NETWORK_ID:-}" && [[ -n "$network_id" ]]; then
+    GRAFANA_PDC_NETWORK_ID="$network_id"
+  fi
+  if missing_or_placeholder "${GRAFANA_PDC_CLUSTER:-}" && [[ -n "$cluster" ]]; then
+    GRAFANA_PDC_CLUSTER="$cluster"
+  fi
+}
+
 log_info "Setting up infrastructure deployment on VM..."
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -667,8 +707,13 @@ append_env_if_set "$RUNTIME_ENV" POLY_CLOB_GEO_BLOCK_TOKEN "${POLY_CLOB_GEO_BLOC
 # BYO-AI: Connection encryption
 append_env_if_set "$RUNTIME_ENV" CONNECTIONS_ENCRYPTION_KEY "${CONNECTIONS_ENCRYPTION_KEY-}"
 # Grafana observability (for OpenClaw grafana-health skill)
+derive_pdc_defaults_from_token
 append_env_if_set "$RUNTIME_ENV" GRAFANA_URL "${GRAFANA_URL-}"
 append_env_if_set "$RUNTIME_ENV" GRAFANA_SERVICE_ACCOUNT_TOKEN "${GRAFANA_SERVICE_ACCOUNT_TOKEN-}"
+append_env_if_set "$RUNTIME_ENV" GRAFANA_PDC_SIGNING_TOKEN "${GRAFANA_PDC_SIGNING_TOKEN-}"
+append_env_if_set "$RUNTIME_ENV" GRAFANA_PDC_HOSTED_GRAFANA_ID "${GRAFANA_PDC_HOSTED_GRAFANA_ID-}"
+append_env_if_set "$RUNTIME_ENV" GRAFANA_PDC_CLUSTER "${GRAFANA_PDC_CLUSTER-}"
+append_env_if_set "$RUNTIME_ENV" GRAFANA_PDC_NETWORK_ID "${GRAFANA_PDC_NETWORK_ID-}"
 # LiteLLM (Compose) → node apps (k3s NodePorts) via bug.0295 VM DNS.
 # NodePorts pinned in infra/k8s/base/node-app/service.yaml; UUIDs in each
 # node's .cogni/repo-spec.yaml. Scheduler-worker uses its own k8s ConfigMap.
@@ -683,11 +728,9 @@ printf '%s=%s\n' DB_BACKUP_INTERVAL_SECONDS "${DB_BACKUP_INTERVAL_SECONDS:-86400
 printf '%s=%s\n' DB_BACKUP_RETENTION_DAYS "${DB_BACKUP_RETENTION_DAYS:-14}" >> "$RUNTIME_ENV"
 printf '%s=%s\n' DB_BACKUP_OBSERVABILITY_GRACE_SECONDS "${DB_BACKUP_OBSERVABILITY_GRACE_SECONDS:-90}" >> "$RUNTIME_ENV"
 
-# ── Doltgres (knowledge data plane) credentials ──────────────────────────
+# ── Derived database credentials ─────────────────────────────────────────
 # Derived deterministically from POSTGRES_ROOT_PASSWORD + salt so no new GitHub
-# Environment secrets are required. Rotating POSTGRES_ROOT_PASSWORD rotates
-# these. Doltgres has weak GRANT support so roles are near-permissive today;
-# derived secrets are still a least-privilege improvement over a shared root pw.
+# Environment secrets are required. Rotating POSTGRES_ROOT_PASSWORD rotates them.
 derive_secret() {
   local salt="$1"
   if command -v openssl >/dev/null 2>&1; then
@@ -698,6 +741,13 @@ derive_secret() {
     echo "dev-${salt}"
   fi
 }
+APP_DB_READONLY_USER="${APP_DB_READONLY_USER:-app_readonly}"
+APP_DB_READONLY_PASSWORD="${APP_DB_READONLY_PASSWORD:-$(derive_secret postgres-readonly)}"
+printf '%s=%s\n' APP_DB_READONLY_USER "$APP_DB_READONLY_USER" >> "$RUNTIME_ENV"
+printf '%s=%s\n' APP_DB_READONLY_PASSWORD "$APP_DB_READONLY_PASSWORD" >> "$RUNTIME_ENV"
+
+# Doltgres has weak GRANT support so roles are near-permissive today; derived
+# secrets are still a least-privilege improvement over a shared root pw.
 DOLTGRES_PASSWORD="${DOLTGRES_PASSWORD:-$(derive_secret doltgres-root)}"
 DOLTGRES_READER_PASSWORD="${DOLTGRES_READER_PASSWORD:-$(derive_secret doltgres-reader)}"
 DOLTGRES_WRITER_PASSWORD="${DOLTGRES_WRITER_PASSWORD:-$(derive_secret doltgres-writer)}"
@@ -859,7 +909,32 @@ fi
 if $RUNTIME_COMPOSE config --services 2>/dev/null | grep -q '^alloy-k8s-events$'; then
   INFRA_SERVICES="$INFRA_SERVICES alloy-k8s-events"
 fi
-$RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
+
+pdc_enabled=false
+if [[ -n "${GRAFANA_PDC_SIGNING_TOKEN:-}" && -n "${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}" && -n "${GRAFANA_PDC_CLUSTER:-}" ]]; then
+  INFRA_SERVICES="$INFRA_SERVICES pdc-agent"
+  pdc_enabled=true
+else
+  log_warn "Grafana PDC agent not started: GRAFANA_PDC_SIGNING_TOKEN, GRAFANA_PDC_HOSTED_GRAFANA_ID, or GRAFANA_PDC_CLUSTER is unset"
+fi
+
+if $pdc_enabled; then
+  COMPOSE_PROFILES=pdc $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
+  sleep 5
+  if ! $RUNTIME_COMPOSE ps --status running pdc-agent 2>/dev/null | grep -q 'pdc-agent'; then
+    log_warn "Grafana PDC agent is not running after compose up; recent logs follow"
+    $RUNTIME_COMPOSE logs --tail=80 pdc-agent || true
+    exit 1
+  fi
+  # Always tail recent pdc-agent logs so SSH-tunnel failures are visible even
+  # when the container itself is "Up". The SSH cert exchange happens at startup;
+  # success looks like "level=info msg=... connected" and any "invalid
+  # credentials" / "key signing request failed" surfaces here.
+  log_info "Grafana pdc-agent recent logs:"
+  $RUNTIME_COMPOSE logs --tail=40 pdc-agent || true
+else
+  $RUNTIME_COMPOSE up -d --remove-orphans $INFRA_SERVICES
+fi
 
 # Sandbox-openclaw disabled — removed from k8s catalog and compose deploy path.
 
@@ -976,6 +1051,8 @@ else
 fi
 
 # Steps 6.6b–6.6c (OpenClaw config hash + readiness gate) removed — sandbox-openclaw disabled.
+# Step 6.6d (alloy checksum-restart) lives near the litellm block above; main
+# already added it at 88e67cdd4 (bug.5169) so this branch's earlier copy is dropped.
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6.7: Ensure Temporal namespace exists (idempotent)
@@ -1348,7 +1425,7 @@ log_info "deploy-infra-remote.sh verified on VM (sha256 match)"
 # Execute remote script with env vars
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ssh $SSH_OPTS root@"$VM_HOST" \
-    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' POLYGON_RPC_URL='$POLYGON_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN:-}' INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' OPENCLAW_GITHUB_RW_TOKEN='${OPENCLAW_GITHUB_RW_TOKEN:-}' GRAFANA_URL='${GRAFANA_URL:-}' GRAFANA_SERVICE_ACCOUNT_TOKEN='${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' TAVILY_API_KEY='${TAVILY_API_KEY:-}' DISCORD_BOT_TOKEN='${DISCORD_BOT_TOKEN:-}' GH_OAUTH_CLIENT_ID='${GH_OAUTH_CLIENT_ID:-}' GH_OAUTH_CLIENT_SECRET='${GH_OAUTH_CLIENT_SECRET:-}' DISCORD_OAUTH_CLIENT_ID='${DISCORD_OAUTH_CLIENT_ID:-}' DISCORD_OAUTH_CLIENT_SECRET='${DISCORD_OAUTH_CLIENT_SECRET:-}' GOOGLE_OAUTH_CLIENT_ID='${GOOGLE_OAUTH_CLIENT_ID:-}' GOOGLE_OAUTH_CLIENT_SECRET='${GOOGLE_OAUTH_CLIENT_SECRET:-}' GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' GH_REPOS='${GH_REPOS:-}' GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' PRIVY_APP_ID='${PRIVY_APP_ID:-}' PRIVY_APP_SECRET='${PRIVY_APP_SECRET:-}' PRIVY_SIGNING_KEY='${PRIVY_SIGNING_KEY:-}' PRIVY_USER_WALLETS_APP_ID='${PRIVY_USER_WALLETS_APP_ID:-}' PRIVY_USER_WALLETS_APP_SECRET='${PRIVY_USER_WALLETS_APP_SECRET:-}' PRIVY_USER_WALLETS_SIGNING_KEY='${PRIVY_USER_WALLETS_SIGNING_KEY:-}' POLY_WALLET_AEAD_KEY_HEX='${POLY_WALLET_AEAD_KEY_HEX:-}' POLY_WALLET_AEAD_KEY_ID='${POLY_WALLET_AEAD_KEY_ID:-}' POLY_CLOB_GEO_BLOCK_TOKEN='${POLY_CLOB_GEO_BLOCK_TOKEN:-}' CONNECTIONS_ENCRYPTION_KEY='${CONNECTIONS_ENCRYPTION_KEY:-}' COGNI_NODE_DBS='${COGNI_NODE_DBS:-}' ACTIONS_AUTOMATION_BOT_PAT='${ACTIONS_AUTOMATION_BOT_PAT:-}' LITELLM_IMAGE='${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-template:litellm-b6e4e942cb23}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-infra-remote.sh"
+    "DOMAIN='$DOMAIN' APP_ENV='$APP_ENV' DEPLOY_ENVIRONMENT='$DEPLOY_ENVIRONMENT' DATABASE_URL='$DATABASE_URL' DATABASE_SERVICE_URL='$DATABASE_SERVICE_URL' LITELLM_MASTER_KEY='$LITELLM_MASTER_KEY' OPENROUTER_API_KEY='$OPENROUTER_API_KEY' AUTH_SECRET='$AUTH_SECRET' POSTGRES_ROOT_USER='$POSTGRES_ROOT_USER' POSTGRES_ROOT_PASSWORD='$POSTGRES_ROOT_PASSWORD' APP_DB_USER='$APP_DB_USER' APP_DB_PASSWORD='$APP_DB_PASSWORD' APP_DB_SERVICE_USER='$APP_DB_SERVICE_USER' APP_DB_SERVICE_PASSWORD='$APP_DB_SERVICE_PASSWORD' APP_DB_READONLY_USER='${APP_DB_READONLY_USER:-}' APP_DB_READONLY_PASSWORD='${APP_DB_READONLY_PASSWORD:-}' APP_DB_NAME='$APP_DB_NAME' EVM_RPC_URL='$EVM_RPC_URL' POLYGON_RPC_URL='$POLYGON_RPC_URL' TEMPORAL_DB_USER='$TEMPORAL_DB_USER' TEMPORAL_DB_PASSWORD='$TEMPORAL_DB_PASSWORD' GHCR_DEPLOY_TOKEN='$GHCR_DEPLOY_TOKEN' GHCR_USERNAME='$GHCR_USERNAME' GRAFANA_CLOUD_LOKI_URL='${GRAFANA_CLOUD_LOKI_URL:-}' GRAFANA_CLOUD_LOKI_USER='${GRAFANA_CLOUD_LOKI_USER:-}' GRAFANA_CLOUD_LOKI_API_KEY='${GRAFANA_CLOUD_LOKI_API_KEY:-}' METRICS_TOKEN='${METRICS_TOKEN:-}' SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN:-}' BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN:-}' INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN:-}' WORK_ITEMS_NOTION_TOKEN='${WORK_ITEMS_NOTION_TOKEN:-}' WORK_ITEMS_NOTION_DATA_SOURCE_ID='${WORK_ITEMS_NOTION_DATA_SOURCE_ID:-}' WORK_ITEMS_NOTION_VERSION='${WORK_ITEMS_NOTION_VERSION:-}' PROMETHEUS_REMOTE_WRITE_URL='${PROMETHEUS_REMOTE_WRITE_URL:-}' PROMETHEUS_USERNAME='${PROMETHEUS_USERNAME:-}' PROMETHEUS_PASSWORD='${PROMETHEUS_PASSWORD:-}' PROMETHEUS_QUERY_URL='${PROMETHEUS_QUERY_URL:-}' PROMETHEUS_READ_USERNAME='${PROMETHEUS_READ_USERNAME:-}' PROMETHEUS_READ_PASSWORD='${PROMETHEUS_READ_PASSWORD:-}' LANGFUSE_PUBLIC_KEY='${LANGFUSE_PUBLIC_KEY:-}' LANGFUSE_SECRET_KEY='${LANGFUSE_SECRET_KEY:-}' LANGFUSE_BASE_URL='${LANGFUSE_BASE_URL:-}' COGNI_REPO_URL='$COGNI_REPO_URL' COGNI_REPO_REF='$COGNI_REPO_REF' GIT_READ_USERNAME='$GIT_READ_USERNAME' GIT_READ_TOKEN='$GIT_READ_TOKEN' OPENCLAW_GATEWAY_TOKEN='$OPENCLAW_GATEWAY_TOKEN' OPENCLAW_GITHUB_RW_TOKEN='${OPENCLAW_GITHUB_RW_TOKEN:-}' GRAFANA_URL='${GRAFANA_URL:-}' GRAFANA_SERVICE_ACCOUNT_TOKEN='${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}' GRAFANA_PDC_SIGNING_TOKEN='${GRAFANA_PDC_SIGNING_TOKEN:-}' GRAFANA_PDC_HOSTED_GRAFANA_ID='${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}' GRAFANA_PDC_CLUSTER='${GRAFANA_PDC_CLUSTER:-}' GRAFANA_PDC_NETWORK_ID='${GRAFANA_PDC_NETWORK_ID:-}' GRAFANA_PDC_NETWORK_UUID='${GRAFANA_PDC_NETWORK_UUID:-}' POSTHOG_API_KEY='$POSTHOG_API_KEY' POSTHOG_HOST='$POSTHOG_HOST' TAVILY_API_KEY='${TAVILY_API_KEY:-}' DISCORD_BOT_TOKEN='${DISCORD_BOT_TOKEN:-}' GH_OAUTH_CLIENT_ID='${GH_OAUTH_CLIENT_ID:-}' GH_OAUTH_CLIENT_SECRET='${GH_OAUTH_CLIENT_SECRET:-}' DISCORD_OAUTH_CLIENT_ID='${DISCORD_OAUTH_CLIENT_ID:-}' DISCORD_OAUTH_CLIENT_SECRET='${DISCORD_OAUTH_CLIENT_SECRET:-}' GOOGLE_OAUTH_CLIENT_ID='${GOOGLE_OAUTH_CLIENT_ID:-}' GOOGLE_OAUTH_CLIENT_SECRET='${GOOGLE_OAUTH_CLIENT_SECRET:-}' GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' GH_REPOS='${GH_REPOS:-}' GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' PRIVY_APP_ID='${PRIVY_APP_ID:-}' PRIVY_APP_SECRET='${PRIVY_APP_SECRET:-}' PRIVY_SIGNING_KEY='${PRIVY_SIGNING_KEY:-}' PRIVY_USER_WALLETS_APP_ID='${PRIVY_USER_WALLETS_APP_ID:-}' PRIVY_USER_WALLETS_APP_SECRET='${PRIVY_USER_WALLETS_APP_SECRET:-}' PRIVY_USER_WALLETS_SIGNING_KEY='${PRIVY_USER_WALLETS_SIGNING_KEY:-}' POLY_WALLET_AEAD_KEY_HEX='${POLY_WALLET_AEAD_KEY_HEX:-}' POLY_WALLET_AEAD_KEY_ID='${POLY_WALLET_AEAD_KEY_ID:-}' POLY_CLOB_GEO_BLOCK_TOKEN='${POLY_CLOB_GEO_BLOCK_TOKEN:-}' CONNECTIONS_ENCRYPTION_KEY='${CONNECTIONS_ENCRYPTION_KEY:-}' COGNI_NODE_DBS='${COGNI_NODE_DBS:-}' ACTIONS_AUTOMATION_BOT_PAT='${ACTIONS_AUTOMATION_BOT_PAT:-}' LITELLM_IMAGE='${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-template:litellm-b6e4e942cb23}' COMMIT_SHA='${GITHUB_SHA:-$(git rev-parse HEAD 2>/dev/null || echo unknown)}' DEPLOY_ACTOR='${GITHUB_ACTOR:-$(whoami)}' bash /tmp/deploy-infra-remote.sh"
 
 emit_deployment_event "infra_deployment.complete" "success" "Infrastructure deployment completed"
 log_info "Infrastructure deployment complete!"

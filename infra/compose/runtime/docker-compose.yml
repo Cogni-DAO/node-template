@@ -252,6 +252,8 @@ services:
       APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       APP_DB_SERVICE_USER: ${APP_DB_SERVICE_USER}
       APP_DB_SERVICE_PASSWORD: ${APP_DB_SERVICE_PASSWORD}
+      APP_DB_READONLY_USER: ${APP_DB_READONLY_USER:-app_readonly}
+      APP_DB_READONLY_PASSWORD: ${APP_DB_READONLY_PASSWORD:-}
       LITELLM_DB_NAME: litellm
     volumes:
       - ./postgres-init/provision.sh:/app/provision.sh:ro
@@ -468,6 +470,21 @@ services:
       - LOKI_WRITE_URL=${LOKI_WRITE_URL}
       - LOKI_USERNAME=${LOKI_USERNAME}
       - LOKI_PASSWORD=${LOKI_PASSWORD}
+
+  pdc-agent:
+    image: grafana/pdc-agent:0.0.57@sha256:541e46e2c404686b881c8c9e633a0242b5d7b714c945b186d0e581fb568e509e
+    restart: unless-stopped
+    profiles:
+      - pdc
+    networks:
+      - internal
+    environment:
+      - GCLOUD_PDC_SIGNING_TOKEN=${GRAFANA_PDC_SIGNING_TOKEN:-}
+      - GCLOUD_HOSTED_GRAFANA_ID=${GRAFANA_PDC_HOSTED_GRAFANA_ID:-}
+      - GCLOUD_PDC_CLUSTER=${GRAFANA_PDC_CLUSTER:-}
+    command:
+      - -ssh-flag
+      - -o PermitRemoteOpen=postgres:5432
 
   # =============================================================================
   # Temporal Services (from temporalio/docker-compose v1.29.1, postgres-only)

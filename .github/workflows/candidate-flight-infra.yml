@@ -58,6 +58,8 @@ jobs:
       APP_DB_PASSWORD: ${{ secrets.APP_DB_PASSWORD }}
       APP_DB_SERVICE_USER: ${{ secrets.APP_DB_SERVICE_USER }}
       APP_DB_SERVICE_PASSWORD: ${{ secrets.APP_DB_SERVICE_PASSWORD }}
+      APP_DB_READONLY_USER: ${{ secrets.APP_DB_READONLY_USER }}
+      APP_DB_READONLY_PASSWORD: ${{ secrets.APP_DB_READONLY_PASSWORD }}
       APP_DB_NAME: ${{ secrets.APP_DB_NAME }}
       LITELLM_MASTER_KEY: ${{ secrets.LITELLM_MASTER_KEY }}
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
@@ -101,6 +103,11 @@ jobs:
       GOOGLE_OAUTH_CLIENT_SECRET: ${{ secrets.GOOGLE_OAUTH_CLIENT_SECRET }}
       GRAFANA_URL: ${{ secrets.GRAFANA_URL }}
       GRAFANA_SERVICE_ACCOUNT_TOKEN: ${{ secrets.GRAFANA_SERVICE_ACCOUNT_TOKEN }}
+      GRAFANA_PDC_SIGNING_TOKEN: ${{ secrets.GRAFANA_PDC_SIGNING_TOKEN }}
+      GRAFANA_PDC_HOSTED_GRAFANA_ID: ${{ secrets.GRAFANA_PDC_HOSTED_GRAFANA_ID }}
+      GRAFANA_PDC_CLUSTER: ${{ secrets.GRAFANA_PDC_CLUSTER }}
+      GRAFANA_PDC_NETWORK_ID: ${{ secrets.GRAFANA_PDC_NETWORK_ID }}
+      GRAFANA_PDC_NETWORK_UUID: ${{ secrets.GRAFANA_PDC_NETWORK_UUID }}
       GH_REVIEW_APP_ID: ${{ secrets.GH_REVIEW_APP_ID }}
       GH_REVIEW_APP_PRIVATE_KEY_BASE64: ${{ secrets.GH_REVIEW_APP_PRIVATE_KEY_BASE64 }}
       GH_REPOS: ${{ vars.GH_REPOS }}
@@ -173,9 +180,17 @@ jobs:
           fi
           echo "✅ SSH connection successful"
 
+      - name: Preflight Grafana PDC signing token
+        if: env.VM_HOST != '' && env.GRAFANA_PDC_SIGNING_TOKEN != ''
+        run: bash scripts/grafana-pdc-token-preflight.sh
+
       - name: Deploy Compose infra to candidate-a VM
         if: env.VM_HOST != ''
         run: bash scripts/ci/deploy-infra.sh --ref "$COGNI_REPO_REF"
+
+      - name: Provision Grafana Postgres datasources
+        if: env.VM_HOST != ''
+        run: bash scripts/ci/provision-grafana-postgres-datasources.sh
 
       - name: Dump alloy-k8s-events state (post-deploy diagnostics)
         if: env.VM_HOST != ''
@@ -210,3 +225,15 @@ jobs:
           done
           echo "::error::db-backup.completed logs did not appear in Loki for both app and temporal clusters"
           exit 1
+
+      - name: Trigger work-items Notion sync
+        if: env.VM_HOST != '' && env.WORK_ITEMS_NOTION_TOKEN != ''
+        env:
+          DOMAIN: ${{ vars.DOMAIN }}
+          INTERNAL_OPS_TOKEN: ${{ secrets.INTERNAL_OPS_TOKEN }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST "https://${DOMAIN}/api/internal/work/notion/sync" \
+            -H "Authorization: Bearer ${INTERNAL_OPS_TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d '{"limit":500}' | jq .

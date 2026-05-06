@@ -143,7 +143,10 @@ pnpm setup github --env production
        - `GH_REPOS` (comma-separated, e.g. `Cogni-DAO/node-template` — set as GitHub Actions **variable**, not secret)
      - **Grafana (optional):**
        - `GRAFANA_URL` (Grafana instance URL)
-       - `GRAFANA_SERVICE_ACCOUNT_TOKEN` (service account token with viewer+ role)
+       - `GRAFANA_SERVICE_ACCOUNT_TOKEN` (Grafana stack service-account token, usually `glsa_`, with `datasources:read`, `datasources:query`, `datasources:create`, and `datasources:write` when setup/deploy provisions datasources; do not use a Grafana Cloud access-policy token prefixed `glc_`; use Grafana Cloud PDC or another private path for database datasources, never public inbound Postgres)
+       - `GRAFANA_PDC_SIGNING_TOKEN` (the only generated PDC secret; from Connections → Private data source connections → Configuration Details → Generate token)
+       - `GRAFANA_PDC_HOSTED_GRAFANA_ID`, `GRAFANA_PDC_CLUSTER` (copy from the same Docker snippet that produced the signing token; stable per Grafana org)
+       - `GRAFANA_PDC_NETWORK_UUID` (internal Grafana UUID for the PDC network; read once via `curl $GRAFANA_URL/api/datasources/uid/<any-bound-datasource> | jq -r .jsonData.secureSocksProxyUsername`)
      - **Privy — Operator Wallet (optional — skipped if missing):**
        - `PRIVY_APP_ID` (from privy.io → App Settings)
        - `PRIVY_APP_SECRET` (from privy.io → App Settings)
