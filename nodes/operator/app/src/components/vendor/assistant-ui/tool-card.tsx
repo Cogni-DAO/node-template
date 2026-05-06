@@ -59,9 +59,7 @@ export function ToolCard({
         type="button"
         className={cn(
           "flex w-full items-center gap-2 px-3 py-2 text-left",
-          canExpand
-            ? "cursor-pointer hover:bg-muted/40"
-            : "cursor-default"
+          canExpand ? "cursor-pointer hover:bg-muted/40" : "cursor-default"
         )}
         onClick={canExpand ? () => setOpen((o) => !o) : undefined}
         aria-expanded={canExpand ? open : undefined}
@@ -90,7 +88,7 @@ export function ToolCard({
       {canExpand && open && (
         <div
           id={detailsId}
-          className="border-t border-border/60 bg-background/40 px-3 py-2"
+          className="border-border/60 border-t bg-background/40 px-3 py-2"
         >
           {details}
         </div>

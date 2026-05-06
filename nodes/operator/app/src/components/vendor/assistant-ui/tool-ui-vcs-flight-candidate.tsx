@@ -94,7 +94,9 @@ const FlightView: ToolCallMessagePartComponent<FlightArgs, FlightResult> = ({
     ? `https://github.com/${owner}/${repo}/pull/${prNumber}`
     : undefined;
   const shaHref =
-    sha != null ? `https://github.com/${owner}/${repo}/commit/${sha}` : undefined;
+    sha != null
+      ? `https://github.com/${owner}/${repo}/commit/${sha}`
+      : undefined;
 
   const title = (
     <span className="inline-flex flex-wrap items-center gap-x-1.5 gap-y-1">
@@ -192,8 +194,7 @@ const FlightView: ToolCallMessagePartComponent<FlightArgs, FlightResult> = ({
           candidate-a /version ↗
         </a>
         <span>
-          Observe via{" "}
-          <code className="font-mono">core__vcs_get_ci_status</code>
+          Observe via <code className="font-mono">core__vcs_get_ci_status</code>
         </span>
       </div>
     </div>
