@@ -6,7 +6,8 @@
  * Purpose: Build the dashboard market aggregation read model from our live
  *   execution positions plus observed active copy-target current positions,
  *   pivoted into one row per (wallet, conditionId) with a primary leg + an
- *   optional hedge leg + a `net` summary.
+ *   optional hedge leg + a `net` summary, plus the rate-gap / size-scaled-gap
+ *   pair that drives the alpha-leak sort.
  * Scope: Feature service. Caller injects DB and already-fetched live positions.
  *   No upstream Polymarket calls.
  * Invariants:
@@ -35,15 +36,21 @@
  *     (target observed but no longer held). Once `poly_market_outcomes` is
  *     populated, resolved legs get joined in to promote `active`/`inactive`
  *     → `winner`/`loser`/`resolved`.
- *   - EDGE_GAP_NULL_WITHOUT_TARGETS: `edgeGapUsdc` and `edgeGapPct` are null
- *     on lines/groups with zero target legs. "How much we beat (nobody) by"
- *     is undefined, not `-ourPnl`.
+ *   - RETURN_FROM_FILLS: per-position return is computed Modified-Dietz-style
+ *     from `poly_trader_fills` (BUY notional + SELL realized cash) when
+ *     available, falling back to position-derived cost basis for our wallet
+ *     when no fills row exists yet. Targets always use fills (always observed).
+ *   - GAP_NULL_WITHOUT_TARGETS: `rateGapPct` and `sizeScaledGapUsdc` are null
+ *     on lines/groups with zero target legs that have positive buy notional.
+ *     "Edge gap vs. nobody" is undefined, not `-ourPnl`.
+ *   - SIGN_TARGET_MINUS_US: `rateGapPct = targetReturnPct − ourReturnPct`;
+ *     positive = target ahead = alpha leaking from us. Default sort
+ *     descending by `sizeScaledGapUsdc` puts the worst leak on top.
  * Side-effects: DB read across `poly_copy_trade_targets`,
- *   `poly_trader_wallets`, `poly_trader_position_snapshots`. No upstream
- *   Polymarket calls.
- * Links: docs/design/poly-dashboard-market-aggregation.md,
- *        docs/design/poly-hedge-followup-policy.md,
- *        .context/market-aggregation-research-handoff.md
+ *   `poly_trader_wallets`, `poly_trader_position_snapshots`,
+ *   `poly_trader_fills`. No upstream Polymarket calls.
+ * Links: docs/design/poly-markets-aggregation-redesign.md,
+ *        docs/design/poly-hedge-followup-policy.md
  * @internal
  */
 
@@ -55,6 +62,12 @@ import type {
   WalletExecutionPosition,
 } from "@cogni/poly-node-contracts";
 import { type SQL, sql } from "drizzle-orm";
+
+import {
+  blendTargetReturns,
+  edgeGap,
+  positionReturnPct,
+} from "./market-return-math";
 
 type Db = {
   execute(query: SQL): Promise<unknown>;
@@ -87,6 +100,11 @@ type RawLeg = {
    * `null` for `copy_target` legs (they have no caller-position concept).
    */
   ourPositionStatus: WalletExecutionMarketLineStatus | null;
+};
+
+type FillRollup = {
+  totalBuyNotional: number;
+  realizedCash: number;
 };
 
 type TargetPositionRow = {
@@ -123,13 +141,21 @@ export async function buildMarketExposureGroups(params: {
     ...buildOurLegs(params.livePositions, params.walletAddress, "live"),
     ...buildOurLegs(closedPositions, params.walletAddress, "closed"),
   ];
+  const conditions = [...new Set(ourLegs.map((leg) => leg.conditionId))];
   const targetLegs = await readTargetLegs({
     db: params.db,
     billingAccountId: params.billingAccountId,
-    conditions: [...new Set(ourLegs.map((leg) => leg.conditionId))],
+    conditions,
+  });
+  const allLegs = [...ourLegs, ...targetLegs];
+  const wallets = [...new Set(allLegs.map((leg) => leg.walletAddress))];
+  const rollups = await readFillRollups({
+    db: params.db,
+    conditions,
+    walletAddresses: wallets,
   });
 
-  return groupParticipants([...ourLegs, ...targetLegs]);
+  return groupParticipants(allLegs, rollups);
 }
 
 function buildOurLegs(
@@ -284,7 +310,8 @@ async function readTargetLegs(params: {
 }
 
 function groupParticipants(
-  legs: readonly RawLeg[]
+  legs: readonly RawLeg[],
+  rollups: ReadonlyMap<string, FillRollup>
 ): WalletExecutionMarketGroup[] {
   const byCondition = new Map<string, RawLeg[]>();
   for (const leg of legs) {
@@ -296,8 +323,10 @@ function groupParticipants(
   type Line = WalletExecutionMarketGroup["lines"][number];
   type LineWithMeta = {
     line: Line;
-    ourCostBasisUsdc: number;
-    hasTargetLeg: boolean;
+    /** Our combined buy notional on this line; weight for group blending. */
+    ourTotalBuyNotional: number;
+    /** Combined target buy notional across ALL targets on this line. */
+    targetTotalBuyNotional: number;
   };
 
   const groupBuckets = new Map<
@@ -310,7 +339,7 @@ function groupParticipants(
   >();
 
   for (const [conditionId, conditionLegs] of byCondition.entries()) {
-    const participants = pivotParticipants(conditionLegs);
+    const participants = pivotParticipants(conditionLegs, rollups);
     const anchor = pickAnchor(conditionLegs);
     if (anchor === null) continue;
     const eventSlug =
@@ -322,21 +351,56 @@ function groupParticipants(
       : `condition:${conditionId}`;
 
     const ourLegs = conditionLegs.filter((leg) => leg.side === "our_wallet");
-    const targetLegsForLine = conditionLegs.filter(
+    const targetLegs = conditionLegs.filter(
       (leg) => leg.side === "copy_target"
     );
     const ourValueUsdc = roundMoney(sumValue(ourLegs));
-    const targetValueUsdc = roundMoney(sumValue(targetLegsForLine));
-    const ourPnlUsdc = sumPnl(ourLegs);
-    const targetPnlUsdc = sumPnl(targetLegsForLine);
-    const ourCostBasisUsdc = sumCostBasis(ourLegs);
-    const hasTargetLeg = targetLegsForLine.length > 0;
-    // EDGE_GAP_NULL_WITHOUT_TARGETS: comparing our P/L to nobody is undefined.
-    const edgeGapUsdc = hasTargetLeg
-      ? roundMoney(targetPnlUsdc - ourPnlUsdc)
-      : null;
-    const edgeGapPct =
-      edgeGapUsdc === null ? null : pctOrNull(edgeGapUsdc, ourCostBasisUsdc);
+    const targetValueUsdc = roundMoney(sumValue(targetLegs));
+
+    // Our side: aggregate fill rollups across all our legs in this condition.
+    // RETURN_FROM_FILLS — fall back to position-derived cost basis when no
+    // fills row exists yet (fresh wallet not yet observed).
+    const ourAgg = aggregateWalletReturn(ourLegs, rollups, true);
+    const ourReturnPct = positionReturnPct({
+      totalBuyNotional: ourAgg.totalBuyNotional,
+      realizedCash: ourAgg.realizedCash,
+      currentMarkValue: ourAgg.currentMarkValue,
+    });
+
+    // Target side: per-target return, then cost-basis-weighted blend.
+    const byTargetWallet = new Map<string, RawLeg[]>();
+    for (const leg of targetLegs) {
+      const list = byTargetWallet.get(leg.walletAddress) ?? [];
+      list.push(leg);
+      byTargetWallet.set(leg.walletAddress, list);
+    }
+    const targetEntries: {
+      totalBuyNotional: number;
+      returnPct: number | null;
+    }[] = [];
+    for (const tlegs of byTargetWallet.values()) {
+      const agg = aggregateWalletReturn(tlegs, rollups, false);
+      targetEntries.push({
+        totalBuyNotional: agg.totalBuyNotional,
+        returnPct: positionReturnPct({
+          totalBuyNotional: agg.totalBuyNotional,
+          realizedCash: agg.realizedCash,
+          currentMarkValue: agg.currentMarkValue,
+        }),
+      });
+    }
+    const targetReturnPct = blendTargetReturns(targetEntries);
+    const targetTotalBuyNotional = targetEntries.reduce(
+      (sum, e) => sum + e.totalBuyNotional,
+      0
+    );
+
+    const { rateGapPct, sizeScaledGapUsdc } = edgeGap({
+      ourReturnPct,
+      targetReturnPct,
+      ourTotalBuyNotional: ourAgg.totalBuyNotional,
+    });
+
     const lineStatus: WalletExecutionMarketLineStatus = ourLegs.some(
       (leg) => leg.ourPositionStatus === "live"
     )
@@ -352,9 +416,11 @@ function groupParticipants(
       ourValueUsdc,
       targetValueUsdc,
       ourVwap: weightedVwap(ourLegs),
-      targetVwap: weightedVwap(targetLegsForLine),
-      edgeGapUsdc,
-      edgeGapPct,
+      targetVwap: weightedVwap(targetLegs),
+      ourReturnPct,
+      targetReturnPct,
+      rateGapPct,
+      sizeScaledGapUsdc,
       hedgeCount: participants.filter((p) => p.hedge !== null).length,
       participants,
     };
@@ -367,7 +433,11 @@ function groupParticipants(
     if (bucket.eventTitle === null && eventTitle !== null) {
       bucket.eventTitle = eventTitle;
     }
-    bucket.lines.push({ line, ourCostBasisUsdc, hasTargetLeg });
+    bucket.lines.push({
+      line,
+      ourTotalBuyNotional: ourAgg.totalBuyNotional,
+      targetTotalBuyNotional,
+    });
     groupBuckets.set(groupKey, bucket);
   }
 
@@ -376,26 +446,38 @@ function groupParticipants(
       const sorted = [...bucket.lines].sort((left, right) =>
         compareLine(left.line, right.line)
       );
-      const groupHasTarget = sorted.some((entry) => entry.hasTargetLeg);
-      // Sum cost basis only for lines that contribute to the gap, so the
-      // percentage denominator matches the numerator.
-      const groupOurCostBasis = sorted
-        .filter((entry) => entry.hasTargetLeg)
-        .reduce((sum, entry) => sum + entry.ourCostBasisUsdc, 0);
-      const groupEdgeGapUsdc = groupHasTarget
-        ? roundMoney(
-            sorted.reduce(
-              (sum, entry) => sum + (entry.line.edgeGapUsdc ?? 0),
-              0
-            )
-          )
-        : null;
       const groupStatus: WalletExecutionMarketLineStatus = sorted.some(
         (entry) => entry.line.status === "live"
       )
         ? "live"
         : "closed";
       const lines = sorted.map((entry) => entry.line);
+
+      // Group-level metrics: cost-basis-weighted blends of per-line returns,
+      // weighted by each line's our (resp. target) buy notional. Mirrors the
+      // single-line formula one level up.
+      const groupOurReturnPct = blendTargetReturns(
+        sorted.map((entry) => ({
+          totalBuyNotional: entry.ourTotalBuyNotional,
+          returnPct: entry.line.ourReturnPct,
+        }))
+      );
+      const groupTargetReturnPct = blendTargetReturns(
+        sorted.map((entry) => ({
+          totalBuyNotional: entry.targetTotalBuyNotional,
+          returnPct: entry.line.targetReturnPct,
+        }))
+      );
+      const groupOurTotalBuyNotional = sorted.reduce(
+        (sum, entry) => sum + entry.ourTotalBuyNotional,
+        0
+      );
+      const groupGap = edgeGap({
+        ourReturnPct: groupOurReturnPct,
+        targetReturnPct: groupTargetReturnPct,
+        ourTotalBuyNotional: groupOurTotalBuyNotional,
+      });
+
       return {
         groupKey,
         eventTitle: bucket.eventTitle,
@@ -418,16 +500,81 @@ function groupParticipants(
             0
           )
         ),
-        edgeGapUsdc: groupEdgeGapUsdc,
-        edgeGapPct:
-          groupEdgeGapUsdc === null
-            ? null
-            : pctOrNull(groupEdgeGapUsdc, groupOurCostBasis),
+        ourReturnPct: groupOurReturnPct,
+        targetReturnPct: groupTargetReturnPct,
+        rateGapPct: groupGap.rateGapPct,
+        sizeScaledGapUsdc: groupGap.sizeScaledGapUsdc,
         hedgeCount: lines.reduce((sum, line) => sum + line.hedgeCount, 0),
         lines,
       };
     })
-    .sort((left, right) => right.ourValueUsdc - left.ourValueUsdc);
+    .sort((left, right) => {
+      // Default sort: largest alpha leak first. Null gaps sort last so
+      // unmatched markets don't crowd the head.
+      const lv = left.sizeScaledGapUsdc;
+      const rv = right.sizeScaledGapUsdc;
+      if (lv === null && rv === null) {
+        return right.ourValueUsdc - left.ourValueUsdc;
+      }
+      if (lv === null) return 1;
+      if (rv === null) return -1;
+      return rv - lv;
+    });
+}
+
+/**
+ * Sum (totalBuyNotional, realizedCash, currentMarkValue) across a wallet's
+ * legs in one condition. `useFallback=true` (our wallet) substitutes the
+ * leg's `costBasisUsdc` for `totalBuyNotional` when the rollup row is missing
+ * — covers the "wallet not observed yet" early state. Targets always rely
+ * on observed fills; missing rollups → zero notional → null returnPct.
+ */
+function aggregateWalletReturn(
+  legs: readonly RawLeg[],
+  rollups: ReadonlyMap<string, FillRollup>,
+  useFallback: boolean
+): {
+  totalBuyNotional: number;
+  realizedCash: number;
+  currentMarkValue: number;
+} {
+  if (legs.length === 0) {
+    return { totalBuyNotional: 0, realizedCash: 0, currentMarkValue: 0 };
+  }
+  // Per (wallet, condition) — every leg in this set shares both keys.
+  const first = legs[0];
+  if (first === undefined) {
+    return { totalBuyNotional: 0, realizedCash: 0, currentMarkValue: 0 };
+  }
+  const key = rollupKey(first.walletAddress, first.conditionId);
+  const rollup = rollups.get(key);
+  const currentMarkValue = legs.reduce(
+    (sum, leg) => sum + leg.currentValueUsdc,
+    0
+  );
+  if (rollup !== undefined) {
+    return {
+      totalBuyNotional: rollup.totalBuyNotional,
+      realizedCash: rollup.realizedCash,
+      currentMarkValue,
+    };
+  }
+  if (!useFallback) {
+    return {
+      totalBuyNotional: 0,
+      realizedCash: 0,
+      currentMarkValue,
+    };
+  }
+  // Fallback: derive from the snapshot/position-side cost basis we already
+  // built into RawLeg. Sum of legs.costBasisUsdc approximates totalBuyNotional
+  // for positions that haven't been partial-closed; partial-close cases will
+  // converge once fills are observed.
+  return {
+    totalBuyNotional: legs.reduce((sum, leg) => sum + leg.costBasisUsdc, 0),
+    realizedCash: 0,
+    currentMarkValue,
+  };
 }
 
 // Per-condition: pivot one row per (wallet) with primary + optional hedge legs.
@@ -435,7 +582,8 @@ function groupParticipants(
 // smaller cost-basis leg is the hedge; the other is primary. Singletons go to
 // primary with hedge=null.
 function pivotParticipants(
-  legs: readonly RawLeg[]
+  legs: readonly RawLeg[],
+  rollups: ReadonlyMap<string, FillRollup>
 ): WalletExecutionMarketParticipantRow[] {
   const byWallet = new Map<string, RawLeg[]>();
   for (const leg of legs) {
@@ -467,6 +615,18 @@ function pivotParticipants(
         .sort()
         .pop() ?? null;
 
+    // Per-participant round-trip return on this condition. Same formula
+    // as the line-level `ourReturnPct` / `targetReturnPct`. Surfaces a
+    // winner-loser split when the line's blended `targetReturnPct`
+    // averages two divergent targets.
+    const useFallback = anchor.side === "our_wallet";
+    const agg = aggregateWalletReturn(walletLegs, rollups, useFallback);
+    const roundTripReturnPct = positionReturnPct({
+      totalBuyNotional: agg.totalBuyNotional,
+      realizedCash: agg.realizedCash,
+      currentMarkValue: agg.currentMarkValue,
+    });
+
     rows.push({
       side: anchor.side,
       source: anchor.source,
@@ -483,6 +643,7 @@ function pivotParticipants(
           (primary?.costBasisUsdc ?? 0) + (hedge?.costBasisUsdc ?? 0)
         ),
         pnlUsdc: roundMoney((primary?.pnlUsdc ?? 0) + (hedge?.pnlUsdc ?? 0)),
+        roundTripReturnPct,
       },
       lastObservedAt,
     });
@@ -536,20 +697,61 @@ function sumValue(legs: readonly RawLeg[]): number {
   return legs.reduce((sum, leg) => sum + leg.currentValueUsdc, 0);
 }
 
-function sumPnl(legs: readonly RawLeg[]): number {
-  return legs.reduce(
-    (sum, leg) => sum + (leg.currentValueUsdc - leg.costBasisUsdc),
-    0
+function rollupKey(walletAddress: string, conditionId: string): string {
+  return `${walletAddress.toLowerCase()}:${conditionId}`;
+}
+
+/**
+ * Aggregate `(totalBuyNotional, realizedCash)` per `(wallet, condition)`
+ * from `poly_trader_fills`, joined to `poly_trader_wallets` so the caller
+ * can supply wallet addresses (lowercased) without needing trader-wallet
+ * UUIDs. Bounded SQL aggregation per data-research skill — V8 hydrates one
+ * row per (wallet, condition), never raw fills.
+ */
+async function readFillRollups(params: {
+  db: Db;
+  conditions: readonly string[];
+  walletAddresses: readonly string[];
+}): Promise<Map<string, FillRollup>> {
+  if (params.conditions.length === 0 || params.walletAddresses.length === 0) {
+    return new Map();
+  }
+  const conditionList = sql.join(
+    params.conditions.map((c) => sql`${c}`),
+    sql`, `
   );
-}
-
-function sumCostBasis(legs: readonly RawLeg[]): number {
-  return legs.reduce((sum, leg) => sum + leg.costBasisUsdc, 0);
-}
-
-function pctOrNull(numerator: number, denominator: number): number | null {
-  if (denominator <= 0) return null;
-  return Math.round((numerator / denominator) * 10_000) / 10_000;
+  const walletList = sql.join(
+    params.walletAddresses.map((w) => sql`${w.toLowerCase()}`),
+    sql`, `
+  );
+  const rows = (await params.db.execute(sql`
+    SELECT
+      lower(w.wallet_address) AS wallet_address,
+      f.condition_id,
+      COALESCE(SUM(f.size_usdc) FILTER (WHERE f.side = 'BUY'), 0)::numeric
+        AS total_buy_notional,
+      COALESCE(SUM(f.size_usdc) FILTER (WHERE f.side = 'SELL'), 0)::numeric
+        AS realized_cash
+    FROM poly_trader_fills f
+    JOIN poly_trader_wallets w ON w.id = f.trader_wallet_id
+    WHERE f.condition_id IN (${conditionList})
+      AND lower(w.wallet_address) IN (${walletList})
+    GROUP BY lower(w.wallet_address), f.condition_id
+  `)) as unknown as ReadonlyArray<{
+    wallet_address: string | null;
+    condition_id: string | null;
+    total_buy_notional: string | number | null;
+    realized_cash: string | number | null;
+  }>;
+  const out = new Map<string, FillRollup>();
+  for (const row of rows) {
+    if (row.wallet_address === null || row.condition_id === null) continue;
+    out.set(rollupKey(row.wallet_address, row.condition_id), {
+      totalBuyNotional: toNumber(row.total_buy_notional),
+      realizedCash: toNumber(row.realized_cash),
+    });
+  }
+  return out;
 }
 
 function compareParticipantRow(

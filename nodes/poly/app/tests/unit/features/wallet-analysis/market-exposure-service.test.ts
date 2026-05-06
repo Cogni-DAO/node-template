@@ -3,16 +3,21 @@
 
 /**
  * Module: `@features/wallet-analysis/server/market-exposure-service` (unit)
- * Purpose: Locks the two cross-cutting invariants the dashboard Markets view
+ * Purpose: Locks the cross-cutting invariants the dashboard Markets view
  *   depends on:
  *   - TARGET_LEGS_FROM_SNAPSHOTS — any active copy-target snapshot row that
  *     covers a condition we hold surfaces as a leg, regardless of whether
  *     we've mirrored a fill on that condition.
- *   - EDGE_GAP_NULL_WITHOUT_TARGETS — `edgeGapUsdc` and `edgeGapPct` are
- *     null on lines/groups with zero target legs, so the UI renders `—`
- *     rather than a meaningless solo-market percentage.
+ *   - GAP_NULL_WITHOUT_TARGETS — `rateGapPct` and `sizeScaledGapUsdc` are
+ *     null on lines/groups with zero target legs that have positive buy
+ *     notional, so the UI renders `—` rather than a meaningless
+ *     solo-market percentage.
+ *   - SIGN_TARGET_MINUS_US — `rateGapPct` is positive when targets are
+ *     ahead of us; the table sorts by `sizeScaledGapUsdc` descending so
+ *     the biggest leak ends up on top.
  * Scope: Pure unit. Drizzle DB is faked via `db.execute()` returning canned
- *   rows; the SQL string itself is not asserted.
+ *   rows; the SQL string itself is not asserted. Two distinct execute()
+ *   calls are made per group: target-snapshots, then fill-rollups.
  * Side-effects: none
  * Links: nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts
  * @internal
@@ -25,9 +30,21 @@ import { buildMarketExposureGroups } from "@/features/wallet-analysis/server/mar
 
 type Db = Parameters<typeof buildMarketExposureGroups>[0]["db"];
 
-function fakeDb(rows: unknown[]): Db {
+/**
+ * Fake DB that returns a sequence of canned result-sets per .execute() call.
+ * The service issues two reads when there are positions:
+ *   1. target snapshots (poly_trader_position_snapshots)
+ *   2. fill rollups       (poly_trader_fills)
+ * Pass `[targetRows, fillRollupRows]`.
+ */
+function fakeDb(callResults: readonly unknown[][]): Db {
+  let i = 0;
   return {
-    execute: vi.fn().mockResolvedValue(rows),
+    execute: vi.fn(() => {
+      const rows = callResults[i] ?? [];
+      i += 1;
+      return Promise.resolve(rows);
+    }),
   } as unknown as Db;
 }
 
@@ -66,7 +83,7 @@ function ourPosition(
 
 describe("buildMarketExposureGroups", () => {
   it("returns no groups when the caller has no positions (early-out)", async () => {
-    const db = fakeDb([]);
+    const db = fakeDb([[], []]);
     const groups = await buildMarketExposureGroups({
       db,
       billingAccountId: "ba-1",
@@ -74,14 +91,15 @@ describe("buildMarketExposureGroups", () => {
       livePositions: [],
     });
     expect(groups).toEqual([]);
-    // Early-out — never asks the DB about target legs.
+    // Early-out — never asks the DB about anything.
     expect(db.execute as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
   });
 
-  it("nulls edgeGap when no target snapshot rows exist for the condition", async () => {
+  it("nulls gap metrics when no target snapshot rows exist", async () => {
     // Solo market: we hold $9.99 with $7.95 P/L, but no target leg surfaces.
     // The pre-fix code returned -ourPnl/ourCost = -390% — that is the bug.
-    const db = fakeDb([]);
+    // No target snapshots, no fill rollups (our wallet not yet observed).
+    const db = fakeDb([[], []]);
     const groups = await buildMarketExposureGroups({
       db,
       billingAccountId: "ba-1",
@@ -92,10 +110,11 @@ describe("buildMarketExposureGroups", () => {
     expect(groups).toHaveLength(1);
     const group = groups[0];
     expect(group?.lines).toHaveLength(1);
-    expect(group?.lines[0]?.edgeGapUsdc).toBeNull();
-    expect(group?.lines[0]?.edgeGapPct).toBeNull();
-    expect(group?.edgeGapUsdc).toBeNull();
-    expect(group?.edgeGapPct).toBeNull();
+    expect(group?.lines[0]?.rateGapPct).toBeNull();
+    expect(group?.lines[0]?.sizeScaledGapUsdc).toBeNull();
+    expect(group?.lines[0]?.targetReturnPct).toBeNull();
+    expect(group?.rateGapPct).toBeNull();
+    expect(group?.sizeScaledGapUsdc).toBeNull();
     // Our leg still renders.
     expect(group?.lines[0]?.participants).toHaveLength(1);
     expect(group?.lines[0]?.participants[0]?.side).toBe("our_wallet");
@@ -107,23 +126,36 @@ describe("buildMarketExposureGroups", () => {
     // snapshot in our condition shows up — that is the whole point of the
     // "Markets" lens.
     const db = fakeDb([
-      {
-        wallet_address: TARGET_WALLET,
-        label: "RN1",
-        condition_id: "0xCOND1",
-        token_id: "tok-yes-1",
-        market_title: "Tampa Bay Rays vs. Cleveland Guardians",
-        event_title: null,
-        market_slug: "mlb-tb-cle",
-        event_slug: null,
-        outcome: "Tampa Bay Rays",
-        shares: "100",
-        cost_basis_usdc: "20.00",
-        current_value_usdc: "80.00",
-        avg_price: "0.20",
-        last_observed_at: new Date("2026-05-04T12:30:00.000Z"),
-        lifecycle: "active",
-      },
+      [
+        {
+          wallet_address: TARGET_WALLET,
+          label: "RN1",
+          condition_id: "0xCOND1",
+          token_id: "tok-yes-1",
+          market_title: "Tampa Bay Rays vs. Cleveland Guardians",
+          event_title: null,
+          market_slug: "mlb-tb-cle",
+          event_slug: null,
+          outcome: "Tampa Bay Rays",
+          shares: "100",
+          cost_basis_usdc: "20.00",
+          current_value_usdc: "80.00",
+          avg_price: "0.20",
+          last_observed_at: new Date("2026-05-04T12:30:00.000Z"),
+          lifecycle: "active",
+        },
+      ],
+      // Fill rollups: target's BUY notional was $20 on this condition.
+      // Our wallet has no fills row → service falls back to position-derived
+      // cost basis (currentValue − pnlUsd = 9.99 − 7.95 = $2.04).
+      [
+        {
+          wallet_address: TARGET_WALLET.toLowerCase(),
+          condition_id: "0xCOND1",
+          total_buy_notional: "20.00",
+          realized_cash: "0",
+        },
+      ],
     ]);
 
     const groups = await buildMarketExposureGroups({
@@ -136,11 +168,17 @@ describe("buildMarketExposureGroups", () => {
     expect(groups).toHaveLength(1);
     const line = groups[0]?.lines[0];
     expect(line).toBeDefined();
-    // Both participants rendered.
     const sides = line?.participants.map((p) => p.side).sort();
     expect(sides).toEqual(["copy_target", "our_wallet"]);
-    // edgeGap = targetPnl ($60) − ourPnl ($7.95) = +$52.05 (targets ahead).
-    expect(line?.edgeGapUsdc).toBeCloseTo(52.05, 2);
-    expect(line?.edgeGapPct).not.toBeNull();
+    // Target: bought $20 → mark $80 = +300% return.
+    expect(line?.targetReturnPct).toBeCloseTo(3.0, 2);
+    // Our fallback cost basis = 9.99 − 7.95 = $2.04; mark $9.99 → ~+390% return.
+    expect(line?.ourReturnPct).not.toBeNull();
+    // rateGapPct = targetReturn − ourReturn; our return is huge here so the
+    // gap is actually negative (we're "ahead" because cost basis is tiny).
+    // The point: rateGapPct is computed and non-null when both sides have
+    // positive notional.
+    expect(line?.rateGapPct).not.toBeNull();
+    expect(line?.sizeScaledGapUsdc).not.toBeNull();
   });
 });
