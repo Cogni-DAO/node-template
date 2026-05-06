@@ -14,6 +14,11 @@
  *     aggregate fill volume only for the wallet that currently owns the bucket.
  *   - WINDOW_ONLY_APPLIES_TO_VOLUME: active value and PnL are current-position
  *     facts; fill volume is filtered by the selected interval.
+ *   - PNL_FROM_VENDOR_CASHPNL: per-position PnL reads Polymarket's authoritative
+ *     `cashPnl` from the persisted `/positions` payload (`raw->>'cashPnl'`).
+ *     Subtracting `current_value_usdc - cost_basis_usdc` would diverge whenever
+ *     Polymarket's cash P/L includes realized components beyond
+ *     `currentValue - initialValue`.
  * Side-effects: DB reads only.
  * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
  * @public
@@ -122,7 +127,10 @@ async function readOverlapRows(
         p.token_id,
         p.current_value_usdc::numeric AS current_value_usdc,
         p.cost_basis_usdc::numeric AS cost_basis_usdc,
-        (p.current_value_usdc::numeric - p.cost_basis_usdc::numeric) AS pnl_usdc
+        COALESCE(
+          (p.raw->>'cashPnl')::numeric,
+          p.current_value_usdc::numeric - p.cost_basis_usdc::numeric
+        ) AS pnl_usdc
       FROM poly_trader_current_positions p
       WHERE p.active = true
         AND p.trader_wallet_id IN (${rn1WalletId}, ${swisstonyWalletId})
