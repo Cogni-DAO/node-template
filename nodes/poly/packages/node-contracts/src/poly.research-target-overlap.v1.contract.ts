@@ -9,10 +9,16 @@
  * Invariants:
  *   - ACTIVE_POSITIONS_DEFINE_OVERLAP: overlap buckets are built from current
  *     saved active positions by condition_id.
- *   - WINDOW_ONLY_APPLIES_TO_VOLUME: active USDC and PnL are current-position
- *     facts; fill volume is windowed.
+ *   - WINDOW_ONLY_APPLIES_TO_VOLUME: active USDC is a current-position fact;
+ *     fill volume is windowed.
+ *   - NO_BUCKET_PNL: per-bucket PnL is intentionally absent (bug.5020).
+ *     Unrealized P/L on currently-open positions is misleading next to the
+ *     vendor-authoritative net P/L on the P/L tab line chart, which sources
+ *     `poly_trader_user_pnl_points`. Net P/L is per-wallet; bucketing it by
+ *     condition is structurally meaningless. The Target Overlap surface
+ *     reports exposure (USDC, markets, positions) and fill volume only.
  * Side-effects: none
- * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/task.5005
+ * Links: docs/design/poly-copy-target-performance-benchmark.md, work/items/bug.5020
  * @public
  */
 
@@ -25,36 +31,22 @@ export const PolyResearchTargetOverlapBucketSchema = z.object({
   marketCount: z.number().int().nonnegative(),
   positionCount: z.number().int().nonnegative(),
   currentValueUsdc: z.number(),
-  costBasisUsdc: z.number(),
-  pnlUsdc: z.number(),
   fillVolumeUsdc: z.number(),
   rn1: z.object({
     marketCount: z.number().int().nonnegative(),
     positionCount: z.number().int().nonnegative(),
     currentValueUsdc: z.number(),
-    pnlUsdc: z.number(),
     fillVolumeUsdc: z.number(),
   }),
   swisstony: z.object({
     marketCount: z.number().int().nonnegative(),
     positionCount: z.number().int().nonnegative(),
     currentValueUsdc: z.number(),
-    pnlUsdc: z.number(),
     fillVolumeUsdc: z.number(),
   }),
 });
 export type PolyResearchTargetOverlapBucket = z.infer<
   typeof PolyResearchTargetOverlapBucketSchema
->;
-
-export const PolyResearchTargetOverlapPolicySchema = z.object({
-  signal: z.enum(["shared_outperforms", "solo_outperforms", "insufficient"]),
-  sharedPnlPerDollar: z.number().nullable(),
-  soloPnlPerDollar: z.number().nullable(),
-  note: z.string(),
-});
-export type PolyResearchTargetOverlapPolicy = z.infer<
-  typeof PolyResearchTargetOverlapPolicySchema
 >;
 
 export const PolyResearchTargetOverlapResponseSchema = z.object({
@@ -73,7 +65,6 @@ export const PolyResearchTargetOverlapResponseSchema = z.object({
     }),
   }),
   buckets: z.array(PolyResearchTargetOverlapBucketSchema),
-  policy: PolyResearchTargetOverlapPolicySchema,
 });
 export type PolyResearchTargetOverlapResponse = z.infer<
   typeof PolyResearchTargetOverlapResponseSchema

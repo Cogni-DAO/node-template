@@ -37,12 +37,6 @@ const TARGET_OVERLAP = {
     bucket("shared", "Shared", 3, 4),
     bucket("swisstony_only", "swisstony only", 0, 8),
   ],
-  policy: {
-    signal: "insufficient",
-    sharedPnlPerDollar: null,
-    soloPnlPerDollar: null,
-    note: "Need active shared and solo exposure before policy comparison.",
-  },
 } satisfies PolyResearchTargetOverlapResponse;
 
 function bucket(
@@ -57,21 +51,17 @@ function bucket(
     marketCount: rn1Value + swisstonyValue > 0 ? 1 : 0,
     positionCount: rn1Value + swisstonyValue,
     currentValueUsdc: rn1Value + swisstonyValue,
-    costBasisUsdc: rn1Value + swisstonyValue,
-    pnlUsdc: 0,
     fillVolumeUsdc: rn1Value + swisstonyValue,
     rn1: {
       marketCount: rn1Value > 0 ? 1 : 0,
       positionCount: rn1Value,
       currentValueUsdc: rn1Value,
-      pnlUsdc: 0,
       fillVolumeUsdc: rn1Value,
     },
     swisstony: {
       marketCount: swisstonyValue > 0 ? 1 : 0,
       positionCount: swisstonyValue,
       currentValueUsdc: swisstonyValue,
-      pnlUsdc: 0,
       fillVolumeUsdc: swisstonyValue,
     },
   };
