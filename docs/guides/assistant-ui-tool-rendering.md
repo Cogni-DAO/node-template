@@ -70,7 +70,11 @@ const View: ToolCallMessagePartComponent<Args, Result> = ({
   const hasError =
     status?.type === "incomplete" && status.reason !== "cancelled";
 
-  const Icon = hasError ? AlertTriangleIcon : isRunning ? Loader2Icon : SparklesIcon;
+  const Icon = hasError
+    ? AlertTriangleIcon
+    : isRunning
+      ? Loader2Icon
+      : SparklesIcon;
   const tone = hasError ? "danger" : isRunning ? "info" : "success";
 
   const title = (
@@ -88,7 +92,12 @@ const View: ToolCallMessagePartComponent<Args, Result> = ({
   );
 
   const details = result?.url ? (
-    <a href={result.url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline text-xs">
+    <a
+      href={result.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="text-primary text-xs hover:underline"
+    >
       Open results →
     </a>
   ) : null;
@@ -131,18 +140,18 @@ export function ToolUIRegistry() {
 
 `<ToolUIRegistry />` is already mounted inside the node's `Thread` (under
 `AssistantRuntimeProvider`). Each per-tool component is a no-render `useAssistantToolUI`
-side-effect — mounting *is* registration.
+side-effect — mounting _is_ registration.
 
 That's it. Reload `/chat`, trigger the tool, see the new card.
 
 ## What goes in `title` vs `details`
 
-| Goes in `title` (the always-visible 1-liner) | Goes in `details` (collapsible body) |
-|---|---|
-| The verb (Searched / Flighted / Read / Wrote) | Full args / result JSON if you want to expose them |
-| 1–3 chips for the most-clickable identifiers (PR #, wallet, sha) | A grid of all params for power users |
-| A short outcome marker (`→ 12 matches`, `→ 200 OK`) | Error blocks (`bg-danger/10`) for `incomplete` status |
-| Mono chips for code-shaped values (branches, hashes, paths) | External links to logs / dashboards / GitHub runs |
+| Goes in `title` (the always-visible 1-liner)                     | Goes in `details` (collapsible body)                  |
+| ---------------------------------------------------------------- | ----------------------------------------------------- |
+| The verb (Searched / Flighted / Read / Wrote)                    | Full args / result JSON if you want to expose them    |
+| 1–3 chips for the most-clickable identifiers (PR #, wallet, sha) | A grid of all params for power users                  |
+| A short outcome marker (`→ 12 matches`, `→ 200 OK`)              | Error blocks (`bg-danger/10`) for `incomplete` status |
+| Mono chips for code-shaped values (branches, hashes, paths)      | External links to logs / dashboards / GitHub runs     |
 
 Keep the title to **one visual line at desktop width**. If you find yourself wanting more, that's body content.
 
@@ -151,13 +160,16 @@ Keep the title to **one visual line at desktop width**. If you find yourself wan
 `status.type` flows through three states. Branch icon and tone off it, not off `result`.
 
 ```ts
-const isCancelled = status?.type === "incomplete" && status.reason === "cancelled";
-const hasError    = status?.type === "incomplete" && status.reason !== "cancelled";
-const isRunning   = status?.type === "running" || status?.type === "requires-action";
+const isCancelled =
+  status?.type === "incomplete" && status.reason === "cancelled";
+const hasError = status?.type === "incomplete" && status.reason !== "cancelled";
+const isRunning =
+  status?.type === "running" || status?.type === "requires-action";
 // "complete" is the implicit success state
 ```
 
 For the icon:
+
 - success → tool's identity icon (`RocketIcon`, `SparklesIcon`, `BookOpenIcon`, etc.)
 - running → `Loader2Icon` + `iconClassName="animate-spin"`
 - error → `AlertTriangleIcon`, tone `danger`
@@ -175,8 +187,8 @@ Auto-open the body on error (`<ToolCard defaultOpen={hasError} />`) so the user 
 
 Almost never. Two cases:
 
-1. The args alone don't tell the user *why* the tool was called (e.g. `core__vector_search` with `{ query, k: 12 }` — the user might want to know what topic). Solution: prompt the model to phrase the question, but use a *separate text part* before the tool call. Don't smuggle UI hints into args.
-2. The result is structured but the *interesting* field for the human is computed (e.g. "found 12 matches but only 3 are high-confidence"). Solution: change the tool's output schema to include the summary field, then surface it in the renderer. The model still doesn't know about the UI.
+1. The args alone don't tell the user _why_ the tool was called (e.g. `core__vector_search` with `{ query, k: 12 }` — the user might want to know what topic). Solution: prompt the model to phrase the question, but use a _separate text part_ before the tool call. Don't smuggle UI hints into args.
+2. The result is structured but the _interesting_ field for the human is computed (e.g. "found 12 matches but only 3 are high-confidence"). Solution: change the tool's output schema to include the summary field, then surface it in the renderer. The model still doesn't know about the UI.
 
 If you find yourself wanting a `displayHint` arg on every tool, stop — you're rebuilding what the renderer should do client-side from typed args.
 
