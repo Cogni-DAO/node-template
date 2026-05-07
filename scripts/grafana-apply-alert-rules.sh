@@ -130,7 +130,9 @@ for env_name in "${envs_arr[@]}"; do
     db_name="$(echo "$db_name" | xargs)"
     [[ -n "$db_name" ]] || continue
     node="${db_name#cogni_}"
-    rule_uid="cogni-postgres-health-${env_name}-${node}"
+    # Grafana caps alert-rule UIDs at 40 chars; pg-health-* keeps the longest
+    # combo (candidate-a / operator → 30) under the limit.
+    rule_uid="pg-health-${env_name}-${node}"
     rendered="${tmpdir}/rule-${env_name}-${node}.json"
 
     env="$env_name" node="$node" ALERTS_FOLDER_UID="$folder_uid" \
@@ -151,7 +153,7 @@ jq -n \
   '{
     title: $title,
     folderUid: $folderUID,
-    interval: "1m",
+    interval: 60,
     rules: $rules[0]
   }' > "$group_payload"
 
