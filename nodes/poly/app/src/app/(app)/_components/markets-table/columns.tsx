@@ -83,10 +83,9 @@ function pnlClass(value: number): string {
 }
 
 /**
- * `edgeGapUsdc = targetPnl - ourPnl`. Positive = targets ahead of us
- * (alpha leaking) → render as `destructive`. Negative = we are ahead → success.
- * Null = no target legs to compare against → muted (rendered as `—`).
- * Same orientation for the percentage cell.
+ * Δ = `targetReturnPct − ourReturnPct` (pp), and the $ companion is that
+ * scaled by our cost basis. Positive = targets ahead → destructive.
+ * Negative = we are ahead → success. Null = no target legs → muted (`—`).
  */
 function edgeGapClass(value: number | null): string {
   if (value === null) return "text-muted-foreground";
@@ -320,12 +319,10 @@ export function makeColumns(): AnyCol[] {
       id: "edgeGap",
       header: ({ column }) =>
         rightHeader(
-          <DataGridColumnHeader column={column} title="Edge Gap" visibility />
+          <DataGridColumnHeader column={column} title="Δ" visibility />
         ),
-      size: 110,
+      size: 90,
       sortingFn: (left, right) => {
-        // Sort by edgeGapPct DESC = "biggest alpha leak first". Nulls sort last
-        // either direction so empty-cost-basis rows do not crowd the head.
         const lv = left.original.edgeGapPct;
         const rv = right.original.edgeGapPct;
         if (lv === null && rv === null) return 0;
@@ -339,7 +336,7 @@ export function makeColumns(): AnyCol[] {
         const tooltip =
           usdc === null
             ? "No copy-target legs in this market"
-            : `Target P/L − our P/L = ${formatSignedUsd(usdc)}`;
+            : `Δ return × our notional = ${formatSignedUsd(usdc)}`;
         return (
           <div
             className={cn(
@@ -353,8 +350,8 @@ export function makeColumns(): AnyCol[] {
         );
       },
       meta: {
-        headerTitle: "Edge Gap",
-        skeleton: <Skeleton className="ms-auto h-3.5 w-14" />,
+        headerTitle: "Δ",
+        skeleton: <Skeleton className="ms-auto h-3.5 w-10" />,
       },
     }),
     col.accessor((row) => row.pnlUsd, {
