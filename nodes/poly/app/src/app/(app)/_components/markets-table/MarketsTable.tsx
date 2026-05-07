@@ -40,7 +40,7 @@ import {
   type VisibilityState,
 } from "@tanstack/react-table";
 import { Flame } from "lucide-react";
-import type { ReactElement, ReactNode } from "react";
+import type { ReactElement } from "react";
 import { useEffect, useMemo, useState } from "react";
 
 import {
@@ -50,8 +50,14 @@ import {
 import { DataGridPagination } from "@/components/reui/data-grid/data-grid-pagination";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import { Toggle } from "@/components/vendor/shadcn/toggle";
+import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/vendor/shadcn/toggle-group";
 
 import { makeColumns } from "./columns";
+
+type StatusFilter = "live" | "closed";
 
 /**
  * Group is an "alpha leak": we lost money AND the targets' blended return
@@ -68,7 +74,6 @@ export function isAlphaLeak(group: WalletExecutionMarketGroup): boolean {
 export type MarketsTableProps = {
   groups?: readonly WalletExecutionMarketGroup[] | undefined;
   isLoading?: boolean | undefined;
-  emptyMessage?: ReactNode;
 };
 
 const DEFAULT_VISIBILITY: VisibilityState = {
@@ -76,7 +81,9 @@ const DEFAULT_VISIBILITY: VisibilityState = {
   market: true,
   ourValue: true,
   targets: true,
-  status: true,
+  // Status owned by the toolbar segmented control; redundant in every row.
+  // Still toggleable via column-visibility menu.
+  status: false,
   edgeGap: true,
   pnl: true,
   hedges: true,
@@ -87,17 +94,22 @@ const PAGE_SIZE_OPTIONS = [25, 50, 100] as const;
 export function MarketsTable({
   groups,
   isLoading = false,
-  emptyMessage = "No open market exposure.",
 }: MarketsTableProps): ReactElement {
   const allGroups = useMemo(() => (groups ? Array.from(groups) : []), [groups]);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("live");
   const [alphaLeakOnly, setAlphaLeakOnly] = useState(false);
-  const { data, alphaLeakCount } = useMemo(() => {
-    const leaks = allGroups.filter(isAlphaLeak);
+  const { data, alphaLeakCount, liveCount, closedCount } = useMemo(() => {
+    const live = allGroups.filter((g) => g.status === "live");
+    const closed = allGroups.filter((g) => g.status === "closed");
+    const base = statusFilter === "live" ? live : closed;
+    const leaks = base.filter(isAlphaLeak);
     return {
-      data: alphaLeakOnly ? leaks : allGroups,
+      data: alphaLeakOnly ? leaks : base,
       alphaLeakCount: leaks.length,
+      liveCount: live.length,
+      closedCount: closed.length,
     };
-  }, [allGroups, alphaLeakOnly]);
+  }, [allGroups, statusFilter, alphaLeakOnly]);
 
   const columns = useMemo(() => makeColumns(), []);
 
@@ -146,13 +158,37 @@ export function MarketsTable({
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center justify-end">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <ToggleGroup
+          type="single"
+          size="sm"
+          variant="outline"
+          value={statusFilter}
+          onValueChange={(value) => {
+            if (value === "live" || value === "closed") setStatusFilter(value);
+          }}
+          disabled={isLoading || allGroups.length === 0}
+          aria-label="Filter markets by status"
+        >
+          <ToggleGroupItem value="live" className="gap-1.5">
+            <span className="text-xs">Live</span>
+            <span className="font-mono text-muted-foreground text-xs tabular-nums">
+              ({liveCount})
+            </span>
+          </ToggleGroupItem>
+          <ToggleGroupItem value="closed" className="gap-1.5">
+            <span className="text-xs">Closed</span>
+            <span className="font-mono text-muted-foreground text-xs tabular-nums">
+              ({closedCount})
+            </span>
+          </ToggleGroupItem>
+        </ToggleGroup>
         <Toggle
           size="sm"
           variant="outline"
           pressed={alphaLeakOnly}
           onPressedChange={setAlphaLeakOnly}
-          disabled={isLoading || allGroups.length === 0}
+          disabled={isLoading || data.length === 0}
           aria-label="Show only markets where we lost and the copy target won"
           title="Markets where we are red and the copy target is green"
           className="gap-1.5"
@@ -177,7 +213,11 @@ export function MarketsTable({
           columnsVisibility: true,
         }}
         emptyMessage={
-          alphaLeakOnly ? "No alpha-leak markets right now." : emptyMessage
+          alphaLeakOnly
+            ? `No alpha-leak markets in ${statusFilter} right now.`
+            : statusFilter === "live"
+              ? "No live markets."
+              : "No closed markets yet."
         }
       >
         <DataGridContainer className="overflow-x-auto">
