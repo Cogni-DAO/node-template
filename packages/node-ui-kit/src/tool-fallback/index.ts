@@ -4,6 +4,10 @@
 /**
  * Module: `@cogni/node-ui-kit/tool-fallback`
  * Purpose: Public surface for the default assistant-ui ToolFallback renderer.
+ * Scope: Re-export only. Does not introduce any new components or runtime behavior.
+ * Invariants: BARREL_ONLY — keep this file as a pure re-export; component logic lives in `./tool-fallback.tsx`.
+ * Side-effects: none
+ * Links: docs/guides/assistant-ui-tool-rendering.md
  * @public
  */
 

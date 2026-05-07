@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: 2025 Cogni-DAO
 
 /**
- * Module: `@cogni/node-ui-kit/tool-card` (ToolChip)
+ * Module: `@cogni/node-ui-kit/tool-card/tool-chip`
  * Purpose: Inline pill for tool-call title parameters — small mono-friendly chip, optional external link affordance. Shared across all node apps.
- * Scope: Presentational. Used inside ToolCard `title`.
+ * Scope: Presentational. Used inside ToolCard `title`. Does not own state, does not fetch data, does not depend on `@assistant-ui/react`.
+ * Invariants: LINK_OPENS_NEW_TAB — `href` chips render with `target="_blank" rel="noopener noreferrer"`.
  * Side-effects: none
  * Links: docs/guides/assistant-ui-tool-rendering.md
  * @public

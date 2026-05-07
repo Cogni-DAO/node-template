@@ -4,7 +4,8 @@
 /**
  * Module: `@cogni/node-ui-kit/tool-fallback`
  * Purpose: Default tool-call renderer for assistant-ui chat — used when no per-tool UI is registered. Wraps the shared ToolCard with a humanized name + arg summary in the 1-liner and pretty-printed args/result in the collapsible body. Status-driven icon/tone covers running / cancelled / error / complete.
- * Scope: Couples to `@assistant-ui/react` types (peer dep). Pure presentation otherwise.
+ * Scope: Couples to `@assistant-ui/react` types via peer dep. Pure presentation otherwise — does not own runtime state, does not register any per-tool UI, does not fetch data.
+ * Invariants: STATUS_DRIVES_ICON — icon/tone come from `MessagePartStatus`, not `result`.
  * Side-effects: none
  * Links: docs/guides/assistant-ui-tool-rendering.md
  * @public

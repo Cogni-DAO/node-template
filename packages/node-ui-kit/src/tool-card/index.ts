@@ -4,6 +4,10 @@
 /**
  * Module: `@cogni/node-ui-kit/tool-card`
  * Purpose: Public surface for ToolCard + ToolChip primitives used in chat tool-call rendering.
+ * Scope: Re-exports only. Does not introduce any new components or runtime behavior.
+ * Invariants: BARREL_ONLY — keep this file as a pure re-export; component logic lives in sibling files.
+ * Side-effects: none
+ * Links: docs/guides/assistant-ui-tool-rendering.md
  * @public
  */
 

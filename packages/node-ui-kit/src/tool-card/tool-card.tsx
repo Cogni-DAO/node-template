@@ -4,7 +4,8 @@
 /**
  * Module: `@cogni/node-ui-kit/tool-card`
  * Purpose: Visual primitive for tool-call rendering in the assistant chat — icon + 1-liner title (chip/link params allowed) + collapsible details body. Shared across all node apps.
- * Scope: Presentational. No assistant-ui runtime coupling so it stays usable from default fallback and per-tool renderers in any node.
+ * Scope: Presentational. Does not import from `@assistant-ui/react`, does not own runtime state, does not fetch data — stays usable from default fallback and per-tool renderers in any node.
+ * Invariants: ZERO_ASSISTANT_UI_COUPLING — no `@assistant-ui/react` imports here.
  * Side-effects: none
  * Links: docs/guides/assistant-ui-tool-rendering.md
  * @public
