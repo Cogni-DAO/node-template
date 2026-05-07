@@ -64,10 +64,10 @@ Grafana Cloud observability resources managed from git. This directory owns dash
 
 The contract:
 
-| Layer                                               | Script / surface                            | Blocking?                                                                  |
-| --------------------------------------------------- | ------------------------------------------- | -------------------------------------------------------------------------- |
-| Provision (declarative state)                       | `provision-grafana-postgres-datasources.sh`                                    | Yes — fails the deploy if the API write fails                              |
-| Verify (post-deploy connectivity smoke, with retry) | `verify-grafana-postgres-datasources.sh`                                       | No — `continue-on-error: true`; failures emit `::warning::` + step summary |
+| Layer                                               | Script / surface                                                                            | Blocking?                                                                  |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| Provision (declarative state)                       | `provision-grafana-postgres-datasources.sh`                                                 | Yes — fails the deploy if the API write fails                              |
+| Verify (post-deploy connectivity smoke, with retry) | `verify-grafana-postgres-datasources.sh`                                                    | No — `continue-on-error: true`; failures emit `::warning::` + step summary |
 | Liveness (steady-state runtime health)              | `alerts/` + `scripts/grafana-apply-alert-rules.sh` (`.github/workflows/grafana-alerts.yml`) | Pages contact `derek-email` on sustained failure (`for: 10m`)              |
 
 If you ever want to add "validate" back into the provision script, don't. Extend the verify layer instead.
