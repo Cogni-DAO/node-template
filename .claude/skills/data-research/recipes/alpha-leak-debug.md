@@ -1,27 +1,28 @@
 # Alpha-leak debug — agent recipe pack
 
-> When the operator dashboard's **Markets** tab (`MarketsTable.tsx`, server-pivoted in `nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts`) flags a market where targets beat us by ≥5pp on a position with positive dollar gap, this recipe walks the per-fill diff and **classifies why**. The Markets tab tells you *which* market leaked. This pack tells you *why it leaked* and *what to fix*.
+> When the operator dashboard's **Markets** tab (`MarketsTable.tsx`, server-pivoted in `nodes/poly/app/src/features/wallet-analysis/server/market-exposure-service.ts`) flags a market where targets beat us by ≥5pp on a position with positive dollar gap, this recipe walks the per-fill diff and **classifies why**. The Markets tab tells you _which_ market leaked. This pack tells you _why it leaked_ and _what to fix_.
 
 ## Discrepancy taxonomy (stack-ranked by P/L impact)
 
 For any one alpha-leak market, walk this list in order. The first hit is usually the dominant cause; classify against later modes only if upstream modes are clean.
 
-| # | Mode | One-line | Detect with |
-|---|---|---|---|
-| 1 | **Wrong side** | We landed on the opposite outcome token of the same condition — opposite P/L sign | Recipe 3 |
-| 2 | **Coverage gap** | They fired N fills; we fired <N (skipped/errored/not-fired) | Recipe 6 |
-| 3 | **VWAP gap** | Same side + same token, but our entry price is materially worse | Recipe 4 |
-| 4 | **Size cap asymmetry** | They sized $5k, we capped at $5 — bounded edge, not a bug per se | Recipe 4 (size_ratio col) |
-| 5 | **Timing lag** | We filled later, price moved against us | Recipe 2 (`our_lag_s`) |
-| 6 | **pXX filter staleness** | Hardcoded p50/p75/p90/p95/p99 in `bet-sizer-v1` no longer matches the live distribution → wrong filter | Recipe 5 |
-| 7 | **Exit asymmetry** | They SELL to close; we hold (or vice versa) | Recipe 2 (filter side='SELL') |
-| 8 | **Hedge mismatch** | They hold offsetting legs across tokens; we mirrored only one | Recipe 3 (compare net positions across both tokens of the condition) |
+| #   | Mode                     | One-line                                                                                               | Detect with                                                          |
+| --- | ------------------------ | ------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------- |
+| 1   | **Wrong side**           | We landed on the opposite outcome token of the same condition — opposite P/L sign                      | Recipe 3                                                             |
+| 2   | **Coverage gap**         | They fired N fills; we fired <N (skipped/errored/not-fired)                                            | Recipe 6                                                             |
+| 3   | **VWAP gap**             | Same side + same token, but our entry price is materially worse                                        | Recipe 4                                                             |
+| 4   | **Size cap asymmetry**   | They sized $5k, we capped at $5 — bounded edge, not a bug per se                                       | Recipe 4 (size_ratio col)                                            |
+| 5   | **Timing lag**           | We filled later, price moved against us                                                                | Recipe 2 (`our_lag_s`)                                               |
+| 6   | **pXX filter staleness** | Hardcoded p50/p75/p90/p95/p99 in `bet-sizer-v1` no longer matches the live distribution → wrong filter | Recipe 5                                                             |
+| 7   | **Exit asymmetry**       | They SELL to close; we hold (or vice versa)                                                            | Recipe 2 (filter side='SELL')                                        |
+| 8   | **Hedge mismatch**       | They hold offsetting legs across tokens; we mirrored only one                                          | Recipe 3 (compare net positions across both tokens of the condition) |
 
 **Hardcoded pXX baseline** (from `nodes/poly/app/src/bootstrap/jobs/copy-trade-mirror.job.ts`, captured 2026-05-03):
+
 - RN1: p95 ≈ $51,811, p99 ≈ $300,659
 - swisstony: p95 ≈ $7,394, p99 ≈ $9,809
 
-Recipe 5 compares those numbers to the *current* distribution.
+Recipe 5 compares those numbers to the _current_ distribution.
 
 ## Pre-reqs
 
@@ -182,7 +183,7 @@ from positions;
 
 ### Recipe 6 — Coverage gap by reason (taxonomy mode 2)
 
-For one market, *why* did we miss the fills we missed?
+For one market, _why_ did we miss the fills we missed?
 
 ```sql
 -- recipes/sql/coverage-gap.sql
