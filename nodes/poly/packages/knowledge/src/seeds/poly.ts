@@ -17,9 +17,6 @@
 
 import type { NewKnowledge } from "@cogni/knowledge-store";
 
-/** Base seeds inherited from node-template (owned by that package, not this one). */
-export { BASE_KNOWLEDGE_SEEDS } from "@cogni/node-template-knowledge";
-
 /**
  * Poly-specific seeds — intentionally empty (clean-slate by design).
  *

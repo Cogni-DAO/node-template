@@ -229,7 +229,6 @@
     "@cogni/knowledge-store": "workspace:^",
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/node-core": "workspace:*",
-    "@cogni/node-template-knowledge": "workspace:*",
     "@cogni/operator-wallet": "workspace:*",
     "@cogni/poly-knowledge": "workspace:*",
     "@cogni/repo-spec": "workspace:*",

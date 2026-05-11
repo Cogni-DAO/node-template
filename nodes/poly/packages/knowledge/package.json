@@ -22,8 +22,7 @@
   },
   "dependencies": {
     "drizzle-orm": "^0.44.7",
-    "@cogni/knowledge-store": "workspace:*",
-    "@cogni/node-template-knowledge": "workspace:*"
+    "@cogni/knowledge-store": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1",
