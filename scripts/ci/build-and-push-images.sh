@@ -102,66 +102,28 @@ build_target() {
   local target="$1"
   local tag="$2"
 
-  case "$target" in
-    operator)
-      docker buildx build \
-        --platform "$PLATFORM" \
-        --file nodes/operator/app/Dockerfile \
-        --target runner \
-        --build-arg "BUILD_SHA=${git_sha}" \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni" \
-        --label "org.opencontainers.image.revision=${git_sha}" \
-        --label "org.opencontainers.image.created=${build_timestamp}" \
-        --cache-from "type=gha,scope=build-operator" \
-        --cache-to "type=gha,mode=max,scope=build-operator" \
-        --tag "$tag" \
-        --push \
-        .
-      ;;
-    poly)
-      docker buildx build \
-        --platform "$PLATFORM" \
-        --file nodes/poly/app/Dockerfile \
-        --target runner \
-        --build-arg "BUILD_SHA=${git_sha}" \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni" \
-        --label "org.opencontainers.image.revision=${git_sha}" \
-        --label "org.opencontainers.image.created=${build_timestamp}" \
-        --cache-from "type=gha,scope=build-poly" \
-        --cache-to "type=gha,mode=max,scope=build-poly" \
-        --tag "$tag" \
-        --push \
-        .
-      ;;
-    resy)
-      docker buildx build \
-        --platform "$PLATFORM" \
-        --file nodes/resy/app/Dockerfile \
-        --target runner \
-        --build-arg "BUILD_SHA=${git_sha}" \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni" \
-        --label "org.opencontainers.image.revision=${git_sha}" \
-        --label "org.opencontainers.image.created=${build_timestamp}" \
-        --cache-from "type=gha,scope=build-resy" \
-        --cache-to "type=gha,mode=max,scope=build-resy" \
-        --tag "$tag" \
-        --push \
-        .
-      ;;
-    scheduler-worker)
-      docker buildx build \
-        --platform "$PLATFORM" \
-        --file services/scheduler-worker/Dockerfile \
-        --label "org.opencontainers.image.source=https://github.com/cogni-dao/cogni" \
-        --label "org.opencontainers.image.revision=${git_sha}" \
-        --label "org.opencontainers.image.created=${build_timestamp}" \
-        --cache-from "type=gha,scope=build-scheduler-worker" \
-        --cache-to "type=gha,mode=max,scope=build-scheduler-worker" \
-        --tag "$tag" \
-        --push \
-        .
-      ;;
-  esac
+  # Generic per-node build. Dockerfile path comes from the catalog entry's
+  # `dockerfile` field — keeps build-and-push agnostic of node name.
+  local dockerfile
+  dockerfile=$(yq -r ".dockerfile" "infra/catalog/${target}.yaml" 2>/dev/null || echo "")
+  if [ -z "$dockerfile" ] || [ "$dockerfile" = "null" ]; then
+    log_error "No dockerfile in infra/catalog/${target}.yaml"
+    exit 1
+  fi
+
+  docker buildx build \
+    --platform "$PLATFORM" \
+    --file "$dockerfile" \
+    --target runner \
+    --build-arg "BUILD_SHA=${git_sha}" \
+    --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY:-cogni-dao/node-template}" \
+    --label "org.opencontainers.image.revision=${git_sha}" \
+    --label "org.opencontainers.image.created=${build_timestamp}" \
+    --cache-from "type=gha,scope=build-${target}" \
+    --cache-to "type=gha,mode=max,scope=build-${target}" \
+    --tag "$tag" \
+    --push \
+    .
 }
 
 resolve_digest_ref() {

@@ -21,7 +21,7 @@ on:
         description: "SHA baked into images at build time (PR branch head). Defaults to source_sha. Ignored in preview-forward mode."
         required: false
       nodes:
-        description: "CSV of nodes to promote (default: all NODE_TARGETS + scheduler-worker). Set by flight-preview.yml from RESOLVED_TARGETS."
+        description: "CSV of nodes to promote (default: all NODE_TARGETS). Set by flight-preview.yml from RESOLVED_TARGETS."
         required: false
         default: ""
       skip_infra:

@@ -23,17 +23,7 @@ import {
 } from "@cogni/repo-spec";
 import { describe, expect, it } from "vitest";
 
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-// Per task.0410, rule files moved from root .cogni/rules/ → nodes/operator/.cogni/rules/.
-const RULES_DIR = join(process.cwd(), "nodes", "operator", ".cogni", "rules");
 const REPO_SPEC_PATH = join(process.cwd(), ".cogni", "repo-spec.yaml");
-
-function readRuleFixture(filename: string): string {
-  return readFileSync(join(RULES_DIR, filename), "utf-8");
-}
 
 // ---------------------------------------------------------------------------
 // Rule schema tests
@@ -150,30 +140,6 @@ describe("gateConfigSchema", () => {
 // ---------------------------------------------------------------------------
 
 describe("parseRule", () => {
-  it("parses pr-syntropy-coherence.yaml fixture", () => {
-    const yaml = readRuleFixture("pr-syntropy-coherence.yaml");
-    const rule = parseRule(yaml);
-    expect(rule.id).toBe("strict-pr-mapping");
-    expect(rule.evaluations).toHaveLength(3);
-    expect(rule.success_criteria.require).toHaveLength(3);
-  });
-
-  it("parses patterns-and-docs.yaml fixture", () => {
-    const yaml = readRuleFixture("patterns-and-docs.yaml");
-    const rule = parseRule(yaml);
-    expect(rule.id).toBe("patterns-and-docs");
-    expect(rule.evaluations).toHaveLength(2);
-    expect(rule.success_criteria.any_of).toHaveLength(2);
-  });
-
-  it("parses repo-goal-alignment.yaml fixture", () => {
-    const yaml = readRuleFixture("repo-goal-alignment.yaml");
-    const rule = parseRule(yaml);
-    expect(rule.id).toBe("cogni-git-review-repo-goal-alignment");
-    expect(rule.evaluations).toHaveLength(3);
-    expect(rule.success_criteria.any_of).toHaveLength(3);
-  });
-
   it("parses pre-parsed object", () => {
     const rule = parseRule({
       id: "test",
@@ -204,7 +170,7 @@ describe("extractGatesConfig", () => {
     const spec = parseRepoSpec(yaml);
     const config = extractGatesConfig(spec);
 
-    expect(config.gates.length).toBeGreaterThanOrEqual(4);
+    expect(config.gates.length).toBeGreaterThanOrEqual(1);
     expect(config.gates[0]?.type).toBe("review-limits");
     expect(config.failOnError).toBe(true);
   });

@@ -19,20 +19,20 @@ describe("Dependency-cruiser config hygiene", () => {
   it("defines only layers that exist in filesystem", () => {
     // Core existing layers
     const existingLayers = [
-      "nodes/operator/app/src/core",
-      "nodes/operator/app/src/ports",
-      "nodes/operator/app/src/features",
-      "nodes/operator/app/src/app",
-      "nodes/operator/app/src/adapters/server",
-      "nodes/operator/app/src/adapters/test",
-      "nodes/operator/app/src/shared",
-      "nodes/operator/app/src/bootstrap",
-      "nodes/operator/app/src/lib",
-      "nodes/operator/app/src/components",
-      "nodes/operator/app/src/styles",
-      "nodes/operator/app/src/types",
-      "nodes/operator/app/src/contracts",
-      "nodes/operator/app/src/mcp",
+      "nodes/node-template/app/src/core",
+      "nodes/node-template/app/src/ports",
+      "nodes/node-template/app/src/features",
+      "nodes/node-template/app/src/app",
+      "nodes/node-template/app/src/adapters/server",
+      "nodes/node-template/app/src/adapters/test",
+      "nodes/node-template/app/src/shared",
+      "nodes/node-template/app/src/bootstrap",
+      "nodes/node-template/app/src/lib",
+      "nodes/node-template/app/src/components",
+      "nodes/node-template/app/src/styles",
+      "nodes/node-template/app/src/types",
+      "nodes/node-template/app/src/contracts",
+      "nodes/node-template/app/src/mcp",
     ];
 
     // Verify each layer exists
@@ -42,10 +42,12 @@ describe("Dependency-cruiser config hygiene", () => {
   });
 
   it("does not define phantom adaptersWorker layer", () => {
-    expect(existsSync("nodes/operator/app/src/adapters/worker")).toBe(false);
+    expect(existsSync("nodes/node-template/app/src/adapters/worker")).toBe(
+      false
+    );
   });
 
   it("does not define phantom adaptersCli layer", () => {
-    expect(existsSync("nodes/operator/app/src/adapters/cli")).toBe(false);
+    expect(existsSync("nodes/node-template/app/src/adapters/cli")).toBe(false);
   });
 });

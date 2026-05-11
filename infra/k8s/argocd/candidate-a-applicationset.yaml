@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# Spec: work/items/task.0372 (per-node lane isolation, GR-1 four-generator shape).
+# Single-node (node-template) applicationset for Cogni-DAO/node-template.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -11,25 +11,10 @@ spec:
   goTemplate: true
   generators:
     - git:
-        repoURL: https://github.com/cogni-dao/cogni.git
-        revision: deploy/candidate-a-operator
+        repoURL: https://github.com/cogni-dao/node-template.git
+        revision: deploy/candidate-a-node-template
         files:
-          - path: "infra/catalog/operator.yaml"
-    - git:
-        repoURL: https://github.com/cogni-dao/cogni.git
-        revision: deploy/candidate-a-poly
-        files:
-          - path: "infra/catalog/poly.yaml"
-    - git:
-        repoURL: https://github.com/cogni-dao/cogni.git
-        revision: deploy/candidate-a-resy
-        files:
-          - path: "infra/catalog/resy.yaml"
-    - git:
-        repoURL: https://github.com/cogni-dao/cogni.git
-        revision: deploy/candidate-a-scheduler-worker
-        files:
-          - path: "infra/catalog/scheduler-worker.yaml"
+          - path: "infra/catalog/node-template.yaml"
   template:
     metadata:
       name: "candidate-a-{{.name}}"
@@ -39,7 +24,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: https://github.com/cogni-dao/cogni.git
+        repoURL: https://github.com/cogni-dao/node-template.git
         targetRevision: "deploy/candidate-a-{{.name}}"
         path: "infra/k8s/overlays/candidate-a/{{.name}}"
       destination:

@@ -50,7 +50,7 @@ function runDepCruise(probeDirs: string[]): {
 describe("Core layer isolation (core-only-core rule)", () => {
   it("allows core to import from core", () => {
     const { exitCode, stderr } = runDepCruise([
-      "nodes/operator/app/src/core/__arch_probes__",
+      "nodes/node-template/app/src/core/__arch_probes__",
     ]);
     if (exitCode !== 0) {
       console.error("STDERR:", stderr);
@@ -60,8 +60,8 @@ describe("Core layer isolation (core-only-core rule)", () => {
 
   it("blocks core from importing features", () => {
     const { exitCode, stdout } = runDepCruise([
-      "nodes/operator/app/src/core/__arch_probes__",
-      "nodes/operator/app/src/features/__arch_probes__",
+      "nodes/node-template/app/src/core/__arch_probes__",
+      "nodes/node-template/app/src/features/__arch_probes__",
     ]);
     if (exitCode === 0) {
       console.log("STDOUT:", stdout);
@@ -72,8 +72,8 @@ describe("Core layer isolation (core-only-core rule)", () => {
 
   it("blocks core from importing ports", () => {
     const { exitCode, stdout } = runDepCruise([
-      "nodes/operator/app/src/core/__arch_probes__",
-      "nodes/operator/app/src/ports/__arch_probes__",
+      "nodes/node-template/app/src/core/__arch_probes__",
+      "nodes/node-template/app/src/ports/__arch_probes__",
     ]);
     if (exitCode === 0) {
       console.log("STDOUT:", stdout);
@@ -84,8 +84,8 @@ describe("Core layer isolation (core-only-core rule)", () => {
 
   it("blocks core from importing adapters", () => {
     const { exitCode, stdout } = runDepCruise([
-      "nodes/operator/app/src/core/__arch_probes__",
-      "nodes/operator/app/src/adapters/__arch_probes__",
+      "nodes/node-template/app/src/core/__arch_probes__",
+      "nodes/node-template/app/src/adapters/__arch_probes__",
     ]);
     if (exitCode === 0) {
       console.log("STDOUT:", stdout);

@@ -1,9 +1,0 @@
-{
-  "name": "empty diff",
-  "paths": [],
-  "expected": {
-    "domains": [],
-    "pass": true,
-    "rideAlongApplied": false
-  }
-}

@@ -6,7 +6,7 @@
  * Purpose: Enforces OPEN_WORLD_CONTRACTS by asserting that node bootstrap files do not reference the TOOL_CATALOG symbol.
  * Scope: Reads source files as text and asserts absence of the TOOL_CATALOG symbol. Does NOT import the files (they have side effects), does NOT cover packages/langgraph-graphs/src/runtime/ (intentional carve-out).
  * Invariants:
- *   - OPEN_WORLD_CONTRACTS: nodes/{poly,operator,resy,node-template}/app/src/bootstrap/ai/tool-source.factory.ts
+ *   - OPEN_WORLD_CONTRACTS: nodes/<name>/app/src/bootstrap/ai/tool-source.factory.ts (discovered dynamically)
  *     must not reference TOOL_CATALOG
  *   - container.ts files must not reference TOOL_CATALOG
  * Side-effects: IO (reads source files from disk)
@@ -18,18 +18,21 @@
  * @public
  */
 
-import { readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
-const NODES = ["poly", "operator", "resy", "node-template"] as const;
+const NODES = readdirSync("nodes", { withFileTypes: true })
+  .filter((d) => d.isDirectory())
+  .map((d) => d.name);
 
-const FACTORY_FILES = NODES.map(
-  (node) => `nodes/${node}/app/src/bootstrap/ai/tool-source.factory.ts`
-);
+const FACTORY_FILES = NODES.map((node) =>
+  join("nodes", node, "app/src/bootstrap/ai/tool-source.factory.ts")
+).filter((p) => existsSync(p));
 
-const CONTAINER_FILES = NODES.map(
-  (node) => `nodes/${node}/app/src/bootstrap/container.ts`
-);
+const CONTAINER_FILES = NODES.map((node) =>
+  join("nodes", node, "app/src/bootstrap/container.ts")
+).filter((p) => existsSync(p));
 
 const ALL_FILES = [...FACTORY_FILES, ...CONTAINER_FILES];
 
@@ -51,7 +54,7 @@ describe("OPEN_WORLD_CONTRACTS: node bootstrap files must not import TOOL_CATALO
       expect(
         importsTOOL_CATALOG(source),
         `${filePath} must not import TOOL_CATALOG. ` +
-          `Use CORE_TOOL_BUNDLE / POLY_TOOL_BUNDLE and pass them to createBoundToolSource().`
+          `Use node-scoped tool bundles and pass them to createBoundToolSource().`
       ).toBe(false);
     });
   }

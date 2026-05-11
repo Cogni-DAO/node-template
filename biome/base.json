@@ -192,10 +192,7 @@
       "formatter": { "enabled": false }
     },
     {
-      "includes": [
-        "nodes/operator/app/src/**/__arch_probes__/**",
-        "nodes/*/app/src/**/__arch_probes__/**"
-      ],
+      "includes": ["nodes/*/app/src/**/__arch_probes__/**"],
       "linter": {
         "rules": {
           "style": {
@@ -230,7 +227,6 @@
         "packages/attribution-pipeline-plugins/tsup.config.ts",
         "packages/operator-wallet/tsup.config.ts",
         "packages/operator-wallet/vitest.config.ts",
-        "nodes/poly/packages/wallet/tsup.config.ts",
         "packages/attribution-pipeline-plugins/vitest.config.ts",
         "packages/financial-ledger/tsup.config.ts",
         "packages/financial-ledger/vitest.config.ts",
