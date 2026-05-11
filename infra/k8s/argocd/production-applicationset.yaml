@@ -1,7 +1,7 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# Spec: work/items/task.0376 (per-node lane isolation, GR-1 four-generator shape).
+# Single-node (poly) applicationset for cogni-poly.
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
 metadata:
@@ -11,25 +11,10 @@ spec:
   goTemplate: true
   generators:
     - git:
-        repoURL: https://github.com/cogni-dao/cogni-template.git
-        revision: deploy/production-operator
-        files:
-          - path: "infra/catalog/operator.yaml"
-    - git:
-        repoURL: https://github.com/cogni-dao/cogni-template.git
+        repoURL: https://github.com/cogni-dao/cogni-poly.git
         revision: deploy/production-poly
         files:
           - path: "infra/catalog/poly.yaml"
-    - git:
-        repoURL: https://github.com/cogni-dao/cogni-template.git
-        revision: deploy/production-resy
-        files:
-          - path: "infra/catalog/resy.yaml"
-    - git:
-        repoURL: https://github.com/cogni-dao/cogni-template.git
-        revision: deploy/production-scheduler-worker
-        files:
-          - path: "infra/catalog/scheduler-worker.yaml"
   template:
     metadata:
       name: "production-{{.name}}"
@@ -39,7 +24,7 @@ spec:
     spec:
       project: default
       source:
-        repoURL: https://github.com/cogni-dao/cogni-template.git
+        repoURL: https://github.com/cogni-dao/cogni-poly.git
         targetRevision: "deploy/production-{{.name}}"
         path: "infra/k8s/overlays/production/{{.name}}"
       destination:
