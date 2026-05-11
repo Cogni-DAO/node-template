@@ -41,8 +41,8 @@
     }
   },
   "devDependencies": {
-    "@0xsplits/splits-sdk": "6.4.1",
-    "@privy-io/node": "^0.10.1",
+    "@0xsplits/splits-sdk": "6.5.0",
+    "@privy-io/node": "^0.18.0",
     "tsup": "^8.5.1",
     "typescript": "^5"
   }

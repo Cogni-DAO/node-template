@@ -24,7 +24,7 @@
     "@cogni/ai-core": "workspace:*",
     "@cogni/db-schema": "workspace:*",
     "@cogni/ids": "workspace:*",
-    "type-fest": "^5.4.1",
+    "type-fest": "^5.6.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {

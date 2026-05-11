@@ -32,7 +32,7 @@
     "@cogni/poly-ai-tools": "workspace:*",
     "@cogni/node-contracts": "workspace:*",
     "@cogni/poly-node-contracts": "workspace:*",
-    "@langchain/langgraph": "^1.0.7",
+    "@langchain/langgraph": "^1.3.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

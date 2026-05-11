@@ -41,7 +41,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@polymarket/clob-client-v2": "^1.0.2",
+    "@polymarket/clob-client-v2": "^1.0.6",
     "zod": "^3.24.0"
   },
   "peerDependencies": {

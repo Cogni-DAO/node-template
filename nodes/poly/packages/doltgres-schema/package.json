@@ -27,7 +27,7 @@
   },
   "dependencies": {
     "@cogni/poly-knowledge": "workspace:*",
-    "drizzle-orm": "^0.44.7"
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
     "tsup": "^8.5.1",
