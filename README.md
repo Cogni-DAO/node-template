@@ -1,6 +1,27 @@
-# Cogni Template
+# Cogni node-template
 
-A production-ready Next.js template for AI-powered autonomous organizations.
+Single-node quickstart for forking your own [Cogni DAO](https://cognidao.org) node. Production-ready Next.js + LangGraph + Doltgres stack.
+
+> ## ⚠️ Quickstart starter — read this first
+>
+> This repo was bootstrapped from `Cogni-DAO/cogni-poly` (the canonical
+> single-node implementation) at Phase 0 of the repo-split spec
+> ([private-node-repo-contract.md](docs/spec/private-node-repo-contract.md)).
+>
+> **The node directory is named `poly` here as a working fixture.** When you
+> fork to launch your own node, do a repo-wide rename of `poly` → `<your-node-name>`:
+>
+> - `nodes/poly/` → `nodes/<your-node>/`
+> - `@cogni/poly-*` workspace packages → `@cogni/<your-node>-*`
+> - `infra/catalog/poly.yaml` → `infra/catalog/<your-node>.yaml`
+> - `.cogni/repo-spec.yaml` `intent.name`, `source_refs`, `nodes[].path`
+> - Argo applicationsets (`infra/k8s/argocd/*.yaml`) `repoURL` and `deploy/*-poly` refs
+>
+> A polished "rename out of the box" pass is a follow-up — for v0 today,
+> the repo exists, builds clean (`pnpm packages:build` → ✓ all 34 packages),
+> and the spec invariants are documented.
+
+---
 
 ## Payments Configuration (read this first)
 
