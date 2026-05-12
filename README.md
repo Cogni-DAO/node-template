@@ -1,87 +1,57 @@
-# Cogni Template
+# Cogni node-template
 
-A production-ready Next.js template for AI-powered autonomous organizations.
+Single-node quickstart for forking your own [Cogni DAO](https://cognidao.org) node. Production-ready Next.js + LangGraph + Doltgres stack.
 
-## Payments Configuration (read this first)
-
-- `.cogni/repo-spec.yaml` is the single source of truth for the DAO receiving wallet, chain_id, and widget provider. There is **no env override**.
-- The credits page reads repo-spec server-side and passes the config to the client widget as props.
-- Changing the wallet or chain requires a repo-spec edit + redeploy; build-time validation fails if repo-spec.chain_id drifts from the app CHAIN_ID.
-
-## There are 2 ways you could be using this repository! Which are you?
-
-### 1. 👨‍💻 Contributor: Improve the Template
-
-**Goal:** Develop improvements and merge back into CogniDAO repo
-_We love you! ❤️_
+## Fork it
 
 ```bash
-git clone https://github.com/Cogni-DAO/cogni
-cd cogni-template
-scripts/bootstrap/setup.sh   # Install tools + dependencies, prompts to start dev stack
-cp .env.local.example .env.local  # Configure environment (add OpenRouter API key)
-pnpm dev:stack       # Start developing with full stack (DB + LiteLLM + Next.js)
-pnpm db:setup        # Migrate and Seed database, once dev stack is running
-pnpm docker:stack    # Full production simulation (https://localhost - browser cert warning expected)
+# 1. Fork on GitHub: Cogni-DAO/node-template → <your-org>/<your-repo>
+git clone https://github.com/<your-org>/<your-repo>
+cd <your-repo>
+
+# 2. Pick your node name (kebab-case) and run the rename helper.
+#    This does all the git mv + sed in one shot.
+scripts/rename-node.sh my-node
+
+# 3. Install + verify.
+pnpm install --no-frozen-lockfile
+pnpm packages:build
+pnpm test:ci
 ```
 
-**You'll need:** [OpenRouter API key](https://openrouter.ai/keys) for AI features
+Commit the rename and you have a clean single-node repo named `my-node`. Push to your fork.
 
-### 2. 🚀 Fork Owner: Launch Your Own DAO
+## What you got
 
-**Goal:** Create your own autonomous organization with your unique direction
-_We love you too, go for it! 🎯_
+- `nodes/my-node/` — Next.js app + LangGraph graphs + per-node packages
+- `packages/` — shared libraries (ai-core, db-client, graph-execution-core, etc.)
+- `infra/` — Docker compose, Argo CD ApplicationSets, k8s overlays, image catalog
+- `.cogni/repo-spec.yaml` — single source of truth for node identity, governance, payments
+
+The template node is `nodes/node-template/` and the rename script retargets every active config and workflow at your chosen name. After it runs, the only places still mentioning "node-template" are `docs/`, `work/`, and `.claude/skills/` (prose only — safe to leave or sed yourself).
+
+## Upstream
+
+This repo is a fork of [Cogni-DAO/cogni](https://github.com/Cogni-DAO/cogni). Pull shared-package improvements with:
 
 ```bash
-git clone https://github.com/YOUR-ORG/your-fork
-cd your-fork
-scripts/bootstrap/setup.sh --all   # Install all tools (includes OpenTofu, REUSE)
-cp .env.local.example .env.local    # Configure environment
-pnpm dev:stack                      # Start dev stack
+git remote add upstream https://github.com/Cogni-DAO/cogni
+git fetch upstream
+git merge upstream/main   # conflicts only on stripped paths (nodes/operator/, etc.)
 ```
 
----
+## Next steps after rename
 
-## Setup Status: What's Scripted vs Manual
+1. **Identity:** rotate the placeholder UUIDs in `.cogni/repo-spec.yaml` and `nodes/my-node/.cogni/repo-spec.yaml` (see [docs/spec/identity-model.md](docs/spec/identity-model.md)).
+2. **Payments:** wire your DAO wallet + chain ID in `.cogni/repo-spec.yaml` `payments_in.credits_topup` (see [docs/spec/payments.md](docs/spec/payments.md) if present, or grep `payments_in` for context).
+3. **Env:** `cp .env.local.example .env.local`, fill values (start with [OpenRouter API key](https://openrouter.ai/keys)).
+4. **Dev stack:** `pnpm dev:infra && pnpm dev` — Next.js on `http://localhost:3200`.
+5. **Deploy:** see [docs/spec/ci-cd.md](docs/spec/ci-cd.md) and [docs/runbooks/DEPLOY.md](docs/runbooks/DEPLOY.md) for the Argo CD flow.
 
-_We're working to automate more of this! Want to help? Contribute setup automation._
+## Conventions
 
-### ✅ Current Script Support
+The repo follows a "fork-friendly by convention" rule: anywhere a single node name needs to appear, it lives in **`.cogni/repo-spec.yaml` `intent.name`** + the matching `infra/catalog/<name>.yaml` filename, and downstream config is glob-driven (`nodes/*`, `nodes/[^/]+/app/src` regex, etc.). See [docs/spec/private-node-repo-contract.md](docs/spec/private-node-repo-contract.md) for the contract.
 
-- **`scripts/bootstrap/setup.sh`** - One-command dev environment setup (Volta, Node 22, pnpm, Docker Desktop)
-- **`scripts/bootstrap/setup.sh --all`** - Full setup including OpenTofu and REUSE
-- **`tofu apply`** - VM provisioning (when manually configured)
+## Contributing back
 
-### ⚠️ Current Manual Setup Required
-
-**For Contributors:**
-
-- Get [OpenRouter API key](https://openrouter.ai/keys) for AI features
-- Copy `.env.local.example` → `.env.local` and fill in values
-- **Observability:** Local Loki + Grafana on localhost:3001 (auto-configured). For MCP log queries, optionally set `GRAFANA_URL` + `GRAFANA_SERVICE_ACCOUNT_TOKEN` for Grafana Cloud access.
-
-**For Fork Owners (everything above, plus):**
-
-**Infra Setup** _(see [deploy.md](docs/runbooks/DEPLOY.md) for details)_
-
-- Generate SSH keys for deployment, move to folder, commit
-- Get [Cherry Servers auth token](https://portal.cherryservers.com/settings/api-keys)
-- Update `.tfvars` files with your settings
-- Run `tofu apply`
-
-**GitHub Environment Setup**
-
-- Create [GitHub PAT](https://github.com/settings/personal-access-tokens/new) for bot account automation (needs Contents:Write, Pull requests:Write, Actions:Read, Metadata:Read), add it as a repo environment secret named `ACTIONS_AUTOMATION_BOT_PAT`
-- Enable your git repo to contribute packages to your git org
-- Set up GitHub environments and secrets manually
-- Configure branch protection rules (see docs/spec/ci-cd.md)
-- **SonarCloud setup:** Generate token at [SonarCloud Security](https://sonarcloud.io/account/security) → Add as `SONAR_TOKEN` repository secret
-- **Grafana Cloud setup (optional):** Get Loki credentials from [Grafana Cloud](https://grafana.com/products/cloud/) → Add `GRAFANA_CLOUD_LOKI_URL`, `GRAFANA_CLOUD_LOKI_USER`, `GRAFANA_CLOUD_LOKI_API_KEY` as **repository secrets** (shared across environments)
-
-**DAO Setup**
-
-- Run `make dao-setup` from [cogni-signal-evm-contracts](https://github.com/Cogni-DAO/cogni-signal-evm-contracts)
-
----
-
-**Coming Soon:** `pnpm setup local|infra|github|dao` commands to automate these steps!
+PRs improving the template itself are welcome — point them at this repo. PRs that belong in the multi-node monorepo (operator features, scheduler-worker, cross-node integrations) go to [Cogni-DAO/cogni](https://github.com/Cogni-DAO/cogni).
