@@ -15,6 +15,11 @@ spec:
         revision: deploy/preview-node-template
         files:
           - path: "infra/catalog/node-template.yaml"
+    - git:
+        repoURL: https://github.com/cogni-dao/node-template.git
+        revision: deploy/preview-scheduler-worker
+        files:
+          - path: "infra/catalog/scheduler-worker.yaml"
   template:
     metadata:
       name: "preview-{{.name}}"
