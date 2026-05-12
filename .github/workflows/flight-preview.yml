@@ -46,7 +46,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-template
+  IMAGE_NAME: ghcr.io/cogni-dao/cogni-node-template
 
 jobs:
   flight:

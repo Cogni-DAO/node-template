@@ -12,7 +12,7 @@ set -euo pipefail
 
 FRAGMENTS_DIR=${FRAGMENTS_DIR:-${RUNNER_TEMP:-/tmp}/build-fragments}
 OUTPUT_FILE=${OUTPUT_FILE:-${RUNNER_TEMP:-/tmp}/build-images.json}
-IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-template}
+IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-node-template}
 IMAGE_TAG=${IMAGE_TAG:-}
 PLATFORM=${PLATFORM:-linux/amd64}
 

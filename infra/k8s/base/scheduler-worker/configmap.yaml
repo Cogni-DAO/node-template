@@ -17,9 +17,11 @@ data:
   TEMPORAL_NAMESPACE: "cogni-staging"
   TEMPORAL_TASK_QUEUE: "scheduler-tasks"
 
-  # Per-node API endpoints — identical across envs (k8s Service DNS + port).
+  # Per-node API endpoints — single-node template.
   # Each entry maps nodeId/slug to the node's internal Service.
-  COGNI_NODE_ENDPOINTS: "operator=http://operator-node-app:3000,poly=http://poly-node-app:3000,resy=http://resy-node-app:3000,4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://operator-node-app:3000,5ed2d64f-2745-4676-983b-2fb7e05b2eba=http://poly-node-app:3000,f6d2a17d-b7f6-4ad1-a86b-f0ad2380999e=http://resy-node-app:3000"
+  # scripts/rename-node.sh rewrites the slug; rotate the UUID in .cogni/repo-spec.yaml
+  # post-fork (placeholder below is the .cogni/repo-spec.yaml seed).
+  COGNI_NODE_ENDPOINTS: "node-template=http://node-app:3000,00000000-0000-4000-a000-000000000000=http://node-app:3000"
 
   # Observability
   LOG_LEVEL: "info"

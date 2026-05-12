@@ -18,7 +18,7 @@
 #   resolved_file, resolved_targets (CSV), has_images (bool)
 #
 # Env:
-#   IMAGE_NAME           (default ghcr.io/cogni-dao/cogni-template) legacy
+#   IMAGE_NAME           (default ghcr.io/cogni-dao/cogni-node-template) legacy
 #                        APP-repo override; feeds IMAGE_NAME_APP.
 #   IMAGE_NAME_APP       (default = IMAGE_NAME) APP-repo override.
 #   IMAGE_TAG            (required) the pr-{N}-{sha} tag
@@ -35,7 +35,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib/image-tags.sh
 . "$SCRIPT_DIR/lib/image-tags.sh"
 
-IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-template}
+IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-node-template}
 export IMAGE_NAME_APP=${IMAGE_NAME_APP:-$IMAGE_NAME}
 export IMAGE_NAME_MIGRATOR=${IMAGE_NAME_MIGRATOR:-${IMAGE_NAME_APP}-migrate}
 IMAGE_TAG=${IMAGE_TAG:-}

@@ -145,7 +145,7 @@ services:
       - "autoheal=false"
 
   litellm:
-    image: ${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-template:litellm-b6e4e942cb23}
+    image: ${LITELLM_IMAGE:-ghcr.io/cogni-dao/cogni-node-template:litellm-b6e4e942cb23}
     restart: unless-stopped
     labels:
       - "autoheal=true"

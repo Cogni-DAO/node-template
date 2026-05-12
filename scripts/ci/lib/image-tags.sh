@@ -12,7 +12,7 @@
 # error handling.
 
 # shellcheck disable=SC2034
-IMAGE_NAME_APP=${IMAGE_NAME_APP:-ghcr.io/cogni-dao/cogni-template}
+IMAGE_NAME_APP=${IMAGE_NAME_APP:-ghcr.io/cogni-dao/cogni-node-template}
 
 if ! command -v yq >/dev/null 2>&1; then
   echo "[ERROR] image-tags: yq is required (CATALOG_IS_SSOT). Install: bash scripts/bootstrap/install/install-yq.sh" >&2
