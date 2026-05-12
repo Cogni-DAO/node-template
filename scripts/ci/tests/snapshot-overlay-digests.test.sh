@@ -42,8 +42,8 @@ emit_overlay() {
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
-  - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/cogni-template
+  - name: ghcr.io/cogni-dao/cogni-node-template
+    newName: ghcr.io/cogni-dao/cogni-node-template
     digest: "$pin"
 EOF
   else
@@ -52,8 +52,8 @@ EOF
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 images:
-  - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/cogni-template
+  - name: ghcr.io/cogni-dao/cogni-node-template
+    newName: ghcr.io/cogni-dao/cogni-node-template
     newTag: $pin
 EOF
   fi
@@ -86,10 +86,10 @@ emit_overlay "$ENV" poly             sha256:bbbb
 emit_overlay "$ENV" resy             sha256:cccc
 emit_overlay "$ENV" scheduler-worker sha256:dddd
 out=$(snapshot_in "$TREE" "$ENV")
-expected="operator	ghcr.io/cogni-dao/cogni-template@sha256:aaaa
-poly	ghcr.io/cogni-dao/cogni-template@sha256:bbbb
-resy	ghcr.io/cogni-dao/cogni-template@sha256:cccc
-scheduler-worker	ghcr.io/cogni-dao/cogni-template@sha256:dddd"
+expected="operator	ghcr.io/cogni-dao/cogni-node-template@sha256:aaaa
+poly	ghcr.io/cogni-dao/cogni-node-template@sha256:bbbb
+resy	ghcr.io/cogni-dao/cogni-node-template@sha256:cccc
+scheduler-worker	ghcr.io/cogni-dao/cogni-node-template@sha256:dddd"
 assert_eq "case 1: all four targets snapshotted" "$expected" "$out"
 
 # ── Case 2: one overlay missing
@@ -100,9 +100,9 @@ mv "$TMPROOT/$ENV-tree/infra" "$TREE/"
 rm -rf "$TREE/infra/k8s/overlays/$ENV/poly"
 out=$(snapshot_in "$TREE" "$ENV")
 # operator + resy + scheduler-worker remain
-expected="operator	ghcr.io/cogni-dao/cogni-template@sha256:aaaa
-resy	ghcr.io/cogni-dao/cogni-template@sha256:cccc
-scheduler-worker	ghcr.io/cogni-dao/cogni-template@sha256:dddd"
+expected="operator	ghcr.io/cogni-dao/cogni-node-template@sha256:aaaa
+resy	ghcr.io/cogni-dao/cogni-node-template@sha256:cccc
+scheduler-worker	ghcr.io/cogni-dao/cogni-node-template@sha256:dddd"
 assert_eq "case 2: missing overlay omitted" "$expected" "$out"
 
 # ── Case 3: mixed digest + newTag
@@ -113,10 +113,10 @@ emit_overlay candidate-a resy             sha256:2222
 emit_overlay candidate-a scheduler-worker sha256:3333
 mv "$TMPROOT/candidate-a-tree" "$TREE"  # latest emit_overlay run
 out=$(snapshot_in "$TREE" candidate-a)
-expected="operator	ghcr.io/cogni-dao/cogni-template@sha256:1111
-poly	ghcr.io/cogni-dao/cogni-template:pr-999-abc-poly
-resy	ghcr.io/cogni-dao/cogni-template@sha256:2222
-scheduler-worker	ghcr.io/cogni-dao/cogni-template@sha256:3333"
+expected="operator	ghcr.io/cogni-dao/cogni-node-template@sha256:1111
+poly	ghcr.io/cogni-dao/cogni-node-template:pr-999-abc-poly
+resy	ghcr.io/cogni-dao/cogni-node-template@sha256:2222
+scheduler-worker	ghcr.io/cogni-dao/cogni-node-template@sha256:3333"
 assert_eq "case 3: tag-form preserved" "$expected" "$out"
 
 echo

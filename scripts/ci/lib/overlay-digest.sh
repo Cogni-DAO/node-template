@@ -12,8 +12,8 @@
 #   - cwd must be the repo root (or any tree where
 #     `infra/k8s/overlays/<ENV>/<APP>/kustomization.yaml` resolves).
 #   - prints one of:
-#       - "ghcr.io/cogni-dao/cogni-template@sha256:<hex>"  (digest pin)
-#       - "ghcr.io/cogni-dao/cogni-template:<tag>"         (tag pin only)
+#       - "ghcr.io/cogni-dao/cogni-node-template@sha256:<hex>"  (digest pin)
+#       - "ghcr.io/cogni-dao/cogni-node-template:<tag>"         (tag pin only)
 #   - returns 0 on success; non-zero with stderr message if the file is
 #     missing or no app image block / digest / tag is found.
 #
@@ -37,7 +37,7 @@ text = open(path, encoding="utf-8").read()
 blocks = re.split(r"\n[ \t]*-\s+name:\s*", "\n" + text)
 for block in blocks[1:]:
     line = block.split("\n", 1)[0].strip()
-    if line != "ghcr.io/cogni-dao/cogni-template":
+    if line != "ghcr.io/cogni-dao/cogni-node-template":
         continue
     rest = block.split("\n", 1)[1] if "\n" in block else ""
     m = re.search(r'^\s*digest:\s*"(sha256:[0-9a-f]+)"', rest, re.MULTILINE)

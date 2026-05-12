@@ -35,7 +35,7 @@ spec:
         # `images:` block patches both this and the main container image to the
         # same per-PR digest. task.0370 step 1.
         - name: migrate
-          image: ghcr.io/cogni-dao/cogni-template:placeholder
+          image: ghcr.io/cogni-dao/cogni-node-template:placeholder
           command:
             - /bin/sh
             - -c
@@ -54,7 +54,7 @@ spec:
               cpu: "1000m"
       containers:
         - name: app
-          image: ghcr.io/cogni-dao/cogni-template:placeholder
+          image: ghcr.io/cogni-dao/cogni-node-template:placeholder
           ports:
             - containerPort: 3000
               name: http

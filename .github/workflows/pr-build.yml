@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-template
+  IMAGE_NAME: ghcr.io/cogni-dao/cogni-node-template
 
 jobs:
   # task.0391: single source of truth for event-derived metadata.

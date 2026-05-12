@@ -7,7 +7,7 @@ dockerfile: services/scheduler-worker/Dockerfile
 # scripts/ci/lib/image-tags.sh:52), so the migrator alias is a no-op —
 # its allow-tags regex matches zero GHCR tags, argocd-image-updater logs
 # "no newer version" and never touches this overlay's images block
-# (which has no cogni-template-migrate entry anyway).
+# (which has no cogni-node-template-migrate entry anyway).
 image_tag_suffix: "-scheduler-worker"
 migrator_tag_suffix: "-scheduler-worker-migrate"
 # task.0320 — per-env deploy branches (see operator.yaml).

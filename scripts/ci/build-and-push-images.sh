@@ -20,7 +20,7 @@ TARGETS=${TARGETS:-}
 # GHCR package; the producer now picks the push repo per-target via
 # image_name_for_target. IMAGE_NAME is preserved as the APP-repo override
 # knob (back-compat with existing workflow env; it feeds IMAGE_NAME_APP).
-IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-template}
+IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-node-template}
 export IMAGE_NAME_APP=${IMAGE_NAME_APP:-$IMAGE_NAME}
 export IMAGE_NAME_MIGRATOR=${IMAGE_NAME_MIGRATOR:-${IMAGE_NAME_APP}-migrate}
 IMAGE_TAG=${IMAGE_TAG:-}

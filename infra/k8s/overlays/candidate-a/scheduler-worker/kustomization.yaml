@@ -10,8 +10,8 @@ resources:
 
 # Image tag — updated by argocd-image-updater (or candidate-a flight).
 images:
-  - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/cogni-template
+  - name: ghcr.io/cogni-dao/cogni-node-template
+    newName: ghcr.io/cogni-dao/cogni-node-template
     newTag: "candidate-a-placeholder-scheduler-worker"
 
 patches:

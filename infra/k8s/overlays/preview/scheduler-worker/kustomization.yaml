@@ -10,8 +10,8 @@ resources:
 
 # Image tag — updated by argocd-image-updater on each preview promote.
 images:
-  - name: ghcr.io/cogni-dao/cogni-template
-    newName: ghcr.io/cogni-dao/cogni-template
+  - name: ghcr.io/cogni-dao/cogni-node-template
+    newName: ghcr.io/cogni-dao/cogni-node-template
     newTag: "preview-placeholder-scheduler-worker"
 
 patches:
