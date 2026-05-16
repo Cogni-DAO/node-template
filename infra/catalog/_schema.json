@@ -78,6 +78,28 @@
     "production_branch": {
       "type": "string",
       "pattern": "^deploy/production-[a-z0-9-]+$"
+    },
+    "public_url": {
+      "type": "object",
+      "description": "bug.5002 — per-env public URL (Ingress / Caddy) for this node. Verify scripts (wait-for-candidate-ready.sh, smoke-candidate.sh, verify-buildsha.sh, verify-deployment.sh) read these directly. Optional for service-type entries that have no public ingress (scheduler-worker, migrators).",
+      "properties": {
+        "candidate-a": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "preview": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        },
+        "production": {
+          "type": "string",
+          "format": "uri",
+          "pattern": "^https://"
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

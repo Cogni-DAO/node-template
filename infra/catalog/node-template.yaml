@@ -9,3 +9,11 @@ candidate_a_branch: deploy/candidate-a-node-template
 preview_branch: deploy/preview-node-template
 production_branch: deploy/production-node-template
 path_prefix: nodes/node-template/
+# bug.5002 — per-env public URLs. Verify scripts read these directly
+# instead of computing "${node}-${DOMAIN}" with an "if node = operator"
+# special-case. Each fork's catalog declares the truth for its nodes.
+# Forks: replace these with your A-record FQDNs from node-setup Phase 6.
+public_url:
+  candidate-a: https://node-template-test.cognidao.org
+  preview: https://node-template-preview.cognidao.org
+  production: https://node-template.cognidao.org

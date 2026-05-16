@@ -326,7 +326,7 @@ services:
   # =============================================================================
 
   doltgres:
-    image: dolthub/doltgresql:latest
+    image: dolthub/doltgresql:0.56.2
     restart: unless-stopped
     labels:
       - "autoheal=true"

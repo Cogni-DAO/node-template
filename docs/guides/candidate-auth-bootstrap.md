@@ -41,6 +41,12 @@ Chrome 136+ **disables** `--remote-debugging-port` when launched against the def
 
 Root `.gitignore` excludes the entire `/.local-auth/` directory. Never commit — these files hold live session cookies, and the profile dir holds the MetaMask vault.
 
+### Conductor / git-worktree clones share `.local-auth` via symlink
+
+When you create a new worktree (Conductor app, manual `git worktree add`, etc.), bootstrap it with [`scripts/dev/worktree-setup.sh`](../../scripts/dev/worktree-setup.sh). The script symlinks the worktree's `.local-auth` and `.env.cogni` back to the main checkout (`$COGNI_TEMPLATE_ROOT`, default `$HOME/dev/cogni-node-template`). Capture state once in the main checkout — every worktree picks it up automatically. The same is true for secret rotations in `.env.cogni`: rotate once, every worktree sees the change on the next read.
+
+Symlinks are used deliberately instead of `cp`: copying creates stale-secret divergence (rotate in `$SRC`, the worktree's stale copy lies for the next month). The symlink pattern is the single propagation primitive — no agents need to know which checkout is "main."
+
 > **Future state:** this whole stack is a crawl-step MVP wedge. Long-term it should be:
 >
 > - test wallet seed in a secrets manager (1Password CLI / Doppler), not a gitignored markdown file

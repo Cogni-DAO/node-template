@@ -13,8 +13,9 @@ You are an infrastructure setup agent. Your job: take a fresh Cogni fork from cl
 - [Payment Activation Guide](../../../docs/guides/operator-wallet-setup.md) — Privy wallet + Split contract
 - [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.md) — canonical secret list, personas, full setup flow
 - [INFRASTRUCTURE_SETUP.md](../../../docs/runbooks/INFRASTRUCTURE_SETUP.md) — VM provisioning runbook
-- [server-env.ts](../../../apps/web/src/shared/env/server-env.ts) — app runtime env schema (source of truth)
-- [deploy.sh](../../../scripts/ci/deploy.sh) — deploy script required secrets
+- `nodes/<node>/app/src/shared/env/server-env.ts` — app runtime env schema (Zod, validated at boot). Note: app boot validates a separate list from deploy-infra.sh's `REQUIRED_SECRETS` — keep both lists in sync.
+- [scripts/ci/deploy-infra.sh](../../../scripts/ci/deploy-infra.sh) — `REQUIRED_SECRETS` + `OPTIONAL_SECRETS` (infra-side env gate)
+- [dns-ops skill](../dns-ops/SKILL.md) — DNS create/destroy + stale-record handling
 
 ## Pre-flight
 
@@ -94,11 +95,18 @@ Follow [INFRASTRUCTURE_SETUP.md](../../../docs/runbooks/INFRASTRUCTURE_SETUP.md)
 
 1. Generate SSH keypairs, commit public keys
 2. Discover Cherry project ID via API (never hardcode)
-3. Create tfvars (plan: `B1-4-4gb-80s-shared` minimum)
-4. `tofu init && tofu apply`
-5. Wait for cloud-init (~3 min), verify Docker is running
+3. Create tfvars (plan: **`B1-6-6gb-100s-shared`** — 4GB OOMs under the full k3s + Argo + Compose stack)
+4. `tofu init && tofu apply` — **from the user's main checkout**, not a throwaway worktree (state files live in `.local/` + `terraform.tfstate.d/`)
+5. Wait for cloud-init (~3 min). Marker: `/var/lib/cogni/bootstrap.ok` on the VM.
+6. **For per-node-AppSet repos** (forks with their own per-node deploy branches): create deploy branches before first Argo sync. Use `gh api` (husky pre-push runs tests on every push):
+   ```bash
+   MAIN_SHA=$(git ls-remote origin refs/heads/main | awk '{print $1}')
+   for ref in deploy/${env} deploy/${env}-<node>; do
+     gh api -X POST repos/<org>/<repo>/git/refs -f ref="refs/heads/${ref}" -f sha="$MAIN_SHA"
+   done
+   ```
 
-**Gate:** SSH into VM succeeds, `docker version` works.
+**Gate:** SSH succeeds, `cat /var/lib/cogni/bootstrap.ok` shows `BOOTSTRAP_OK=1`, `kubectl -n argocd get pods` shows controllers `Running`.
 
 ### Phase 5: GitHub Secrets
 
@@ -110,15 +118,46 @@ Follow the secret list in [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.
 2. **From .env.local** — shared credentials (OpenRouter, EVM RPC, PostHog, etc.)
 3. **Repo-level** — CHERRY_AUTH_TOKEN, GHCR_DEPLOY_TOKEN, GIT_READ_TOKEN
 
-Set `DOMAIN` as both variable and secret per environment. Ask user for domain names.
+Set `DOMAIN` as both variable AND secret per environment. Ask user for domain names.
+
+**Pre-flight:** Create the GitHub environment first — `setup:secrets` aborts with a misleading "Is gh authenticated?" if the env doesn't exist:
+
+```bash
+gh api -X PUT repos/<org>/<repo>/environments/<env>
+```
 
 **Gate:** `gh secret list --env preview` shows all required secrets.
 
-### Phase 6: DNS
+### Phase 6: DNS — two layers, both required
 
-**Goal:** Domain records point to VMs.
+Pods reach host-network infra (Postgres, Temporal, LiteLLM, Redis) through a separate DNS layer from the user-facing one. The kustomize overlays use `Service: type: ExternalName → <env>.vm.cognidao.org` (per `bug.0295`). If only the user-facing record exists, the app crashes with Temporal/DB connection timeouts.
 
-Ask user to create A records. Verify with `dig +short <domain>`.
+Create A records for both:
+
+| Record                  | Purpose                                             | Example                                 |
+| ----------------------- | --------------------------------------------------- | --------------------------------------- |
+| `<user-fqdn>`           | User-facing app via Caddy (matches `DOMAIN` secret) | `myfork-test.cognidao.org → <vm-ip>`    |
+| `<env>.vm.cognidao.org` | Pod-to-host service discovery (`bug.0295`)          | `candidate-a.vm.cognidao.org → <vm-ip>` |
+
+**Stale records from prior destroyed VMs silently break this** — always list-then-delete before POSTing a new A record. See [dns-ops skill](../dns-ops/SKILL.md).
+
+**Gate:** `dig +short <user-fqdn> @1.1.1.1` AND `dig +short <env>.vm.cognidao.org @1.1.1.1` both return the new VM IP.
+
+### Phase 6b: Declare per-env public URLs in the catalog (bug.5002)
+
+**Every new node in this repo MUST add `public_url` to its `infra/catalog/<name>.yaml` entry for each env it serves.** Verify scripts (`wait-for-candidate-ready.sh`, `smoke-candidate.sh`, `verify-buildsha.sh`, `verify-deployment.sh`) read URLs from here — without it they fall back to a legacy `${node}-${DOMAIN}` builder that produces NXDOMAIN URLs on single-node-shaped forks. Schema is enforced by `infra/catalog/_schema.json`.
+
+```yaml
+# infra/catalog/<your-node>.yaml
+public_url:
+  candidate-a: https://<user-fqdn-for-candidate-a>
+  preview: https://<user-fqdn-for-preview>
+  production: https://<user-fqdn-for-production>
+```
+
+URLs MUST match the `<user-fqdn>` A records you just created in Phase 6. Service-type entries (e.g. `scheduler-worker`) that have no Ingress omit this block.
+
+**Gate:** `bash -c '. scripts/ci/lib/image-tags.sh && public_url_for_target candidate-a <your-node>'` prints the candidate-a URL non-empty.
 
 ### Phase 7: Deploy & Verify
 
@@ -137,11 +176,12 @@ Ask user to create A records. Verify with `dig +short <domain>`.
 - [ ] Production deployment green
 - [ ] DNS resolves for both environments
 - [ ] `/readyz` returns 200 on both domains
+- [ ] `infra/catalog/<node>.yaml::public_url` declared for every env the node serves (bug.5002)
 
 ## Anti-patterns
 
 1. **NEVER `source .env.local`** — use `grep` extraction for individual vars
 2. **NEVER use fine-grained PATs for GHCR** — only Classic PATs work
-3. **NEVER use 2GB VMs** — full stack requires 4GB minimum
+3. **NEVER use 4GB VMs for the full stack** — k3s + Argo + Postgres + Temporal + LiteLLM + Redis + Caddy OOMs at bootstrap. Use `B1-6-6gb-100s-shared`.
 4. **NEVER hardcode `cogni-template` names** — derive from repo name
 5. **NEVER trust `/v1/regions` for auth verification** — it's public; use `/v1/teams`

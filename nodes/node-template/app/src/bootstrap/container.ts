@@ -367,21 +367,33 @@ function createContainer(): Container {
     "container initialized"
   );
 
-  // Initialize PostHog product analytics (required — env validated at boot)
-  initAnalytics({
-    apiKey: env.POSTHOG_API_KEY,
-    host: env.POSTHOG_HOST,
-    appVersion: env.COGNI_REPO_SHA ?? "unknown",
-    environment: env.DEPLOY_ENVIRONMENT ?? "local",
-  });
-  log.info("PostHog analytics initialized");
+  // Initialize PostHog product analytics — opt-in: skip cleanly when env
+  // is absent (matches the OPENROUTER_API_KEY / CONNECTIONS_ENCRYPTION_KEY
+  // pattern for graceful-degradation features).
+  if (env.POSTHOG_API_KEY && env.POSTHOG_HOST) {
+    initAnalytics({
+      apiKey: env.POSTHOG_API_KEY,
+      host: env.POSTHOG_HOST,
+      appVersion: env.COGNI_REPO_SHA ?? "unknown",
+      environment: env.DEPLOY_ENVIRONMENT ?? "local",
+    });
+    log.info("PostHog analytics initialized");
 
-  // Flush analytics events on graceful shutdown
-  const flushOnExit = () => {
-    shutdownAnalytics().catch(() => {});
-  };
-  process.on("SIGTERM", flushOnExit);
-  process.on("SIGINT", flushOnExit);
+    // Flush analytics events on graceful shutdown
+    const flushOnExit = () => {
+      shutdownAnalytics().catch(() => {});
+    };
+    process.on("SIGTERM", flushOnExit);
+    process.on("SIGINT", flushOnExit);
+  } else {
+    log.info(
+      {
+        POSTHOG_API_KEY: !!env.POSTHOG_API_KEY,
+        POSTHOG_HOST: !!env.POSTHOG_HOST,
+      },
+      "PostHog analytics disabled (POSTHOG_API_KEY/HOST not set)"
+    );
+  }
 
   // LLM adapter: always LiteLlmAdapter (test stacks use mock-openai-api via litellm.test.config.yaml)
   const llmService = new LiteLlmAdapter();

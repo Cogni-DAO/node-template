@@ -255,8 +255,6 @@ REQUIRED_SECRETS=(
     "OPENCLAW_GATEWAY_TOKEN"
     "OPENCLAW_GITHUB_RW_TOKEN"
     "INTERNAL_OPS_TOKEN"
-    "POSTHOG_API_KEY"
-    "POSTHOG_HOST"
 )
 
 REQUIRED_ENV_VARS=(
@@ -299,6 +297,8 @@ log_info "All required secrets provided"
 
 # Check optional secrets (warn if missing)
 OPTIONAL_SECRETS=(
+    "POSTHOG_API_KEY"
+    "POSTHOG_HOST"
     "GRAFANA_CLOUD_LOKI_URL"
     "GRAFANA_CLOUD_LOKI_USER"
     "GRAFANA_CLOUD_LOKI_API_KEY"
@@ -642,8 +642,8 @@ GIT_READ_USERNAME=${GIT_READ_USERNAME}
 GIT_READ_TOKEN=${GIT_READ_TOKEN}
 OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN}
 OPENCLAW_GITHUB_RW_TOKEN=${OPENCLAW_GITHUB_RW_TOKEN}
-POSTHOG_API_KEY=${POSTHOG_API_KEY}
-POSTHOG_HOST=${POSTHOG_HOST}
+POSTHOG_API_KEY=${POSTHOG_API_KEY:-}
+POSTHOG_HOST=${POSTHOG_HOST:-}
 # App/worker images — not started by infra deploy, but compose validates all vars.
 # Use placeholder values; k8s/Argo manages the real images.
 APP_IMAGE=${APP_IMAGE:-cogni-template-local}
@@ -959,9 +959,59 @@ else
   log_warn "Alloy config missing at $ALLOY_CONFIG, skipping restart check"
 fi
 
-log_info "[$(date -u +%H:%M:%S)] Installing db-backup systemd timer..."
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# db-backup: validation backup, THEN systemd timer install.
+#
+# Ordering matters (bug.5169 follow-up): `systemctl enable --now` schedules an
+# immediate firing of `compose up --force-recreate db-backup` via the unit's
+# ExecStart. The inline validation backup below runs the SAME command. If the
+# timer is installed first (with --now), the two `compose up` invocations
+# race on the container name and the second one fails with
+#   "Conflict. The container name "/cogni-runtime-db-backup-1" is already in
+#    use by container ..."
+# (Caught on preview bring-up 2026-05-15.)
+#
+# Correct sequence:
+#   1. Pre-cleanup: clear any leftover db-backup container from a prior
+#      aborted deploy. Pairs with the top-level [FATAL] ERR trap.
+#   2. Validation backup + manifest verify — proves the backup path on this
+#      VM. Failure here exits non-zero, blocking the deploy.
+#   3. Cleanup the validation container (alloy has already scraped the
+#      Exited container for the `db_backup.completed` log line).
+#   4. Install + enable systemd timer. The `--now` fire is now unopposed —
+#      no inline command competes for the container name.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Step 1: Pre-cleanup
+log_info "[$(date -u +%H:%M:%S)] Pre-cleaning db-backup container (if any)..."
 $RUNTIME_COMPOSE --profile backup stop db-backup 2>/dev/null || true
 $RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+
+# Step 2: Validation backup
+# `up --force-recreate` keeps the Exited container briefly so alloy scrapes
+# `db_backup.completed` into Loki (relied on by candidate-flight-infra).
+log_info "Running db-backup validation backup..."
+$RUNTIME_COMPOSE --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
+$RUNTIME_COMPOSE --profile backup logs --tail 80 db-backup | grep 'db_backup.completed' || {
+  $RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+  log_error "db-backup completed logs missing after validation backup"
+  exit 1
+}
+$RUNTIME_COMPOSE --profile backup run --rm --no-deps --entrypoint bash db-backup -lc '
+  set -euo pipefail
+  for cluster in app temporal; do
+    latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
+    test -n "$latest"
+    test -s "${latest}/MANIFEST.sha256"
+    echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
+  done
+'
+
+# Step 3: Cleanup validation container so the timer's --now fire is unopposed
+$RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
+
+# Step 4: Install + enable systemd timer
+log_info "[$(date -u +%H:%M:%S)] Installing db-backup systemd timer..."
 DOCKER_BIN=$(command -v docker)
 BACKUP_INTERVAL_SECONDS="${DB_BACKUP_INTERVAL_SECONDS:-86400}"
 cat >/etc/systemd/system/cogni-db-backup.service <<SYSTEMD_SERVICE_EOF
@@ -999,29 +1049,6 @@ systemctl enable --now cogni-db-backup.timer
 systemctl reset-failed cogni-db-backup.service 2>/dev/null || true
 log_info "db-backup timer installed with interval ${BACKUP_INTERVAL_SECONDS}s"
 
-log_info "Running db-backup validation backup..."
-# `up --force-recreate` keeps the Exited container briefly so alloy scrapes
-# `db_backup.completed` into Loki (relied on by candidate-flight-infra). The
-# explicit `rm -f` after prevents the next timer fire from colliding on the
-# container name; the systemd unit's ExecStartPost mirrors this for the timer.
-# A pre-cleanup at line ~888 + the existing top-level [FATAL] ERR trap handle
-# the case where validation aborts mid-flight and leaves a leftover. (bug.5169)
-$RUNTIME_COMPOSE --profile backup up --force-recreate --no-deps --abort-on-container-exit --exit-code-from db-backup db-backup
-$RUNTIME_COMPOSE --profile backup logs --tail 80 db-backup | grep 'db_backup.completed' || {
-  $RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
-  log_error "db-backup completed logs missing after validation backup"
-  exit 1
-}
-$RUNTIME_COMPOSE --profile backup run --rm --no-deps --entrypoint bash db-backup -lc '
-  set -euo pipefail
-  for cluster in app temporal; do
-    latest=$(find "/backups/${cluster}" -mindepth 1 -maxdepth 1 -type d | sort | tail -1)
-    test -n "$latest"
-    test -s "${latest}/MANIFEST.sha256"
-    echo "db-backup manifest verified: ${latest}/MANIFEST.sha256"
-  done
-'
-$RUNTIME_COMPOSE --profile backup rm -f db-backup 2>/dev/null || true
 emit_deployment_event "infra_deployment.db_backup_scheduled" "success" "db-backup timer installed and validation backup completed"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
