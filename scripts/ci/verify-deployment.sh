@@ -7,9 +7,8 @@
 # Dependency reachability is already confirmed by deploy-infra.sh (Step 6.8).
 #
 # Usage: verify-deployment.sh
-# Env:   DOMAIN (required), DEPLOY_ENVIRONMENT (preferred; selects catalog
-#        public_url entry per bug.5002), VM_HOST (optional, for diagnostics
-#        on failure), K8S_NAMESPACE (optional), SSH_DEPLOY_KEY (optional)
+# Env:   DOMAIN (required), VM_HOST (optional, for diagnostics on failure),
+#        K8S_NAMESPACE (optional), SSH_DEPLOY_KEY (optional)
 
 set -euo pipefail
 
@@ -71,21 +70,23 @@ poll_health() {
   return 1
 }
 
-# Node-app list comes from infra/catalog (CATALOG_IS_SSOT, docs/spec/ci-cd.md
-# axiom 16). Adding/removing a node in catalog updates the health-poll set
-# automatically. Replaces a previously-hardcoded operator/poly/resy iteration.
-declare -A POLL_PIDS=()
-URLS=()
+if [ "${#NODE_TARGETS[@]}" -eq 0 ]; then
+  echo "ℹ️  No node-apps in catalog — skipping health polls."
+  exit 0
+fi
+
+declare -a PIDS=()
+declare -a NAMES=()
 for node in "${NODE_TARGETS[@]}"; do
   url=$(url_for_node "$node")
-  URLS+=("${node}=${url}")
   poll_health "$node" "$url" &
-  POLL_PIDS[$node]=$!
+  PIDS+=("$!")
+  NAMES+=("$node")
 done
 
 FAILED=0
-for node in "${!POLL_PIDS[@]}"; do
-  wait "${POLL_PIDS[$node]}" || FAILED=1
+for i in "${!PIDS[@]}"; do
+  wait "${PIDS[$i]}" || { echo "❌ ${NAMES[$i]} failed"; FAILED=1; }
 done
 
 if [ $FAILED -ne 0 ]; then
@@ -96,8 +97,8 @@ echo "✅ All nodes healthy"
 
 # ── Smoke tests ──────────────────────────────────────────────────────────────
 
-for entry in "${URLS[@]}"; do
-  url="${entry#*=}"
+for node in "${NODE_TARGETS[@]}"; do
+  url=$(url_for_node "$node")
   BODY=$(curl -sk "$url/livez" 2>/dev/null)
   echo "$url/livez → $BODY"
   if ! echo "$BODY" | grep -q '"status"'; then
