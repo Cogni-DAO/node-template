@@ -255,11 +255,16 @@ export const serverSchema = z.object({
   // Optional — BYO-AI features disabled when not set.
   CONNECTIONS_ENCRYPTION_KEY: optionalString,
 
-  // PostHog product analytics — required
-  // See docs/guides/posthog-setup.md for setup
+  // PostHog product analytics — optional. Analytics is opt-in: when API key
+  // is absent the SDK is not initialized and the app boots without PostHog.
+  // See docs/guides/posthog-setup.md for setup.
   // PostHog Cloud free tier: 1M events/month at https://us.i.posthog.com
-  POSTHOG_API_KEY: z.string().min(1),
-  POSTHOG_HOST: z.string().url(),
+  POSTHOG_API_KEY: optionalString,
+  POSTHOG_HOST: z
+    .string()
+    .url()
+    .optional()
+    .or(z.literal("").transform(() => undefined)),
   POSTHOG_PROJECT_ID: optionalString,
 });
 

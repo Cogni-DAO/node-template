@@ -7,24 +7,47 @@
 # Dependency reachability is already confirmed by deploy-infra.sh (Step 6.8).
 #
 # Usage: verify-deployment.sh
-# Env:   DOMAIN (required), VM_HOST (optional, for diagnostics on failure),
-#        K8S_NAMESPACE (optional), SSH_DEPLOY_KEY (optional)
+# Env:   DOMAIN (required), DEPLOY_ENVIRONMENT (preferred; selects catalog
+#        public_url entry per bug.5002), VM_HOST (optional, for diagnostics
+#        on failure), K8S_NAMESPACE (optional), SSH_DEPLOY_KEY (optional)
 
 set -euo pipefail
 
 DOMAIN="${DOMAIN:?DOMAIN is required}"
 MAX_ATTEMPTS="${MAX_ATTEMPTS:-30}"
 SLEEP="${SLEEP:-15}"
+# bug.5002 — DEPLOY_ENV picks the catalog public_url key. Callers
+# (promote-and-deploy.yml) export DEPLOY_ENVIRONMENT; accept either,
+# fall back to the legacy URL builder when neither is set.
+DEPLOY_ENV="${DEPLOY_ENV:-${OVERLAY_ENV:-${DEPLOY_ENVIRONMENT:-}}}"
 
+_verify_deployment_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/image-tags.sh
+. "${_verify_deployment_dir}/lib/image-tags.sh"
+
+# Legacy URL builder kept as fallback for laptop CLI runs and pre-migration
+# catalogs that don't declare public_url yet.
 if [[ "$DOMAIN" == *.*.* ]]; then
   NODE_JOIN="-"
 else
   NODE_JOIN="."
 fi
 
-OPERATOR_URL="https://${DOMAIN}"
-POLY_URL="https://poly${NODE_JOIN}${DOMAIN}"
-RESY_URL="https://resy${NODE_JOIN}${DOMAIN}"
+# Hostname convention: catalog-first (bug.5002), else legacy
+# operator → DOMAIN / others → ${node}${NODE_JOIN}${DOMAIN}.
+url_for_node() {
+  local node="$1" catalog_url=""
+  if [ -n "$DEPLOY_ENV" ]; then
+    catalog_url=$(public_url_for_target "$DEPLOY_ENV" "$node" 2>/dev/null || true)
+  fi
+  if [ -n "$catalog_url" ]; then
+    printf '%s' "$catalog_url"
+  elif [ "$node" = "operator" ]; then
+    printf 'https://%s' "$DOMAIN"
+  else
+    printf 'https://%s%s%s' "$node" "$NODE_JOIN" "$DOMAIN"
+  fi
+}
 
 # ── Health polls ─────────────────────────────────────────────────────────────
 
@@ -48,18 +71,22 @@ poll_health() {
   return 1
 }
 
-# Poll all nodes in parallel
-poll_health "operator" "$OPERATOR_URL" &
-PID_OP=$!
-poll_health "poly" "$POLY_URL" &
-PID_POLY=$!
-poll_health "resy" "$RESY_URL" &
-PID_RESY=$!
+# Node-app list comes from infra/catalog (CATALOG_IS_SSOT, docs/spec/ci-cd.md
+# axiom 16). Adding/removing a node in catalog updates the health-poll set
+# automatically. Replaces a previously-hardcoded operator/poly/resy iteration.
+declare -A POLL_PIDS=()
+URLS=()
+for node in "${NODE_TARGETS[@]}"; do
+  url=$(url_for_node "$node")
+  URLS+=("${node}=${url}")
+  poll_health "$node" "$url" &
+  POLL_PIDS[$node]=$!
+done
 
 FAILED=0
-wait $PID_OP || FAILED=1
-wait $PID_POLY || FAILED=1
-wait $PID_RESY || FAILED=1
+for node in "${!POLL_PIDS[@]}"; do
+  wait "${POLL_PIDS[$node]}" || FAILED=1
+done
 
 if [ $FAILED -ne 0 ]; then
   echo "❌ One or more nodes failed health checks"
@@ -69,7 +96,8 @@ echo "✅ All nodes healthy"
 
 # ── Smoke tests ──────────────────────────────────────────────────────────────
 
-for url in "$OPERATOR_URL" "$POLY_URL" "$RESY_URL"; do
+for entry in "${URLS[@]}"; do
+  url="${entry#*=}"
   BODY=$(curl -sk "$url/livez" 2>/dev/null)
   echo "$url/livez → $BODY"
   if ! echo "$BODY" | grep -q '"status"'; then

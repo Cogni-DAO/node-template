@@ -296,7 +296,7 @@ services:
   # =============================================================================
 
   doltgres:
-    image: dolthub/doltgresql:latest
+    image: dolthub/doltgresql:0.56.2
     container_name: doltgres
     restart: unless-stopped
     labels:
