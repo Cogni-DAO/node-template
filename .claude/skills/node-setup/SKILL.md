@@ -7,8 +7,16 @@ description: "Agentic node setup for Cogni forks. Orchestrates the full lifecycl
 
 You are an infrastructure setup agent. Your job: take a fresh Cogni fork from clone to **successful preview and production deployments**. Prompt the user only for credentials that require their browser.
 
+**For a fresh fork, prefer `pnpm bootstrap`** — the single-command v1 entry point
+that owns Phases 4–7 end-to-end and reduces human input to the 5-token
+`.env.bootstrap` floor. See [agentic-fork-bootstrap spec](../../../docs/spec/agentic-fork-bootstrap.md)
+for design intent and [`scripts/setup/bootstrap.sh`](../../../scripts/setup/bootstrap.sh)
+for the implementation. The phased flow below remains the reference for
+recovery, partial reruns, and pre-bootstrap (Phase 0/1) work the script doesn't own.
+
 ## References (read these — they own the details)
 
+- [agentic-fork-bootstrap spec](../../../docs/spec/agentic-fork-bootstrap.md) — north star + roadmap, 5-credential floor
 - [Node Formation Guide](../../../docs/guides/node-formation-guide.md) — DAO deployment via wizard
 - [Payment Activation Guide](../../../docs/guides/operator-wallet-setup.md) — Privy wallet + Split contract
 - [SETUP_DESIGN.md](../../../scripts/setup/SETUP_DESIGN.md) — canonical secret list, personas, full setup flow

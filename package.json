@@ -59,6 +59,7 @@
     "db:setup:test": "pnpm db:provision:test && pnpm db:migrate:test",
     "db:drop:test": "pnpm tsx --tsconfig tsconfig.scripts.json scripts/db/drop-test-db.ts",
     "db:reset:test": "pnpm db:drop:test || true && pnpm db:setup:test",
+    "bootstrap": "bash scripts/setup/bootstrap.sh",
     "dev:setup": "pnpm db:setup && pnpm db:setup:test",
     "docker:dev:down": "docker compose --env-file .env.local -f infra/compose/runtime/docker-compose.dev.yml --profile sandbox-openclaw down",
     "docker:dev:stack": "docker network create cogni-edge || true && DB_PORT=5432 docker compose --env-file .env.local --env-file .env.docker -f infra/compose/runtime/docker-compose.dev.yml up -d --build",
