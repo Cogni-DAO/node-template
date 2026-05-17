@@ -137,6 +137,13 @@ Usage (candidate-a only; read-only): `ssh -i .local/candidate-a-vm-key root@$(ca
 
 If `.local/{env}-vm-key` isn't present for the env you need, this device isn't the provisioner for that env. Do not improvise — don't source shell aliases from personal dotfiles, don't paste IPs from Slack, don't copy keys from a teammate. Either re-run `provision-test-vm.sh` (candidate-a only) or drive the change through the pipeline.
 
+## Known gaps (open follow-ups)
+
+Tracked bugs to factor into design reviews of CI/CD changes — closing any of these is welcome substrate work, and PRs that _re-introduce_ the patterns should be flagged.
+
+- **`bug.5009` — RESOLVED.** `flight-preview.yml` previously hard-failed on CI/docs/script-only PRs that produced no `mq-{N}-{sha}` images. Now classified via [`scripts/ci/classify-pr-build-state.sh`](../../../scripts/ci/classify-pr-build-state.sh): `zero-affected` merges surface as the visible green `flight-skipped-zero-affected` marker job (per Axiom 11), real bypass (`no-run`) and `missing` build-fail still hard-fail loudly.
+- **Catalog v2 (upstream cogni-poly PRs #61, #70, #72, #75, #84, #85)** — not yet ported to node-template. cogni-poly's catalog v2 separates deploy units from build units (each catalog file lists `images[]` with `role: app | migrator | sidecar`) and reorganizes Shape B sidecars as kustomize Components at `infra/k8s/components/sidecars/<image>/`. Node-template still uses catalog v1 (`ALL_TARGETS` / `image_tag_for_target` in [`scripts/ci/lib/image-tags.sh`](../../../scripts/ci/lib/image-tags.sh)). When porting v2, watch for: `image_tag_for_image` vs `image_tag_for_target` rename, new `DEPLOY_UNITS` / `ALL_IMAGES` arrays, multi-image snapshot/restore TSV schema (`deploy_unit\timage_name\tref`), and image-name-aware `promote-k8s-image.sh`.
+
 ## Enforcement rules
 
 When reviewing code that touches CI/CD, deploy, or infra:
