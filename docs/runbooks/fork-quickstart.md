@@ -3,7 +3,7 @@ id: fork-quickstart-runbook
 type: runbook
 title: Fork Quickstart — From Zero to Green Deploy
 status: draft
-summary: The copy/paste prompt a fresh human (or a fresh Claude Code session) needs to fork node-template and drive it to a green deploy. The minimum-floor companion to docs/spec/agentic-fork-bootstrap.md.
+summary: The copy/paste prompt that hands a fresh AI agent autonomous control of a node-template fork provisioning. The human's role is bounded to clicking Fork, pasting the prompt, and filling 5 token values in an editor. Companion to docs/spec/agentic-fork-bootstrap.md.
 read_when: A new user wants their own node-template instance; an external agent is dropped in cold and needs the canonical zero-state instructions.
 owner: derekg1729
 created: 2026-05-17
@@ -12,17 +12,14 @@ tags: [onboarding, agent, bootstrap]
 
 # Fork Quickstart
 
-For a fresh human starting from zero, the path is:
+## The asymmetry
 
-1. Browser → click **Fork** on https://github.com/Cogni-DAO/node-template
-2. Paste the prompt below into a fresh Claude Code session
-3. When the editor opens, fill in the 5 sections of `.env.bootstrap` (each section has its mint URL inline)
-4. Walk away
+| Who       | Does what                                                                                                                                                                                                                                          |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Human** | (1) Click Fork on github.com/Cogni-DAO/node-template. (2) Paste the prompt below into a fresh Claude Code session. (3) Fill 5 sections in `.env.bootstrap` when an editor pops up, save, close.                                                    |
+| **Agent** | Everything else — install missing tools, clone, run bootstrap, set ~25 GitHub Actions secrets, provision the Cherry VM, configure Cloudflare DNS, dispatch the deploy, watch CI, verify `/readyz`. ~10 minutes wall-clock, no further human input. |
 
-The bootstrap script (see [`scripts/setup/bootstrap.sh`](../../scripts/setup/bootstrap.sh))
-provisions the Cherry VM, sets ~25 GitHub Actions secrets, configures Cloudflare
-DNS, dispatches `promote-and-deploy.yml`, and reports the result.
-
+Bootstrap script: [`scripts/setup/bootstrap.sh`](../../scripts/setup/bootstrap.sh).
 Design rationale + invariants: [`docs/spec/agentic-fork-bootstrap.md`](../spec/agentic-fork-bootstrap.md).
 
 ## The Copy/Paste Prompt
@@ -31,64 +28,87 @@ Drop this into a fresh Claude Code session in whatever parent directory you want
 the fork to land in:
 
 ```
-Fork and provision github.com/Cogni-DAO/node-template end-to-end.
+You are an autonomous fork-provisioning agent for Cogni node-template. Your
+job is to take github.com/Cogni-DAO/node-template from zero to a green
+deployment with one human checkpoint: filling 5 token values into an editor
+when .env.bootstrap is opened for them. Before that moment and after it,
+you drive — pick defaults, install missing tools, retry transient failures.
+Report only when (a) /readyz returns 200, or (b) you hit a genuinely
+unrecoverable blocker (auth rejected, quota exceeded, account suspended).
 
-1. Verify these CLI tools are installed: gh, pnpm, tofu, age, ssh-keygen,
-   openssl, curl, jq, git. Tell me how to install any that are missing
-   and stop. Verify `gh auth status` succeeds.
+# Steps
 
-2. Determine the target fork name:
-     USER=$(gh api user --jq .login)
-   If the user already has a fork of Cogni-DAO/node-template (check via
-   `gh api repos/$USER/node-template` — exit 0 means it exists), reuse it.
-   If the literal name `node-template` is taken under their account by an
-   UNRELATED repo, prompt me for a fork name and use `gh repo fork
-   Cogni-DAO/node-template --clone --remote --fork-name <chosen>`.
-   Do NOT silently accept the gh CLI's auto-suffixed `-1`, `-2` names —
-   downstream tooling derives identifiers from the repo name.
+1. PREREQS — auto-install, do not ask. Tools: gh, pnpm, tofu, age, jq.
+   - macOS: `brew install <tool>` for each missing tool
+   - Debian/Ubuntu: `sudo apt-get update && sudo apt-get install -y <tool>`
+     (tofu/age may need their official installers — use them)
+   - `gh auth status` must succeed; if not, attempt `gh auth login --web`
+     and pause once for the human to complete browser auth — that's the
+     only acceptable pre-bootstrap human checkpoint.
 
-3. Otherwise fork + clone in one shot:
-     gh repo fork Cogni-DAO/node-template --clone --remote
-   Then `cd` into the cloned directory.
+2. FORK + CLONE — pick a default, do not ask.
+   - USER=$(gh api user --jq .login)
+   - If `gh api repos/$USER/node-template` returns 200, a fork (or a
+     same-named repo) already exists. If it's a fork of
+     Cogni-DAO/node-template (check `.parent.full_name`), reuse it via
+     `gh repo clone $USER/node-template`. Don't re-fork.
+   - If it exists but isn't a fork of the template, pick a defaulted
+     fork name: `cogni-node-$(date +%Y%m%d)` and run
+     `gh repo fork Cogni-DAO/node-template --clone --remote --fork-name <name>`.
+   - Otherwise: `gh repo fork Cogni-DAO/node-template --clone --remote`.
+   - NEVER accept the gh CLI's silent `-1`, `-2` auto-suffix. If you'd
+     get one, use --fork-name explicitly.
+   - cd into the cloned directory.
 
-4. Install dependencies:
-     pnpm install
+3. INSTALL: `pnpm install`
 
-5. First bootstrap pass — writes .env.bootstrap and opens it in my editor:
-     pnpm bootstrap
-   I will fill the 5 sections (Cherry, Cloudflare, GitHub Admin, OpenRouter,
-   optional Grafana), save, and close the editor.
+4. BOOTSTRAP — the only human checkpoint.
+   - Run: `pnpm bootstrap`
+   - The script writes .env.bootstrap and opens it in the human's editor.
+   - Say to the human, exactly once: "Fill the 5 sections in your editor
+     (mint URLs are inline), save, and close. I'll handle the rest."
+   - When the human signals done (editor closed or "done"), re-run
+     `pnpm bootstrap`. This pass validates inputs, generates ~25 agent
+     secrets, sets them via `gh secret set`, provisions the Cherry VM,
+     configures Cloudflare DNS, and dispatches promote-and-deploy.yml.
 
-6. Second bootstrap pass — validates inputs, provisions the Cherry VM,
-   sets ~25 GitHub Actions secrets, configures Cloudflare DNS, and
-   dispatches promote-and-deploy.yml:
-     pnpm bootstrap
+5. DRIVE TO GREEN.
+   - The script already watches CI via `gh run watch`. Let it run.
+   - On transient failure (network, rate-limit, eventual-consistency),
+     diagnose then retry the failing step yourself. Don't escalate.
+   - On unrecoverable failure (auth rejected, quota exceeded, account
+     suspended, Cherry billing block), STOP and report the specific
+     failure + the one thing the human needs to do.
 
-7. Watch the CI run end-to-end. When `/readyz` returns 200, report a
-   one-line scorecard: VM IP, domain, /readyz status, run URL.
+6. REPORT — when /readyz returns 200, post one line:
+   `✓ <domain> /readyz=200 VM=<ip> run=<url>`
 
-Spec for context (in the cloned repo): docs/spec/agentic-fork-bootstrap.md
-Bootstrap implementation:              scripts/setup/bootstrap.sh
+# Anti-patterns — do not do these
 
-Stop and ask if anything looks off. Don't proceed past the editor step until
-.env.bootstrap has all 5 required sections filled.
+- Do NOT ask the human to install tools you can install. Use brew/apt.
+- Do NOT ask the human to pick a fork name when a default works.
+- Do NOT stop and ask if "something looks off" — investigate first.
+- Do NOT proceed past .env.bootstrap with empty values; abort with a
+  clear "the following sections are still blank: ..." if you detect any.
+- Do NOT escalate transient failures (rate-limit, network blip) without
+  at least one retry.
+
+# Reference (in the cloned repo)
+
+Implementation: scripts/setup/bootstrap.sh
+Spec:          docs/spec/agentic-fork-bootstrap.md
 ```
 
 ## Why the fork-detection step is load-bearing
 
 `gh repo fork <upstream> --clone --remote` silently appends `-1`, `-2`, …
 when a same-named repo already exists under the caller's account. That repo
-might be unrelated (a prior project the human named `node-template`) or it
-might be a stale prior fork. Either way, the auto-suffixed name drifts from
-any documented identifier — downstream tooling that derives the node slug
-from the repo name will produce names like `node-template-1` that don't
-match catalog entries, DNS records the human registered, or anything else
-that was named ahead of time.
-
-The prompt instructs the agent to:
-
-- Check for an existing fork explicitly and reuse it if present
-- Refuse the silent `-1` suffix and ask the human for a name instead
+might be a stale prior fork (reuse it) or an unrelated namesake (need a
+different name). Either way the auto-suffixed name is wrong — downstream
+tooling that derives identifiers from the repo name will produce slugs like
+`node-template-1` that drift from anything the human registered ahead of
+time. The prompt mandates explicit detection and a defaulted alternate name
+before accepting any silent suffix.
 
 ## Safety: bootstrap refuses to run on the template
 
