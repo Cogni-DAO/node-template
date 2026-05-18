@@ -24,4 +24,4 @@ domain:
   # `https://<catalog-prefix>.<root>` (or `https://<root>` if catalog
   # prefix is empty, e.g. production at the apex). Must match the zone
   # named by .env.bootstrap::CLOUDFLARE_ZONE_ID.
-  root: cognidao.org
+  root: opencompany.cc
