@@ -1,101 +1,86 @@
 ---
 id: upstream-sync.create-service-docs.handoff
 type: handoff
-status: open
+status: blocked
 created: 2026-05-17
 updated: 2026-05-17
-branch: (none yet — create off main)
+branch: (none — do not start until unblocked)
 last_commit: af131b919 (main)
+blocked_on: catalog-v2 port (cogni-poly #61 / #70 / #72 / #75)
 ---
 
 # Handoff: Port cogni-poly #54 — create-service.md v0
 
-## Context
+## Status: BLOCKED on catalog-v2
 
-This is the doc-sync companion to [PR #17](https://github.com/Cogni-DAO/node-template/pull/17)
-which ported the CI/CD bug fixes (cogni-poly #81 + #82). PR #17 ports the
-**wire-level** machinery (`classify-pr-build-state.sh` + flight-preview
-classify path); this handoff ports the **conceptual companion** — the guide
-that explains how to add a new deployable service through that machinery.
+The handoff's original premise — "port PR #54 as a standalone docs change" —
+does not hold. PR #54 is the documentation **for** catalog v2. Importing it
+into a catalog-v1 repo documents features that don't exist.
 
-Both belong together. They were split only because PR #17 maintained "clean
-ports only" scope and the create-service doc requires manual conflict
-resolution.
+## Evidence
 
-## What to port
+cogni-poly main's `docs/guides/create-service.md` (post-#54) opens with:
 
-**cogni-poly PR #54**: https://github.com/Cogni-DAO/cogni-poly/pull/54
-**Merge commit**: `16a541b8ef42bf11343ffe4f14e1f234326d11de`
+> "Catalog v2 playbook for adding a new image to the deployed stack (new
+> deploy unit OR new image on an existing unit)"
 
-Touches two files, both of which exist in node-template and have diverged:
+Every Shape A example uses catalog v2 schema:
 
-- `docs/guides/create-service.md` — v0 standardization for adding any new
-  deployable service. 5-shape decision tree (standalone k8s deployment /
-  sibling container / MCP server / legacy Compose / cron one-shot) + the
-  end-to-end pipeline spine (Author → PR Build → Candidate-A Flight →
-  Preview Promote → Production Promote).
-- `work/projects/proj.cicd-services-gitops.md` — adds blockers #23–28
-  covering gaps the guide surfaces. Several are flagged upstream-relevant
-  for node-template.
-
-## Conflict shape (when I tried cherry-pick)
-
-```
-$ git cherry-pick 16a541b8
-Auto-merging docs/guides/create-service.md
-CONFLICT (content): Merge conflict in docs/guides/create-service.md
+```yaml
+schema_version: 2
+name: <name>
+deploy:
+  candidate_a_branch: deploy/candidate-a-<name>
+  preview_branch: deploy/preview-<name>
+  production_branch: deploy/production-<name>
+  path_prefix: services/<name>/
+  port: 9000
+images:
+  - name: <name>
+    role: app
+    dockerfile: services/<name>/Dockerfile
+    image_name: ghcr.io/cogni-dao/cogni-poly
+    image_tag_suffix: "-<name>"
 ```
 
-`git diff --check` reported **18 conflict markers across one file**
-(docs/guides/create-service.md). The `proj.cicd-services-gitops.md` change
-applied cleanly (`M` in `git status`, not `UU`), but stayed staged behind
-the unresolved file.
+Node-template's `infra/catalog/scheduler-worker.yaml` is catalog v1 (flat
+top-level keys: `image_tag_suffix`, `migrator_tag_suffix`, `path_prefix`,
+deploy branches, no `images[]` array, no `schema_version`). Same for
+`infra/catalog/node-template.yaml`.
 
-The conflicts cluster around the sidecar shape sections (cogni-poly's
-canonical pattern moved from `3ee5913f8` → `ce9e5fc66`; node-template's
-guide may still reference earlier commits or have a different precedent).
+PR #17's body already classifies catalog v2 (cogni-poly #61 / #70 / #72 /
+#75) as deferred — "architectural refactor; out of scope for 'clearly
+porting only'. Needs its own design call." PR #54 inherits that block —
+it's the docs surface of the same refactor.
 
-## Suggested approach
+The companion `proj.cicd-services-gitops.md` additions (#54's blockers
+#23–28) also lean on v2 mechanics: #25 references catalog-v2 sidecar
+roles, #26 talks about overlay-only flight for sidecar-only PRs, #28
+references node-domain catalog paths. Only #23 (`promote-k8s-image.sh`
+image-name-blind), #24 (AppSet wildcard generators), and #27 (CronJob
+template) are v2-independent enough to port standalone — but porting
+half-a-set of blockers into a tracker is a worse outcome than leaving the
+tracker in lock-step with cogni-poly post-v2-port.
 
-1. **Branch**: `git checkout origin/main -b <yourname>/upstream-sync-create-service`
-2. **Read both versions in full first** — `docs/guides/create-service.md` in
-   node-template, and in cogni-poly main (`git show
-cogni-poly/main:docs/guides/create-service.md`). Diverged for ~4 weeks;
-   the resolution needs judgment, not mechanical merging.
-3. **Cherry-pick** `16a541b8`, resolve conflicts manually:
-   - For sections that exist in both: prefer cogni-poly's wording where it
-     references current canonical commits (`ce9e5fc66`); preserve any
-     node-template-specific examples or invariants that don't exist
-     upstream.
-   - For sections only in cogni-poly: include verbatim.
-   - For sections only in node-template: keep.
-4. **De-poly-ify examples**: cogni-poly references `poly-paper-sidecar`,
-   `poly-test-worker`. node-template doesn't have those. Either:
-   - Genericize the example (`<your-sidecar>`, `<your-service>`) — preferred
-     for a template repo
-   - Or keep poly references and note them as "from the upstream
-     cogni-poly fork; analogous structure for any fork"
-5. **`proj.cicd-services-gitops.md`**: review the new blockers #23–28
-   added by #54. Some may already be resolved on node-template main (e.g.
-   anything fixed by PR #14's bundle). Mark resolved-on-import; keep open
-   items.
-6. **Validation**: `pnpm check:fast` must pass; `pnpm check:docs` will
-   catch any header/metadata regressions. There are no runtime tests for
-   docs.
-7. **PR title suggestion**: `docs(upstream-sync): port create-service.md v0
-from cogni-poly #54`. Reference PR #17 in the body as the wire-level
-   companion.
+## Unblock criteria
 
-## Out of scope (do NOT bundle)
+Land a catalog v2 port PR first:
 
-- catalog v2 cluster (cogni-poly #61, #70, #72, #75) — architectural
-  change requiring its own design call. PR #17's description tracks this.
-- #84 / #85 — depend on catalog v2 structures
-- Genericizing other cogni-poly examples in unrelated docs — focus this PR
-  on `create-service.md` + `proj.cicd-services-gitops.md` only.
+1. Pick up cogni-poly #61 → #70 → #72 → #75 as a single port (the original
+   commits, not a rewrite). Adapt poly-specific paths/names; preserve the
+   v2 schema, the new `lib/image-tags.sh` API surface
+   (`image_tag_for_image` etc.), and the multi-image snapshot/restore TSV
+   format documented in the devops-expert skill's Known Gaps.
+2. After catalog v2 is in node-template, port #54 — the conflicts should
+   collapse since both files will reference v2 idioms.
+3. Then port #84 (retag word-prefix collision) and #85 (placeholder-fill
+   self-heal) which depend on v2's multi-image overlay shape.
 
 ## Reference
 
-- Wire-level companion PR: https://github.com/Cogni-DAO/node-template/pull/17
+- Wire-level companion PR (already shipped scope-wise): https://github.com/Cogni-DAO/node-template/pull/17
 - Source PR: https://github.com/Cogni-DAO/cogni-poly/pull/54
-- Cross-reference of all `needs-upstream-sync` PRs lives in PR #17's body.
+- Catalog v2 cluster: cogni-poly #61, #70, #72, #75
+- Dependent ports awaiting v2: #84, #85
+- Devops-expert Known Gaps section (added in PR #17) documents the v2
+  rename surface to watch for when porting.
