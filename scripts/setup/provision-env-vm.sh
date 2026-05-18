@@ -678,6 +678,7 @@ APP_IMAGE=placeholder:not-started
 APP_BASE_URL=https://${DOMAIN}
 COGNI_REPO_URL=${COGNI_REPO_URL}
 COGNI_REPO_REF=${COGNI_REPO_REF}
+LITELLM_IMAGE=cogni-litellm:latest
 ENVEOF"
 
 # Start services
