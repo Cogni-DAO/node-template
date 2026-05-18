@@ -230,6 +230,11 @@ jobs:
       contents: read
       pull-requests: write # Required for PR decoration
       actions: read # Required for CI telemetry
+    # Lifted to job-level so step-level `if: env.SONAR_TOKEN != ''` can read it.
+    # Forks of this template that haven't configured SonarCloud (no project bound,
+    # no SONAR_TOKEN secret) green-skip the scan step instead of red-failing every PR.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -247,9 +252,9 @@ jobs:
           path: coverage/
 
       - name: SonarCloud Scan
+        if: env.SONAR_TOKEN != ''
         uses: SonarSource/sonarqube-scan-action@884b79409bbd464b2a59edc326a4b77dc56b2195 # v5.0.0
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: https://sonarcloud.io
           GITHUB_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
 
