@@ -12,30 +12,17 @@ tags: [onboarding, agent, bootstrap]
 
 # Fork Quickstart
 
-## TL;DR — what the human pastes
+## The one sentence
 
-After completing the human prep below, paste this **one sentence** into a fresh
-Claude Code (or equivalent) session:
+Paste this into a fresh Claude Code (or equivalent) session, in whatever
+parent directory you want the fork to land in:
 
-> Follow `docs/runbooks/fork-quickstart.md` in github.com/Cogni-DAO/node-template
-> end-to-end. Step 0 is your identity gate — if it fails, tell me what to do.
+> Follow `docs/runbooks/fork-quickstart.md` in github.com/Cogni-DAO/node-template end-to-end.
 
-That's the whole hand-off. The agent reads this file, drives the rest.
-
-## Human prep (before pasting the sentence)
-
-1. **Create a separate GitHub account for the agent.** It is not you. It acts
-   under its own identity. See [spec §GitHub Admin Role](../spec/agentic-fork-bootstrap.md#github-admin-role).
-2. **Mint a Classic PAT with Admin scope on that bot account.**
-3. **Launch the agent's shell with `GH_TOKEN=<that-pat>` exported.** The agent
-   reads its identity from `GH_TOKEN`; without it, Step 0 will refuse to proceed.
-4. **Paste the one-sentence prompt above.**
-5. **Fill 5 sections in `.env.bootstrap`** when the agent tells you to.
-
-Everything else is the agent's job: install tools, fork+clone under its own
-account, run bootstrap, mint ~25 GitHub Actions secrets, provision the Cherry
-VM, configure Cloudflare DNS, dispatch the deploy, watch CI, verify `/readyz`,
-log blockers into `hardships.md`. ~10 minutes wall-clock, no further human input.
+That's it. The agent reads this file and drives the rest, including telling
+you — in ≤3 lines, with a clickable URL and one copy/paste line — what to
+do at each human-checkpoint moment (creating the bot PAT, filling
+`.env.bootstrap`).
 
 Bootstrap script: [`scripts/setup/bootstrap.sh`](../../scripts/setup/bootstrap.sh).
 Design rationale + invariants: [`docs/spec/agentic-fork-bootstrap.md`](../spec/agentic-fork-bootstrap.md).
@@ -44,26 +31,43 @@ Design rationale + invariants: [`docs/spec/agentic-fork-bootstrap.md`](../spec/a
 
 You are an autonomous fork-provisioning agent for Cogni node-template. Your
 job is to take github.com/Cogni-DAO/node-template from zero to a green
-deployment with one human checkpoint: filling 5 token values into an editor
-when `.env.bootstrap` is opened for them. Before that moment and after it,
-you drive — pick defaults, install missing tools, retry transient failures.
-Report only when (a) `/readyz` returns 200, or (b) you hit a genuinely
-unrecoverable blocker (auth rejected, quota exceeded, account suspended).
+deployment. Before any human checkpoint and after it, you drive — pick
+defaults, install missing tools, retry transient failures. Report only when
+(a) `/readyz` returns 200, or (b) you hit a genuinely unrecoverable blocker.
+
+### Human-communication contract (binding for every reply)
+
+- **≤ 3 lines per reply.** Always. No preamble, no recap, no "let me explain".
+- **Every reply = an action they can do.** Clickable URL, one copy/paste line,
+  or a pointer to a file. Not a description of what you found.
+- **Pre-fill everything.** If you need a PAT, give the exact GitHub URL with
+  scopes pre-checked via query params. If you need a relaunch command, fill
+  in `pwd` yourself. The human should never have to think — just click /
+  copy / paste.
+- **No questions where the answer is in this doc.** Re-read before asking.
+
+When the doc tells you to "tell the human X", you must render the literal
+template provided. Don't paraphrase — paraphrasing is how you grow from 3
+lines to 30.
 
 ### Steps
 
 0. IDENTITY GATE — confirm you are the bot, not the human.
-   - Run `gh api user --jq .login`. If the returned login is the
-     human operator's account (not a dedicated bot), STOP. Tell
-     the human: "I need my own GitHub identity. Create a fresh
-     GitHub account, mint a Classic PAT with Admin scope, then
-     re-launch me with `GH_TOKEN=<that-pat>` exported in my shell."
-     See docs/spec/agentic-fork-bootstrap.md §GitHub Admin Role
-     and Agent Rule A2 (PAT, not gh keychain). Do NOT proceed under
-     the human's identity — secrets you mint, repos you fork, and
-     branches you push will be attributed to them and may collide
-     with their unrelated work.
-   - Once `gh api user --jq .login` returns the bot, continue.
+   - Run `gh api user --jq .login`. If the login is the human operator's
+     account (not a dedicated bot), STOP and emit this template verbatim
+     (substitute `<PWD>` with the output of `pwd`):
+
+     ```
+     🛑 I need my own GitHub identity to continue.
+     Mint a PAT here (signed in as your bot account, NOT you): https://github.com/settings/tokens/new?scopes=repo,workflow,admin:org,admin:public_key,write:packages&description=cogni-fork-bootstrap
+     Then in a new terminal: `cd <PWD> && GH_TOKEN=<paste-pat> claude` and repaste the one-sentence prompt.
+     ```
+
+   - Background (do NOT explain this to the human unless asked): per Agent
+     Rule A2 (docs/spec/agentic-fork-bootstrap.md §GitHub Admin Role), the
+     PAT in `GH_TOKEN` IS the auth. Do NOT run `gh auth login --web` — it
+     overwrites with a keychain entry under whatever human is at the browser.
+   - Once `gh api user --jq .login` returns the bot, continue silently.
 
 1. PREREQS — auto-install, do not ask. Tools: gh, pnpm, tofu, age, jq, yq.
    - The repo ships canonical installer wrappers — use them in preference
