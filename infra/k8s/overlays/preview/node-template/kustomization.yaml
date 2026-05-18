@@ -1,0 +1,127 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Per-env overlay for the node-template app. Mirrors the scheduler-worker
+# overlay pattern: base ref + image override + ConfigMap patches +
+# ExternalName Service patches (bug.0295). Created in this PR to close
+# the deploy-machinery gap exposed by the v0 canary; the AppSet's
+# templated path `infra/k8s/overlays/candidate-a/{{.name}}` requires this
+# directory to exist for `name: node-template` (from infra/catalog/node-template.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cogni-preview
+
+resources:
+  - ../../../base/node-app
+
+# Image tag — updated by argocd-image-updater on each preview promote.
+images:
+  - name: ghcr.io/cogni-dao/cogni-node-template
+    newName: ghcr.io/cogni-dao/cogni-node-template
+    newTag: "preview-placeholder-node-template"
+
+patches:
+  # NodePort 30000 for Caddy → app routing on the VM.
+  - target: { kind: Service, name: node-app }
+    patch: |
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30000
+
+  - target:
+      kind: ConfigMap
+      name: node-app-config
+    patch: |
+      - op: replace
+        path: /data/TEMPORAL_NAMESPACE
+        value: "cogni-preview"
+
+  # bug.0295: VM discovery via DNS (preview.vm.cognidao.org for the
+  # canonical operator; forks override the vm.* zone separately at fork
+  # time). Convert headless Services → ExternalName; delete EndpointSlices.
+  - target: { kind: Service, name: postgres-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: postgres-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: temporal-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: temporal-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: litellm-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: litellm-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: doltgres-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: doltgres-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: Service, name: redis-external }
+    patch: |
+      apiVersion: v1
+      kind: Service
+      metadata:
+        name: redis-external
+      spec:
+        type: ExternalName
+        externalName: preview.vm.cognidao.org
+        clusterIP: null
+  - target: { kind: EndpointSlice, name: postgres-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: postgres-external-1
+  - target: { kind: EndpointSlice, name: temporal-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: temporal-external-1
+  - target: { kind: EndpointSlice, name: litellm-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: litellm-external-1
+  - target: { kind: EndpointSlice, name: doltgres-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: doltgres-external-1
+  - target: { kind: EndpointSlice, name: redis-external-1 }
+    patch: |
+      $patch: delete
+      apiVersion: discovery.k8s.io/v1
+      kind: EndpointSlice
+      metadata:
+        name: redis-external-1

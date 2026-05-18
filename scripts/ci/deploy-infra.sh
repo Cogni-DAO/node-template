@@ -1084,7 +1084,7 @@ fi
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 6.7: Ensure Temporal namespace exists (idempotent)
 # App pods need cogni-${env} namespace registered in Temporal before /readyz passes.
-# Same script used by provision-test-vm.sh — one shared primitive.
+# Same script used by provision-env-vm.sh — one shared primitive.
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TEMPORAL_NAMESPACE="cogni-${DEPLOY_ENVIRONMENT}" \
 TEMPORAL_CONTAINER="cogni-runtime-temporal-1" \

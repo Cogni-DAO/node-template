@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# Script: scripts/setup/provision-test-vm.sh
+# Script: scripts/setup/provision-env-vm.sh
 # Purpose: One-command VM provisioning + infra deployment + scorecard.
 #          Generates ALL secrets (same generators as setup-secrets.ts), provisions
 #          via OpenTofu, deploys Compose infra, verifies k3s + Argo CD.
 # Usage:
-#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-test-vm.sh preview
-#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-test-vm.sh production
+#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-env-vm.sh preview
+#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-env-vm.sh production
 #   CHERRY_AUTH_TOKEN=<token> DOMAIN=test.cognidao.org \
-#     bash scripts/setup/provision-test-vm.sh candidate-a
-#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-test-vm.sh candidate-b
+#     bash scripts/setup/provision-env-vm.sh candidate-a
+#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-env-vm.sh candidate-b
 # Environments:
 #   preview, production     — long-lived post-merge lanes
 #   candidate-*             — pre-merge slots (candidate-a, candidate-b, ...).
@@ -41,7 +41,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$DEPLOY_ENV" ]]; then
-  echo "Usage: provision-test-vm.sh <preview|production|candidate-*> [--yes]"
+  echo "Usage: provision-env-vm.sh <preview|production|candidate-*> [--yes]"
   echo ""
   echo "  preview       — preview.cognidao.org"
   echo "  production    — cognidao.org"
@@ -134,7 +134,7 @@ GH_REPO=$(git -C "$REPO_ROOT" remote get-url origin \
   | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1#')
 if [[ -z "$GH_REPO" || "$GH_REPO" =~ ^Cogni-DAO/(cogni|node-template)$ ]]; then
   log_error "origin points at the upstream template ($GH_REPO) or is undetectable."
-  log_error "provision-test-vm.sh must run inside a fork (the bootstrap pushes deploy state to origin)."
+  log_error "provision-env-vm.sh must run inside a fork (the bootstrap pushes deploy state to origin)."
   exit 1
 fi
 log_info "Fork repo: $GH_REPO"
@@ -448,6 +448,52 @@ fi
 # issue until the hourly window resets. See .claude/skills/dns-ops/SKILL.md.
 
 # ══════════════════════════════════════════════════════════════
+# Phase 4b.5: Seed missing deploy/* branches in the fork from main
+# ══════════════════════════════════════════════════════════════
+# B1 (deploy machinery) — node-template ships only `main`; per-node
+# deploy branches don't exist until first promote-and-deploy run. But
+# Phase 4c (env-state push) AND the AppSet generators (Phase 7) both
+# need them present. Seed from main's HEAD SHA via `gh api /git/refs`
+# when missing. Idempotent: existing branches are left alone. Requires
+# GITHUB_ADMIN_PAT (set by bootstrap.sh) — exported as GH_TOKEN.
+log_step "Phase 4b.5: Seed deploy/* branches in fork (idempotent)"
+
+# bootstrap.sh writes GHCR_DEPLOY_TOKEN=GITHUB_ADMIN_PAT into .env.operator;
+# this script reads it as GHCR_TOKEN. Use whichever the caller set.
+SEED_TOKEN="${GITHUB_ADMIN_PAT:-${GHCR_TOKEN:-${GHCR_DEPLOY_TOKEN:-}}}"
+if [[ -n "$SEED_TOKEN" ]]; then
+  export GH_TOKEN="$SEED_TOKEN"
+  MAIN_SHA=$(gh api "repos/${GH_REPO}/branches/main" --jq '.commit.sha' 2>/dev/null || echo "")
+  if [[ -z "$MAIN_SHA" ]]; then
+    log_error "Could not read main's HEAD SHA from ${GH_REPO} (gh api auth issue?)."
+    exit 1
+  fi
+  # Per-node branches (consumed by AppSet generators in Phase 7) + the
+  # aggregate deploy/<env> branch (consumed by Phase 4c env-state writes).
+  BRANCHES_TO_SEED=("deploy/${DEPLOY_ENV}")
+  for node in "${NODE_TARGETS[@]}"; do
+    BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${node}")
+  done
+  for ref in "${BRANCHES_TO_SEED[@]}"; do
+    if gh api "repos/${GH_REPO}/branches/${ref}" >/dev/null 2>&1; then
+      log_info "  ${ref} — already exists"
+      continue
+    fi
+    if gh api -X POST "repos/${GH_REPO}/git/refs" \
+        -f "ref=refs/heads/${ref}" \
+        -f "sha=${MAIN_SHA}" >/dev/null 2>&1; then
+      log_info "  ${ref} — seeded from main (${MAIN_SHA:0:8})"
+    else
+      log_error "  ${ref} — FAILED to seed (check PAT push permission)"
+      exit 1
+    fi
+  done
+else
+  log_warn "No GitHub PAT in env (GITHUB_ADMIN_PAT/GHCR_TOKEN) — skipping branch-seed."
+  log_warn "Phase 4c will fail if deploy/${DEPLOY_ENV} doesn't already exist on the fork."
+fi
+
+# ══════════════════════════════════════════════════════════════
 # Phase 4c: Patch EndpointSlice IPs on deploy branch
 # ══════════════════════════════════════════════════════════════
 log_step "Phase 4c: Patch EndpointSlice IPs to $VM_IP on $DEPLOY_BRANCH"
@@ -638,16 +684,19 @@ log_step "Phase 6: Create k8s secrets on cluster"
 ssh $SSH_OPTS root@"$VM_IP" "kubectl create namespace ${K8S_NAMESPACE} 2>/dev/null || true"
 
 # Node-app secrets — one per NODE_TARGETS entry (B2: discover from catalog,
-# don't hardcode operator|poly|resy). Each Deployment references
-# secretRef: ${node}-node-app-secrets. DB name normalises hyphens to
+# don't hardcode operator|poly|resy). v1 single-node-per-namespace convention:
+# secret is named `node-app-secrets` (matches base/node-app/deployment.yaml
+# secretRef without overlay namePrefix). DB name normalises hyphens to
 # underscores per postgres name rules.
+# Multi-node-per-namespace (future): adds overlay namePrefix ${node}- and
+# corresponding ${node}-node-app-secrets here. Out of scope for v1.
 for node in "${NODE_TARGETS[@]}"; do
   db_name="cogni_${node//-/_}"
 
   NODE_DB_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
   NODE_DB_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
 
-  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic ${node}-node-app-secrets \
+  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic node-app-secrets \
     --from-literal=DATABASE_URL='${NODE_DB_URL}' \
     --from-literal=DATABASE_SERVICE_URL='${NODE_DB_SERVICE_URL}' \
     --from-literal=AUTH_SECRET='${AUTH_SECRET}' \
@@ -664,7 +713,7 @@ for node in "${NODE_TARGETS[@]}"; do
     --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
     --from-literal=METRICS_TOKEN='${METRICS_TOKEN}' \
     --dry-run=client -o yaml | kubectl apply -f -"
-  log_info "  Created ${node}-node-app-secrets"
+  log_info "  Created node-app-secrets (node=${node}, db=${db_name})"
 done
 
 # Scheduler-worker secret
@@ -702,13 +751,12 @@ log_info "All k8s secrets created"
 # ══════════════════════════════════════════════════════════════
 log_step "Phase 7: Apply ApplicationSets (triggers Argo sync)"
 
-# Gate: verify prerequisites exist before enabling Argo sync
+# Gate: verify prerequisites exist before enabling Argo sync.
+# v1 single-node-per-namespace: one `node-app-secrets` per env namespace
+# (not one per NODE_TARGETS entry — see Phase 6 comment).
 ssh $SSH_OPTS root@"$VM_IP" "
-$(for node in "${NODE_TARGETS[@]}"; do
-    printf "  kubectl -n %s get secret %s-node-app-secrets >/dev/null || { echo 'FATAL: %s secrets missing'; exit 1; }\n" \
-      "${K8S_NAMESPACE}" "${node}" "${node}"
-  done)
-  kubectl -n ${K8S_NAMESPACE} get secret scheduler-worker-secrets >/dev/null || { echo 'FATAL: scheduler-worker secrets missing'; exit 1; }
+  kubectl -n ${K8S_NAMESPACE} get secret node-app-secrets >/dev/null || { echo 'FATAL: node-app-secrets missing'; exit 1; }
+  kubectl -n ${K8S_NAMESPACE} get secret scheduler-worker-secrets >/dev/null || { echo 'FATAL: scheduler-worker-secrets missing'; exit 1; }
   echo 'All prerequisite secrets verified'
 "
 
@@ -727,7 +775,17 @@ if [ ! -f "$APPSET_LOCAL" ]; then
   exit 1
 fi
 
-scp $SSH_OPTS "$APPSET_LOCAL" root@"$VM_IP":/tmp/appset.yaml
+# B1 (deploy machinery) — substitute repoURL to point at the FORK, not the
+# upstream. AppSet files commit with the canonical Cogni-DAO/node-template
+# URL; provision rewrites at apply time so Argo CD syncs from the fork's
+# own deploy/* branches. Idempotent for the canonical operator (no-op).
+APPSET_RENDERED=$(mktemp)
+trap 'rm -f "$APPSET_RENDERED"' EXIT
+sed -E "s#https://github\.com/[Cc]ogni-[Dd][Aa][Oo]/node-template\.git#https://github.com/${GH_REPO}.git#g" \
+  "$APPSET_LOCAL" > "$APPSET_RENDERED"
+log_info "AppSet repoURL substituted: → https://github.com/${GH_REPO}.git"
+
+scp $SSH_OPTS "$APPSET_RENDERED" root@"$VM_IP":/tmp/appset.yaml
 ssh $SSH_OPTS root@"$VM_IP" "
   kubectl apply -f /tmp/appset.yaml -n argocd
   rm -f /tmp/appset.yaml
