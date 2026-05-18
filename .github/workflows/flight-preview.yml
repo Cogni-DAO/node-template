@@ -68,6 +68,12 @@ jobs:
       status: ${{ steps.flight.outputs.status }}
       pr_number: ${{ steps.pr.outputs.pr_number }}
       head_sha: ${{ steps.pr.outputs.head_sha }}
+      # bug.5009 — emitted by scripts/ci/classify-pr-build-state.sh.
+      # Values: ready | zero-affected | missing | no-run.
+      # Drives the flight-skipped-zero-affected marker job so a CI/docs-only
+      # merge surfaces as a distinct skipped (grey) job rather than a
+      # misleading-red hard-fail or silent-green success.
+      build_state: ${{ steps.classify.outputs.state }}
     steps:
       - name: Checkout app source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -154,12 +160,42 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
           echo "Merged PR #${PR_NUMBER}: main SHA ${HEAD_SHA:0:8} (= queue commit), PR head SHA ${PR_HEAD_SHA:0:8}"
 
-      - name: Set up Docker Buildx
+      # bug.5009 — disambiguate the cause when no mq-{N}-{sha} images are in
+      # GHCR. CI/docs/script-only PRs skip cleanly (state=zero-affected);
+      # real bypass / build-fail cases still hard-fail loudly.
+      - name: Classify pr-build state for this merge SHA
+        id: classify
         if: steps.pr.outputs.skip != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+        run: bash scripts/ci/classify-pr-build-state.sh
+
+      - name: Skip flight when pr-build had zero affected targets
+        if: steps.pr.outputs.skip != 'true' && steps.classify.outputs.state == 'zero-affected'
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          REASON: ${{ steps.classify.outputs.classification_reason }}
+        run: |
+          echo "ℹ️  PR #${PR_NUMBER} (${HEAD_SHA:0:8}) had no affected build targets — nothing to promote to preview."
+          echo "    ${REASON}"
+          {
+            echo "## Flight Preview — Skipped (zero-affected)"
+            echo ""
+            echo "PR #${PR_NUMBER} merge commit \`${HEAD_SHA:0:8}\` had zero affected build targets. No mq-* images were produced, so there is nothing to re-tag as preview-${HEAD_SHA:0:8}. This is the expected outcome for CI / docs / script-only PRs."
+            echo ""
+            echo "Visible green marker: \`flight-skipped-zero-affected\`."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Set up Docker Buildx
+        if: steps.pr.outputs.skip != 'true' && steps.classify.outputs.state == 'ready'
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
-        if: steps.pr.outputs.skip != 'true'
+        if: steps.pr.outputs.skip != 'true' && steps.classify.outputs.state == 'ready'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -168,19 +204,33 @@ jobs:
 
       - name: Resolve PR image digests
         id: images
-        if: steps.pr.outputs.skip != 'true'
+        if: steps.pr.outputs.skip != 'true' && steps.classify.outputs.state == 'ready'
         env:
           IMAGE_TAG: ${{ steps.pr.outputs.image_tag }}
           OUTPUT_FILE: ${{ runner.temp }}/resolved-pr-images.json
         run: bash scripts/ci/resolve-pr-build-images.sh
 
-      - name: Hard-fail when no images found for resolved PR
-        if: steps.pr.outputs.skip != 'true' && steps.images.outputs.has_images != 'true'
+      # bug.5009 — hard-fail ONLY when pr-build was supposed to produce
+      # images and failed to (state=missing) or didn't run at all
+      # (state=no-run, admin-merge bypass). Zero-affected merges silent-skip
+      # via the dedicated job-level marker below; ready merges proceed normally.
+      - name: Hard-fail on missing-images or no-run (real bypass/build-fail)
+        if: |
+          steps.pr.outputs.skip != 'true' &&
+          (steps.classify.outputs.state == 'missing' || steps.classify.outputs.state == 'no-run')
         env:
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
+          STATE: ${{ steps.classify.outputs.state }}
+          REASON: ${{ steps.classify.outputs.classification_reason }}
         run: |
-          echo "::error::flight-preview resolved PR #${PR_NUMBER} (sha ${HEAD_SHA:0:8}) but no \`mq-${PR_NUMBER}-${HEAD_SHA}\` images exist in GHCR. Most likely cause: the PR was admin-merged (bypassed merge_group), so pr-build never rebuilt against the queue commit. Recovery: open a follow-up PR that touches the affected node's paths (e.g. nodes/<node>/app/) and merge via the GH merge queue — NOT admin-merge. The merge_group rebuild produces the mq-{N}-{queue-sha} images, and the auto-flight on the resulting push:main heals preview."
+          echo "::error::flight-preview cannot promote PR #${PR_NUMBER} (sha ${HEAD_SHA:0:8}): pr-build state is ${STATE}."
+          echo "::error::${REASON}"
+          if [ "$STATE" = "no-run" ]; then
+            echo "::error::No merge_group pr-build run for ${HEAD_SHA:0:8}. Most likely cause: the PR was admin-merged (bypassed merge_group), so pr-build never rebuilt against the queue commit. Recovery: open a follow-up PR that touches the affected node's paths (e.g. nodes/<node>/app/) and merge via the GH merge queue — NOT admin-merge."
+          else
+            echo "::error::pr-build's build matrix did not succeed for ${HEAD_SHA:0:8}. Inspect the pr-build run linked in the reason above; re-run failed legs or open a follow-up PR."
+          fi
           exit 1
 
       # Re-tag only the images that were actually built (affected-only CI may skip services).
@@ -188,7 +238,10 @@ jobs:
       # Source tag is mq-{N}-{HEAD_SHA} (pr-build merge_group output, bug.0412);
       # destination is preview-{HEAD_SHA} so promote-and-deploy can look it up.
       - name: Re-tag merge_group images as preview-{sha} in GHCR
-        if: steps.pr.outputs.skip != 'true' && steps.images.outputs.has_images == 'true'
+        if: |
+          steps.pr.outputs.skip != 'true' &&
+          steps.classify.outputs.state == 'ready' &&
+          steps.images.outputs.has_images == 'true'
         env:
           PR_IMAGE_TAG: ${{ steps.pr.outputs.image_tag }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
@@ -226,7 +279,7 @@ jobs:
       # this workflow. Exit 0 = dispatched, 1 = error, 2 = queued.
       - name: Flight to preview (lock-gate aware)
         id: flight
-        if: steps.pr.outputs.skip != 'true'
+        if: steps.pr.outputs.skip != 'true' && steps.classify.outputs.state == 'ready'
         env:
           GH_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
           HEAD_SHA: ${{ steps.pr.outputs.head_sha }}
@@ -269,6 +322,26 @@ jobs:
         with:
           name: preview-flight-outcome
           path: preview-flight-outcome.txt
+
+  # bug.5009 — visible green marker for CI/docs/script-only merges that
+  # legitimately had no images to promote. Per Axiom 11, modeled as a
+  # job-level gate so it surfaces as a distinct check in the list (not as
+  # a silent-skipped step buried in `flight`). Operators reading the checks
+  # see explicit "zero-affected" rather than a missing preview-dispatched
+  # marker (which would look identical to a queued/contended preview).
+  flight-skipped-zero-affected:
+    needs: flight
+    if: needs.flight.outputs.build_state == 'zero-affected'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preview flight skipped — zero affected build targets
+        env:
+          PR_NUMBER: ${{ needs.flight.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.flight.outputs.head_sha }}
+        run: |
+          echo "✅ PR #${PR_NUMBER} (${HEAD_SHA:0:8}) merged a CI/docs/script-only change."
+          echo "   pr-build emitted zero affected targets → no mq-* images to re-tag → preview promote is a true no-op."
+          echo "   This is the expected outcome, not a failure."
 
   # Visible check: green only when promote-and-deploy was actually dispatched
   # (lease unlocked). Skipped (grey) when preview was queue-only — distinct
