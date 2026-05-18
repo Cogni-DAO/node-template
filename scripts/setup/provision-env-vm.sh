@@ -494,11 +494,10 @@ if [[ -n "$SEED_TOKEN" ]]; then
     log_error "Could not read main's HEAD SHA from ${GH_REPO} (gh api auth issue?)."
     exit 1
   fi
-  # Per-node branches (consumed by AppSet generators in Phase 7) + the
-  # aggregate deploy/<env> branch (consumed by Phase 4c env-state writes).
+  # AppSet template generates one Application per catalog entry, not per node.
   BRANCHES_TO_SEED=("deploy/${DEPLOY_ENV}")
-  for node in "${NODE_TARGETS[@]}"; do
-    BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${node}")
+  for target in "${ALL_TARGETS[@]}"; do
+    BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${target}")
   done
   for ref in "${BRANCHES_TO_SEED[@]}"; do
     if gh api "repos/${GH_REPO}/branches/${ref}" >/dev/null 2>&1; then
@@ -701,6 +700,7 @@ APP_IMAGE=placeholder:not-started
 APP_BASE_URL=https://${DOMAIN}
 COGNI_REPO_URL=${COGNI_REPO_URL}
 COGNI_REPO_REF=${COGNI_REPO_REF}
+LITELLM_IMAGE=cogni-litellm:latest
 ENVEOF"
 
 # Start services

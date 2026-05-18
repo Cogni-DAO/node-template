@@ -10,8 +10,14 @@
 #
 # Spec: docs/spec/agentic-fork-bootstrap.md §Fork Identity.
 #
-# Forking checklist (the canonical pre-bootstrap edit for any new fork):
-#   1. Change `domain.root` below to a Cloudflare zone you own.
+# REQUIRED EDIT before bootstrap. The committed value is intentionally
+# empty — node-template is a template, not a deployment. The upstream
+# (Cogni-DAO/node-template) ships no default zone because no fork should
+# inherit any other fork's zone as its starting point. bootstrap.sh and
+# provision-env-vm.sh both validate this is non-empty and abort if not.
+#
+# Forking checklist:
+#   1. Set `domain.root` below to a Cloudflare zone YOU own.
 #   2. Commit. That's it — every URL rederives.
 #
 # DO NOT add per-node concerns here (image tags, deploy branches, ports).
@@ -24,4 +30,4 @@ domain:
   # `https://<catalog-prefix>.<root>` (or `https://<root>` if catalog
   # prefix is empty, e.g. production at the apex). Must match the zone
   # named by .env.bootstrap::CLOUDFLARE_ZONE_ID.
-  root: cognidao.org
+  root: "" # ← set me
