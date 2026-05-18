@@ -50,6 +50,23 @@ When the doc tells you to "tell the human X", you must render the literal
 template provided. Don't paraphrase — paraphrasing is how you grow from 3
 lines to 30.
 
+### Auth principle (binding for every git/gh action)
+
+Your only authority is `$GH_TOKEN` (the bot PAT). Every command you run
+must succeed using **just that token**. You operate **only** on resources
+the bot owns.
+
+- Before any git/gh action, verify the resource belongs to the bot.
+  If `cwd` is already a git repo, `git remote get-url origin` must point
+  to the bot's account. Wrong owner = **STOP**, not "reuse".
+- On 403 / permission errors, the human has a setup gap. Surface it
+  (one URL + one copy/paste line, per the comms contract). **Never**
+  borrow other auth — keychain, browser, the human's shell, the human's
+  `gh` session, nothing.
+- A step the doc assigns to "the human" is the human's to do. Even if
+  you could technically execute it via local creds, doing so collapses
+  the contract this runbook exists to test.
+
 ### Steps
 
 0. IDENTITY GATE — confirm you are the bot, not the human.
@@ -63,10 +80,6 @@ lines to 30.
      Then in a new terminal: `cd <PWD> && GH_TOKEN=<paste-pat> claude` and repaste the one-sentence prompt.
      ```
 
-   - Background (do NOT explain this to the human unless asked): per Agent
-     Rule A2 (docs/spec/agentic-fork-bootstrap.md §GitHub Admin Role), the
-     PAT in `GH_TOKEN` IS the auth. Do NOT run `gh auth login --web` — it
-     overwrites with a keychain entry under whatever human is at the browser.
    - Once `gh api user --jq .login` returns the bot, continue silently.
 
 1. PREREQS — auto-install, do not ask. Tools: gh, pnpm, tofu, age, jq, yq.
@@ -78,10 +91,8 @@ lines to 30.
      bash scripts/bootstrap/install/install-ripgrep.sh
      For tools without a wrapper (gh, age, jq, openssl, curl), use
      brew/apt on the appropriate platform.
-   - `gh auth status` must already show you as the bot (from Step 0's
-     `GH_TOKEN`). Do NOT run `gh auth login --web` — that overwrites the
-     PAT with a keychain entry under whatever human happens to be at
-     the browser. Per Agent Rule A2, `GH_TOKEN=<pat>` IS the auth.
+   - `gh auth status` must show the bot from Step 0's `GH_TOKEN`. (Auth
+     details are in the Auth principle above — don't deviate from them.)
 
 2. FORK + CLONE — pick a default, do not ask.
    - USER=$(gh api user --jq .login)
