@@ -107,6 +107,16 @@ unrecoverable blocker (auth rejected, quota exceeded, account suspended).
   clear "the following sections are still blank: ..." if you detect any.
 - Do NOT escalate transient failures (rate-limit, network blip) without
   at least one retry.
+- Do NOT delete any account-scoped infra resource (Cherry SSH keys,
+  Cloudflare zones, GitHub org secrets, etc.) without first enumerating
+  EVERY reference across EVERY project on the account. Account-scoped
+  resources are NOT project-scoped — a key that looks orphaned in one
+  project can be load-bearing for a VM in a sibling project. A v0
+  canary did exactly this and took down production CI/CD.
+- Do NOT resolve "tofu apply: resource already exists" by deleting the
+  conflicting resource. The script's idempotency contract is for
+  resources the script owns; cross-system collisions are out-of-contract.
+  STOP and surface the conflict to the operator.
 
 # Reference (in the cloned repo)
 
