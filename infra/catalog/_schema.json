@@ -42,6 +42,12 @@
       "minimum": 1,
       "maximum": 65535
     },
+    "node_port": {
+      "type": "integer",
+      "minimum": 30000,
+      "maximum": 32767,
+      "description": "K8s NodePort exposed for Compose→k8s gateway access (LiteLLM billing-ingest, edge Caddy upstream). Read by provision-env-vm.sh (COGNI_NODE_ENDPOINTS) + per-env overlay Service patches. Optional — node-type only."
+    },
     "node_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",

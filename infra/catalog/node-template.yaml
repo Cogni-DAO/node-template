@@ -1,6 +1,11 @@
 name: node-template
 type: node
 port: 3200
+# K8s NodePort exposed for Compose→k8s gateway access (LiteLLM billing
+# callbacks via host.docker.internal:${node_port}). Read by both
+# provision-env-vm.sh (writes COGNI_NODE_ENDPOINTS) and the per-env overlay
+# Service patch. Keep these two consumers in sync.
+node_port: 30000
 node_id: "00000000-0000-4000-a000-000000000000"
 dockerfile: nodes/node-template/app/Dockerfile
 image_tag_suffix: "-node-template"

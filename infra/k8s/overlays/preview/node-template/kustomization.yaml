@@ -22,9 +22,16 @@ images:
     newTag: "preview-placeholder-node-template"
 
 patches:
-  # NodePort 30000 for Caddy → app routing on the VM.
+  # NodePort for Caddy → app + LiteLLM billing-ingest routing on the VM.
+  # MUST match infra/catalog/node-template.yaml::node_port. Kustomize can't
+  # interpolate from another YAML; v1 keeps the value duplicated with this
+  # comment as the lint. If multi-node forks add a 2nd node, add its overlay
+  # here with its own port (catalog declares the canonical value).
   - target: { kind: Service, name: node-app }
     patch: |
+      - op: add
+        path: /spec/ports/0/nodePort
+        value: 30000|
       - op: add
         path: /spec/ports/0/nodePort
         value: 30000

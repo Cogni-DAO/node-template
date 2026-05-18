@@ -276,9 +276,23 @@ POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
 COGNI_REPO_URL="https://github.com/${GH_REPO}.git"
 COGNI_REPO_REF="$BRANCH"
 
-# LiteLLM node endpoints — billing callback routing (Compose→k8s NodePorts via host gateway)
-# Format: nodeId=billingIngestUrl (one per node)
-COGNI_NODE_ENDPOINTS="4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://host.docker.internal:30000/api/internal/billing/ingest,5ed2d64f-2745-4676-983b-2fb7e05b2eba=http://host.docker.internal:30100/api/internal/billing/ingest,f6d2a17d-b7f6-4ad1-a86b-f0ad2380999e=http://host.docker.internal:30300/api/internal/billing/ingest"
+# LiteLLM node endpoints — billing callback routing (Compose→k8s NodePorts
+# via the host gateway). B2 (residual): derive from NODE_TARGETS catalogs
+# instead of hardcoding cogni-poly's three UUIDs (which the canary inherited
+# and would have silently dropped node-template's billing events).
+# Format: <key>=<billing-ingest-url>,... — both `name` and `node_id` are
+# included as keys to match the scheduler-worker ConfigMap convention
+# (services/scheduler-worker resolves either form).
+COGNI_NODE_ENDPOINTS_PARTS=()
+for node in "${NODE_TARGETS[@]}"; do
+  nid=$(yq -N '.node_id // ""' "$REPO_ROOT/infra/catalog/${node}.yaml")
+  np=$(yq  -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/${node}.yaml")
+  url="http://host.docker.internal:${np}/api/internal/billing/ingest"
+  COGNI_NODE_ENDPOINTS_PARTS+=("${node}=${url}")
+  [[ -n "$nid" && "$nid" != "null" ]] && COGNI_NODE_ENDPOINTS_PARTS+=("${nid}=${url}")
+done
+COGNI_NODE_ENDPOINTS=$(IFS=,; printf '%s' "${COGNI_NODE_ENDPOINTS_PARTS[*]}")
+log_info "COGNI_NODE_ENDPOINTS (derived from catalog): ${COGNI_NODE_ENDPOINTS}"
 
 # DATABASE_URLs (constructed from parts — same derivation as setup-secrets.ts)
 # DATABASE_URLs use VM_IP placeholder — replaced after Phase 3 when IP is known.
