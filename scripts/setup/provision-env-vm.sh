@@ -547,18 +547,31 @@ data:
 EOF
 done
 
-# B2 (overlays) — overlays reference <env>.vm.cognidao.org as the ExternalName
-# host for pod→host service discovery (postgres, temporal, litellm, doltgres,
-# redis). For forks on a different domain root, rewrite to <env>.vm.<root>.
-# Same fix pattern as the AppSet repoURL substitution at Phase 7; here it's
-# written into the deploy branch (where Argo CD reads from) instead of
-# stamped at apply time.
+# B2 (overlays) — the shared _template/ overlay and per-env wrappers
+# reference `vm.cognidao.org` as the ExternalName placeholder for pod→host
+# service discovery (postgres, temporal, litellm, doltgres, redis).
+# For forks on a different domain root, rewrite to `vm.<root>` and also
+# prefix with the env (e.g. `candidate-a.vm.<root>`).
+# Sed walks both the per-env wrapper AND the shared _template (each deploy
+# branch is per-env, so substituting _template doesn't race with siblings).
 FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
-if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" && "$FORK_ROOT" != "cognidao.org" ]]; then
-  log_info "Rewriting overlay vm.cognidao.org references → vm.${FORK_ROOT}"
-  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" -name "kustomization.yaml" -print0 \
-    | xargs -0 sed -i.bak -E "s/\.vm\.cognidao\.org/.vm.${FORK_ROOT}/g"
-  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" -name "*.bak" -delete
+if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" ]]; then
+  # Determine env-specific VM host prefix (production = apex, no prefix)
+  case "$DEPLOY_ENV" in
+    production)   VM_HOST="vm.${FORK_ROOT}" ;;
+    *)            VM_HOST="${DEPLOY_ENV}.vm.${FORK_ROOT}" ;;
+  esac
+  log_info "Rewriting overlay vm.cognidao.org → ${VM_HOST}"
+  # Rewrite both the per-env wrapper directory AND the shared _template.
+  # _template lives at overlays/_template/ — each deploy branch has its own
+  # copy, so per-env substitutions don't conflict across branches.
+  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" \
+       "$DEPLOY_TMP/infra/k8s/overlays/_template" \
+       -name "kustomization.yaml" -print0 2>/dev/null \
+    | xargs -0 sed -i.bak -E "s/vm\.cognidao\.org/${VM_HOST}/g"
+  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" \
+       "$DEPLOY_TMP/infra/k8s/overlays/_template" \
+       -name "*.bak" -delete 2>/dev/null || true
 fi
 
 cd "$DEPLOY_TMP"
