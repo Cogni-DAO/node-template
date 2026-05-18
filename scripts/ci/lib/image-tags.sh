@@ -81,7 +81,11 @@ public_url_for_target() {
   [ "$prefix" = "null" ] && prefix=""
 
   root=$(yq -N '.domain.root // ""' "${_image_tags_repo_root}/infra/fork.yaml" 2>/dev/null)
-  [ -z "$root" ] || [ "$root" = "null" ] && return 0  # No fork.yaml → no URL
+  # bash precedence: must use explicit `if`, not `A || B && return`. The
+  # short-circuit `||` would skip the `return 0` when A is true.
+  if [ -z "$root" ] || [ "$root" = "null" ]; then
+    return 0
+  fi
 
   if [ -n "$prefix" ]; then
     printf 'https://%s.%s' "$prefix" "$root"

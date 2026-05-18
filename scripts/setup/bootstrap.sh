@@ -115,6 +115,20 @@ if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
 fi
 log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (from infra/fork.yaml)"
 
+# Derive DOMAIN from FORK_ROOT + DEPLOY_ENV using the same convention as
+# provision-env-vm.sh. Single source (fork.yaml.root), two consumers
+# (bootstrap.sh writes secrets here; provision-env-vm.sh re-derives the
+# same value). Both compute the same answer — no drift risk because the
+# convention is shared.
+case "$DEPLOY_ENV" in
+  production)   DOMAIN="$FORK_ROOT" ;;
+  preview)      DOMAIN="preview.$FORK_ROOT" ;;
+  candidate-a)  DOMAIN="test.$FORK_ROOT" ;;
+  candidate-*)  DOMAIN="${DEPLOY_ENV}.$FORK_ROOT" ;;
+  *)            err "Unsupported DEPLOY_ENV: $DEPLOY_ENV"; exit 2 ;;
+esac
+log "Derived DOMAIN: ${BOLD}${DOMAIN}${NC} (for $DEPLOY_ENV)"
+
 # Installer hints reference scripts/bootstrap/install/install-<tool>.sh
 # instead of brew/apt — these are the canonical wrappers for this repo and
 # handle platform differences (don't reinvent the wheel).
