@@ -59,7 +59,7 @@ lines to 30.
 
      ```
      🛑 I need my own GitHub identity to continue.
-     Mint a PAT here (signed in as your bot account, NOT you): https://github.com/settings/tokens/new?scopes=repo,workflow,admin:org,admin:public_key,write:packages&description=cogni-fork-bootstrap
+     Mint a PAT here (signed in as your bot account, NOT you): https://github.com/settings/tokens/new?scopes=repo,workflow,admin:repo_hook&description=cogni-fork-bootstrap
      Then in a new terminal: `cd <PWD> && GH_TOKEN=<paste-pat> claude` and repaste the one-sentence prompt.
      ```
 
