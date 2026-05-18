@@ -277,6 +277,31 @@ repos/$USER/<name>` + `.parent.full_name` inspection) and a defaulted
 alternate name (`cogni-node-$(date +%Y%m%d)`) instead of accepting the
 suffix.
 
+**A5 — Never delete account-scoped infra without enumerating ALL
+references across ALL projects.** A v0 canary recovery attempt deleted a
+Cherry SSH key that looked orphaned in its project but was load-bearing
+for a VM in a sibling project on the same Cherry account. **Cherry SSH
+keys are account-scoped, not project-scoped.** Same applies to any
+account-scoped resource (DNS zones, Cloudflare API tokens, GitHub
+organization secrets). Before deletion: enumerate every consumer across
+every project on the account, dump each consumer's references, confirm
+none touch the target. "Project X has zero references" is _necessary
+but not sufficient_. Code-side belt-and-suspenders: this PR also
+namespaces SSH-key labels per-fork (`<gh-repo-slug>-<env>-deploy`) so
+the collision class doesn't recur.
+
+**A6 — When a script's own idempotency assumption fails, STOP and ask.**
+The canary's `tofu apply` expected to create a Cherry SSH key that
+already existed; the agent's instinct was to delete the conflict and
+retry. **That's the wrong instinct.** If the resource lives outside the
+directory tree of the current run (Cherry account, Cloudflare zone,
+GitHub org), the conflicting resource probably belongs to someone or
+something else — deleting it can take down production. Correct move:
+abort, surface the conflict to the operator, let them decide whether
+to delete or to rename the inbound resource. The script's idempotency
+contract is _for resources the script owns_; cross-system collisions
+are out-of-contract.
+
 ## GitHub Admin Role — The Non-Obvious Prerequisite
 
 Scope alone is insufficient. To mint env-scoped secrets via API, the PAT user
