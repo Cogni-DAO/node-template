@@ -586,6 +586,29 @@ if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" ]]; then
        -name "*.bak" -delete 2>/dev/null || true
 fi
 
+# Image-pull fallback (next failure cliff after vm.* rewrite) — fresh forks
+# have nothing on their own GHCR namespace yet. Substitute the overlay's
+# `<env>-placeholder-<target>` newTag with the catalog's bootstrap_image_tag,
+# which points at a known-good upstream pr-* image. First canary pulls
+# upstream's code; argocd-image-updater swaps to the fork's own pr-* tags
+# after its first push-to-main publishes them.
+log_info "Rewriting overlay newTag → catalog bootstrap_image_tag"
+for target in "${ALL_TARGETS[@]}"; do
+  catalog_file="$REPO_ROOT/infra/catalog/${target}.yaml"
+  boot_tag=$(yq -N '.bootstrap_image_tag // ""' "$catalog_file" 2>/dev/null)
+  if [[ -z "$boot_tag" || "$boot_tag" == "null" ]]; then
+    log_warn "  ${target} — no bootstrap_image_tag in catalog; first deploy may ImagePullBackOff"
+    continue
+  fi
+  overlay_file="$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}/${target}/kustomization.yaml"
+  [[ -f "$overlay_file" ]] || continue
+  # Pattern: newTag: "<env>-placeholder-<target>" → newTag: "<boot_tag>"
+  sed -i.bak -E "s|newTag: \"${OVERLAY_DIR}-placeholder-${target}\"|newTag: \"${boot_tag}\"|g" \
+    "$overlay_file"
+  rm -f "${overlay_file}.bak"
+  log_info "  ${target} → ${boot_tag}"
+done
+
 cd "$DEPLOY_TMP"
 git config user.name "provision-script"
 git config user.email "provision@cogni.dev"
