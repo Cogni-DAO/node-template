@@ -3,7 +3,7 @@ id: fork-quickstart-runbook
 type: runbook
 title: Fork Quickstart — From Zero to Green Deploy
 status: draft
-summary: The copy/paste prompt that hands a fresh AI agent autonomous control of a node-template fork provisioning. The human's role is bounded to clicking Fork, pasting the prompt, and filling 5 token values in an editor. Companion to docs/spec/agentic-fork-bootstrap.md.
+summary: The one-sentence hand-off plus the agent guide it points at — together they hand a fresh AI agent autonomous control of a node-template fork provisioning. The human's role is bounded to creating a bot GitHub account + PAT, pasting one sentence, and filling 5 token values in an editor. Companion to docs/spec/agentic-fork-bootstrap.md.
 read_when: A new user wants their own node-template instance; an external agent is dropped in cold and needs the canonical zero-state instructions.
 owner: derekg1729
 created: 2026-05-17
