@@ -1,0 +1,27 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# infra/fork.yaml — Fork-identity SSOT.
+#
+# Single source of truth for what's TRULY fork-level (not node-level or
+# repo-level). Today, that's just the Cloudflare zone the operator owns;
+# every public URL composes from this root plus the per-node subdomain
+# prefix declared in infra/catalog/<node>.yaml::public_url.
+#
+# Spec: docs/spec/agentic-fork-bootstrap.md §Fork Identity.
+#
+# Forking checklist (the canonical pre-bootstrap edit for any new fork):
+#   1. Change `domain.root` below to a Cloudflare zone you own.
+#   2. Commit. That's it — every URL rederives.
+#
+# DO NOT add per-node concerns here (image tags, deploy branches, ports).
+# Those belong in infra/catalog/<node>.yaml.
+
+schema_version: 1
+
+domain:
+  # The Cloudflare zone the operator owns. Public URLs compose as
+  # `https://<catalog-prefix>.<root>` (or `https://<root>` if catalog
+  # prefix is empty, e.g. production at the apex). Must match the zone
+  # named by .env.bootstrap::CLOUDFLARE_ZONE_ID.
+  root: cognidao.org

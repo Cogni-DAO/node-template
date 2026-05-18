@@ -10,7 +10,7 @@
 #   TEMPORAL_NAMESPACE=cogni-preview TEMPORAL_CONTAINER=cogni-runtime-temporal-1 \
 #     bash scripts/ci/ensure-temporal-namespace.sh
 #
-# Usage (from deploy-infra.sh or provision-test-vm.sh — already on VM):
+# Usage (from deploy-infra.sh or provision-env-vm.sh — already on VM):
 #   TEMPORAL_NAMESPACE=cogni-preview ensure_temporal_namespace
 #
 # Env:

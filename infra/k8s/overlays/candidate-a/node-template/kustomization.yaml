@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# Thin per-env wrapper. All shared structure lives in
+# ../../_template/node-template/. This file declares ONLY the env-specific
+# parts: namespace, image tag, TEMPORAL_NAMESPACE.
+#
+# ExternalName host (`vm.cognidao.org`) inherits from the shared template;
+# provision-env-vm.sh Phase 4c sed-rewrites to `<env>.vm.<fork.yaml.root>`
+# on the deploy branch before Argo CD picks it up.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: cogni-candidate-a
+
+resources:
+  - ../../_template/node-template
+
+images:
+  - name: ghcr.io/cogni-dao/cogni-node-template
+    newName: ghcr.io/cogni-dao/cogni-node-template
+    newTag: "candidate-a-placeholder-node-template"
+
+patches:
+  - target:
+      kind: ConfigMap
+      name: node-app-config
+    patch: |
+      - op: replace
+        path: /data/TEMPORAL_NAMESPACE
+        value: "cogni-candidate-a"

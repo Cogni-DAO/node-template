@@ -2,16 +2,16 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# Script: scripts/setup/provision-test-vm.sh
+# Script: scripts/setup/provision-env-vm.sh
 # Purpose: One-command VM provisioning + infra deployment + scorecard.
 #          Generates ALL secrets (same generators as setup-secrets.ts), provisions
 #          via OpenTofu, deploys Compose infra, verifies k3s + Argo CD.
 # Usage:
-#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-test-vm.sh preview
-#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-test-vm.sh production
+#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-env-vm.sh preview
+#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-env-vm.sh production
 #   CHERRY_AUTH_TOKEN=<token> DOMAIN=test.cognidao.org \
-#     bash scripts/setup/provision-test-vm.sh candidate-a
-#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-test-vm.sh candidate-b
+#     bash scripts/setup/provision-env-vm.sh candidate-a
+#   CHERRY_AUTH_TOKEN=<token> bash scripts/setup/provision-env-vm.sh candidate-b
 # Environments:
 #   preview, production     — long-lived post-merge lanes
 #   candidate-*             — pre-merge slots (candidate-a, candidate-b, ...).
@@ -41,7 +41,7 @@ for arg in "$@"; do
 done
 
 if [[ -z "$DEPLOY_ENV" ]]; then
-  echo "Usage: provision-test-vm.sh <preview|production|candidate-*> [--yes]"
+  echo "Usage: provision-env-vm.sh <preview|production|candidate-*> [--yes]"
   echo ""
   echo "  preview       — preview.cognidao.org"
   echo "  production    — cognidao.org"
@@ -52,46 +52,26 @@ if [[ -z "$DEPLOY_ENV" ]]; then
 fi
 
 case "$DEPLOY_ENV" in
-  preview)
+  preview|production)
     BRANCH="main"
-    DEPLOY_BRANCH="deploy/preview"
-    K8S_NAMESPACE="cogni-preview"
-    OVERLAY_DIR="preview"
-    APPSET_FILE="preview-applicationset.yaml"
-    DOMAIN="${DOMAIN:-preview.cognidao.org}"
-    POLY_DOMAIN="${POLY_DOMAIN:-poly-preview.cognidao.org}"
-    RESY_DOMAIN="${RESY_DOMAIN:-resy-preview.cognidao.org}"
-    WORKSPACE="preview"
-    ;;
-  production)
-    BRANCH="main"
-    DEPLOY_BRANCH="deploy/production"
-    K8S_NAMESPACE="cogni-production"
-    OVERLAY_DIR="production"
-    APPSET_FILE="production-applicationset.yaml"
-    DOMAIN="${DOMAIN:-cognidao.org}"
-    POLY_DOMAIN="${POLY_DOMAIN:-poly.cognidao.org}"
-    RESY_DOMAIN="${RESY_DOMAIN:-resy.cognidao.org}"
-    WORKSPACE="production"
+    DEPLOY_BRANCH="deploy/${DEPLOY_ENV}"
+    K8S_NAMESPACE="cogni-${DEPLOY_ENV}"
+    OVERLAY_DIR="${DEPLOY_ENV}"
+    APPSET_FILE="${DEPLOY_ENV}-applicationset.yaml"
+    WORKSPACE="${DEPLOY_ENV}"
     ;;
   candidate-*)
     # Pre-merge candidate slots. All fields derive from ${DEPLOY_ENV} so
     # spinning up candidate-b, candidate-c, ... only needs (1) a matching
-    # infra/k8s/argocd/${slot}-applicationset.yaml, (2) a matching
-    # infra/k8s/overlays/${slot}/ overlay tree, and (3) DNS. No edits
-    # here. candidate-a historically inherited test.cognidao.org from the
-    # retired canary env — pass DOMAIN=test.cognidao.org when provisioning
-    # candidate-a to preserve that; other candidates default to
-    # ${slot}.cognidao.org.
+    # infra/k8s/argocd/${slot}-applicationset.yaml and (2) a matching
+    # infra/k8s/overlays/${slot}/ overlay tree. DNS + DOMAIN come from
+    # infra/fork.yaml::domain.root composed with the convention below.
     SLOT="$DEPLOY_ENV"
     BRANCH="main"
     DEPLOY_BRANCH="deploy/${SLOT}"
     K8S_NAMESPACE="cogni-${SLOT}"
     OVERLAY_DIR="${SLOT}"
     APPSET_FILE="${SLOT}-applicationset.yaml"
-    DOMAIN="${DOMAIN:-${SLOT}.cognidao.org}"
-    POLY_DOMAIN="${POLY_DOMAIN:-poly-${SLOT}.cognidao.org}"
-    RESY_DOMAIN="${RESY_DOMAIN:-resy-${SLOT}.cognidao.org}"
     WORKSPACE="${SLOT}"
     ;;
   *)
@@ -101,6 +81,26 @@ case "$DEPLOY_ENV" in
     exit 1
     ;;
 esac
+
+# DOMAIN derives from infra/fork.yaml::domain.root if not explicitly overridden.
+# Convention: candidate-a → test.<root>, preview → preview.<root>,
+# production → <root> (apex), candidate-* → <slot>.<root>.
+# Forks change one line — fork.yaml::domain.root — and every URL rederives.
+# (B2 + P5 — replaces POLY_DOMAIN/RESY_DOMAIN hardcodes.)
+if [ -z "${DOMAIN:-}" ]; then
+  FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
+  if [ -z "$FORK_ROOT" ] || [ "$FORK_ROOT" = "null" ]; then
+    echo "[ERROR] DOMAIN unset and infra/fork.yaml::domain.root missing or empty." >&2
+    echo "[ERROR] Edit infra/fork.yaml to set the Cloudflare zone you own, or export DOMAIN=." >&2
+    exit 1
+  fi
+  case "$DEPLOY_ENV" in
+    production)   DOMAIN="$FORK_ROOT" ;;
+    preview)      DOMAIN="preview.$FORK_ROOT" ;;
+    candidate-a)  DOMAIN="test.$FORK_ROOT" ;;
+    candidate-*)  DOMAIN="${DEPLOY_ENV}.$FORK_ROOT" ;;
+  esac
+fi
 
 # Allow branch override (e.g., testing a feature branch on preview infra)
 BRANCH="${COGNI_REPO_REF:-$BRANCH}"
@@ -117,12 +117,28 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 log_step() { echo -e "${CYAN}[STEP]${NC} $1"; }
 
 # ── Prerequisites ──────────────────────────────────────────
-for cmd in tofu ssh-keygen age-keygen openssl; do
+for cmd in tofu ssh-keygen age-keygen openssl yq git; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
-    log_error "Required: $cmd not found. Install it first."
+    log_error "Required: $cmd not found. Install it first (see scripts/bootstrap/install/)."
     exit 1
   fi
 done
+
+# Fork identity (B1 + B2). Source the catalog library to get NODE_TARGETS,
+# then derive the fork's repo coordinates from origin. Both replace the
+# Cogni-DAO/cogni + operator|poly|resy hardcodes the canary tripped on.
+# shellcheck source=../ci/lib/image-tags.sh
+. "$REPO_ROOT/scripts/ci/lib/image-tags.sh"
+
+GH_REPO=$(git -C "$REPO_ROOT" remote get-url origin \
+  | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1#')
+if [[ -z "$GH_REPO" || "$GH_REPO" =~ ^Cogni-DAO/(cogni|node-template)$ ]]; then
+  log_error "origin points at the upstream template ($GH_REPO) or is undetectable."
+  log_error "provision-env-vm.sh must run inside a fork (the bootstrap pushes deploy state to origin)."
+  exit 1
+fi
+log_info "Fork repo: $GH_REPO"
+log_info "Nodes:     ${NODE_TARGETS[*]}"
 
 # ── Secret generators (ported from setup-secrets.ts) ──────
 # rand64: openssl rand -base64 <bytes>  (same as setup-secrets.ts rand64)
@@ -236,9 +252,14 @@ TEMPORAL_DB_USER="${TEMPORAL_DB_USER:-temporal}"
 APP_ENV="${DEPLOY_ENV}"
 DEPLOY_ENVIRONMENT="${DEPLOY_ENV}"
 
-# Per-node databases
-COGNI_NODE_DBS="cogni_operator,cogni_poly,cogni_resy"
+# Per-node databases derive from NODE_TARGETS (B2). Hyphens → underscores
+# for postgres-name legality: node-template → cogni_node_template.
+COGNI_NODE_DBS=$(IFS=','; printf '%s' "${NODE_TARGETS[*]/#/cogni_}" | sed 's/-/_/g')
 LITELLM_DB_NAME="litellm"
+# Primary node DB (first NODE_TARGETS entry) — used for DATABASE_URL defaults
+# before per-node secrets are written in Phase 6. Each node gets its own DB
+# scoped secret there.
+PRIMARY_NODE_DB="cogni_${NODE_TARGETS[0]//-/_}"
 
 # EVM RPC — use public Base mainnet endpoint for test
 EVM_RPC_URL="${EVM_RPC_URL:-https://mainnet.base.org}"
@@ -251,19 +272,33 @@ POLYGON_RPC_URL="${POLYGON_RPC_URL:-}"
 POSTHOG_API_KEY="${POSTHOG_API_KEY:-phc_placeholder_test}"
 POSTHOG_HOST="${POSTHOG_HOST:-https://us.i.posthog.com}"
 
-# Repo URL/ref for git-sync
-COGNI_REPO_URL="https://github.com/Cogni-DAO/cogni.git"
+# Repo URL/ref for git-sync — derive from origin (B1: never hardcode upstream).
+COGNI_REPO_URL="https://github.com/${GH_REPO}.git"
 COGNI_REPO_REF="$BRANCH"
 
-# LiteLLM node endpoints — billing callback routing (Compose→k8s NodePorts via host gateway)
-# Format: nodeId=billingIngestUrl (one per node)
-COGNI_NODE_ENDPOINTS="4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://host.docker.internal:30000/api/internal/billing/ingest,5ed2d64f-2745-4676-983b-2fb7e05b2eba=http://host.docker.internal:30100/api/internal/billing/ingest,f6d2a17d-b7f6-4ad1-a86b-f0ad2380999e=http://host.docker.internal:30300/api/internal/billing/ingest"
+# LiteLLM node endpoints — billing callback routing (Compose→k8s NodePorts
+# via the host gateway). B2 (residual): derive from NODE_TARGETS catalogs
+# instead of hardcoding cogni-poly's three UUIDs (which the canary inherited
+# and would have silently dropped node-template's billing events).
+# Format: <key>=<billing-ingest-url>,... — both `name` and `node_id` are
+# included as keys to match the scheduler-worker ConfigMap convention
+# (services/scheduler-worker resolves either form).
+COGNI_NODE_ENDPOINTS_PARTS=()
+for node in "${NODE_TARGETS[@]}"; do
+  nid=$(yq -N '.node_id // ""' "$REPO_ROOT/infra/catalog/${node}.yaml")
+  np=$(yq  -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/${node}.yaml")
+  url="http://host.docker.internal:${np}/api/internal/billing/ingest"
+  COGNI_NODE_ENDPOINTS_PARTS+=("${node}=${url}")
+  [[ -n "$nid" && "$nid" != "null" ]] && COGNI_NODE_ENDPOINTS_PARTS+=("${nid}=${url}")
+done
+COGNI_NODE_ENDPOINTS=$(IFS=,; printf '%s' "${COGNI_NODE_ENDPOINTS_PARTS[*]}")
+log_info "COGNI_NODE_ENDPOINTS (derived from catalog): ${COGNI_NODE_ENDPOINTS}"
 
 # DATABASE_URLs (constructed from parts — same derivation as setup-secrets.ts)
 # DATABASE_URLs use VM_IP placeholder — replaced after Phase 3 when IP is known.
 # Inside k8s pods, 127.0.0.1 is the pod's loopback, NOT the host.
-DATABASE_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@VM_IP_PLACEHOLDER:5432/cogni_operator"
-DATABASE_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@VM_IP_PLACEHOLDER:5432/cogni_operator"
+DATABASE_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@VM_IP_PLACEHOLDER:5432/${PRIMARY_NODE_DB}"
+DATABASE_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@VM_IP_PLACEHOLDER:5432/${PRIMARY_NODE_DB}"
 
 log_info "All secrets loaded from .env.${DEPLOY_ENV}"
 
@@ -379,11 +414,31 @@ ssh $SSH_OPTS root@"$VM_IP" 'kubectl get nodes && echo "---" && kubectl -n argoc
 # ══════════════════════════════════════════════════════════════
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
   log_step "Phase 4b: Create DNS records"
-  # Derive subdomains from domain vars (e.g., test.cognidao.org → test)
-  DNS_RECORDS=("$DOMAIN" "$POLY_DOMAIN" "$RESY_DOMAIN")
+  FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
+
+  # FQDNs come from two sources (B2):
+  #   1. DOMAIN — the apex/operator-host (Caddy listens here for TLS)
+  #   2. public_url_for_target $DEPLOY_ENV $node — one per NODE_TARGETS entry
+  # No more hardcoded poly-*/resy-* (those squatted on upstream's zone last canary).
+  DNS_RECORDS=("$DOMAIN")
+  for node in "${NODE_TARGETS[@]}"; do
+    node_url=$(public_url_for_target "$DEPLOY_ENV" "$node" 2>/dev/null || true)
+    [[ -z "$node_url" ]] && continue
+    fqdn="${node_url#https://}"
+    [[ "$fqdn" == "$DOMAIN" ]] && continue  # dedupe apex
+    DNS_RECORDS+=("$fqdn")
+  done
+
   for fqdn in "${DNS_RECORDS[@]}"; do
-    sub="${fqdn%.cognidao.org}"  # Strip zone suffix to get subdomain
-    # Delete existing A records for this subdomain
+    # Subdomain = FQDN minus the zone root. Use fork.yaml.root if available;
+    # else fall back to the legacy cognidao.org suffix strip.
+    sub="$fqdn"
+    if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" ]]; then
+      sub="${fqdn%.${FORK_ROOT}}"
+      [[ "$sub" == "$fqdn" ]] && sub="@"  # apex record
+    else
+      sub="${fqdn%.cognidao.org}"
+    fi
     EXISTING=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
       "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?name=${fqdn}&type=A" \
       | python3 -c "import json,sys; [print(x['id']) for x in json.load(sys.stdin).get('result',[])]" 2>/dev/null)
@@ -391,7 +446,6 @@ if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; t
       curl -s -X DELETE -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
         "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records/$id" >/dev/null
     done
-    # Create new A record
     RESULT=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
       "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
       -d "{\"type\":\"A\",\"name\":\"${sub}\",\"content\":\"${VM_IP}\",\"ttl\":300,\"proxied\":false}")
@@ -408,6 +462,52 @@ fi
 # issue until the hourly window resets. See .claude/skills/dns-ops/SKILL.md.
 
 # ══════════════════════════════════════════════════════════════
+# Phase 4b.5: Seed missing deploy/* branches in the fork from main
+# ══════════════════════════════════════════════════════════════
+# B1 (deploy machinery) — node-template ships only `main`; per-node
+# deploy branches don't exist until first promote-and-deploy run. But
+# Phase 4c (env-state push) AND the AppSet generators (Phase 7) both
+# need them present. Seed from main's HEAD SHA via `gh api /git/refs`
+# when missing. Idempotent: existing branches are left alone. Requires
+# GITHUB_ADMIN_PAT (set by bootstrap.sh) — exported as GH_TOKEN.
+log_step "Phase 4b.5: Seed deploy/* branches in fork (idempotent)"
+
+# bootstrap.sh writes GHCR_DEPLOY_TOKEN=GITHUB_ADMIN_PAT into .env.operator;
+# this script reads it as GHCR_TOKEN. Use whichever the caller set.
+SEED_TOKEN="${GITHUB_ADMIN_PAT:-${GHCR_TOKEN:-${GHCR_DEPLOY_TOKEN:-}}}"
+if [[ -n "$SEED_TOKEN" ]]; then
+  export GH_TOKEN="$SEED_TOKEN"
+  MAIN_SHA=$(gh api "repos/${GH_REPO}/branches/main" --jq '.commit.sha' 2>/dev/null || echo "")
+  if [[ -z "$MAIN_SHA" ]]; then
+    log_error "Could not read main's HEAD SHA from ${GH_REPO} (gh api auth issue?)."
+    exit 1
+  fi
+  # Per-node branches (consumed by AppSet generators in Phase 7) + the
+  # aggregate deploy/<env> branch (consumed by Phase 4c env-state writes).
+  BRANCHES_TO_SEED=("deploy/${DEPLOY_ENV}")
+  for node in "${NODE_TARGETS[@]}"; do
+    BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${node}")
+  done
+  for ref in "${BRANCHES_TO_SEED[@]}"; do
+    if gh api "repos/${GH_REPO}/branches/${ref}" >/dev/null 2>&1; then
+      log_info "  ${ref} — already exists"
+      continue
+    fi
+    if gh api -X POST "repos/${GH_REPO}/git/refs" \
+        -f "ref=refs/heads/${ref}" \
+        -f "sha=${MAIN_SHA}" >/dev/null 2>&1; then
+      log_info "  ${ref} — seeded from main (${MAIN_SHA:0:8})"
+    else
+      log_error "  ${ref} — FAILED to seed (check PAT push permission)"
+      exit 1
+    fi
+  done
+else
+  log_warn "No GitHub PAT in env (GITHUB_ADMIN_PAT/GHCR_TOKEN) — skipping branch-seed."
+  log_warn "Phase 4c will fail if deploy/${DEPLOY_ENV} doesn't already exist on the fork."
+fi
+
+# ══════════════════════════════════════════════════════════════
 # Phase 4c: Patch EndpointSlice IPs on deploy branch
 # ══════════════════════════════════════════════════════════════
 log_step "Phase 4c: Patch EndpointSlice IPs to $VM_IP on $DEPLOY_BRANCH"
@@ -416,7 +516,12 @@ log_step "Phase 4c: Patch EndpointSlice IPs to $VM_IP on $DEPLOY_BRANCH"
 # promote-and-deploy.yml no longer rsyncs overlays — only updates digests.
 # Provision is the one writer for IP state.
 DEPLOY_TMP=$(mktemp -d)
-REPO_URL="https://${GHCR_USERNAME:-Cogni-1729}:${GHCR_TOKEN}@github.com/Cogni-DAO/cogni.git"
+# B1 — push to the fork's own deploy branch, NOT the upstream template.
+# Last canary's auto-flight here was a `fatal: 403` because the bot account
+# had no write access to Cogni-DAO/cogni. Use the same GHCR PAT we already
+# have (it doubles as a Contents:Write PAT on the fork; bootstrap.sh's
+# pre-flight check guarantees that).
+REPO_URL="https://${GHCR_USERNAME:-${GITHUB_ADMIN_USERNAME:-Cogni-1729}}:${GHCR_TOKEN}@github.com/${GH_REPO}.git"
 
 log_info "Cloning $DEPLOY_BRANCH..."
 git clone --depth=1 --branch "$DEPLOY_BRANCH" "$REPO_URL" "$DEPLOY_TMP" 2>/dev/null
@@ -441,6 +546,33 @@ data:
   VM_IP: "${VM_IP}"
 EOF
 done
+
+# B2 (overlays) — the shared _template/ overlay and per-env wrappers
+# reference `vm.cognidao.org` as the ExternalName placeholder for pod→host
+# service discovery (postgres, temporal, litellm, doltgres, redis).
+# For forks on a different domain root, rewrite to `vm.<root>` and also
+# prefix with the env (e.g. `candidate-a.vm.<root>`).
+# Sed walks both the per-env wrapper AND the shared _template (each deploy
+# branch is per-env, so substituting _template doesn't race with siblings).
+FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
+if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" ]]; then
+  # Determine env-specific VM host prefix (production = apex, no prefix)
+  case "$DEPLOY_ENV" in
+    production)   VM_HOST="vm.${FORK_ROOT}" ;;
+    *)            VM_HOST="${DEPLOY_ENV}.vm.${FORK_ROOT}" ;;
+  esac
+  log_info "Rewriting overlay vm.cognidao.org → ${VM_HOST}"
+  # Rewrite both the per-env wrapper directory AND the shared _template.
+  # _template lives at overlays/_template/ — each deploy branch has its own
+  # copy, so per-env substitutions don't conflict across branches.
+  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" \
+       "$DEPLOY_TMP/infra/k8s/overlays/_template" \
+       -name "kustomization.yaml" -print0 2>/dev/null \
+    | xargs -0 sed -i.bak -E "s/vm\.cognidao\.org/${VM_HOST}/g"
+  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" \
+       "$DEPLOY_TMP/infra/k8s/overlays/_template" \
+       -name "*.bak" -delete 2>/dev/null || true
+fi
 
 cd "$DEPLOY_TMP"
 git config user.name "provision-script"
@@ -484,8 +616,6 @@ log_info "Writing .env files..."
 
 ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-edge/.env << 'ENVEOF'
 DOMAIN=${DOMAIN}
-POLY_DOMAIN=${POLY_DOMAIN}
-RESY_DOMAIN=${RESY_DOMAIN}
 OPERATOR_UPSTREAM=host.docker.internal:30000
 POLY_UPSTREAM=host.docker.internal:30100
 RESY_UPSTREAM=host.docker.internal:30300
@@ -594,19 +724,20 @@ log_step "Phase 6: Create k8s secrets on cluster"
 # Create namespace (Argo CD creates it on first sync, but secrets need it now)
 ssh $SSH_OPTS root@"$VM_IP" "kubectl create namespace ${K8S_NAMESPACE} 2>/dev/null || true"
 
-# Node-app secrets — one per node (operator, poly, resy)
-# The Deployment references secretRef: {namePrefix}-node-app-secrets
-for node in operator poly resy; do
-  case $node in
-    operator) db_name="cogni_operator" ;;
-    poly)     db_name="cogni_poly" ;;
-    resy)     db_name="cogni_resy" ;;
-  esac
+# Node-app secrets — one per NODE_TARGETS entry (B2: discover from catalog,
+# don't hardcode operator|poly|resy). v1 single-node-per-namespace convention:
+# secret is named `node-app-secrets` (matches base/node-app/deployment.yaml
+# secretRef without overlay namePrefix). DB name normalises hyphens to
+# underscores per postgres name rules.
+# Multi-node-per-namespace (future): adds overlay namePrefix ${node}- and
+# corresponding ${node}-node-app-secrets here. Out of scope for v1.
+for node in "${NODE_TARGETS[@]}"; do
+  db_name="cogni_${node//-/_}"
 
   NODE_DB_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
   NODE_DB_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
 
-  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic ${node}-node-app-secrets \
+  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic node-app-secrets \
     --from-literal=DATABASE_URL='${NODE_DB_URL}' \
     --from-literal=DATABASE_SERVICE_URL='${NODE_DB_SERVICE_URL}' \
     --from-literal=AUTH_SECRET='${AUTH_SECRET}' \
@@ -623,7 +754,7 @@ for node in operator poly resy; do
     --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
     --from-literal=METRICS_TOKEN='${METRICS_TOKEN}' \
     --dry-run=client -o yaml | kubectl apply -f -"
-  log_info "  Created ${node}-node-app-secrets"
+  log_info "  Created node-app-secrets (node=${node}, db=${db_name})"
 done
 
 # Scheduler-worker secret
@@ -661,12 +792,12 @@ log_info "All k8s secrets created"
 # ══════════════════════════════════════════════════════════════
 log_step "Phase 7: Apply ApplicationSets (triggers Argo sync)"
 
-# Gate: verify prerequisites exist before enabling Argo sync
+# Gate: verify prerequisites exist before enabling Argo sync.
+# v1 single-node-per-namespace: one `node-app-secrets` per env namespace
+# (not one per NODE_TARGETS entry — see Phase 6 comment).
 ssh $SSH_OPTS root@"$VM_IP" "
-  kubectl -n ${K8S_NAMESPACE} get secret operator-node-app-secrets >/dev/null || { echo 'FATAL: operator secrets missing'; exit 1; }
-  kubectl -n ${K8S_NAMESPACE} get secret poly-node-app-secrets >/dev/null || { echo 'FATAL: poly secrets missing'; exit 1; }
-  kubectl -n ${K8S_NAMESPACE} get secret resy-node-app-secrets >/dev/null || { echo 'FATAL: resy secrets missing'; exit 1; }
-  kubectl -n ${K8S_NAMESPACE} get secret scheduler-worker-secrets >/dev/null || { echo 'FATAL: scheduler-worker secrets missing'; exit 1; }
+  kubectl -n ${K8S_NAMESPACE} get secret node-app-secrets >/dev/null || { echo 'FATAL: node-app-secrets missing'; exit 1; }
+  kubectl -n ${K8S_NAMESPACE} get secret scheduler-worker-secrets >/dev/null || { echo 'FATAL: scheduler-worker-secrets missing'; exit 1; }
   echo 'All prerequisite secrets verified'
 "
 
@@ -685,7 +816,17 @@ if [ ! -f "$APPSET_LOCAL" ]; then
   exit 1
 fi
 
-scp $SSH_OPTS "$APPSET_LOCAL" root@"$VM_IP":/tmp/appset.yaml
+# B1 (deploy machinery) — substitute repoURL to point at the FORK, not the
+# upstream. AppSet files commit with the canonical Cogni-DAO/node-template
+# URL; provision rewrites at apply time so Argo CD syncs from the fork's
+# own deploy/* branches. Idempotent for the canonical operator (no-op).
+APPSET_RENDERED=$(mktemp)
+trap 'rm -f "$APPSET_RENDERED"' EXIT
+sed -E "s#https://github\.com/[Cc]ogni-[Dd][Aa][Oo]/node-template\.git#https://github.com/${GH_REPO}.git#g" \
+  "$APPSET_LOCAL" > "$APPSET_RENDERED"
+log_info "AppSet repoURL substituted: → https://github.com/${GH_REPO}.git"
+
+scp $SSH_OPTS "$APPSET_RENDERED" root@"$VM_IP":/tmp/appset.yaml
 ssh $SSH_OPTS root@"$VM_IP" "
   kubectl apply -f /tmp/appset.yaml -n argocd
   rm -f /tmp/appset.yaml
