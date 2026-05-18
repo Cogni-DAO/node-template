@@ -1,6 +1,15 @@
 name: node-template
 type: node
 port: 3200
+# Image tag a fresh fork pulls from `ghcr.io/cogni-dao/cogni-node-template`
+# BEFORE its own pr-build has published anything. Phase 4c of
+# provision-env-vm.sh sed-substitutes this into the overlay's `newTag`,
+# so the first canary deploys upstream's code (proving the bootstrap path
+# works). argocd-image-updater swaps to the fork's own pr-* tags after
+# its first push-to-main publishes them. Bump this when the pinned upstream
+# build goes stale (GHCR retention, upstream restructure, etc.) — see PR
+# #22 / docs/spec/agentic-fork-bootstrap.md §Bootstrap Image.
+bootstrap_image_tag: "pr-18-61bf2177d2b9ee19f7d0ad393695ae460c70a819-node-template"
 # K8s NodePort exposed for Compose→k8s gateway access (LiteLLM billing
 # callbacks via host.docker.internal:${node_port}). Read by both
 # provision-env-vm.sh (writes COGNI_NODE_ENDPOINTS) and the per-env overlay

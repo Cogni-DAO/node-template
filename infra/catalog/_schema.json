@@ -48,6 +48,11 @@
       "maximum": 32767,
       "description": "K8s NodePort exposed for Compose→k8s gateway access (LiteLLM billing-ingest, edge Caddy upstream). Read by provision-env-vm.sh (COGNI_NODE_ENDPOINTS) + per-env overlay Service patches. Optional — node-type only."
     },
+    "bootstrap_image_tag": {
+      "type": "string",
+      "pattern": "^[a-z0-9._-]+$",
+      "description": "GHCR tag a fresh fork pulls from upstream's namespace BEFORE its own pr-build has published anything. Phase 4c of provision-env-vm.sh sed-substitutes this into the per-env overlay's `images.newTag`. Lets the first canary deploy upstream's code (proves bootstrap works); argocd-image-updater swaps to the fork's own pr-* tags after its first push-to-main publishes them. Bump when the pinned upstream build goes stale."
+    },
     "node_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
