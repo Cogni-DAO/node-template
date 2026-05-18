@@ -108,10 +108,12 @@ unrecoverable blocker (auth rejected, quota exceeded, account suspended).
 
 4. INSTALL: `pnpm install`
 
-5. EDIT infra/fork.yaml — set domain.root to the Cloudflare zone the
-   human owns (e.g. `opencompany.cc`). This is the SSOT for every URL
-   downstream; no other file needs the zone name. Commit if you want,
-   or leave uncommitted for the first canary.
+5. EDIT infra/fork.yaml — set `domain.root` to the Cloudflare zone the
+   human owns (e.g. `opencompany.cc`). Usually leave `fork.slug` empty;
+   bootstrap derives it from the GitHub repo name. Public node URLs come
+   from `domain.root` plus the catalog. VM aliases are repo/env-scoped:
+   `<slug>-candidate-a.vm.<root>`, `<slug>-preview.vm.<root>`,
+   `<slug>.vm.<root>`.
 
 6. BOOTSTRAP — the only secrets checkpoint.
    - Run: `pnpm bootstrap`
@@ -125,8 +127,10 @@ unrecoverable blocker (auth rejected, quota exceeded, account suspended).
      validates inputs (admin role, push permission, Cloudflare zone,
      Cherry token), generates ~25 agent secrets, sets them via
      `gh secret set`, provisions the Cherry VM, configures Cloudflare
-     DNS, and dispatches promote-and-deploy.yml. Bootstrap fails BEFORE
-     spending Cherry money if any pre-flight check fails.
+     DNS for public app URLs and the repo-scoped VM alias, stores that
+     alias in GitHub env secret `VM_HOST`, and dispatches
+     promote-and-deploy.yml. Bootstrap fails BEFORE spending Cherry
+     money if any pre-flight check fails.
 
 7. DRIVE TO GREEN.
    - The script already watches CI via `gh run watch`. Let it run.
@@ -176,6 +180,15 @@ tooling that derives identifiers from the repo name will produce slugs like
 `node-template-1` that drift from anything the human registered ahead of
 time. The prompt mandates explicit detection and a defaulted alternate name
 before accepting any silent suffix.
+
+## Fork slug vs node slug
+
+`fork.slug` names the repo-level deployment substrate. It is used for
+account-scoped VM aliases so sibling forks under one Cloudflare zone do not
+collide. It is not a node slug. A multi-node repo still has one
+repo/env-scoped VM alias such as `cogni-poly-candidate-a.vm.cognidao.org`,
+while node-specific public URLs stay catalog-owned, such as
+`poly-test.cognidao.org` or `resy-test.cognidao.org`.
 
 ## Safety: bootstrap refuses to run on the template
 

@@ -28,6 +28,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROVISION_DIR="$REPO_ROOT/infra/provision/cherry/base"
 
+# shellcheck source=./scripts/setup/lib/fork-identity.sh
+source "$SCRIPT_DIR/lib/fork-identity.sh"
+
 # ── Flags ─────────────────────────────────────────────────────
 AUTO_APPROVE=false
 DEPLOY_ENV=""
@@ -82,24 +85,24 @@ case "$DEPLOY_ENV" in
     ;;
 esac
 
-# DOMAIN derives from infra/fork.yaml::domain.root if not explicitly overridden.
-# Convention: candidate-a → test.<root>, preview → preview.<root>,
-# production → <root> (apex), candidate-* → <slot>.<root>.
-# Forks change one line — fork.yaml::domain.root — and every URL rederives.
+# Public DOMAIN derives from infra/fork.yaml::domain.root if not explicitly
+# overridden. VM_DNS_HOST always includes the fork slug so sibling repos under
+# one Cloudflare zone do not share generic candidate-a.vm/preview.vm aliases.
 # (B2 + P5 — replaces POLY_DOMAIN/RESY_DOMAIN hardcodes.)
+FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
+if [ -z "$FORK_ROOT" ] || [ "$FORK_ROOT" = "null" ]; then
+  echo "[ERROR] infra/fork.yaml::domain.root missing or empty." >&2
+  echo "[ERROR] Edit infra/fork.yaml to set the Cloudflare zone you own, or export DOMAIN=." >&2
+  exit 1
+fi
+FORK_SLUG=$(fork_identity_slug "$REPO_ROOT")
+if [ -z "$FORK_SLUG" ]; then
+  echo "[ERROR] Unable to derive fork slug from infra/fork.yaml::fork.slug or git origin." >&2
+  exit 1
+fi
+VM_DNS_HOST=$(vm_host_for_env "$DEPLOY_ENV" "$FORK_ROOT" "$FORK_SLUG")
 if [ -z "${DOMAIN:-}" ]; then
-  FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
-  if [ -z "$FORK_ROOT" ] || [ "$FORK_ROOT" = "null" ]; then
-    echo "[ERROR] DOMAIN unset and infra/fork.yaml::domain.root missing or empty." >&2
-    echo "[ERROR] Edit infra/fork.yaml to set the Cloudflare zone you own, or export DOMAIN=." >&2
-    exit 1
-  fi
-  case "$DEPLOY_ENV" in
-    production)   DOMAIN="$FORK_ROOT" ;;
-    preview)      DOMAIN="preview.$FORK_ROOT" ;;
-    candidate-a)  DOMAIN="test.$FORK_ROOT" ;;
-    candidate-*)  DOMAIN="${DEPLOY_ENV}.$FORK_ROOT" ;;
-  esac
+  DOMAIN=$(domain_for_env "$DEPLOY_ENV" "$FORK_ROOT")
 fi
 
 # Allow branch override (e.g., testing a feature branch on preview infra)
@@ -426,13 +429,14 @@ ssh $SSH_OPTS root@"$VM_IP" 'kubectl get nodes && echo "---" && kubectl -n argoc
 # ══════════════════════════════════════════════════════════════
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
   log_step "Phase 4b: Create DNS records"
-  FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
 
   # FQDNs come from two sources (B2):
   #   1. DOMAIN — the apex/operator-host (Caddy listens here for TLS)
   #   2. public_url_for_target $DEPLOY_ENV $node — one per NODE_TARGETS entry
   # No more hardcoded poly-*/resy-* (those squatted on upstream's zone last canary).
-  DNS_RECORDS=("$DOMAIN")
+  # The VM alias is repo-scoped because several forks may share a Cloudflare
+  # zone; generic candidate-a.vm.<root> collides across repos.
+  DNS_RECORDS=("$DOMAIN" "$VM_DNS_HOST")
   for node in "${NODE_TARGETS[@]}"; do
     node_url=$(public_url_for_target "$DEPLOY_ENV" "$node" 2>/dev/null || true)
     [[ -z "$node_url" ]] && continue
@@ -560,26 +564,19 @@ done
 
 # B2 (overlays) — the shared _template/ overlay and per-env wrappers
 # reference `vm.cognidao.org` as the ExternalName placeholder for pod→host
-# service discovery (postgres, temporal, litellm, doltgres, redis).
-# For forks on a different domain root, rewrite to `vm.<root>` and also
-# prefix with the env (e.g. `candidate-a.vm.<root>`).
+# service discovery (postgres, temporal, litellm, doltgres, redis). Rewrite it
+# to the repo/env-scoped VM alias, e.g. `<slug>-candidate-a.vm.<root>`.
 # Sed walks both the per-env wrapper AND the shared _template (each deploy
 # branch is per-env, so substituting _template doesn't race with siblings).
-FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
 if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" ]]; then
-  # Determine env-specific VM host prefix (production = apex, no prefix)
-  case "$DEPLOY_ENV" in
-    production)   VM_HOST="vm.${FORK_ROOT}" ;;
-    *)            VM_HOST="${DEPLOY_ENV}.vm.${FORK_ROOT}" ;;
-  esac
-  log_info "Rewriting overlay vm.cognidao.org → ${VM_HOST}"
+  log_info "Rewriting overlay vm.cognidao.org → ${VM_DNS_HOST}"
   # Rewrite both the per-env wrapper directory AND the shared _template.
   # _template lives at overlays/_template/ — each deploy branch has its own
   # copy, so per-env substitutions don't conflict across branches.
   find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" \
        "$DEPLOY_TMP/infra/k8s/overlays/_template" \
        -name "kustomization.yaml" -print0 2>/dev/null \
-    | xargs -0 sed -i.bak -E "s/vm\.cognidao\.org/${VM_HOST}/g"
+    | xargs -0 sed -i.bak -E "s/vm\.cognidao\.org/${VM_DNS_HOST}/g"
   find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" \
        "$DEPLOY_TMP/infra/k8s/overlays/_template" \
        -name "*.bak" -delete 2>/dev/null || true
