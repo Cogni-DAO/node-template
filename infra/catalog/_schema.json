@@ -81,23 +81,11 @@
     },
     "public_url": {
       "type": "object",
-      "description": "bug.5002 — per-env public URL (Ingress / Caddy) for this node. Verify scripts (wait-for-candidate-ready.sh, smoke-candidate.sh, verify-buildsha.sh, verify-deployment.sh) read these directly. Optional for service-type entries that have no public ingress (scheduler-worker, migrators).",
+      "description": "Per-env subdomain prefix (NOT a full URL). Composed with infra/fork.yaml::domain.root at read time via public_url_for_target. Empty string = root domain (typical for production at the apex). Omit an env entirely to mean 'no public Ingress for this env' (e.g. service-type entries like scheduler-worker). bug.5002 + B2 fork-portability.",
       "properties": {
-        "candidate-a": {
-          "type": "string",
-          "format": "uri",
-          "pattern": "^https://"
-        },
-        "preview": {
-          "type": "string",
-          "format": "uri",
-          "pattern": "^https://"
-        },
-        "production": {
-          "type": "string",
-          "format": "uri",
-          "pattern": "^https://"
-        }
+        "candidate-a": { "type": "string", "pattern": "^[a-z0-9.-]*$" },
+        "preview": { "type": "string", "pattern": "^[a-z0-9.-]*$" },
+        "production": { "type": "string", "pattern": "^[a-z0-9.-]*$" }
       },
       "additionalProperties": false
     }

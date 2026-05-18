@@ -55,19 +55,37 @@ image_tag_for_target() {
   printf '%s:%s%s' "$image_name" "$base_tag" "$suffix"
 }
 
-# bug.5002 — per-env public URL from catalog. Replaces the legacy
-# `if node = operator then DOMAIN else ${node}-${DOMAIN}` URL builder
-# in verify-{candidate-ready,buildsha,deployment} + smoke-candidate.
-# Returns "" if the catalog entry has no public_url for this env
-# (service-type targets, e.g. scheduler-worker, or older catalogs);
-# callers treat "" as a skip (no Ingress to verify).
+# Per-env public URL composer. Reads two files:
+#   • infra/catalog/<target>.yaml::public_url.<env>  → subdomain prefix
+#       (empty string = root domain; omitted entirely = no public Ingress)
+#   • infra/fork.yaml::domain.root                    → Cloudflare zone
+# Composes `https://<prefix>.<root>` (or `https://<root>` if prefix empty).
+#
+# Returns "" if the catalog entry omits `public_url.<env>` (service-type
+# targets, e.g. scheduler-worker) OR if fork.yaml is missing — callers
+# treat "" as a skip (no Ingress to verify). bug.5002 + B2 (fork-portability).
 public_url_for_target() {
-  local env="$1" target="$2" url
+  local env="$1" target="$2" prefix root catalog_file
   if [ -z "${_image_tags_suffix_cache[$target]+x}" ]; then
     echo "[ERROR] image-tags: unknown target: $target" >&2
     return 1
   fi
-  url=$(yq ".public_url.\"${env}\" // \"\"" "${_image_tags_catalog_root}/${target}.yaml")
-  [ "$url" = "null" ] && url=""
-  printf '%s' "$url"
+  catalog_file="${_image_tags_catalog_root}/${target}.yaml"
+  # Detect "key absent" vs "key present but empty" — distinct meanings:
+  #   absent → no Ingress for this env (skip)
+  #   empty  → root domain (compose to "https://${root}")
+  if [ "$(yq "has(\"public_url\") and (.public_url | has(\"${env}\"))" "$catalog_file")" != "true" ]; then
+    return 0
+  fi
+  prefix=$(yq ".public_url.\"${env}\"" "$catalog_file")
+  [ "$prefix" = "null" ] && prefix=""
+
+  root=$(yq -N '.domain.root // ""' "${_image_tags_repo_root}/infra/fork.yaml" 2>/dev/null)
+  [ -z "$root" ] || [ "$root" = "null" ] && return 0  # No fork.yaml → no URL
+
+  if [ -n "$prefix" ]; then
+    printf 'https://%s.%s' "$prefix" "$root"
+  else
+    printf 'https://%s' "$root"
+  fi
 }

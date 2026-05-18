@@ -38,6 +38,16 @@ Fill in the 5 sections (each has the mint URL right above it),
 save & close the editor, then run ${BOLD}pnpm bootstrap${NC} again.
 
 EOF
+  # P1 — Skip editor open under non-TTY (agent / CI / sandbox shell). nano
+  # in particular "opens" then immediately exits in non-TTY mode, the file
+  # stays empty, and the human only discovers it on the re-run. Just tell
+  # the caller to open the file themselves; the next `pnpm bootstrap` will
+  # pick up edits whenever they're saved.
+  if [[ ! -t 0 ]]; then
+    warn "Non-TTY shell detected (likely agent/CI) — not opening an editor."
+    log  "Edit ${BOLD}${BOOT_FILE}${NC} in your real editor, save, then run ${BOLD}pnpm bootstrap${NC} again."
+    exit 0
+  fi
   # Open in the human's editor of choice. Falls back through common defaults.
   EDITOR_CMD="${VISUAL:-${EDITOR:-}}"
   if [[ -z "$EDITOR_CMD" ]]; then
@@ -83,7 +93,6 @@ REQUIRED=(
   CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID
   GITHUB_ADMIN_PAT GITHUB_ADMIN_USERNAME
   OPENROUTER_API_KEY
-  DOMAIN
 )
 MISSING=()
 for v in "${REQUIRED[@]}"; do
@@ -95,9 +104,33 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
   exit 2
 fi
 
-for tool in gh tofu ssh-keygen age-keygen openssl curl jq; do
+# Fork domain comes from infra/fork.yaml::domain.root, not .env.bootstrap
+# (B2 + P5: single SSOT for fork identity). DOMAIN per env is derived
+# downstream by provision-test-vm.sh from the convention test/preview/"".
+FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null || echo "")
+if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
+  err "infra/fork.yaml::domain.root is missing or empty."
+  err "Edit ${BOLD}infra/fork.yaml${NC} to set the Cloudflare zone you own (e.g. opencompany.cc), commit, then re-run."
+  exit 2
+fi
+log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (from infra/fork.yaml)"
+
+# Installer hints reference scripts/bootstrap/install/install-<tool>.sh
+# instead of brew/apt — these are the canonical wrappers for this repo and
+# handle platform differences (don't reinvent the wheel).
+declare -A INSTALLER=(
+  [pnpm]="scripts/bootstrap/install/install-pnpm.sh"
+  [tofu]="scripts/bootstrap/install/install-tofu.sh"
+  [yq]="scripts/bootstrap/install/install-yq.sh"
+)
+for tool in gh tofu ssh-keygen age-keygen openssl curl jq yq pnpm; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     err "Required CLI not found: $tool"
+    if [[ -n "${INSTALLER[$tool]:-}" ]]; then
+      err "  Install: bash ${INSTALLER[$tool]}"
+    else
+      err "  Install via your OS package manager (brew/apt). Re-run when ready."
+    fi
     exit 2
   fi
 done
@@ -115,8 +148,25 @@ if [[ "$GH_REPO" == "Cogni-DAO/node-template" || "$GH_REPO" == "Cogni-DAO/cogni"
   exit 2
 fi
 
-# Admin-role check at ingest (spec §Validating Admin role)
 export GH_TOKEN="$GITHUB_ADMIN_PAT"
+
+# A3 — Validate GITHUB_ADMIN_USERNAME matches the PAT's actual login.
+# Canary tripped on `i_am_coco` (underscore) vs `i-am-coco` (hyphen);
+# GitHub usernames disallow underscores so this would otherwise 404 the
+# admin-role check below with a misleading "user not found" message.
+PAT_LOGIN=$(gh api user --jq .login 2>/dev/null || echo "")
+if [[ -z "$PAT_LOGIN" ]]; then
+  err "GITHUB_ADMIN_PAT failed to authenticate (gh api user returned empty)."
+  err "Mint a fresh PAT and update .env.bootstrap."
+  exit 2
+fi
+if [[ "$PAT_LOGIN" != "$GITHUB_ADMIN_USERNAME" ]]; then
+  err "GITHUB_ADMIN_USERNAME='${GITHUB_ADMIN_USERNAME}' does not match the PAT's login '${PAT_LOGIN}'."
+  err "GitHub usernames disallow underscores — did you mistype? Use ${BOLD}${PAT_LOGIN}${NC} in .env.bootstrap."
+  exit 2
+fi
+
+# Admin-role check at ingest (spec §Validating Admin role).
 PERM=$(gh api "repos/${GH_REPO}/collaborators/${GITHUB_ADMIN_USERNAME}/permission" \
        --jq '.permission' 2>/dev/null || echo "")
 if [[ "$PERM" != "admin" ]]; then
@@ -126,6 +176,21 @@ if [[ "$PERM" != "admin" ]]; then
   exit 2
 fi
 log "Admin role verified for ${GITHUB_ADMIN_USERNAME}"
+
+# B1 fail-fast — confirm push access on origin BEFORE spending money on a
+# Cherry VM. Canary's auto-flight died at Phase 4c with 'fatal: 403' after
+# a VM was already billed because origin pointed at the upstream template
+# the bot couldn't write to. (Admin role implies push, but checking
+# explicitly catches token-scope mismatches that don't surface in role
+# checks alone.)
+CAN_PUSH=$(gh api "repos/${GH_REPO}" --jq '.permissions.push // false' 2>/dev/null || echo "false")
+if [[ "$CAN_PUSH" != "true" ]]; then
+  err "GITHUB_ADMIN_PAT lacks push access on ${GH_REPO} (got permissions.push=${CAN_PUSH})."
+  err "This would fail Phase 4c (env-state push) AFTER the Cherry VM is already billed."
+  err "Re-mint the PAT with Contents:Write on this repo, then re-run."
+  exit 2
+fi
+log "Push access verified — bootstrap will not strand a billed VM at Phase 4c."
 
 # Cloudflare zone reachability
 ZONE_OK=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \

@@ -9,11 +9,12 @@ candidate_a_branch: deploy/candidate-a-node-template
 preview_branch: deploy/preview-node-template
 production_branch: deploy/production-node-template
 path_prefix: nodes/node-template/
-# bug.5002 — per-env public URLs. Verify scripts read these directly
-# instead of computing "${node}-${DOMAIN}" with an "if node = operator"
-# special-case. Each fork's catalog declares the truth for its nodes.
-# Forks: replace these with your A-record FQDNs from node-setup Phase 6.
+# Per-env subdomain prefix. Composed with infra/fork.yaml::domain.root
+# at read time via public_url_for_target (bug.5002 + B2 fork-portability).
+# Empty string = root domain (typical for production at the apex). Omit
+# the env key entirely to mean "no public Ingress for this env".
+# Forks: leave these prefixes alone — change infra/fork.yaml::domain.root.
 public_url:
-  candidate-a: https://node-template-test.cognidao.org
-  preview: https://node-template-preview.cognidao.org
-  production: https://node-template.cognidao.org
+  candidate-a: node-template-test
+  preview: node-template-preview
+  production: node-template

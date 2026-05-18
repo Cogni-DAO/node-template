@@ -62,6 +62,39 @@ the sequential bootstrap topology, the `.env.bootstrap` shape, the GitHub
 Admin role prerequisite, the Grafana stack ownership decision, the v1
 implementation gaps, the roadmap, and the invariants.
 
+### Fork Identity — three layers, one new file
+
+The canary in §Canary Lessons (`work/handoffs/bootstrap-v0-canary.md`, dev's
+HARDSHIPS.md) hit two architectural blockers (B1: hardcoded upstream push
+URL; B2: hardcoded poly/resy DNS + DB names) because **fork identity was
+spread across script literals**, not one declarative source.
+
+After this PR, identity has three clean layers, each with one source of
+truth:
+
+| Layer    | SSOT                                   | Used for                                                              |
+| -------- | -------------------------------------- | --------------------------------------------------------------------- |
+| **Repo** | `git remote get-url origin` (implicit) | `COGNI_REPO_URL`, push targets, GH API repo arg                       |
+| **Fork** | **`infra/fork.yaml`** (new)            | `domain.root` (Cloudflare zone) — composes all FQDNs                  |
+| **Node** | `infra/catalog/<node>.yaml` (existing) | `NODE_TARGETS`, per-env subdomain prefix, image tags, deploy branches |
+
+`infra/fork.yaml` declares one field:
+
+```yaml
+schema_version: 1
+domain:
+  root: cognidao.org # Cloudflare zone you own
+```
+
+Forking changes that one value. Every URL re-derives. No script literal
+references the zone name; no `for node in operator poly resy` lives in
+provisioning code. The agent walks the catalog and the fork-spec.
+
+Composition rule: `public_url_for_target(env, node)` reads
+`infra/catalog/<node>.yaml::public_url.<env>` (the **subdomain prefix**;
+empty string = root domain) and composes with `infra/fork.yaml::domain.root`
+as `https://<prefix>.<root>` (or `https://<root>` if prefix is empty).
+
 ## V1 Credential Floor — 5 Services, 8 Lines
 
 | #   | Service       | Authority shape           | What it mints downstream                                                                                                    | Pure passthrough? |
@@ -211,6 +244,38 @@ Lifecycle automation is vNext — tracked as Open Q5.
 pod-runtime compromise leaks the human's full OpenRouter authority across
 every fork using that key. Open Q1 (per-fork sub-account) exists for this
 reason; no v1 mitigation.
+
+## Agent Rules (from canary lessons)
+
+The v0 canary surfaced four rules the orchestrating agent must follow.
+Each maps to an actual mis-step or near-miss; they're in the spec so any
+future driving agent reading this cold inherits the lesson.
+
+**A1 — Never accept secrets via chat.** The v0 agent asked the operator
+to "paste your PAT in the next message" when confused about where to put
+it. That would have leaked 5 minting-authority credentials into the
+conversation transcript. The answer to "where do I paste?" is always
+"into the gitignored file you already have open." Bootstrap reads from
+the file and only the file.
+
+**A2 — Bot identity = the PAT, not the gh keychain.** Do not run
+`gh auth login` for a bot account when you have its PAT. `GH_TOKEN=<pat>
+gh ...` is the entire point of the PAT. Bootstrap exports `GH_TOKEN`
+from `GITHUB_ADMIN_PAT` and that's sufficient for every `gh api` and
+`gh secret set` call.
+
+**A3 — Username must match the PAT login.** GitHub disallows underscores
+in usernames; the canary mis-typed `i_am_coco` instead of `i-am-coco` and
+the admin-role check returned a misleading 404. Bootstrap validates
+`GITHUB_ADMIN_USERNAME == gh api user --jq .login` before any side effect.
+
+**A4 — Pre-existing same-named non-fork repos force a renamed fork.**
+The bot account had a `node-template` repo unrelated to the upstream;
+`gh repo fork --clone` would have silently produced `node-template-1`
+(suffix). The quickstart prompt mandates explicit detection (`gh api
+repos/$USER/<name>` + `.parent.full_name` inspection) and a defaulted
+alternate name (`cogni-node-$(date +%Y%m%d)`) instead of accepting the
+suffix.
 
 ## GitHub Admin Role — The Non-Obvious Prerequisite
 

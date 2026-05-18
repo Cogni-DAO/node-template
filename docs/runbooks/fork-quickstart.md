@@ -38,10 +38,15 @@ unrecoverable blocker (auth rejected, quota exceeded, account suspended).
 
 # Steps
 
-1. PREREQS — auto-install, do not ask. Tools: gh, pnpm, tofu, age, jq.
-   - macOS: `brew install <tool>` for each missing tool
-   - Debian/Ubuntu: `sudo apt-get update && sudo apt-get install -y <tool>`
-     (tofu/age may need their official installers — use them)
+1. PREREQS — auto-install, do not ask. Tools: gh, pnpm, tofu, age, jq, yq.
+   - The repo ships canonical installer wrappers — use them in preference
+     to brew/apt:
+       bash scripts/bootstrap/install/install-pnpm.sh
+       bash scripts/bootstrap/install/install-tofu.sh
+       bash scripts/bootstrap/install/install-yq.sh
+       bash scripts/bootstrap/install/install-ripgrep.sh
+     For tools without a wrapper (gh, age, jq, openssl, curl), use
+     brew/apt on the appropriate platform.
    - `gh auth status` must succeed; if not, attempt `gh auth login --web`
      and pause once for the human to complete browser auth — that's the
      only acceptable pre-bootstrap human checkpoint.
@@ -62,17 +67,27 @@ unrecoverable blocker (auth rejected, quota exceeded, account suspended).
 
 3. INSTALL: `pnpm install`
 
-4. BOOTSTRAP — the only human checkpoint.
+4. EDIT infra/fork.yaml — set domain.root to the Cloudflare zone the
+   human owns (e.g. `opencompany.cc`). This is the SSOT for every URL
+   downstream; no other file needs the zone name. Commit if you want,
+   or leave uncommitted for the first canary.
+
+5. BOOTSTRAP — the only secrets checkpoint.
    - Run: `pnpm bootstrap`
-   - The script writes .env.bootstrap and opens it in the human's editor.
+   - First invocation writes .env.bootstrap. In a TTY, it opens the
+     human's editor. In a non-TTY agent shell, it prints the file path
+     and exits — that's expected behaviour (script does not open nano
+     in non-TTY, which would silently no-op).
    - Say to the human, exactly once: "Fill the 5 sections in your editor
      (mint URLs are inline), save, and close. I'll handle the rest."
-   - When the human signals done (editor closed or "done"), re-run
-     `pnpm bootstrap`. This pass validates inputs, generates ~25 agent
-     secrets, sets them via `gh secret set`, provisions the Cherry VM,
-     configures Cloudflare DNS, and dispatches promote-and-deploy.yml.
+   - When the human signals done, re-run `pnpm bootstrap`. This pass
+     validates inputs (admin role, push permission, Cloudflare zone,
+     Cherry token), generates ~25 agent secrets, sets them via
+     `gh secret set`, provisions the Cherry VM, configures Cloudflare
+     DNS, and dispatches promote-and-deploy.yml. Bootstrap fails BEFORE
+     spending Cherry money if any pre-flight check fails.
 
-5. DRIVE TO GREEN.
+6. DRIVE TO GREEN.
    - The script already watches CI via `gh run watch`. Let it run.
    - On transient failure (network, rate-limit, eventual-consistency),
      diagnose then retry the failing step yourself. Don't escalate.
@@ -80,7 +95,7 @@ unrecoverable blocker (auth rejected, quota exceeded, account suspended).
      suspended, Cherry billing block), STOP and report the specific
      failure + the one thing the human needs to do.
 
-6. REPORT — when /readyz returns 200, post one line:
+7. REPORT — when /readyz returns 200, post one line:
    `✓ <domain> /readyz=200 VM=<ip> run=<url>`
 
 # Anti-patterns — do not do these
