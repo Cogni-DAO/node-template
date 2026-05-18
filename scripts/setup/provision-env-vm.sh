@@ -533,6 +533,20 @@ data:
 EOF
 done
 
+# B2 (overlays) — overlays reference <env>.vm.cognidao.org as the ExternalName
+# host for pod→host service discovery (postgres, temporal, litellm, doltgres,
+# redis). For forks on a different domain root, rewrite to <env>.vm.<root>.
+# Same fix pattern as the AppSet repoURL substitution at Phase 7; here it's
+# written into the deploy branch (where Argo CD reads from) instead of
+# stamped at apply time.
+FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null)
+if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" && "$FORK_ROOT" != "cognidao.org" ]]; then
+  log_info "Rewriting overlay vm.cognidao.org references → vm.${FORK_ROOT}"
+  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" -name "kustomization.yaml" -print0 \
+    | xargs -0 sed -i.bak -E "s/\.vm\.cognidao\.org/.vm.${FORK_ROOT}/g"
+  find "$DEPLOY_TMP/infra/k8s/overlays/${OVERLAY_DIR}" -name "*.bak" -delete
+fi
+
 cd "$DEPLOY_TMP"
 git config user.name "provision-script"
 git config user.email "provision@cogni.dev"
