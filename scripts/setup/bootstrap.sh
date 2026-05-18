@@ -18,6 +18,9 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BOOT_FILE="$REPO_ROOT/.env.bootstrap"
 BOOT_TEMPLATE="$REPO_ROOT/.env.bootstrap.example"
 
+# shellcheck source=./scripts/setup/lib/fork-identity.sh
+source "$SCRIPT_DIR/lib/fork-identity.sh"
+
 RED=$'\033[0;31m'; GREEN=$'\033[0;32m'; YELLOW=$'\033[1;33m'; CYAN=$'\033[0;36m'; BOLD=$'\033[1m'; NC=$'\033[0m'
 log()   { echo -e "${GREEN}[bootstrap]${NC} $*"; }
 warn()  { echo -e "${YELLOW}[bootstrap]${NC} $*"; }
@@ -107,7 +110,7 @@ fi
 # Fork domain comes from infra/fork.yaml::domain.root, not .env.bootstrap
 # (B2 + P5: single SSOT for fork identity). DOMAIN per env is derived
 # downstream by provision-env-vm.sh from the convention test/preview/"".
-FORK_ROOT=$(yq -N '.domain.root // ""' "$REPO_ROOT/infra/fork.yaml" 2>/dev/null || echo "")
+FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
 if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
   err "infra/fork.yaml::domain.root is missing or empty."
   err "Edit ${BOLD}infra/fork.yaml${NC} to set the Cloudflare zone you own (e.g. opencompany.cc), commit, then re-run."
@@ -115,19 +118,22 @@ if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
 fi
 log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (from infra/fork.yaml)"
 
+FORK_SLUG=$(fork_identity_slug "$REPO_ROOT")
+if [[ -z "$FORK_SLUG" ]]; then
+  err "Unable to derive fork slug from infra/fork.yaml::fork.slug or git origin."
+  exit 2
+fi
+log "Fork infra slug: ${BOLD}${FORK_SLUG}${NC} (used for VM DNS aliases)"
+
 # Derive DOMAIN from FORK_ROOT + DEPLOY_ENV using the same convention as
 # provision-env-vm.sh. Single source (fork.yaml.root), two consumers
 # (bootstrap.sh writes secrets here; provision-env-vm.sh re-derives the
 # same value). Both compute the same answer — no drift risk because the
 # convention is shared.
-case "$DEPLOY_ENV" in
-  production)   DOMAIN="$FORK_ROOT" ;;
-  preview)      DOMAIN="preview.$FORK_ROOT" ;;
-  candidate-a)  DOMAIN="test.$FORK_ROOT" ;;
-  candidate-*)  DOMAIN="${DEPLOY_ENV}.$FORK_ROOT" ;;
-  *)            err "Unsupported DEPLOY_ENV: $DEPLOY_ENV"; exit 2 ;;
-esac
+DOMAIN=$(domain_for_env "$DEPLOY_ENV" "$FORK_ROOT") || { err "Unsupported DEPLOY_ENV: $DEPLOY_ENV"; exit 2; }
+VM_DNS_HOST=$(vm_host_for_env "$DEPLOY_ENV" "$FORK_ROOT" "$FORK_SLUG")
 log "Derived DOMAIN: ${BOLD}${DOMAIN}${NC} (for $DEPLOY_ENV)"
+log "Derived VM DNS host: ${BOLD}${VM_DNS_HOST}${NC}"
 
 # Installer hints reference scripts/bootstrap/install/install-<tool>.sh
 # instead of brew/apt — these are the canonical wrappers for this repo and
@@ -385,10 +391,10 @@ log "Delegating to scripts/setup/provision-env-vm.sh (already validated)"
 export DOMAIN
 bash "$REPO_ROOT/scripts/setup/provision-env-vm.sh" "$DEPLOY_ENV" --yes
 
-# Post-provision: re-set DATABASE_URLs + VM_HOST with real IP
+# Post-provision: re-set DATABASE_URLs with real IP and VM_HOST with DNS alias
 VM_IP=$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-ip")
-log "VM_IP=${VM_IP}; updating DATABASE_URLs and VM_HOST in GitHub env"
-set_env_secret VM_HOST "$VM_IP"
+log "VM_IP=${VM_IP}; updating DATABASE_URLs and VM_HOST=${VM_DNS_HOST} in GitHub env"
+set_env_secret VM_HOST "$VM_DNS_HOST"
 set_env_secret DATABASE_URL         "postgresql://${APP_DB_USER}:${GEN[APP_DB_PASSWORD]}@${VM_IP}:5432/${APP_DB_NAME}?sslmode=disable"
 set_env_secret DATABASE_SERVICE_URL "postgresql://${APP_DB_SERVICE_USER}:${GEN[APP_DB_SERVICE_PASSWORD]}@${VM_IP}:5432/${APP_DB_NAME}?sslmode=disable"
 
@@ -424,6 +430,7 @@ ${GREEN}${BOLD}Bootstrap complete.${NC}
 Environment:  ${DEPLOY_ENV}
 Domain:       https://${DOMAIN}
 VM IP:        ${VM_IP}
+VM DNS:       ${VM_DNS_HOST}
 GitHub env:   https://github.com/${GH_REPO}/settings/environments
 
 Re-running ${BOLD}pnpm bootstrap${NC} is safe (idempotent).

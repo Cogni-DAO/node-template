@@ -3,10 +3,10 @@
 #
 # infra/fork.yaml — Fork-identity SSOT.
 #
-# Single source of truth for what's TRULY fork-level (not node-level or
-# repo-level). Today, that's just the Cloudflare zone the operator owns;
-# every public URL composes from this root plus the per-node subdomain
-# prefix declared in infra/catalog/<node>.yaml::public_url.
+# Single source of truth for what's TRULY fork-level (not node-level).
+# Public URLs compose from the Cloudflare zone plus the per-node subdomain
+# prefix declared in infra/catalog/<node>.yaml::public_url. VM DNS aliases
+# compose from the fork slug plus env so multiple forks can share one zone.
 #
 # Spec: docs/spec/agentic-fork-bootstrap.md §Fork Identity.
 #
@@ -18,12 +18,25 @@
 #
 # Forking checklist:
 #   1. Set `domain.root` below to a Cloudflare zone YOU own.
-#   2. Commit. That's it — every URL rederives.
+#   2. Usually leave `fork.slug` empty; bootstrap derives it from the
+#      GitHub repo name. Set it only if you need a different infra alias.
+#   3. Commit. That's it — every URL rederives.
 #
 # DO NOT add per-node concerns here (image tags, deploy branches, ports).
 # Those belong in infra/catalog/<node>.yaml.
 
 schema_version: 1
+
+fork:
+  # Repo/fork-level slug for account-scoped infra aliases. This is NOT a
+  # node slug: a multi-node repo still shares one VM substrate per env.
+  # Empty means bootstrap/provision derive it from the GitHub repo name.
+  #
+  # Example VM aliases:
+  #   candidate-a: <slug>-candidate-a.vm.<domain.root>
+  #   preview:     <slug>-preview.vm.<domain.root>
+  #   production:  <slug>.vm.<domain.root>
+  slug: ""
 
 domain:
   # The Cloudflare zone the operator owns. Public URLs compose as
