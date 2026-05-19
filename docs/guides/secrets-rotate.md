@@ -138,7 +138,7 @@ For production DB access, the canonical pattern is **OpenBao DB engine dynamic c
 
 ```yaml
 # Approximation of the ExternalSecret for dynamic DB creds (lands with Crawl-row-3)
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: poly-db-dynamic

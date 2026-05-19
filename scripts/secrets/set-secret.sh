@@ -94,9 +94,10 @@ fi
 
 # ── Patch invocation ────────────────────────────────────────────────────────
 # The KV v2 path mounted at `cogni/` (see ClusterSecretStore) — `bao kv patch`
-# writes to data/<path> automatically. We pass the key=value as the FIRST
-# (and only) arg following the path so that `bao` reads it; the value is
-# passed via env to avoid showing in `ps`.
+# writes to data/<path> automatically. `kv patch` cannot create an absent
+# path, so first writes use `kv put` and later writes use `kv patch`.
+# We pass the key=value as the FIRST (and only) arg following the path so that
+# `bao` reads it; the value is passed via stdin to avoid showing in `ps`.
 #
 # Three execution modes:
 #  1. $SET_SECRET_BAO set → invoke that command directly (test shim)
@@ -115,10 +116,14 @@ fi
 
 if [[ -n "${BAO_ADDR:-}" && -n "${BAO_TOKEN:-}" ]]; then
   command -v bao >/dev/null 2>&1 || die "bao CLI not found on PATH (needed when BAO_ADDR is set)."
-  # bao kv patch <path> key=@/dev/stdin reads value from stdin without
+  op="patch"
+  if ! BAO_ADDR="$BAO_ADDR" BAO_TOKEN="$BAO_TOKEN" bao kv metadata get "$bao_path" >/dev/null 2>&1; then
+    op="put"
+  fi
+  # bao kv <op> <path> key=@/dev/stdin reads value from stdin without
   # interpolating into argv. Available since OpenBao 2.x.
   printf '%s' "$value" | BAO_ADDR="$BAO_ADDR" BAO_TOKEN="$BAO_TOKEN" \
-    bao kv patch "$bao_path" "${key}=-"
+    bao kv "$op" "$bao_path" "${key}=-"
   exit
 fi
 
@@ -134,6 +139,13 @@ root_token="$(cat "$root_token_file")"
 
 # kubectl exec runs `bao kv patch <path> KEY=-` reading value from stdin.
 # Pass the value via stdin all the way through; argv stays clean.
+op="patch"
+if ! ssh -i "$ssh_key_file" -o StrictHostKeyChecking=accept-new \
+  "root@${vm_ip}" \
+  "kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN='${root_token}' bao kv metadata get '${bao_path}'" \
+  >/dev/null 2>&1; then
+  op="put"
+fi
 printf '%s' "$value" | ssh -i "$ssh_key_file" -o StrictHostKeyChecking=accept-new \
   "root@${vm_ip}" \
-  "kubectl exec -i -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN='${root_token}' bao kv patch '${bao_path}' '${key}=-'"
+  "kubectl exec -i -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN='${root_token}' bao kv '${op}' '${bao_path}' '${key}=-'"

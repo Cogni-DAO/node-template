@@ -55,7 +55,7 @@ A human or AI agent can declare a new secret, rotate an existing secret, or revo
 
 2. **ONE_EXTERNAL_SECRET_PER_SERVICE_ENV.** Each service-env pair has exactly ONE `ExternalSecret` resource, created at first deploy, never edited when secrets are added. It uses `dataFrom: extract: key: cogni/<env>/<service>` to pull every key at the path into a single k8s `Secret` named `<service>-env-secrets`.
 
-3. **POD_CONSUMES_VIA_ENVFROM.** Pod specs reference the synced k8s Secret via `envFrom: - secretRef: name: <service>-env-secrets`. ONE line per container, set ONCE at service creation. Adding/removing/rotating secrets does NOT edit pod specs. (Reference: [ESO `dataFrom` pattern](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1beta1.ExternalSecretDataFromRemoteRef).)
+3. **POD_CONSUMES_VIA_ENVFROM.** Pod specs reference the synced k8s Secret via `envFrom: - secretRef: name: <service>-env-secrets`. ONE line per container, set ONCE at service creation. Adding/removing/rotating secrets does NOT edit pod specs. (Reference: [ESO `dataFrom` pattern](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1.ExternalSecretDataFromRemoteRef).)
 
 4. **NO_VALUE_IN_GIT.** Secret values never enter git history, PR diffs, GitHub Actions logs, chat transcripts, or AI agent context. Only secret NAMES and PATHS appear in committed YAML. Violation = immediate rotation + audit.
 
@@ -103,7 +103,7 @@ System-level secrets (Cherry token, Cloudflare token, GH PAT, ESO seed token) li
 
 ```yaml
 # infra/k8s/secrets/external-secrets/<env>/<service>/external-secret.yaml
-apiVersion: external-secrets.io/v1beta1
+apiVersion: external-secrets.io/v1
 kind: ExternalSecret
 metadata:
   name: <service>-env-secrets

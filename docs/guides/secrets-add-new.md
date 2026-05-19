@@ -38,7 +38,7 @@ Done. The CLI writes to OpenBao at `cogni/candidate-a/node-template`, key `OPENA
 - Run `kubectl` anything (Argo reconciles + ESO syncs + Reloader restarts)
 - Touch the `OPENBAO_SEED_TOKEN` in GitHub env secrets (that's an automated path; you never touch it)
 
-This is the contract from [`docs/spec/secrets-management.md`](../spec/secrets-management.md), enforced by ESO's `dataFrom: extract` pattern (one ExternalSecret per service-env, pulls all keys; published canonical pattern: [ESO docs](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1beta1.ExternalSecretDataFromRemoteRef)).
+This is the contract from [`docs/spec/secrets-management.md`](../spec/secrets-management.md), enforced by ESO's `dataFrom: extract` pattern (one ExternalSecret per service-env, pulls all keys; published canonical pattern: [ESO docs](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1.ExternalSecretDataFromRemoteRef)).
 
 ## Three entry points — pick the one for your context
 
@@ -127,6 +127,6 @@ The whole thing is ~30 lines of bash. Same primitive, three faces (CLI / workflo
 - [`docs/spec/secrets-management.md`](../spec/secrets-management.md) — the canonical contract
 - [`docs/guides/secrets-rotate.md`](./secrets-rotate.md) — rotation playbook
 - [`docs/runbooks/fork-quickstart.md`](../runbooks/fork-quickstart.md) — bootstrap flow (substrate install + unseal + role bind happen here)
-- [External Secrets Operator `dataFrom` docs](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1beta1.ExternalSecretDataFromRemoteRef)
+- [External Secrets Operator `dataFrom` docs](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1.ExternalSecretDataFromRemoteRef)
 - [OpenBao KV v2 docs](https://openbao.org/docs/secrets/kv/kv-v2/)
 - [Stakater Reloader](https://github.com/stakater/Reloader)

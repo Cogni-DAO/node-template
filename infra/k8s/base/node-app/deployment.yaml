@@ -44,7 +44,7 @@ spec:
             - configMapRef:
                 name: node-app-config
             - secretRef:
-                name: node-app-secrets
+                name: node-template-env-secrets
           resources:
             requests:
               memory: "384Mi"
@@ -86,7 +86,7 @@ spec:
             - configMapRef:
                 name: node-app-config
             - secretRef:
-                name: node-app-secrets
+                name: node-template-env-secrets
           resources:
             requests:
               memory: "256Mi"

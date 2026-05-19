@@ -200,7 +200,7 @@ for the full add-new playbook.
      failure + the one thing the human needs to do. Log it in
      `hardships.md` first.
    - If `/readyz` stays red, suspect a missing app secret first:
-     `kubectl describe externalsecret -n cogni-<env> node-app-env-secrets`
+     `kubectl describe externalsecret -n cogni-<env> node-template-env-secrets`
      surfaces missing keys; re-run the relevant `pnpm secrets:set` and
      `kubectl rollout restart deployment/node-app`.
 

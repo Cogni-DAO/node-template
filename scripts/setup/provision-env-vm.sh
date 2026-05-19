@@ -771,12 +771,12 @@ log_step "Phase 5b: Install + initialize OpenBao + ESO"
 # ── 5b.1 Install ───────────────────────────────────────────────────────────
 rsync -e "ssh $SSH_OPTS" -az --delete \
   "$REPO_ROOT/infra/k8s/argocd/openbao/" root@"$VM_IP":/opt/cogni-template-openbao/
-ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-openbao/ | kubectl apply -f -"
+ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-openbao/ | kubectl apply --server-side --force-conflicts -f -"
 log_info "Applied OpenBao bootstrap kustomize"
 
 rsync -e "ssh $SSH_OPTS" -az --delete \
   "$REPO_ROOT/infra/k8s/argocd/external-secrets/" root@"$VM_IP":/opt/cogni-template-external-secrets-operator/
-ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-external-secrets-operator/ | kubectl apply -f -"
+ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-external-secrets-operator/ | kubectl apply --server-side --force-conflicts -f -"
 log_info "Applied External Secrets Operator bootstrap kustomize"
 
 # Wait for ExternalSecret + ClusterSecretStore CRDs to be Established before
@@ -935,11 +935,19 @@ else
   seed_kv() {
     # seed_kv <service> <KEY> <value>
     # No-op when value is empty (operator-pass-through that the fork didn't
-    # provide). bao kv patch is upsert — re-runs are idempotent.
+    # provide). First write creates the path; later writes patch so existing
+    # keys are preserved.
     local svc="$1" k="$2" v="$3"
     [[ -z "$v" ]] && return 0
+    local path="cogni/${DEPLOY_ENV}/${svc}"
+    local op="patch"
+    if ! ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv metadata get '${path}'" \
+      >/dev/null 2>&1; then
+      op="put"
+    fi
     printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
-      "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv patch 'cogni/${DEPLOY_ENV}/${svc}' '${k}=-'" \
+      "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv ${op} '${path}' '${k}=-'" \
       >/dev/null
   }
 
@@ -1141,22 +1149,28 @@ echo ""
 log_step "Phase 9: Verify /readyz on all nodes (up to 5 min)"
 
 READYZ_OK=true
-for node_port in 30000 30100 30300; do
+for node in "${NODE_TARGETS[@]}"; do
+  catalog_file="$REPO_ROOT/infra/catalog/${node}.yaml"
+  node_port=$(yq -N '.node_port // ""' "$catalog_file" 2>/dev/null)
+  if [[ -z "$node_port" || "$node_port" == "null" ]]; then
+    log_warn "  ${node}: no node_port in ${catalog_file}; skipping /readyz"
+    continue
+  fi
   NODE_OK=false
   for attempt in $(seq 1 30); do
     STATUS=$(ssh $SSH_OPTS root@"$VM_IP" "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://localhost:${node_port}/readyz" 2>/dev/null || echo "000")
     if [[ "$STATUS" == "200" ]]; then
-      log_info "  Port ${node_port}: /readyz 200 ✅"
+      log_info "  ${node} (${node_port}): /readyz 200 ✅"
       NODE_OK=true
       break
     fi
     if (( attempt % 6 == 0 )); then
-      log_info "  Port ${node_port}: waiting... (${attempt}0s, last status: ${STATUS})"
+      log_info "  ${node} (${node_port}): waiting... (${attempt}0s, last status: ${STATUS})"
     fi
     sleep 10
   done
   if [[ "$NODE_OK" != "true" ]]; then
-    log_error "  Port ${node_port}: /readyz FAILED after 5 min ❌"
+    log_error "  ${node} (${node_port}): /readyz FAILED after 5 min ❌"
     READYZ_OK=false
   fi
 done
