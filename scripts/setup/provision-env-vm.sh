@@ -749,72 +749,91 @@ scp $SSH_OPTS "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" root@"$VM_IP"
 ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CONTAINER=cogni-runtime-temporal-1 TEMPORAL_TIMEOUT=60 bash /tmp/ensure-temporal-namespace.sh"
 
 # ══════════════════════════════════════════════════════════════
-# Phase 6: Create k8s secrets directly on cluster
+# Phase 5b: Install OpenBao + External Secrets Operator (task.0284)
 # ══════════════════════════════════════════════════════════════
-log_step "Phase 6: Create k8s secrets on cluster"
+# Mirrors the image-updater bootstrap shape: rsync local kustomize layer +
+# `kubectl kustomize --enable-helm | kubectl apply -f -`. Idempotent; re-runs
+# fold version bumps in. Both controllers must be installed BEFORE Phase 6
+# (ExternalSecret apply) because Phase 6 references their CRDs.
+#
+# After this phase, OpenBao starts sealed (expected). The operator unseals it
+# once per cluster lifetime (docs/runbooks/openbao-bootstrap.md). Until then,
+# ExternalSecret reconciliation surfaces SecretSyncedError events and
+# downstream Pods CrashLoop — visible in `kubectl describe` + Argo CD UI.
+log_step "Phase 5b: Install OpenBao + ESO"
 
-# Create namespace (Argo CD creates it on first sync, but secrets need it now)
+# OpenBao
+rsync -e "ssh $SSH_OPTS" -az --delete \
+  "$REPO_ROOT/infra/k8s/argocd/openbao/" root@"$VM_IP":/opt/cogni-template-openbao/
+ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-openbao/ | kubectl apply -f -"
+log_info "Applied OpenBao bootstrap kustomize"
+
+# External Secrets Operator
+rsync -e "ssh $SSH_OPTS" -az --delete \
+  "$REPO_ROOT/infra/k8s/argocd/external-secrets/" root@"$VM_IP":/opt/cogni-template-external-secrets-operator/
+ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-external-secrets-operator/ | kubectl apply -f -"
+log_info "Applied External Secrets Operator bootstrap kustomize"
+
+# Wait for ExternalSecret + ClusterSecretStore CRDs to be Established before
+# Phase 6 applies CRs that reference them. (ESO controller itself doesn't need
+# to be Ready; CRDs alone let the API server accept applies and ESO will
+# queue + reconcile.)
+log_info "Waiting for ESO CRDs to register..."
+ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
+  || log_warn "ESO CRDs not yet Established; Phase 6 may fail (TRANSITION_SAFE: re-run provision)."
+
+# Apply the cluster-scoped ClusterSecretStore (one per cluster, env-independent).
+# Lives at the parent of the per-env trees so Phase 6 can apply just the env subdir.
+CSS_LOCAL="$REPO_ROOT/infra/k8s/secrets/external-secrets/cluster-secret-store.yaml"
+scp $SSH_OPTS "$CSS_LOCAL" root@"$VM_IP":/tmp/cluster-secret-store.yaml
+ssh $SSH_OPTS root@"$VM_IP" "kubectl apply -f /tmp/cluster-secret-store.yaml"
+log_info "Applied ClusterSecretStore openbao-backend"
+
+# ══════════════════════════════════════════════════════════════
+# Phase 6: Apply ExternalSecret manifests (ESO materializes the k8s Secrets)
+# ══════════════════════════════════════════════════════════════
+# task.0284 — replaces the pre-substrate imperative `kubectl create secret
+# generic ...` block. App secrets now flow OpenBao → ESO → native k8s Secret.
+# The operator writes secret values into OpenBao via `bao kv put secret/cogni/
+# <env>/<workload>` from their laptop (auth via OIDC from their identity, NOT
+# a shared bot token); ESO pulls them in on its refresh cadence.
+#
+# Bootstrap dependency order (enforced by Phase 5 → 6 → 7 sequencing):
+#   1. OpenBao Application Healthy (Phase 5b applies infra/k8s/argocd/openbao/)
+#   2. ESO Application Healthy (Phase 5b applies infra/k8s/argocd/external-secrets/)
+#   3. Operator unseals OpenBao + writes secret values + binds eso-reader role
+#      (docs/runbooks/openbao-bootstrap.md — out-of-band, runs ONCE per cluster
+#      lifetime)
+#   4. ExternalSecret CRDs applied (this phase) — ESO syncs Secret resources
+#   5. ApplicationSets applied (Phase 7) — pods consume via envFrom: secretRef
+#
+# TRANSITION_SAFE: until step 3 completes for a fresh cluster, ESO emits
+# `SecretSyncedError` events on the ExternalSecrets and the downstream Pod
+# CrashLoops on missing envFrom keys. Both are visible in `kubectl describe`
+# and Argo CD UI; neither hard-fails this script. The runbook documents the
+# unblock procedure.
+log_step "Phase 6: Apply ExternalSecret manifests"
+
+# Create namespace (Argo CD creates it on first sync, but ExternalSecret needs it now)
 ssh $SSH_OPTS root@"$VM_IP" "kubectl create namespace ${K8S_NAMESPACE} 2>/dev/null || true"
 
-# Node-app secrets — one per NODE_TARGETS entry (B2: discover from catalog,
-# don't hardcode operator|poly|resy). v1 single-node-per-namespace convention:
-# secret is named `node-app-secrets` (matches base/node-app/deployment.yaml
-# secretRef without overlay namePrefix). DB name normalises hyphens to
-# underscores per postgres name rules.
-# Multi-node-per-namespace (future): adds overlay namePrefix ${node}- and
-# corresponding ${node}-node-app-secrets here. Out of scope for v1.
-for node in "${NODE_TARGETS[@]}"; do
-  db_name="cogni_${node//-/_}"
-
-  NODE_DB_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
-  NODE_DB_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
-
-  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic node-app-secrets \
-    --from-literal=DATABASE_URL='${NODE_DB_URL}' \
-    --from-literal=DATABASE_SERVICE_URL='${NODE_DB_SERVICE_URL}' \
-    --from-literal=AUTH_SECRET='${AUTH_SECRET}' \
-    --from-literal=LITELLM_MASTER_KEY='${LITELLM_MASTER_KEY}' \
-    --from-literal=OPENROUTER_API_KEY='${OPENROUTER_API_KEY}' \
-    --from-literal=EVM_RPC_URL='${EVM_RPC_URL}' \
-    --from-literal=POLYGON_RPC_URL='${POLYGON_RPC_URL}' \
-    --from-literal=POSTHOG_API_KEY='${POSTHOG_API_KEY}' \
-    --from-literal=POSTHOG_HOST='${POSTHOG_HOST}' \
-    --from-literal=OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
-    --from-literal=OPENCLAW_GITHUB_RW_TOKEN='placeholder-not-needed-for-test' \
-    --from-literal=SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN}' \
-    --from-literal=BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN}' \
-    --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
-    --from-literal=METRICS_TOKEN='${METRICS_TOKEN}' \
-    --dry-run=client -o yaml | kubectl apply -f -"
-  log_info "  Created node-app-secrets (node=${node}, db=${db_name})"
-done
-
-# Scheduler-worker secret
-# NOTE: COGNI_NODE_ENDPOINTS and COGNI_NODE_DBS belong in the configmap (set
-# by Kustomize overlay), NOT here. Putting them in the secret shadows the
-# configmap value (envFrom order: configmap first, secret second → secret wins)
-# and caused CrashLoopBackOff when the secret had UUID-only keys without
-# "operator=" named entry. See scorecard row 20.
-ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic scheduler-worker-secrets \
-  --from-literal=DATABASE_URL='${DATABASE_SERVICE_URL}' \
-  --from-literal=SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN}' \
-  --from-literal=GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' \
-  --from-literal=GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' \
-  --from-literal=GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' \
-  --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
-  --dry-run=client -o yaml | kubectl apply -f -"
-log_info "  Created scheduler-worker-secrets"
-
-# Sandbox-openclaw secret (placeholder)
-ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic sandbox-openclaw-secrets \
-  --from-literal=OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
-  --from-literal=OPENCLAW_GITHUB_RW_TOKEN='placeholder-not-needed-for-test' \
-  --from-literal=LITELLM_MASTER_KEY='${LITELLM_MASTER_KEY}' \
-  --from-literal=DISCORD_BOT_TOKEN='placeholder' \
-  --dry-run=client -o yaml | kubectl apply -f -"
-log_info "  Created sandbox-openclaw-secrets"
-
-log_info "All k8s secrets created"
+# rsync the env-scoped ExternalSecret tree to the VM and apply via kustomize.
+# We rsync (rather than `kubectl apply -k` over a remote URL) so the version
+# applied matches the operator's local checkout — same authority-of-truth as
+# Phase 7's APPSET_LOCAL → APPSET_RENDERED pattern below.
+ES_DIR_LOCAL="$REPO_ROOT/infra/k8s/secrets/external-secrets/${DEPLOY_ENV}"
+if [[ -d "$ES_DIR_LOCAL" ]]; then
+  rsync -e "ssh $SSH_OPTS" -az --delete \
+    "$ES_DIR_LOCAL/" root@"$VM_IP":/opt/cogni-template-external-secrets/
+  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} apply -k /opt/cogni-template-external-secrets/"
+  log_info "Applied ExternalSecret manifests from ${DEPLOY_ENV}"
+else
+  log_warn "No ExternalSecret manifests for ${DEPLOY_ENV} — expected at $ES_DIR_LOCAL"
+  log_warn "Pods consuming envFrom: secretRef will CrashLoop until the operator"
+  log_warn "(a) adds ExternalSecret manifests for this env to infra/k8s/secrets/"
+  log_warn "    external-secrets/${DEPLOY_ENV}/, OR"
+  log_warn "(b) follows docs/runbooks/openbao-bootstrap.md to seed the substrate."
+fi
 
 # ══════════════════════════════════════════════════════════════
 # Phase 7: Deployment Status Report (Scorecard)
@@ -824,16 +843,14 @@ log_info "All k8s secrets created"
 # ══════════════════════════════════════════════════════════════
 log_step "Phase 7: Apply ApplicationSets (triggers Argo sync)"
 
-# Gate: verify prerequisites exist before enabling Argo sync.
-# v1 single-node-per-namespace: one `node-app-secrets` per env namespace
-# (not one per NODE_TARGETS entry — see Phase 6 comment).
-ssh $SSH_OPTS root@"$VM_IP" "
-  kubectl -n ${K8S_NAMESPACE} get secret node-app-secrets >/dev/null || { echo 'FATAL: node-app-secrets missing'; exit 1; }
-  kubectl -n ${K8S_NAMESPACE} get secret scheduler-worker-secrets >/dev/null || { echo 'FATAL: scheduler-worker-secrets missing'; exit 1; }
-  echo 'All prerequisite secrets verified'
-"
-
 # Apply the ApplicationSet for this environment via SCP from the local repo checkout.
+# task.0284 — the pre-substrate prerequisite gate (`kubectl get secret node-app-
+# secrets` etc.) is intentionally removed: ESO materializes those Secrets
+# asynchronously from OpenBao, so a hard-gate here would either always fail
+# (cold cluster, OpenBao not yet seeded) or always pass for the wrong reason
+# (stale Secret from a prior provision still cached). The ExternalSecret status
+# is the authoritative readiness signal; surface it via `kubectl describe
+# externalsecret -n ${K8S_NAMESPACE}` post-apply.
 # Bootstrap cloud-init already installed Argo CD. Re-applying the full install conflicts.
 #
 # Why SCP instead of git clone? The ApplicationSet files live in infra/k8s/argocd/ which

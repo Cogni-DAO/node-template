@@ -138,6 +138,17 @@ jobs:
       - name: Image Updater scope (bug.0344)
         run: bash scripts/ci/check-image-updater-scope.sh
 
+      # task.0284 — structural guardrail on External Secrets Operator scope.
+      # Two invariants: every ExternalSecret lives under
+      # infra/k8s/secrets/external-secrets/<env>/, and every ExternalSecret
+      # references the sanctioned ClusterSecretStore "openbao". Fixture tests
+      # at scripts/ci/tests/check-eso-scope.test.sh cover the matrix.
+      - name: External Secrets scope (task.0284)
+        run: bash scripts/ci/check-eso-scope.sh
+
+      - name: External Secrets scope tests (task.0284)
+        run: bash scripts/ci/tests/check-eso-scope.test.sh
+
       - name: Unit + contract coverage tests
         run: pnpm test:ci
 
