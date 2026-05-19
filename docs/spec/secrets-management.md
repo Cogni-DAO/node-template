@@ -79,7 +79,12 @@ A human or AI agent can declare a new secret, rotate an existing secret, or revo
 
 12. **TRANSITION_SAFE.** When ESO is wired but a specific path is empty (cold-start), the pod fails to start (loud, not silent). When a path exists but a specific key is missing, that env var is unset (Go/Node default semantics). Code that requires a secret MUST fail fast at startup with a clear error referencing the missing key NAME (not VALUE).
 
-13. **NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP.** The bootstrap root token captured by `provision-env-vm.sh` Phase 5b exists for the ~5 min unseal+policy-write window only; nothing reads `.local/<env>-openbao-root-token` after bootstrap. Day-2 secret writes require the operator to obtain a short-lived OpenBao token themselves — `kubectl port-forward` + `bao login -method=kubernetes` (or the future `.github/workflows/secrets-manage.yml` workflow_dispatch path, which uses `hashicorp/vault-action` for GH-OIDC→OpenBao exchange). No script reads the bootstrap root token from disk after Phase 5b; no SSH-to-VM-then-kubectl-exec path exists. Violation = the laptop-shell pattern that `proj.security-hardening`'s motivating incident exists to eliminate (a long-lived superuser credential on a developer disk).
+13. **NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP.** The bootstrap root token captured by `provision-env-vm.sh` Phase 5b exists during the ~30 min provisioning window only — Phases 5b.3 (eso-reader policy + role), 5b.4 (`<env>-writer` policy + role binding to `default/openbao-operator`), and 5c (initial path seeding) use it imperatively; nothing reads `.local/<env>-openbao-root-token` after Phase 5b exits. Day-2 secret writes mint a short-lived bao token via the writer role:
+    ```
+    bao login -method=kubernetes role=<env>-writer \
+      token=$(kubectl create token openbao-operator -n default)
+    ```
+    No script reads the bootstrap root token from disk post-bootstrap; no SSH-to-VM-then-kubectl-exec-as-root path exists. The bootstrap window itself is tolerated as the bounded "trust the operator's laptop" moment — v2 closes even this gap by moving provisioning to a GitHub workflow (operator triggers `gh workflow run provision-env.yml`; root token never touches a laptop). Tracked in the follow-up bug. Violation today = re-exporting the root token from `.local/` for day-2 writes, which would re-create the long-lived-superuser-credential-on-a-laptop pattern that `proj.security-hardening`'s motivating incident exists to eliminate.
 
 ---
 

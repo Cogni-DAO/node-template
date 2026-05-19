@@ -884,7 +884,8 @@ if [[ -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
   # Configure (idempotent).
   bao_exec "write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443" >/dev/null
 
-  # eso-reader policy + role binding (upsert).
+  # eso-reader policy + role binding (upsert). Used by the in-cluster ESO
+  # controller's ServiceAccount — read-only across all envs.
   log_info "Writing eso-reader policy + role binding..."
   ssh $SSH_OPTS root@"$VM_IP" "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao policy write eso-reader -" <<'HCL'
 path "cogni/data/*"     { capabilities = ["read"] }
@@ -896,11 +897,40 @@ HCL
     policies=eso-reader \
     ttl=1h" >/dev/null
   log_info "  eso-reader role bound — ESO can now read cogni/* via Kubernetes auth"
+
+  # ── 5b.4 Operator writer role (per-env, post-bootstrap CLI path) ──────────
+  # Closes the post-bootstrap gap: without this, `pnpm secrets:set` would
+  # have nowhere to authenticate except the root token (forbidden by spec
+  # Invariant 13 NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP).
+  #
+  # The operator authenticates as the `openbao-operator` ServiceAccount in
+  # the `default` namespace (created here). They mint a short-lived JWT
+  # via `kubectl create token openbao-operator` and exchange it for a bao
+  # token via `bao login -method=kubernetes role=${DEPLOY_ENV}-writer`.
+  #
+  # Policy is per-env: writers on this env CANNOT touch other envs' paths
+  # (spec Invariant 6 RBAC_VIA_PATH_POLICY). No `delete` capability — destroy
+  # requires admin escalation per CC6.1.
+  log_info "Writing ${DEPLOY_ENV}-writer policy + role binding..."
+  ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl get sa openbao-operator -n default >/dev/null 2>&1 \
+       || kubectl create sa openbao-operator -n default"
+  ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao policy write ${DEPLOY_ENV}-writer -" <<HCL
+path "cogni/data/${DEPLOY_ENV}/*"     { capabilities = ["read", "create", "update", "patch"] }
+path "cogni/metadata/${DEPLOY_ENV}/*" { capabilities = ["read", "list"] }
+HCL
+  bao_exec "write auth/kubernetes/role/${DEPLOY_ENV}-writer \
+    bound_service_account_names=openbao-operator \
+    bound_service_account_namespaces=default \
+    policies=${DEPLOY_ENV}-writer \
+    ttl=1h" >/dev/null
+  log_info "  ${DEPLOY_ENV}-writer role bound — operator: kubectl create token openbao-operator -n default | bao login -method=kubernetes role=${DEPLOY_ENV}-writer"
 else
   log_warn "No root token at $OPENBAO_ROOT_TOKEN_LOCAL — skipping KV mount + auth setup. Re-run provision after recovering init artifacts."
 fi
 
-# ── 5b.4 Apply ClusterSecretStore (lives at parent of per-env trees) ──────
+# ── 5b.5 Apply ClusterSecretStore (lives at parent of per-env trees) ──────
 CSS_LOCAL="$REPO_ROOT/infra/k8s/secrets/external-secrets/cluster-secret-store.yaml"
 scp $SSH_OPTS "$CSS_LOCAL" root@"$VM_IP":/tmp/cluster-secret-store.yaml
 ssh $SSH_OPTS root@"$VM_IP" "kubectl apply -f /tmp/cluster-secret-store.yaml"

@@ -144,9 +144,11 @@ the bot owns.
      configures Cloudflare DNS, **installs the secrets substrate
      (OpenBao + External Secrets Operator), auto-unseals OpenBao
      (Shamir 1-of-1 default; init artifacts captured to
-     `.local/<env>-openbao-init.json`), binds the `eso-reader`
-     Kubernetes auth role, and seeds the per-service OpenBao paths
-     with the agent-generated values** — see
+     `.local/<env>-openbao-init.json`), binds two Kubernetes auth
+     roles — `eso-reader` for the ESO controller (read-only) and
+     `<env>-writer` for the operator SA `default/openbao-operator`
+     (writes on cogni/<env>/\* only) — and seeds the per-service
+     OpenBao paths with the agent-generated values** — see
      [`docs/spec/secrets-management.md`](../spec/secrets-management.md).
      Then it dispatches promote-and-deploy.yml. Bootstrap fails BEFORE
      spending Cherry money if any pre-flight check fails.
@@ -173,9 +175,18 @@ the 5 keys and the script halts here for you to distribute them
 before unseal can proceed.
 
 6.7 APP SECRETS — enter values for the operator-pass-through keys that
-`pnpm bootstrap` no longer carries:
+`pnpm bootstrap` no longer carries. **Prereq: get a short-lived bao token
+via the writer role bound in Phase 5b.4 (NEVER re-export the root token):**
 
 ```
+# One-time per shell session — substitute <env>.
+kubectl port-forward -n openbao svc/openbao 8200:8200 &
+export BAO_ADDR=http://127.0.0.1:8200
+bao login -method=kubernetes role=<env>-writer \
+  token=$(kubectl create token openbao-operator -n default)
+export BAO_TOKEN=$(bao print token)
+
+# Now write the keys:
 pnpm secrets:set <env> node-template OPENROUTER_API_KEY     # mandatory
 pnpm secrets:set <env> node-template GRAFANA_CLOUD_LOKI_API_KEY   # optional
 pnpm secrets:set <env> node-template PROMETHEUS_REMOTE_WRITE_URL # optional

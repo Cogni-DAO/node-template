@@ -20,21 +20,22 @@ tags:
 
 ## Prereq — get a short-lived OpenBao token
 
-The CLI talks to OpenBao via `BAO_ADDR` + `BAO_TOKEN`. Get a token before running it:
+The CLI talks to OpenBao via `BAO_ADDR` + `BAO_TOKEN`. Three copy-paste lines (substitute `<env>`):
 
 ```bash
 # 1. Open a tunnel to the OpenBao service.
 kubectl port-forward -n openbao svc/openbao 8200:8200 &
 export BAO_ADDR=http://127.0.0.1:8200
 
-# 2. Authenticate. Any short-lived issuer works; the canonical operator path
-#    is Kubernetes auth (uses your kubeconfig ServiceAccount) once that role
-#    is bound to a writer policy. See "Operator role binding" below.
-bao login -method=kubernetes role=<your-writer-role>
+# 2. Authenticate as the openbao-operator SA. provision-env-vm.sh Phase 5b.4
+#    bound a `<env>-writer` role to this SA; the JWT below is exchanged for a
+#    1h bao token scoped to cogni/<env>/* writes only.
+bao login -method=kubernetes role=<env>-writer \
+  token=$(kubectl create token openbao-operator -n default)
 export BAO_TOKEN=$(bao print token)
 ```
 
-**Never `cat .local/<env>-openbao-root-token`** into `BAO_TOKEN`. The bootstrap root token is destroyed (revoked or made inaccessible) after Phase 5b unseal+policy-write completes. Reading it from disk would re-create the long-lived-superuser-credential-on-a-laptop pattern that [`proj.security-hardening`](../../work/projects/proj.security-hardening.md) exists to eliminate. Spec: [Invariant 13 NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP](../spec/secrets-management.md).
+**Never `cat .local/<env>-openbao-root-token`** into `BAO_TOKEN`. The bootstrap root token is captured during the ~30 min provisioning window only — Phase 5b.4 binds the writer role specifically so day-2 writes never need that token. Reading it from disk would re-create the long-lived-superuser-credential-on-a-laptop pattern that [`proj.security-hardening`](../../work/projects/proj.security-hardening.md) exists to eliminate. Spec: [Invariant 13 NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP](../spec/secrets-management.md).
 
 ## The write
 
@@ -78,7 +79,16 @@ The candidate-a slack is intentional — it's the experiment slot. The preview/p
 
 ## Operator role binding
 
-The Kubernetes auth role you log in with (`bao login -method=kubernetes role=<your-writer-role>`) must exist + be bound to a writer policy for the env you're writing to. The `eso-reader` role wired by `provision-env-vm.sh` Phase 5b.3 is **read-only**; writer roles are scoped per-env and are part of the same bootstrap (Phase 5b.4 once it lands) or applied as a `vault-config-operator` CRD in the follow-up. Until that's automated, ask the cluster admin to mint the role (`bao write auth/kubernetes/role/<env>-writer ...`) once per env.
+The Kubernetes auth role `<env>-writer` is bound by `provision-env-vm.sh` Phase 5b.4 during bootstrap, alongside the read-only `eso-reader` role (Phase 5b.3). Both bindings:
+
+| Role           | Bound SA                                               | Policy paths                                                                                     | TTL |
+| -------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------ | --- |
+| `eso-reader`   | `external-secrets/external-secrets` (ESO controller)   | `cogni/data/*`, `cogni/metadata/*` — read across all envs                                        | 1h  |
+| `<env>-writer` | `default/openbao-operator` (operator's ServiceAccount) | `cogni/data/<env>/*`, `cogni/metadata/<env>/*` — read + create + update + patch on THIS env only | 1h  |
+
+No `delete` capability on writer; destroy requires admin escalation per spec Invariant 6 / CC6.1.
+
+If the role binding is missing (re-provision skipped a phase, or you're on a pre-task.0284 cluster), the cluster admin re-runs the Phase 5b.4 stanza manually using the captured init artifact (`.local/<env>-openbao-init.json`). After Phase 5b completes, the root token is never needed again.
 
 ## Cross-service or system secrets
 
