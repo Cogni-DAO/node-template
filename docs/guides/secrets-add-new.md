@@ -16,11 +16,27 @@ tags:
 
 # Add a New Secret to a Service
 
-> **The whole guide is one paragraph long.** That's the point — adding a secret is a control-plane operation, not a YAML rewrite. If you find yourself editing a pod spec or an ExternalSecret YAML, you're doing it wrong; come back here.
+> Adding a secret is a control-plane operation, not a YAML rewrite. If you find yourself editing a pod spec or an ExternalSecret YAML, you're doing it wrong — come back here.
 
-## The flow
+## Prereq — get a short-lived OpenBao token
 
-Adding a new secret named `OPENAI_API_KEY` to `node-template` service on `candidate-a`:
+The CLI talks to OpenBao via `BAO_ADDR` + `BAO_TOKEN`. Get a token before running it:
+
+```bash
+# 1. Open a tunnel to the OpenBao service.
+kubectl port-forward -n openbao svc/openbao 8200:8200 &
+export BAO_ADDR=http://127.0.0.1:8200
+
+# 2. Authenticate. Any short-lived issuer works; the canonical operator path
+#    is Kubernetes auth (uses your kubeconfig ServiceAccount) once that role
+#    is bound to a writer policy. See "Operator role binding" below.
+bao login -method=kubernetes role=<your-writer-role>
+export BAO_TOKEN=$(bao print token)
+```
+
+**Never `cat .local/<env>-openbao-root-token`** into `BAO_TOKEN`. The bootstrap root token is destroyed (revoked or made inaccessible) after Phase 5b unseal+policy-write completes. Reading it from disk would re-create the long-lived-superuser-credential-on-a-laptop pattern that [`proj.security-hardening`](../../work/projects/proj.security-hardening.md) exists to eliminate. Spec: [Invariant 13 NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP](../spec/secrets-management.md).
+
+## The write
 
 ```bash
 pnpm secrets:set candidate-a node-template OPENAI_API_KEY
@@ -40,25 +56,29 @@ Done. The CLI writes to OpenBao at `cogni/candidate-a/node-template`, key `OPENA
 
 This is the contract from [`docs/spec/secrets-management.md`](../spec/secrets-management.md), enforced by ESO's `dataFrom: extract` pattern (one ExternalSecret per service-env, pulls all keys; published canonical pattern: [ESO docs](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1.ExternalSecretDataFromRemoteRef)).
 
-## Three entry points — pick the one for your context
+## Entry points
 
-| Context                     | Entry                                                                                                    | Why                                                                                                                                                                |
-| --------------------------- | -------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Developer at terminal       | `pnpm secrets:set <env> <service> <KEY>`                                                                 | Interactive, secure-input, validates path against catalog                                                                                                          |
-| Operator / on-call          | [`.github/workflows/secrets-manage.yml`](../../.github/workflows/secrets-manage.yml) → workflow_dispatch | Audit-logged, OIDC-auth'd, env-protection-gated for production                                                                                                     |
-| AI agent (via operator MCP) | `secret.declare` tool → human fills value via one-time URL                                               | Agent declares SHAPE; never sees VALUE. See [`spec.secrets-management § Operator API`](../spec/secrets-management.md#entry-3--operator-api-ai-agents-mcp-mediated) |
+| Context                          | Entry                                                                                                                                                                                         | Status                                                                                                                                                                |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Developer / operator at terminal | `pnpm secrets:set <env> <service> <KEY>` (this guide)                                                                                                                                         | **Shipped.** Requires caller-provided `BAO_ADDR` + short-lived `BAO_TOKEN` (see Prereq).                                                                              |
+| Operator / on-call ops           | `.github/workflows/secrets-manage.yml` → workflow_dispatch (GH OIDC → OpenBao via [`hashicorp/vault-action`](https://github.com/hashicorp/vault-action); env-protection-gated for production) | **Deferred** — canonical operator path once it ships. Tracked in the follow-up bug under [`proj.security-hardening`](../../work/projects/proj.security-hardening.md). |
+| AI agent (via operator MCP)      | `secret.declare` tool → human fills value via one-time URL                                                                                                                                    | Out of scope for node-template (operator monorepo construct).                                                                                                         |
 
-All three call the same OpenBao primitive (`bao kv patch`) with different auth methods. You don't choose which OpenBao call happens; you choose which interface fits your context.
+All paths call the same OpenBao primitive (`bao kv put`/`patch`). You don't choose which OpenBao call happens; you choose which interface fits your context. **Today there is one shipped path: the CLI with a caller-provided short-lived token.**
 
 ## Per-env behavior
 
-| Env           | Tooling required?                                                          | Approval gate                                                                    |
-| ------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `candidate-a` | Recommended but not enforced — local OpenBao access OK for experimentation | None                                                                             |
-| `preview`     | **Required.** Direct `bao kv put` refused by policy                        | Workflow auto-approves if actor has `preview-writer` role                        |
-| `production`  | **Required + protected.** Direct `bao kv put` refused by policy            | GitHub environment-protection rule requires explicit reviewer approval per write |
+| Env           | Approval gate                                                                                                                                                             | Notes                                                         |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
+| `candidate-a` | None (forker self-approves; experiment slot)                                                                                                                              | Use the CLI with a token bound to a `candidate-a-writer` role |
+| `preview`     | OpenBao policy rejects writes from any role except `preview-writer`                                                                                                       | Same CLI; the token's policy is the gate                      |
+| `production`  | OpenBao policy rejects writes from any role except `production-writer`; once `secrets-manage.yml` ships, GitHub environment-protection adds a per-write reviewer approval | Same CLI today; switch to workflow_dispatch when it lands     |
 
 The candidate-a slack is intentional — it's the experiment slot. The preview/production lockdown is the SOC 2 CC6.1 / CC8.1 boundary.
+
+## Operator role binding
+
+The Kubernetes auth role you log in with (`bao login -method=kubernetes role=<your-writer-role>`) must exist + be bound to a writer policy for the env you're writing to. The `eso-reader` role wired by `provision-env-vm.sh` Phase 5b.3 is **read-only**; writer roles are scoped per-env and are part of the same bootstrap (Phase 5b.4 once it lands) or applied as a `vault-config-operator` CRD in the follow-up. Until that's automated, ask the cluster admin to mint the role (`bao write auth/kubernetes/role/<env>-writer ...`) once per env.
 
 ## Cross-service or system secrets
 
@@ -102,25 +122,19 @@ The code MUST fail fast at startup if a required secret is missing (don't return
 
 ## What the CLI does under the hood
 
-```bash
-# pnpm secrets:set candidate-a node-template OPENAI_API_KEY
-# Approximate logic in scripts/secrets/set-secret.sh:
+`scripts/secrets/set-secret.sh`:
 
-ENV=$1; SERVICE=$2; KEY=$3
-# 1. Validate ENV is one of {candidate-a, preview, production}
-# 2. Validate SERVICE exists in infra/catalog/
-# 3. Validate KEY format (uppercase, alphanumeric + underscore)
-# 4. Refuse if SERVICE matches "_system" or "_shared" (separate flow)
-# 5. Authenticate to OpenBao:
-#    - If $BAO_TOKEN set, use it
-#    - Else use OIDC flow (browser handoff for humans; mTLS for CI)
-# 6. Prompt for value via `read -s` (no echo)
-# 7. bao kv patch cogni/$ENV/$SERVICE "$KEY=$VALUE"
-# 8. Emit success: "✓ Wrote cogni/$ENV/$SERVICE/$KEY (v<N>). ESO refresh ≤ 1h."
-# 9. Optionally annotate force-sync if --immediate flag passed
-```
+1. Validates `<env>` ∈ {candidate-a, preview, production}.
+2. Validates `<service>` matches a `infra/catalog/<service>.yaml` entry (or `_shared`; refuses `_system`).
+3. Validates `<KEY>` matches `^[A-Z][A-Z0-9_]*$`.
+4. Reads value from stdin (interactive `read -s` if a TTY; pipe otherwise). Never echoes.
+5. Requires `BAO_ADDR` + `BAO_TOKEN` from the environment. Dies with a port-forward + `bao login` recipe if either is missing.
+6. Checks if the path already exists via `bao kv metadata get`. If not → `bao kv put` (creates the path). If yes → `bao kv patch` (preserves sibling keys, adds a new version).
+7. Passes the value via `KEY=-` stdin so it never enters argv (`ps` is clean).
 
-The whole thing is ~30 lines of bash. Same primitive, three faces (CLI / workflow / API).
+No `--immediate` flag yet — force-sync is a separate `kubectl annotate` step (see below).
+
+Tests at [`scripts/ci/tests/set-secret.test.sh`](../../scripts/ci/tests/set-secret.test.sh) (12 fixture cases via the `$SET_SECRET_BAO` test shim).
 
 ## Related
 

@@ -68,16 +68,18 @@ A human or AI agent can declare a new secret, rotate an existing secret, or revo
 8. **EVERY_ACCESS_AUDITED.** OpenBao audit device enabled; logs shipped to Loki via Alloy. Every read, write, rotate, delete is captured with actor identity (Kubernetes ServiceAccount, OIDC subject, or operator-MCP token), timestamp, path, and outcome. SOC 2 CC7.2 anomaly detection layers on top of this stream.
 
 9. **TOOLING_IS_THE_INTERFACE.** Humans/agents NEVER call `bao kv put` directly in production paths. Three standardized entry points (all calling the same primitive):
-   - **CLI:** `pnpm secrets:set <env> <service> <KEY>` (developer; interactive; never echoes values)
-   - **GitHub workflow:** `.github/workflows/secrets-manage.yml` (ops; workflow_dispatch with OIDC auth)
-   - **Operator API:** `POST /api/v1/secrets/declare` (AI agents via operator MCP)
-     The candidate-a path may bypass tooling for local experimentation; preview/production MUST go through tooling.
+   - **CLI:** `pnpm secrets:set <env> <service> <KEY>` (developer; interactive; never echoes values; requires caller-provided `BAO_ADDR` + short-lived `BAO_TOKEN` — see Invariant 13)
+   - **GitHub workflow:** `.github/workflows/secrets-manage.yml` (ops; workflow_dispatch; uses `hashicorp/vault-action` for GH-OIDC→OpenBao token exchange — **deferred; canonical operator path for preview/production once it ships**)
+   - **Operator API:** `POST /api/v1/secrets/declare` (AI agents via operator MCP; out of scope for node-template — operator monorepo construct)
+     The CLI is the only currently-implemented path. Until the workflow_dispatch entry ships, preview/production writes use the CLI with short-lived `BAO_TOKEN`s (port-forward + `bao login`).
 
 10. **SEED_TOKEN_IS_NEVER_TOUCHED_MANUALLY.** The `OPENBAO_SEED_TOKEN` (the one secret in GH env secrets per env) is written ONCE by `bootstrap.sh` and rotated only by automated mechanisms (operator-app rotation cron or Kubernetes auth method renewal). No human or agent ever runs `gh secret set OPENBAO_SEED_TOKEN` manually post-bootstrap.
 
 11. **ROTATION_DOES_NOT_EDIT_GIT.** Routine rotation is a control-plane operation (`bao kv patch`). The k8s Secret is synced by ESO automatically; the pod is restarted by Stakater Reloader when it detects the Secret change. Zero PRs for rotation.
 
 12. **TRANSITION_SAFE.** When ESO is wired but a specific path is empty (cold-start), the pod fails to start (loud, not silent). When a path exists but a specific key is missing, that env var is unset (Go/Node default semantics). Code that requires a secret MUST fail fast at startup with a clear error referencing the missing key NAME (not VALUE).
+
+13. **NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP.** The bootstrap root token captured by `provision-env-vm.sh` Phase 5b exists for the ~5 min unseal+policy-write window only; nothing reads `.local/<env>-openbao-root-token` after bootstrap. Day-2 secret writes require the operator to obtain a short-lived OpenBao token themselves — `kubectl port-forward` + `bao login -method=kubernetes` (or the future `.github/workflows/secrets-manage.yml` workflow_dispatch path, which uses `hashicorp/vault-action` for GH-OIDC→OpenBao exchange). No script reads the bootstrap root token from disk after Phase 5b; no SSH-to-VM-then-kubectl-exec path exists. Violation = the laptop-shell pattern that `proj.security-hardening`'s motivating incident exists to eliminate (a long-lived superuser credential on a developer disk).
 
 ---
 

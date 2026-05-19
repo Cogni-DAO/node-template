@@ -39,12 +39,14 @@ Per [NIST SP 800-57 §8 Key States](https://csrc.nist.gov/publications/detail/sp
 The 95% case. Generate-then-rotate, zero downtime, zero git changes.
 
 ```bash
-pnpm secrets:rotate candidate-a node-template AUTH_SECRET
-# Tool:
-#   1. Generates a new 64-char random value (cryptographically secure)
-#   2. Writes via bao kv patch (preserves other keys; new version on the path)
-#   3. Confirms: "✓ Rotated cogni/candidate-a/node-template/AUTH_SECRET (v3 → v4)"
-#   4. Reminds: "ESO refresh ≤ 1h, or annotate force-sync to apply now"
+# Today: rotate = generate locally + `pnpm secrets:set`. The dedicated
+# `pnpm secrets:rotate` wrapper (auto-generate + write + force-sync) is
+# tracked as a follow-up under proj.security-hardening; the underlying
+# primitive is identical to `secrets:set` (bao kv patch).
+NEW=$(openssl rand -hex 32)
+printf '%s' "$NEW" | pnpm secrets:set candidate-a node-template AUTH_SECRET
+unset NEW
+# Prereq: BAO_ADDR + BAO_TOKEN per docs/guides/secrets-add-new.md
 ```
 
 What happens next:
@@ -62,12 +64,13 @@ What happens next:
 
 **No PR. No YAML edit. No `kubectl apply`. Just one CLI call + time.**
 
-If you need the rotation applied immediately (e.g., revoking access for a departing contractor):
+If you need the rotation applied immediately (e.g., revoking access for a departing contractor), annotate the ExternalSecret to force-sync after the write:
 
 ```bash
-pnpm secrets:rotate candidate-a node-template AUTH_SECRET --immediate
-# Same as above PLUS: kubectl annotate externalsecret ... force-sync=$(date +%s)
-# Propagation completes in <2 minutes instead of <1 hour.
+kubectl annotate externalsecret -n cogni-candidate-a node-template-env-secrets \
+  force-sync=$(date +%s) --overwrite
+# ESO syncs in seconds (not the configured 1h). Reloader restarts the pod.
+# Propagation completes in <2 minutes.
 ```
 
 ## Rotation for keys you don't generate locally
@@ -75,13 +78,14 @@ pnpm secrets:rotate candidate-a node-template AUTH_SECRET --immediate
 Some secrets are values issued by external systems (OpenAI keys, OpenRouter keys, Cherry tokens, GH PATs). You can't `--generate-new` for those.
 
 ```bash
-# 1. Mint new value at the issuer (browser, dashboard, API)
-# 2. Apply it via the CLI in interactive mode (prompts for value):
-pnpm secrets:rotate production poly OPENAI_API_KEY
-# Prompts: "New value: " (secure input; never echoes)
+# 1. Mint new value at the issuer (browser, dashboard, API).
+# 2. Apply it via the CLI in interactive mode (prompts for value).
+#    Prereq: BAO_ADDR + BAO_TOKEN (port-forward + bao login).
+pnpm secrets:set production poly OPENAI_API_KEY
+# Prompts: "Value for cogni/...: " (secure input; never echoes)
 # Writes via bao kv patch, preserves prior version
-# 3. Verify new key is in use (via your app's health endpoint or external API logs)
-# 4. Revoke the old key at the issuer (only AFTER confirming new key is in production)
+# 3. Verify new key is in use (your app's health endpoint or external API logs).
+# 4. Revoke the old key at the issuer (only AFTER confirming new key is in production).
 ```
 
 The two-step (write new, verify, then revoke old) prevents the "I rotated and now the service is down" failure mode. **Always verify new credential is in use before revoking the old at the issuer.**
@@ -95,8 +99,10 @@ Some external services (GitHub, OpenRouter) expose rotation APIs that let you ge
 When you have reason to believe a secret has been exposed (laptop theft, accidental commit, audit finding, ex-employee, suspicious access pattern in OpenBao audit log):
 
 ```bash
-# 1. Rotate immediately to lock out the old value
-pnpm secrets:rotate production poly OPENAI_API_KEY --immediate
+# 1. Rotate immediately to lock out the old value.
+pnpm secrets:set production poly OPENAI_API_KEY
+kubectl annotate externalsecret -n cogni-production poly-env-secrets \
+  force-sync=$(date +%s) --overwrite
 #    (interactive prompt for new value, ESO force-sync, pod restarts in <2 min)
 
 # 2. Revoke the old value at the issuer
@@ -200,15 +206,20 @@ This stream is the evidence. No spreadsheet, no manual audit log — the canonic
 ## Substrate-token rotation (root token + unseal keys)
 
 The root token + unseal keys captured at init by `provision-env-vm.sh`
-Phase 5b are break-glass credentials. The day-to-day audit substrate is
-the Kubernetes auth method + per-role policies — no human/agent uses
-the root token after bootstrap. Rotate the root annually OR after any
-suspected compromise of `.local/<env>-openbao-init.json`.
+Phase 5b are **break-glass credentials** — they exist briefly during
+unseal+policy-write, and per spec [Invariant 13 NO*OPERATOR_ROOT_TOKEN*
+ON_LAPTOP](../spec/secrets-management.md) nothing reads them from disk
+post-bootstrap. The day-to-day path is Kubernetes auth method + per-role
+policies. Rotate the root annually OR after any suspected compromise of
+`.local/<env>-openbao-init.json`.
 
 ```bash
-# 1. Generate a new root token using your unseal key threshold.
-#    Repeat the second command once per unseal key (threshold times).
+# Performed against the cluster directly (kubectl exec; no SSH-from-laptop).
+# Operator's kubeconfig must reach the openbao namespace.
+
+# 1. Initialize a fresh root-generation flow.
 kubectl exec -ti -n openbao openbao-0 -- bao operator generate-root -init
+# Provide unseal-key shares until threshold is reached:
 kubectl exec -ti -n openbao openbao-0 -- bao operator generate-root \
   -nonce=<nonce> <unseal-key>
 
@@ -219,8 +230,10 @@ kubectl exec -ti -n openbao openbao-0 -- bao operator generate-root \
 # 3. Revoke the old root token via the old token.
 BAO_TOKEN=<old-root> kubectl exec -ti -n openbao openbao-0 -- bao token revoke -self
 
-# 4. Update .local/<env>-openbao-root-token (used by `pnpm secrets:set` SSH
-#    fallback path). Store the captured value in your password manager too.
+# 4. Store the new root in your password manager. Do NOT save it to a
+#    long-lived file under .local/ — it is break-glass only. Update
+#    .local/<env>-openbao-init.json only if your incident-response
+#    workflow expects to re-run provision-env-vm.sh Phase 5b restoration.
 ```
 
 Rotating unseal keys (`bao operator rekey`) is rare; the standard path is

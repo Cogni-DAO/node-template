@@ -17,13 +17,15 @@
 #        for non-interactive use (CI / bootstrap auto-seed):
 #   echo -n "value" | pnpm secrets:set candidate-a node-app FOO
 #
-# Connectivity: tries in order
-#   1. $BAO_ADDR + $BAO_TOKEN env (e.g. port-forward + admin token in CI)
-#   2. SSH to .local/<env>-vm-ip with .local/<env>-vm-key, then
-#      `kubectl exec -n openbao openbao-0 -- bao` using
-#      .local/<env>-openbao-root-token
-# Tests stub via $SET_SECRET_BAO (an executable path used in place of
-# either real path) — see scripts/ci/tests/set-secret.test.sh.
+# Connectivity: $BAO_ADDR + $BAO_TOKEN must be set by the caller.
+#   Operator path: `kubectl port-forward -n openbao svc/openbao 8200:8200`
+#                  + `bao login -method=kubernetes role=<your-role>` (or any
+#                  short-lived token issuer). NEVER export the bootstrap root
+#                  token — that credential lives in the cluster only after
+#                  Phase 5b unseal, per spec Invariant NO_OPERATOR_ROOT_TOKEN_
+#                  ON_LAPTOP. See docs/guides/secrets-add-new.md.
+# Tests stub via $SET_SECRET_BAO (executable path) — see
+# scripts/ci/tests/set-secret.test.sh.
 
 set -euo pipefail
 
@@ -94,58 +96,42 @@ fi
 
 # ── Patch invocation ────────────────────────────────────────────────────────
 # The KV v2 path mounted at `cogni/` (see ClusterSecretStore) — `bao kv patch`
-# writes to data/<path> automatically. `kv patch` cannot create an absent
-# path, so first writes use `kv put` and later writes use `kv patch`.
-# We pass the key=value as the FIRST (and only) arg following the path so that
-# `bao` reads it; the value is passed via stdin to avoid showing in `ps`.
+# writes to data/<path>. `kv patch` cannot create an absent path, so first
+# write uses `kv put`; subsequent writes use `kv patch` (preserves siblings).
+# Value is passed via stdin (`key=-`) so it never appears in argv / `ps`.
 #
-# Three execution modes:
+# Execution modes:
 #  1. $SET_SECRET_BAO set → invoke that command directly (test shim)
 #  2. $BAO_ADDR + $BAO_TOKEN set → invoke `bao` from PATH
-#  3. otherwise → kubectl exec into openbao-0 over SSH using local .local/ keys
+# No SSH fallback. Operators must obtain a short-lived OpenBao token
+# themselves (port-forward + `bao login -method=kubernetes`, or via the
+# future workflow_dispatch path). The bootstrap root token never leaves
+# the cluster after Phase 5b — Spec Invariant NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP.
 
 bao_path="cogni/${env_name}/${service}"
 
 if [[ -n "${SET_SECRET_BAO:-}" ]]; then
-  # Test shim — bypass real bao + SSH. The shim receives:
-  #   $1 = path, $2 = key, value via stdin
+  # Test shim — bypass real bao. Shim receives: $1=path, $2=key, value via stdin.
   printf '%s' "$value" | "$SET_SECRET_BAO" "$bao_path" "$key"
   exit_code=$?
   exit $exit_code
 fi
 
-if [[ -n "${BAO_ADDR:-}" && -n "${BAO_TOKEN:-}" ]]; then
-  command -v bao >/dev/null 2>&1 || die "bao CLI not found on PATH (needed when BAO_ADDR is set)."
-  op="patch"
-  if ! BAO_ADDR="$BAO_ADDR" BAO_TOKEN="$BAO_TOKEN" bao kv metadata get "$bao_path" >/dev/null 2>&1; then
-    op="put"
-  fi
-  # bao kv <op> <path> key=@/dev/stdin reads value from stdin without
-  # interpolating into argv. Available since OpenBao 2.x.
-  printf '%s' "$value" | BAO_ADDR="$BAO_ADDR" BAO_TOKEN="$BAO_TOKEN" \
-    bao kv "$op" "$bao_path" "${key}=-"
-  exit
+if [[ -z "${BAO_ADDR:-}" || -z "${BAO_TOKEN:-}" ]]; then
+  die "BAO_ADDR + BAO_TOKEN must be set. Obtain a short-lived token:
+    kubectl port-forward -n openbao svc/openbao 8200:8200 &
+    export BAO_ADDR=http://127.0.0.1:8200
+    bao login -method=kubernetes role=<your-role>   # or another short-lived issuer
+    export BAO_TOKEN=\$(bao print token)
+See docs/guides/secrets-add-new.md."
 fi
 
-# Fallback: SSH to VM, kubectl exec into openbao-0, run bao.
-vm_ip_file="$REPO_ROOT/.local/${env_name}-vm-ip"
-ssh_key_file="$REPO_ROOT/.local/${env_name}-vm-key"
-root_token_file="$REPO_ROOT/.local/${env_name}-openbao-root-token"
-for f in "$vm_ip_file" "$ssh_key_file" "$root_token_file"; do
-  [[ -r "$f" ]] || die "Missing $f. Run \`pnpm bootstrap\` (or \`bash scripts/setup/provision-env-vm.sh $env_name\`) first to provision + unseal."
-done
-vm_ip="$(cat "$vm_ip_file")"
-root_token="$(cat "$root_token_file")"
+command -v bao >/dev/null 2>&1 || die "bao CLI not found on PATH (https://openbao.org/docs/install/)."
 
-# kubectl exec runs `bao kv patch <path> KEY=-` reading value from stdin.
-# Pass the value via stdin all the way through; argv stays clean.
 op="patch"
-if ! ssh -i "$ssh_key_file" -o StrictHostKeyChecking=accept-new \
-  "root@${vm_ip}" \
-  "kubectl exec -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN='${root_token}' bao kv metadata get '${bao_path}'" \
-  >/dev/null 2>&1; then
+if ! BAO_ADDR="$BAO_ADDR" BAO_TOKEN="$BAO_TOKEN" bao kv metadata get "$bao_path" >/dev/null 2>&1; then
   op="put"
 fi
-printf '%s' "$value" | ssh -i "$ssh_key_file" -o StrictHostKeyChecking=accept-new \
-  "root@${vm_ip}" \
-  "kubectl exec -i -n openbao openbao-0 -- env BAO_ADDR=http://127.0.0.1:8200 BAO_TOKEN='${root_token}' bao kv '${op}' '${bao_path}' '${key}=-'"
+# bao kv <op> <path> KEY=- reads value from stdin (OpenBao 2.x+).
+printf '%s' "$value" | BAO_ADDR="$BAO_ADDR" BAO_TOKEN="$BAO_TOKEN" \
+  bao kv "$op" "$bao_path" "${key}=-"
