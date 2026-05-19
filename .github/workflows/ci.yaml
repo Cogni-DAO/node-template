@@ -253,7 +253,7 @@ jobs:
 
       - name: SonarCloud Scan
         if: env.SONAR_TOKEN != ''
-        uses: SonarSource/sonarqube-scan-action@884b79409bbd464b2a59edc326a4b77dc56b2195 # v5.0.0
+        uses: SonarSource/sonarqube-scan-action@59db25f34e16620e48ab4bb9e4a5dce155cb5432 # v5.0.0
         env:
           SONAR_HOST_URL: https://sonarcloud.io
           GITHUB_TOKEN: ${{ secrets.ACTIONS_AUTOMATION_BOT_PAT }}
