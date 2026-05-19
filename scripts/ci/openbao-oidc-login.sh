@@ -48,7 +48,10 @@ if [[ -z "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || -z "${ACTIONS_ID_TOKEN_REQUEST_T
 fi
 
 # Fetch the GitHub OIDC token with audience=openbao (matches OpenBao's
-# bound_audiences config; see docs/runbooks/openbao-bootstrap.md §oidc-auth).
+# bound_audiences config — wired by the future `bao write auth/jwt/role/<role>`
+# step once the GH-OIDC-to-OpenBao path is enabled per-fork; v1 deploys the
+# script with the path inactive, hence the no-op-when-OPENBAO_ADDR-unset
+# branch above).
 oidc_resp=$(curl -sS -f \
   -H "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
   "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=openbao")

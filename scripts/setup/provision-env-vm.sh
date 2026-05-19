@@ -749,69 +749,242 @@ scp $SSH_OPTS "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" root@"$VM_IP"
 ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CONTAINER=cogni-runtime-temporal-1 TEMPORAL_TIMEOUT=60 bash /tmp/ensure-temporal-namespace.sh"
 
 # ══════════════════════════════════════════════════════════════
-# Phase 5b: Install OpenBao + External Secrets Operator (task.0284)
+# Phase 5b: Install OpenBao + ESO + auto-init + auto-unseal + auth bind
 # ══════════════════════════════════════════════════════════════
-# Mirrors the image-updater bootstrap shape: rsync local kustomize layer +
-# `kubectl kustomize --enable-helm | kubectl apply -f -`. Idempotent; re-runs
-# fold version bumps in. Both controllers must be installed BEFORE Phase 6
-# (ExternalSecret apply) because Phase 6 references their CRDs.
+# task.0284 — fully automates the substrate bootstrap. Mirrors the
+# image-updater shape (rsync local kustomize layer + `kubectl kustomize
+# --enable-helm | kubectl apply`), then drives OpenBao through init →
+# unseal → KV mount → Kubernetes auth method → eso-reader role bind so
+# `ClusterSecretStore openbao-backend` reaches `Ready=True` with zero
+# operator toil.
 #
-# After this phase, OpenBao starts sealed (expected). The operator unseals it
-# once per cluster lifetime (docs/runbooks/openbao-bootstrap.md). Until then,
-# ExternalSecret reconciliation surfaces SecretSyncedError events and
-# downstream Pods CrashLoop — visible in `kubectl describe` + Argo CD UI.
-log_step "Phase 5b: Install OpenBao + ESO"
+# Default seal shape: Shamir 1-of-1 — appropriate for the single-operator
+# OSS baseline. Multi-operator forks override via OPENBAO_KEY_SHARES +
+# OPENBAO_KEY_THRESHOLD env vars (rare for v1 single-node k3s).
+#
+# Idempotency: every step short-circuits if its target state already holds
+# (`bao status` initialized, `bao auth list` has kubernetes/, policy + role
+# writes are upsert by design). Re-running Phase 5b after a chart version
+# bump just re-applies the kustomize and re-verifies state.
+log_step "Phase 5b: Install + initialize OpenBao + ESO"
 
-# OpenBao
+# ── 5b.1 Install ───────────────────────────────────────────────────────────
 rsync -e "ssh $SSH_OPTS" -az --delete \
   "$REPO_ROOT/infra/k8s/argocd/openbao/" root@"$VM_IP":/opt/cogni-template-openbao/
 ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-openbao/ | kubectl apply -f -"
 log_info "Applied OpenBao bootstrap kustomize"
 
-# External Secrets Operator
 rsync -e "ssh $SSH_OPTS" -az --delete \
   "$REPO_ROOT/infra/k8s/argocd/external-secrets/" root@"$VM_IP":/opt/cogni-template-external-secrets-operator/
 ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-external-secrets-operator/ | kubectl apply -f -"
 log_info "Applied External Secrets Operator bootstrap kustomize"
 
 # Wait for ExternalSecret + ClusterSecretStore CRDs to be Established before
-# Phase 6 applies CRs that reference them. (ESO controller itself doesn't need
-# to be Ready; CRDs alone let the API server accept applies and ESO will
-# queue + reconcile.)
+# 5b.5 below applies the ClusterSecretStore CR.
 log_info "Waiting for ESO CRDs to register..."
 ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
   || log_warn "ESO CRDs not yet Established; Phase 6 may fail (TRANSITION_SAFE: re-run provision)."
 
-# Apply the cluster-scoped ClusterSecretStore (one per cluster, env-independent).
-# Lives at the parent of the per-env trees so Phase 6 can apply just the env subdir.
+# Wait for the openbao-0 pod to exist + be running. NOT Ready — sealed pods
+# are Running but not Ready. The chart's readiness probe gates on unsealed
+# status; the pod is functional for init/unseal once it's Running.
+log_info "Waiting for openbao-0 pod to be Running (sealed but accepting init)..."
+ssh $SSH_OPTS root@"$VM_IP" '
+  for i in $(seq 1 60); do
+    phase=$(kubectl -n openbao get pod openbao-0 -o jsonpath="{.status.phase}" 2>/dev/null || echo "")
+    [[ "$phase" == "Running" ]] && exit 0
+    sleep 2
+  done
+  echo "openbao-0 did not reach Running phase within 120s" >&2
+  exit 1
+'
+
+# ── 5b.2 Init + unseal (idempotent — Shamir 1-of-1 default) ───────────────
+OPENBAO_KEY_SHARES="${OPENBAO_KEY_SHARES:-1}"
+OPENBAO_KEY_THRESHOLD="${OPENBAO_KEY_THRESHOLD:-1}"
+OPENBAO_INIT_LOCAL="$REPO_ROOT/.local/${DEPLOY_ENV}-openbao-init.json"
+OPENBAO_ROOT_TOKEN_LOCAL="$REPO_ROOT/.local/${DEPLOY_ENV}-openbao-root-token"
+
+# Check current seal status. Output is JSON when -format=json is passed.
+seal_status=$(ssh $SSH_OPTS root@"$VM_IP" \
+  'kubectl exec -n openbao openbao-0 -- bao status -format=json 2>/dev/null || true')
+
+if [[ -z "$seal_status" ]]; then
+  log_warn "Could not read bao status — openbao-0 may still be coming up. Skipping init/unseal; re-run provision to retry."
+else
+  initialized=$(echo "$seal_status" | jq -r '.initialized // false')
+  sealed=$(echo "$seal_status" | jq -r '.sealed // true')
+
+  if [[ "$initialized" != "true" ]]; then
+    log_info "Initializing OpenBao (Shamir ${OPENBAO_KEY_THRESHOLD}-of-${OPENBAO_KEY_SHARES})..."
+    init_json=$(ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -n openbao openbao-0 -- bao operator init \
+        -key-shares=${OPENBAO_KEY_SHARES} -key-threshold=${OPENBAO_KEY_THRESHOLD} -format=json")
+    # Persist locally — .local/ is gitignored. Sensitive; chmod 600.
+    printf '%s' "$init_json" >"$OPENBAO_INIT_LOCAL"
+    chmod 600 "$OPENBAO_INIT_LOCAL"
+    jq -r '.root_token' <"$OPENBAO_INIT_LOCAL" >"$OPENBAO_ROOT_TOKEN_LOCAL"
+    chmod 600 "$OPENBAO_ROOT_TOKEN_LOCAL"
+    log_info "  Init artifacts saved to $OPENBAO_INIT_LOCAL + $OPENBAO_ROOT_TOKEN_LOCAL (600)"
+    sealed=true
+  else
+    log_info "OpenBao already initialized — reading prior init artifacts from $OPENBAO_INIT_LOCAL"
+    if [[ ! -r "$OPENBAO_INIT_LOCAL" ]]; then
+      log_error "OpenBao is initialized on the VM but $OPENBAO_INIT_LOCAL is missing — cannot unseal/auth."
+      log_error "Recover the unseal key(s) and root token from your password manager (or another operator on a multi-operator fork) and place them in this file before re-running."
+      exit 1
+    fi
+  fi
+
+  if [[ "$sealed" == "true" ]]; then
+    log_info "Unsealing OpenBao..."
+    # Apply unseal keys one at a time until threshold met. For 1-of-1, this
+    # loops exactly once.
+    key_count=$(jq '.unseal_keys_b64 | length' <"$OPENBAO_INIT_LOCAL")
+    threshold=$(jq -r '.unseal_threshold // 1' <"$OPENBAO_INIT_LOCAL")
+    for i in $(seq 0 $((threshold - 1))); do
+      [[ $i -ge $key_count ]] && break
+      key=$(jq -r ".unseal_keys_b64[$i]" <"$OPENBAO_INIT_LOCAL")
+      ssh $SSH_OPTS root@"$VM_IP" \
+        "kubectl exec -n openbao openbao-0 -- bao operator unseal '${key}'" >/dev/null
+    done
+    log_info "  OpenBao unsealed"
+  else
+    log_info "OpenBao already unsealed"
+  fi
+fi
+
+# ── 5b.3 Mount KV v2 + enable kubernetes auth + write eso-reader policy + role ─
+# All four operations are idempotent: `bao secrets enable` errors on
+# re-enable but we short-circuit by listing first; `bao auth enable` same;
+# `bao policy write` and `bao write auth/.../role/...` are upsert.
+if [[ -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
+  ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
+  bao_exec() {
+    # Runs `bao $@` inside the openbao-0 pod with the root token via env.
+    ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao $*"
+  }
+
+  # KV v2 mount at cogni/.
+  if ! bao_exec "secrets list -format=json" 2>/dev/null | jq -e '."cogni/"' >/dev/null 2>&1; then
+    log_info "Mounting KV v2 at cogni/..."
+    bao_exec "secrets enable -path=cogni -version=2 kv" >/dev/null
+  else
+    log_info "KV v2 mount cogni/ already present"
+  fi
+
+  # Kubernetes auth method.
+  if ! bao_exec "auth list -format=json" 2>/dev/null | jq -e '."kubernetes/"' >/dev/null 2>&1; then
+    log_info "Enabling kubernetes auth method..."
+    bao_exec "auth enable kubernetes" >/dev/null
+  else
+    log_info "kubernetes auth method already enabled"
+  fi
+  # Configure (idempotent).
+  bao_exec "write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443" >/dev/null
+
+  # eso-reader policy + role binding (upsert).
+  log_info "Writing eso-reader policy + role binding..."
+  ssh $SSH_OPTS root@"$VM_IP" "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao policy write eso-reader -" <<'HCL'
+path "cogni/data/*"     { capabilities = ["read"] }
+path "cogni/metadata/*" { capabilities = ["read", "list"] }
+HCL
+  bao_exec "write auth/kubernetes/role/eso-reader \
+    bound_service_account_names=external-secrets \
+    bound_service_account_namespaces=external-secrets \
+    policies=eso-reader \
+    ttl=1h" >/dev/null
+  log_info "  eso-reader role bound — ESO can now read cogni/* via Kubernetes auth"
+else
+  log_warn "No root token at $OPENBAO_ROOT_TOKEN_LOCAL — skipping KV mount + auth setup. Re-run provision after recovering init artifacts."
+fi
+
+# ── 5b.4 Apply ClusterSecretStore (lives at parent of per-env trees) ──────
 CSS_LOCAL="$REPO_ROOT/infra/k8s/secrets/external-secrets/cluster-secret-store.yaml"
 scp $SSH_OPTS "$CSS_LOCAL" root@"$VM_IP":/tmp/cluster-secret-store.yaml
 ssh $SSH_OPTS root@"$VM_IP" "kubectl apply -f /tmp/cluster-secret-store.yaml"
 log_info "Applied ClusterSecretStore openbao-backend"
 
 # ══════════════════════════════════════════════════════════════
+# Phase 5c: Seed OpenBao with auto-generated app secrets (task.0284)
+# ══════════════════════════════════════════════════════════════
+# Phase 2 (above) sourced .env.${DEPLOY_ENV}, which carries every secret
+# auto-generated by bootstrap.sh + every operator pass-through (DATABASE_URL,
+# AUTH_SECRET, ...). Seed them into the OpenBao path the ExternalSecret
+# extracts so Phase 6's `kubectl apply -k` produces a populated k8s Secret,
+# not an empty one.
+#
+# Per-service paths follow spec Invariant 1 (PATH_CONVENTION_PER_SERVICE_PER_ENV):
+#   cogni/<env>/node-template/*    — primary node app
+#   cogni/<env>/scheduler-worker/* — scheduler-worker service
+#
+# Operator-pass-through secrets that DON'T exist in .env.${DEPLOY_ENV}
+# (OPENROUTER_API_KEY, OBSERVABILITY tokens, OAuth client creds, …) are
+# entered post-bootstrap via `pnpm secrets:set` — fork-quickstart Step 6.7.
+# Pods will start with empty values for those keys and fail loudly at runtime
+# (Invariant 12 TRANSITION_SAFE).
+log_step "Phase 5c: Seed OpenBao paths from .env.${DEPLOY_ENV}"
+
+if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
+  log_warn "Skipping seed — no root token (Phase 5b.2 did not produce one)."
+  log_warn "Substrate is up but empty; pods will CrashLoop until secrets are entered manually."
+else
+  ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
+
+  seed_kv() {
+    # seed_kv <service> <KEY> <value>
+    # No-op when value is empty (operator-pass-through that the fork didn't
+    # provide). bao kv patch is upsert — re-runs are idempotent.
+    local svc="$1" k="$2" v="$3"
+    [[ -z "$v" ]] && return 0
+    printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv patch 'cogni/${DEPLOY_ENV}/${svc}' '${k}=-'" \
+      >/dev/null
+  }
+
+  log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
+  for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
+           OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
+           INTERNAL_OPS_TOKEN METRICS_TOKEN GH_WEBHOOK_SECRET \
+           CONNECTIONS_ENCRYPTION_KEY POLY_WALLET_AEAD_KEY_HEX \
+           POLY_WALLET_AEAD_KEY_ID DATABASE_URL DATABASE_SERVICE_URL \
+           POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY \
+           EVM_RPC_URL POLYGON_RPC_URL; do
+    seed_kv node-template "$k" "${!k:-}"
+  done
+  log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."
+  for k in DATABASE_SERVICE_URL SCHEDULER_API_TOKEN GH_REVIEW_APP_ID \
+           GH_REVIEW_APP_PRIVATE_KEY_BASE64 GH_WEBHOOK_SECRET \
+           INTERNAL_OPS_TOKEN; do
+    seed_kv scheduler-worker "$k" "${!k:-}"
+  done
+  log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
+fi
+
+# ══════════════════════════════════════════════════════════════
 # Phase 6: Apply ExternalSecret manifests (ESO materializes the k8s Secrets)
 # ══════════════════════════════════════════════════════════════
 # task.0284 — replaces the pre-substrate imperative `kubectl create secret
 # generic ...` block. App secrets now flow OpenBao → ESO → native k8s Secret.
-# The operator writes secret values into OpenBao via `bao kv put secret/cogni/
-# <env>/<workload>` from their laptop (auth via OIDC from their identity, NOT
-# a shared bot token); ESO pulls them in on its refresh cadence.
+# Phase 5b auto-inits + auto-unseals OpenBao + auto-binds the eso-reader role;
+# Phase 5c seeds the per-service paths from .env.${DEPLOY_ENV}. By the time
+# this phase runs the substrate is populated for the keys the fork generated,
+# and ESO can reconcile on first apply.
 #
 # Bootstrap dependency order (enforced by Phase 5 → 6 → 7 sequencing):
-#   1. OpenBao Application Healthy (Phase 5b applies infra/k8s/argocd/openbao/)
-#   2. ESO Application Healthy (Phase 5b applies infra/k8s/argocd/external-secrets/)
-#   3. Operator unseals OpenBao + writes secret values + binds eso-reader role
-#      (docs/runbooks/openbao-bootstrap.md — out-of-band, runs ONCE per cluster
-#      lifetime)
-#   4. ExternalSecret CRDs applied (this phase) — ESO syncs Secret resources
-#   5. ApplicationSets applied (Phase 7) — pods consume via envFrom: secretRef
+#   1. OpenBao + ESO installed (Phase 5b.1)
+#   2. OpenBao init + unseal + KV mount + Kubernetes auth + eso-reader (5b.2-3)
+#   3. ClusterSecretStore applied (5b.4)
+#   4. OpenBao paths seeded with auto-generated app secrets (Phase 5c)
+#   5. ExternalSecret CRDs applied (this phase) — ESO syncs Secret resources
+#   6. ApplicationSets applied (Phase 7) — pods consume via envFrom: secretRef
 #
-# TRANSITION_SAFE: until step 3 completes for a fresh cluster, ESO emits
-# `SecretSyncedError` events on the ExternalSecrets and the downstream Pod
-# CrashLoops on missing envFrom keys. Both are visible in `kubectl describe`
-# and Argo CD UI; neither hard-fails this script. The runbook documents the
-# unblock procedure.
+# TRANSITION_SAFE: operator-pass-through keys NOT in .env.${DEPLOY_ENV}
+# (OPENROUTER_API_KEY, GRAFANA_CLOUD_LOKI_*, ...) remain empty until the
+# operator runs `pnpm secrets:set` post-bootstrap (docs/runbooks/
+# fork-quickstart.md Step 6.7). Pods that consume those keys CrashLoop on
+# missing envFrom values — loud-by-design (Spec Invariant 12).
 log_step "Phase 6: Apply ExternalSecret manifests"
 
 # Create namespace (Argo CD creates it on first sync, but ExternalSecret needs it now)
@@ -832,7 +1005,7 @@ else
   log_warn "Pods consuming envFrom: secretRef will CrashLoop until the operator"
   log_warn "(a) adds ExternalSecret manifests for this env to infra/k8s/secrets/"
   log_warn "    external-secrets/${DEPLOY_ENV}/, OR"
-  log_warn "(b) follows docs/runbooks/openbao-bootstrap.md to seed the substrate."
+  log_warn "(b) follows docs/runbooks/fork-quickstart.md Step 6.7 to seed the substrate via pnpm secrets:set."
 fi
 
 # ══════════════════════════════════════════════════════════════

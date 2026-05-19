@@ -95,8 +95,10 @@ REQUIRED=(
   CHERRY_AUTH_TOKEN CHERRY_PROJECT_ID
   CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID
   GITHUB_ADMIN_PAT GITHUB_ADMIN_USERNAME
-  OPENROUTER_API_KEY
 )
+# task.0284 — OPENROUTER_API_KEY moved out of bootstrap; it's an app secret
+# entered via `pnpm secrets:set <env> node-template OPENROUTER_API_KEY` after
+# the substrate (OpenBao + ESO) is up. See docs/guides/secrets-add-new.md.
 MISSING=()
 for v in "${REQUIRED[@]}"; do
   [[ -z "${!v:-}" ]] && MISSING+=("$v")
@@ -308,7 +310,6 @@ CHERRY_AUTH_TOKEN=${CHERRY_AUTH_TOKEN}
 CHERRY_PROJECT_ID=${CHERRY_PROJECT_ID}
 CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
 CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID}
-OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 GHCR_DEPLOY_TOKEN=${GITHUB_ADMIN_PAT}
 GHCR_DEPLOY_USERNAME=${GITHUB_ADMIN_USERNAME}
 DOMAIN=${DOMAIN}
@@ -366,16 +367,17 @@ set_env_secret TEMPORAL_DB_USER         "$TEMPORAL_DB_USER"
 set_env_secret POSTGRES_ROOT_USER       "postgres"
 set_env_secret POLY_WALLET_AEAD_KEY_ID  "$POLY_WALLET_AEAD_KEY_ID"
 
-log "Env-level human pass-throughs:"
-set_env_secret OPENROUTER_API_KEY           "$OPENROUTER_API_KEY"
+log "Env-level config (non-secret):"
 set_env_secret DOMAIN                       "$DOMAIN"
 set_repo_var   DOMAIN                       "$DOMAIN"
-set_env_secret GRAFANA_CLOUD_LOKI_URL       "${GRAFANA_CLOUD_LOKI_URL:-}"
-set_env_secret GRAFANA_CLOUD_LOKI_USER      "${GRAFANA_CLOUD_LOKI_USER:-}"
-set_env_secret GRAFANA_CLOUD_LOKI_API_KEY   "${GRAFANA_CLOUD_LOKI_API_KEY:-}"
-set_env_secret PROMETHEUS_REMOTE_WRITE_URL  "${PROMETHEUS_REMOTE_WRITE_URL:-}"
-set_env_secret PROMETHEUS_USERNAME          "${PROMETHEUS_USERNAME:-}"
-set_env_secret PROMETHEUS_PASSWORD          "${PROMETHEUS_PASSWORD:-}"
+# task.0284 — OPENROUTER_API_KEY, GRAFANA_CLOUD_LOKI_*, PROMETHEUS_*, DISCORD_*,
+# OAuth client creds, Privy/Polymarket external creds: ALL moved out of GH env.
+# They flow OpenBao → ESO → native k8s Secret (Spec Invariant 5
+# OPENBAO_IS_SINGLE_SOURCE_OF_TRUTH). Operator enters them post-bootstrap via:
+#   pnpm secrets:set <env> node-template OPENROUTER_API_KEY
+#   pnpm secrets:set <env> node-template GRAFANA_CLOUD_LOKI_API_KEY
+#   ...
+# See docs/guides/secrets-add-new.md. Phase 6 of this script prints the list.
 
 # DSNs — construct from parts. provision-env-vm.sh re-derives with VM IP after
 # tofu apply; this pre-set is for env validation (server-env.ts requires them
@@ -433,11 +435,22 @@ VM IP:        ${VM_IP}
 VM DNS:       ${VM_DNS_HOST}
 GitHub env:   https://github.com/${GH_REPO}/settings/environments
 
+${BOLD}App secrets — enter via the substrate now${NC} (task.0284):
+  Pods that depend on external creds will CrashLoop until you set them.
+
+  pnpm secrets:set ${DEPLOY_ENV} node-template OPENROUTER_API_KEY     # mandatory
+  pnpm secrets:set ${DEPLOY_ENV} node-template GRAFANA_CLOUD_LOKI_API_KEY   # optional
+  pnpm secrets:set ${DEPLOY_ENV} node-template PROMETHEUS_REMOTE_WRITE_URL # optional
+  pnpm secrets:set ${DEPLOY_ENV} node-template PROMETHEUS_PASSWORD         # optional
+
+  Catalog of accepted services: ls infra/catalog/*.yaml
+  Guides: docs/guides/secrets-add-new.md  |  docs/guides/secrets-rotate.md
+
 Re-running ${BOLD}pnpm bootstrap${NC} is safe (idempotent).
 
 Next:
   • To provision preview:    DEPLOY_ENV=preview pnpm bootstrap
   • To provision production: DEPLOY_ENV=production pnpm bootstrap
-  • To delete .env.bootstrap: rm .env.bootstrap  (values persist in GitHub env)
+  • To delete .env.bootstrap: rm .env.bootstrap  (values persist in OpenBao + GitHub env)
 
 EOF

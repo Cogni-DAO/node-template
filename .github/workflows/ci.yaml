@@ -149,6 +149,9 @@ jobs:
       - name: External Secrets scope tests (task.0284)
         run: bash scripts/ci/tests/check-eso-scope.test.sh
 
+      - name: secrets:set CLI tests (task.0284)
+        run: bash scripts/ci/tests/set-secret.test.sh
+
       - name: Unit + contract coverage tests
         run: pnpm test:ci
 

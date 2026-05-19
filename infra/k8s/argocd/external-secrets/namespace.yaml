@@ -5,7 +5,8 @@
 # its supporting RBAC + CRDs.
 # ESO authenticates into OpenBao via the Kubernetes auth method; its
 # ServiceAccount JWT is validated against the cluster's TokenReview API
-# by OpenBao (see docs/runbooks/openbao-bootstrap.md §kubernetes-auth).
+# by OpenBao. The role binding is applied automatically by
+# `scripts/setup/provision-env-vm.sh` Phase 5b.3 — no manual setup.
 apiVersion: v1
 kind: Namespace
 metadata:

@@ -58,10 +58,10 @@ server:
   # return 503 by default; the chart's standby/sealed code mappings already
   # treat sealed-but-running as "alive" so it doesn't crash-loop pre-unseal.
 
-  # Kubernetes auth method config lives in the cluster after first unseal
-  # (see docs/runbooks/openbao-bootstrap.md §kubernetes-auth). It is NOT
-  # configured here because it depends on cluster-issued ServiceAccount
-  # tokens.
+  # Kubernetes auth method config is applied by `provision-env-vm.sh`
+  # Phase 5b.3 (auto-init + auto-bind eso-reader) after init/unseal. It is
+  # NOT configured here because it depends on cluster-issued ServiceAccount
+  # tokens that don't exist at chart-render time.
 
 ui:
   enabled: true

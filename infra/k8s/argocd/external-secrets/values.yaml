@@ -42,8 +42,9 @@ resources:
 
 # Service account is auto-created by the chart. We do NOT bind it to any
 # OpenBao policy here; the Kubernetes auth method binding lives inside
-# OpenBao (see docs/runbooks/openbao-bootstrap.md §kubernetes-auth). The
-# binding references the cluster-resolved JWT issuer, not a static token.
+# OpenBao and is applied automatically by `scripts/setup/provision-env-vm.sh`
+# Phase 5b.3 (the eso-reader role + cogni/* read policy). The binding
+# references the cluster-resolved JWT issuer, not a static token.
 
 # Metrics endpoint exposed on :8080/metrics. Prometheus scrape config is a
 # follow-up (task.0316 monitoring scope).

@@ -272,18 +272,18 @@ Bound via OpenBao role definitions to Kubernetes ServiceAccounts (per-service-pe
 
 ## File Pointers
 
-| File                                                  | Purpose                                                     |
-| ----------------------------------------------------- | ----------------------------------------------------------- |
-| `infra/k8s/argocd/openbao/`                           | Argo Application installing OpenBao (`task.0284`)           |
-| `infra/k8s/argocd/external-secrets/`                  | Argo Application installing ESO controller (`task.0284`)    |
-| `infra/k8s/argocd/reloader/`                          | Argo Application installing Stakater Reloader (`task.5056`) |
-| `infra/k8s/secrets/external-secrets/<env>/<service>/` | Per-service-per-env ExternalSecret YAML                     |
-| `scripts/secrets/set-secret.sh`                       | CLI implementation (`pnpm secrets:set`)                     |
-| `scripts/secrets/rotate-secret.sh`                    | CLI implementation (`pnpm secrets:rotate`)                  |
-| `.github/workflows/secrets-manage.yml`                | GitHub workflow entry point                                 |
-| `docs/runbooks/openbao-bootstrap.md`                  | Unseal + ESO seed token rotation runbook (`task.0284`)      |
-| `docs/guides/secrets-add-new.md`                      | Practical guide — adding a new secret                       |
-| `docs/guides/secrets-rotate.md`                       | Practical guide — rotation playbook                         |
+| File                                                  | Purpose                                                                |
+| ----------------------------------------------------- | ---------------------------------------------------------------------- |
+| `infra/k8s/argocd/openbao/`                           | Argo Application installing OpenBao (`task.0284`)                      |
+| `infra/k8s/argocd/external-secrets/`                  | Argo Application installing ESO controller (`task.0284`)               |
+| `infra/k8s/argocd/reloader/`                          | Argo Application installing Stakater Reloader (`task.5056`)            |
+| `infra/k8s/secrets/external-secrets/<env>/<service>/` | Per-service-per-env ExternalSecret YAML                                |
+| `scripts/secrets/set-secret.sh`                       | CLI implementation (`pnpm secrets:set`)                                |
+| `scripts/secrets/rotate-secret.sh`                    | CLI implementation (`pnpm secrets:rotate`)                             |
+| `.github/workflows/secrets-manage.yml`                | GitHub workflow entry point                                            |
+| `docs/runbooks/fork-quickstart.md`                    | Bootstrap flow (substrate install + unseal + role bind, Steps 6 / 6.5) |
+| `docs/guides/secrets-add-new.md`                      | Practical guide — adding a new secret                                  |
+| `docs/guides/secrets-rotate.md`                       | Practical guide — rotation playbook + substrate-token rotation         |
 
 ## Related
 

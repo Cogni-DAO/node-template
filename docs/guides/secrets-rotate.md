@@ -24,15 +24,15 @@ tags:
 
 Per [NIST SP 800-57 §8 Key States](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final), every key has a lifecycle. Cogni's cadence table:
 
-| Class                      | Cadence                                   | Mechanism                                                                                                                                        |
-| -------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Dynamic DB credentials** | per-session (≤1h TTL)                     | OpenBao DB engine issues per-session; old expires automatically. Pod re-auths transparently.                                                     |
-| **Routine app tokens**     | quarterly                                 | `pnpm secrets:rotate` generates new value; ESO + Reloader handle propagation.                                                                    |
-| **External API keys**      | annually                                  | Manual mint at issuer + `pnpm secrets:rotate`. Some issuers expose rotation APIs (see "Issuer-driven" below).                                    |
-| **Bootstrap tokens**       | annually                                  | Cherry / Cloudflare / GH PAT / OpenRouter. Rotation documented in `docs/runbooks/openbao-bootstrap.md`.                                          |
-| **AEAD / encryption keys** | every 6 months OR on suspected compromise | Special handling — see `docs/runbooks/openbao-bootstrap.md § AEAD rotation`. Two-step (encrypt new + decrypt old) required to prevent data loss. |
-| **ESO seed token**         | per-pod-lifetime                          | Automated by Kubernetes ServiceAccount token rotation. **Never touched manually.**                                                               |
-| **Emergency (compromise)** | immediate                                 | Force-sync; alert chain; incident report. See "Emergency rotation" below.                                                                        |
+| Class                      | Cadence                                   | Mechanism                                                                                                                                                      |
+| -------------------------- | ----------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Dynamic DB credentials** | per-session (≤1h TTL)                     | OpenBao DB engine issues per-session; old expires automatically. Pod re-auths transparently.                                                                   |
+| **Routine app tokens**     | quarterly                                 | `pnpm secrets:rotate` generates new value; ESO + Reloader handle propagation.                                                                                  |
+| **External API keys**      | annually                                  | Manual mint at issuer + `pnpm secrets:rotate`. Some issuers expose rotation APIs (see "Issuer-driven" below).                                                  |
+| **Bootstrap tokens**       | annually                                  | Cherry / Cloudflare / GH PAT / OpenRouter. Re-mint at the issuer, then `pnpm secrets:set` or `gh secret set` (for chicken-and-egg GH env values).              |
+| **AEAD / encryption keys** | every 6 months OR on suspected compromise | Special handling — two-step (encrypt new + decrypt old) required to prevent data loss. Lands with task.5056 (Reloader) + the dedicated AEAD migration runbook. |
+| **ESO seed token**         | per-pod-lifetime                          | Automated by Kubernetes ServiceAccount token rotation. **Never touched manually.**                                                                             |
+| **Emergency (compromise)** | immediate                                 | Force-sync; alert chain; incident report. See "Emergency rotation" below.                                                                                      |
 
 ## Routine rotation
 
@@ -114,7 +114,7 @@ pnpm secrets:rotate production poly OPENAI_API_KEY --immediate
 #    Look for unexpected actors, IPs, timestamps in the 30 days before the compromise window
 ```
 
-Loki queries for the OpenBao audit stream are documented in [`docs/runbooks/openbao-bootstrap.md § Audit query patterns`](../runbooks/openbao-bootstrap.md).
+The OpenBao audit log is shipped to Loki via Alloy (`{component="openbao"}`). Query examples appear at the bottom of this guide under "Audit + evidence".
 
 ## Rollback (the rotation was bad)
 
@@ -194,14 +194,54 @@ This stream is the evidence. No spreadsheet, no manual audit log — the canonic
 - `bao kv destroy` versions pre-incident — versions are the audit substrate; only destroy with documented incident justification
 - Skip the issuer-side revocation after rotating an external API key
 - Skip the audit-log review after an emergency rotation
-- Touch the `OPENBAO_SEED_TOKEN` manually — it has its own automated rotation; see `docs/runbooks/openbao-bootstrap.md`
+- Touch the `OPENBAO_SEED_TOKEN` manually — it has its own automated rotation via Kubernetes auth method renewal; see the "Substrate-token rotation" section below if you genuinely need to rotate the root token
 - Set the ESO refresh interval shorter than 5 minutes — read pressure on OpenBao; use force-sync annotation for immediate needs instead
+
+## Substrate-token rotation (root token + unseal keys)
+
+The root token + unseal keys captured at init by `provision-env-vm.sh`
+Phase 5b are break-glass credentials. The day-to-day audit substrate is
+the Kubernetes auth method + per-role policies — no human/agent uses
+the root token after bootstrap. Rotate the root annually OR after any
+suspected compromise of `.local/<env>-openbao-init.json`.
+
+```bash
+# 1. Generate a new root token using your unseal key threshold.
+#    Repeat the second command once per unseal key (threshold times).
+kubectl exec -ti -n openbao openbao-0 -- bao operator generate-root -init
+kubectl exec -ti -n openbao openbao-0 -- bao operator generate-root \
+  -nonce=<nonce> <unseal-key>
+
+# 2. Decode the new root using the OTP from step 1.
+kubectl exec -ti -n openbao openbao-0 -- bao operator generate-root \
+  -decode=<encoded_root> -otp=<otp>
+
+# 3. Revoke the old root token via the old token.
+BAO_TOKEN=<old-root> kubectl exec -ti -n openbao openbao-0 -- bao token revoke -self
+
+# 4. Update .local/<env>-openbao-root-token (used by `pnpm secrets:set` SSH
+#    fallback path). Store the captured value in your password manager too.
+```
+
+Rotating unseal keys (`bao operator rekey`) is rare; the standard path is
+to re-init from a fresh init artifact only after a full data export +
+restore, which is incident-territory work and lives in the eventual
+SOC 2 incident-response runbook.
+
+## Upgrade discipline (OpenBao + ESO chart bumps)
+
+Both chart versions are pinned in `infra/k8s/argocd/{openbao,external-secrets}/kustomization.yaml`.
+
+1. Bump the `helmCharts[0].version`.
+2. `kustomize build --enable-helm infra/k8s/argocd/<name>/` locally to confirm the new render diffs cleanly.
+3. Run the rotation drill above on candidate-a (write → ESO sync → pod restart → new value in effect) to confirm the upgrade did not regress the path. ESO occasionally renames CRD versions between minor releases; watch for `kubectl wait` failures during `provision-env-vm.sh` Phase 5b re-apply.
+4. Do not bump OpenBao and ESO in the same PR unless the rotation drill is included — pairing a sealed-state regression with an auth-method regression makes the failing axis ambiguous.
 
 ## Related
 
 - [`docs/spec/secrets-management.md`](../spec/secrets-management.md) — canonical contract
 - [`docs/guides/secrets-add-new.md`](./secrets-add-new.md) — adding new secrets
-- [`docs/runbooks/openbao-bootstrap.md`](../runbooks/openbao-bootstrap.md) — bootstrap + seal/unseal + system-token + AEAD rotation
+- [`docs/runbooks/fork-quickstart.md`](../runbooks/fork-quickstart.md) — bootstrap flow (substrate install + unseal + role bind happen here)
 - [`proj.security-hardening`](../../work/projects/proj.security-hardening.md) — parent project + SOC 2 control mapping
 - [NIST SP 800-57 Part 1 Rev 5 §8 Key States](https://csrc.nist.gov/publications/detail/sp/800-57-part-1/rev-5/final)
 - [OpenBao KV v2 versioned secrets](https://openbao.org/docs/secrets/kv/kv-v2/)

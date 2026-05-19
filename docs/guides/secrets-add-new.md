@@ -64,7 +64,7 @@ The candidate-a slack is intentional — it's the experiment slot. The preview/p
 
 If a secret needs to be shared across services (e.g., `OPENROUTER_API_KEY` consumed by multiple services), put it at `cogni/<env>/_shared`. Each consuming service explicitly references the shared path in its ExternalSecret via a SECOND `dataFrom: extract` entry — this is the one case where the per-service ExternalSecret has more than one extract line. Document the shared-key dependency in the service's `AGENTS.md`.
 
-System-level bootstrap secrets (Cherry token, Cloudflare token, GH PAT, ESO seed token) live at `cogni/<env>/_system` and are written ONCE by `bootstrap.sh`. **Never set them via this guide.** They have their own rotation path documented in [`docs/runbooks/openbao-bootstrap.md`](../runbooks/openbao-bootstrap.md).
+System-level bootstrap secrets (Cherry token, Cloudflare token, GH PAT, OpenBao root + unseal keys) live in GitHub Environment secrets + `.local/<env>-openbao-init.json` — written ONCE during `pnpm bootstrap` (see [`docs/runbooks/fork-quickstart.md`](../runbooks/fork-quickstart.md) Step 6 + 6.5). **Never set them via this guide.** Substrate-token rotation is documented in [`secrets-rotate.md`](./secrets-rotate.md#substrate-token-rotation-root-token--unseal-keys).
 
 ## Forcing immediate sync (for impatient developers)
 
@@ -126,7 +126,7 @@ The whole thing is ~30 lines of bash. Same primitive, three faces (CLI / workflo
 
 - [`docs/spec/secrets-management.md`](../spec/secrets-management.md) — the canonical contract
 - [`docs/guides/secrets-rotate.md`](./secrets-rotate.md) — rotation playbook
-- [`docs/runbooks/openbao-bootstrap.md`](../runbooks/openbao-bootstrap.md) — bootstrap + seal/unseal + system-secret rotation
+- [`docs/runbooks/fork-quickstart.md`](../runbooks/fork-quickstart.md) — bootstrap flow (substrate install + unseal + role bind happen here)
 - [External Secrets Operator `dataFrom` docs](https://external-secrets.io/latest/api/externalsecret/#external-secrets.io/v1beta1.ExternalSecretDataFromRemoteRef)
 - [OpenBao KV v2 docs](https://openbao.org/docs/secrets/kv/kv-v2/)
 - [Stakater Reloader](https://github.com/stakater/Reloader)
