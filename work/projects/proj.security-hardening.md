@@ -6,8 +6,8 @@ title: Security Hardening — SOC2-Aligned Production Access Controls
 state: Active
 priority: 3
 estimate: 8
-summary: Close the SOC2 control gaps exposed by the bug.0403 incident response — direct production SSH + superuser psql + chat-text authorization for financial-data mutations bypassed every meaningful access control. Establish maker-checker, app-mediated operator actions, immutable audit, and short-lived credentials so prod data writes by a single agent become structurally impossible.
-outcome: No human or agent can mutate production financial-state data via direct SSH + raw SQL. All operator actions (cap bumps, lifecycle reconciliation, grant edits) flow through authenticated admin endpoints with maker-checker, recorded in an immutable audit log, gated by short-lived signed credentials. SOC2 CC6.1 / CC6.6 / CC8.1 controls have written runbooks with evidence-collection steps.
+summary: Close the SOC2 control gaps exposed by the bug.0403 incident response — direct production SSH + superuser psql + chat-text authorization for financial-data mutations bypassed every meaningful access control. Establish maker-checker, app-mediated operator actions, immutable audit, and short-lived credentials so prod data writes by a single agent become structurally impossible. Tier-1 foundation = External Secrets Operator + OpenBao (OSS Vault fork) as the single secret-truth substrate that Crawl access controls depend on.
+outcome: No human or agent can mutate production financial-state data via direct SSH + raw SQL. All operator actions (cap bumps, lifecycle reconciliation, grant edits) flow through authenticated admin endpoints with maker-checker, recorded in an immutable audit log, gated by short-lived signed credentials issued from OpenBao via ESO. Plaintext secrets never live on developer laptops, in GitHub Actions logs, or in agent context — agents reference secrets by name only. SOC2 CC6.1 / CC6.6 / CC8.1 controls have written runbooks with evidence-collection steps.
 assignees: []
 created: 2026-04-27
 updated: 2026-04-27
@@ -25,6 +25,8 @@ No human or agent can mutate production financial-state data (`poly_wallet_grant
 - **Don't break the experiment-friendly slot.** `candidate-a` write-mode SSH is intentionally permitted for 5-minute experiments per the `devops-expert` skill rules; this project narrows the prod-only gap, not the candidate-a workflow.
 - **Don't reintroduce app-level controls that already exist.** RLS, `app_user`/`app_service` role split, and Zod contract validation are working; this project removes the superuser-shell bypass, not the existing controls.
 - **One-developer team reality.** Maker-checker has to be implementable when there's only one human reviewer — the "checker" can be an automated pre-condition (e.g., SHA-pinned chain-truth verification) for low-risk classes, with human-checker reserved for high-risk classes.
+- **OSS-first secrets substrate.** Backend choice is OpenBao (Apache-licensed Vault fork, OSS sovereign). No vendor lock to a paid KMS at the baseline. Forks may swap backends via ESO's pluggable provider model; operator-managed multi-tenant KMS (Tier 2) is the future product layer on top, not a requirement of the OSS baseline.
+- **Substrate-before-controls ordering.** Crawl rows 2-3 (bastion + named DB role) both require a real secret store to hold the CA private key and the role password without putting them back on disk. Tier-1 (ESO + OpenBao) is therefore Crawl row 0 and gates the rest of the phase.
 
 ## Motivating Incident
 
@@ -39,6 +41,60 @@ During bug.0403 response (2026-04-27), one Claude Code agent autonomously:
 Authorization for both writes was a **single chat message** ("Yes, I authorize you to run this") with no out-of-band confirmation, no MFA, no second-party approval, no change ticket, no automated rollback plan. The action was correct and the data was good — but the **control plane allowed any future agent (or compromised laptop) to do exactly the same with no friction**.
 
 This is a structural SOC2 fail, not a policy fail.
+
+## Secrets Substrate (foundation for every Crawl/Walk control)
+
+Current state (verified 2026-05-19): **C-**. GitHub Actions env vars → SSH → `/opt/cogni-template-runtime/.env` plaintext on VM; SOPS scaffold in tree (`infra/k8s/secrets/.sops.yaml`) but its own comment says _"ksops is not yet end-to-end activated, no real age keys exist, no .enc.yaml files exist"_; zero `ExternalSecret` resources; rotation = redeploy.
+
+Target shape — three tiers, all Argo-idiomatic:
+
+```
+   ┌─── Tier 0: Bootstrap (cluster doesn't exist yet) ──────────────────────┐
+   │   GitHub Actions ─OIDC─▶ OpenBao (short-lived token, no long-lived     │
+   │     PATs on disk or in GitHub).                                         │
+   │   VM provision ─cloud-init─▶ ONE seed secret (ESO auth token); ESO     │
+   │     then pulls everything else.                                         │
+   └─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼  cluster up; Argo CD reconciles ESO install
+   ┌─── Tier 1: Steady state — node-template OSS baseline (Pareto path) ────┐
+   │   OpenBao (self-hosted, Apache-licensed Vault fork)                     │
+   │              │                                                          │
+   │              ▼                                                          │
+   │   External Secrets Operator (per-fork k3s cluster, installed via        │
+   │     Argo CD same shape as the existing image-updater bootstrap).        │
+   │              │                                                          │
+   │              ▼                                                          │
+   │   k8s Secret resources (kubelet tmpfs; no rest-on-disk plaintext).      │
+   │              │                                                          │
+   │              ▼                                                          │
+   │   App pods (envFrom: secretRef — zero app-side code change).            │
+   │                                                                         │
+   │   Bastion SSH CA + named-operator-DB-role password live in OpenBao.     │
+   │   Crawl access controls inherit short-lived, rotatable credentials.     │
+   └─────────────────────────────────────────────────────────────────────────┘
+                                  │
+                                  ▼
+   ┌─── Tier 2: Operator-managed multi-tenant KMS (north star) ─────────────┐
+   │   Cogni operator app hosts a per-fork KMS namespace. Forks' ESO         │
+   │   authenticates with one per-fork token; all other secrets flow         │
+   │   operator-UI → KMS → ESO → k8s Secret → pod.                           │
+   │                                                                         │
+   │   AI-agent-safe: agents reference secrets by NAME, never VALUE.         │
+   │   Plaintext never enters agent context / git / GitHub Actions logs.     │
+   │   Every access logged to operator's audit stream (Loki tenant).         │
+   │   Rotation = control-plane operation, not a redeploy.                   │
+   │                                                                         │
+   │   Out of scope for this project (node-template baseline). Tracked       │
+   │   separately as an operator-app product capability. The Tier-1          │
+   │   baseline supports arbitrary ESO backends including a future           │
+   │   `OperatorKmsProvider`, so Tier-2 is additive, not replacing.          │
+   └─────────────────────────────────────────────────────────────────────────┘
+```
+
+Tier-1 is the Pareto path: closes the laptop-plaintext gap, retires the SOPS scaffold, enables rotation without redeploy, and gives bastion + named-DB-role somewhere to live. Tier-2 is the Cogni-operator-as-a-service layer on top — opt-in for forks that adopt the operator app, not a baseline requirement.
+
+Implementation lives in `task.0284` (Secrets single source of truth — External Secrets Operator + secret store). Backend selection finalized as OpenBao (was open in original task description).
 
 ## SOC2 Control Gap Map
 
@@ -56,13 +112,14 @@ This is a structural SOC2 fail, not a policy fail.
 
 ### Crawl (P0) — Stop the bleed
 
-**Goal:** make today's exact failure mode impossible without removing operator capability.
+**Goal:** make today's exact failure mode impossible without removing operator capability. Row 0 (substrate) gates 2 + 3 — short-lived credentials need somewhere to live.
 
-| Deliverable                                                                                                                 | Notes                                                                                       | Est | Work Item |
-| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- | --- | --------- |
-| Revoke direct prod SSH from developer laptops; rotate `production-vm-key`                                                   | Move the key off `.local/`; only `candidate-flight-infra.yml` workflow + bastion has it     | 2   | —         |
-| Bastion / jump host with TTY session recording → immutable storage                                                          | Auth via SSH cert (CA-signed, 1h TTL, MFA-gated), `script(1)` logs shipped to a WORM bucket | 3   | —         |
-| Named operator DB role with `GRANT UPDATE` only on operator-mutable tables (`poly_wallet_grants`, `poly_redeem_jobs`, etc.) | No more `psql -U postgres` for operator actions                                             | 2   | —         |
+| Deliverable                                                                                                                 | Notes                                                                                                                                                                                                                                                                                                                                                                                 | Est | Work Item   |
+| --------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | ----------- |
+| **0. Tier-1 secrets substrate — OpenBao + ESO baseline**                                                                    | Install OpenBao (self-hosted, Apache-licensed Vault fork) and External Secrets Operator via Argo CD (same bootstrap shape as the existing `infra/k8s/argocd/image-updater/`). Migrate one app's secrets as proof. Retire the SOPS scaffold (`infra/k8s/secrets/.sops.yaml` + `ksops-cmp.yaml`). Move app-secret delivery off `deploy-infra.sh`'s SSH-`.env` path. **Gates rows 1-3.** | 5   | `task.0284` |
+| Revoke direct prod SSH from developer laptops; rotate `production-vm-key`                                                   | Move the key off `.local/`; only `candidate-flight-infra.yml` workflow + bastion has it. Workflow auth via OIDC → OpenBao, not long-lived PAT.                                                                                                                                                                                                                                        | 2   | —           |
+| Bastion / jump host with TTY session recording → immutable storage                                                          | Auth via SSH cert (CA-signed, 1h TTL, MFA-gated), `script(1)` logs shipped to a WORM bucket. **SSH CA private key lives in OpenBao**, never on disk; bastion fetches signing material via ESO.                                                                                                                                                                                        | 3   | —           |
+| Named operator DB role with `GRANT UPDATE` only on operator-mutable tables (`poly_wallet_grants`, `poly_redeem_jobs`, etc.) | No more `psql -U postgres` for operator actions. **Role password lives in OpenBao**, rotated via OpenBao DB engine dynamic credentials (issue per-session short-lived creds, not a static password) — top-of-stack pattern.                                                                                                                                                           | 2   | —           |
 
 ### Walk (P1) — App-mediated operator actions
 
@@ -89,9 +146,9 @@ This is a structural SOC2 fail, not a policy fail.
 
 ## Dependencies
 
-- `proj.database-ops` — backup/restore + connection pooling complete the data-tier story; SOC2 evidence for restore tests integrates here.
-- `proj.cicd-services-gitops` — bastion + signed SSH cert issuance fits the GitOps + workflow-dispatch model already used for `candidate-flight-infra`.
-- Pre-existing `.local/{env}-vm-key` onboarding pattern (`docs/guides/multi-node-deploy.md`) — Crawl row 1 narrows it to non-prod only.
+- `proj.database-ops` — backup/restore + connection pooling complete the data-tier story; SOC2 evidence for restore tests integrates here. OpenBao DB engine dynamic credentials (Crawl row 3) consumes the same per-role grants this project defines.
+- `proj.cicd-services-gitops` — bastion + signed SSH cert issuance fits the GitOps + workflow-dispatch model already used for `candidate-flight-infra`. ESO + OpenBao install lands as new Argo CD applications under `infra/k8s/argocd/`, same shape as the existing `image-updater` bootstrap (controller installed; allowlist empty — see `scripts/ci/check-image-updater-scope.sh`).
+- Pre-existing `.local/{env}-vm-key` onboarding pattern (`docs/guides/multi-node-deploy.md`) — Crawl row 1 narrows it to non-prod only. ESO replaces the broader `.local/<env>-vm-secrets.env` pattern for app-runtime secrets; provision-only bootstrap secrets (the ESO auth seed itself) stay file-based by necessity.
 
 ## As-Built Specs
 
@@ -103,3 +160,6 @@ None yet — every Walk/Run deliverable will land its own spec under `docs/spec/
 - **App-level RLS is already a strong control** — this project does not weaken it. The gap is that a superuser shell BYPASSES RLS; the fix is to remove the superuser shell from the operator workflow, not to redo RLS.
 - **Maker-checker as feature flag, not big-bang** — Walk row 3 is enforce-per-endpoint so the rollout can prove value on cap-bump first before extending to redeem-reconcile and beyond.
 - **Audit log is the truth, not a logging concern** — `operator_audit_log` is a domain entity (append-only ledger) populated synchronously by every admin endpoint, not a side-channel from an APM. Retention + integrity guarantees come from DB constraints, not from app correctness.
+- **Why OpenBao over alternatives** — Apache 2.0 OSS sovereign (Vault fork from the IBM-acquisition relicense). Supports the same secret engines as Vault (KV, PKI, SSH CA, DB dynamic credentials), the same auth methods (Kubernetes, OIDC, AppRole), and the same ESO provider plugin (`SecretStore: provider: vault` works against OpenBao). Sealed Secrets considered and rejected — cluster-bound keys make re-keying after a VM rebuild painful; doesn't support dynamic credentials. SOPS + ksops considered and rejected — current scaffold already documents its own decay; ksops going dormant upstream. AWS Secrets Manager / 1Password Connect considered and rejected as defaults — vendor lock against the OSS-first constraint; forks can still pick them via ESO's provider model.
+- **Tier-2 (operator-managed multi-tenant KMS) is out of scope here** — that's a Cogni operator-app product capability, not a node-template baseline concern. Tracked separately (filed as a stub task under the operator project; not committed in this Roadmap). The Tier-1 design intentionally leaves an `OperatorKmsProvider` shaped hole — when Tier-2 lands, forks opt in by swapping the SecretStore backend, not by rewriting their consumers.
+- **OIDC over long-lived PATs** — Crawl row 1 (revoke prod SSH) pairs with switching GitHub Actions auth to OpenBao via OIDC federation. Eliminates the "GHCR_PAT / SSH_KEY / ACTIONS_AUTOMATION_BOT_PAT lives in GitHub env" pattern entirely. Workflows exchange the OIDC token for a short-lived OpenBao token at job start; expires on job end.
