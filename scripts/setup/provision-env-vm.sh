@@ -432,6 +432,41 @@ done
 log_info "Verifying k3s + Argo CD..."
 ssh $SSH_OPTS root@"$VM_IP" 'kubectl get nodes && echo "---" && kubectl -n argocd get pods --no-headers'
 
+# ── Phase 4a: Fetch k3s kubeconfig to operator's laptop ──────────────────
+# Without this, the operator's only way to talk to the cluster is to SSH
+# into the VM and run kubectl there — the same laptop-shell anti-pattern
+# at the control-plane tier that proj.security-hardening exists to
+# eliminate at the data tier. Fetch + rewrite the API server URL to the
+# public VM IP so local `kubectl` Just Works.
+#
+# Security note: this kubeconfig is the k3s cluster-admin credential. On
+# candidate-a (single-operator fork) the operator IS the admin so this is
+# correct. preview/production should ship a constrained kubeconfig in a
+# follow-up — bound to a dedicated SA with minimum RBAC.
+log_step "Phase 4a: Fetch kubeconfig to .local/${DEPLOY_ENV}-kubeconfig.yaml"
+KUBECONFIG_LOCAL="$REPO_ROOT/.local/${DEPLOY_ENV}-kubeconfig.yaml"
+# k3s issues its server cert for 127.0.0.1 (no SAN for the public VM IP).
+# Rewrite the server URL to the public IP AND drop certificate-authority-data
+# in favor of insecure-skip-tls-verify. Acceptable on candidate-a (fresh-fork,
+# single operator, HTTPS still encrypts the wire). preview/production should
+# either (a) install k3s with `--tls-san <vm-ip>` so the cert is valid, or
+# (b) use an SSH tunnel so the kubeconfig's 127.0.0.1 entry is honored.
+# Both are v-next per .context/followup-bug.0446 + the broader observability
+# track (Grafana/Loki + Argo UI as the visibility surface instead of kubectl).
+ssh $SSH_OPTS root@"$VM_IP" 'cat /etc/rancher/k3s/k3s.yaml' \
+  | sed "s|server: https://127.0.0.1:6443|server: https://${VM_IP}:6443|" \
+  | yq '.clusters[].cluster."insecure-skip-tls-verify" = true | del(.clusters[].cluster."certificate-authority-data")' \
+  > "$KUBECONFIG_LOCAL"
+chmod 600 "$KUBECONFIG_LOCAL"
+if ! KUBECONFIG="$KUBECONFIG_LOCAL" kubectl get nodes >/dev/null 2>&1; then
+  log_warn "  Fetched kubeconfig at $KUBECONFIG_LOCAL but local kubectl can't reach ${VM_IP}:6443."
+  log_warn "  Likely Cherry firewall — check that the k3s API port (6443/tcp) is open."
+else
+  log_info "  Local kubectl works. Operator next step:"
+  log_info "    export KUBECONFIG=$KUBECONFIG_LOCAL"
+  log_info "    kubectl get nodes  # should print the VM node"
+fi
+
 # ApplicationSets applied in Phase 7 (after all prerequisites are in place)
 
 # ══════════════════════════════════════════════════════════════

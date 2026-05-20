@@ -174,6 +174,22 @@ the bot owns.
    plus Compose-runtime infra (DB passwords, LITELLM_MASTER_KEY) stay
    in GH env.
 
+6.3 LOCAL KUBECTL — `pnpm bootstrap` fetches the k3s kubeconfig to
+`.local/<env>-kubeconfig.yaml` (Phase 4a). Export it so every kubectl
+command in subsequent steps runs locally — **never SSH into the VM
+just to run `kubectl`**; that's the laptop-shell anti-pattern at the
+control-plane tier (same shape as the root-token issue, different
+surface).
+
+```
+export KUBECONFIG=$PWD/.local/<env>-kubeconfig.yaml
+kubectl get nodes  # should print the VM node
+```
+
+(v-next: Grafana + Loki + Argo UI become the steady-state visibility
+surface; kubectl becomes operator break-glass. Tracked in the
+observability follow-up.)
+
 6.5 UNSEAL CHECKPOINT — auto-unsealed for 1-of-1 (skip silently). The
 provision script's Phase 5b initialized OpenBao with Shamir 1-of-1
 and unsealed it immediately. The unseal key + root token live at
