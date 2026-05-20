@@ -143,13 +143,28 @@ log "Cloudflare zone reachable: ${BOLD}${CLOUDFLARE_ZONE_NAME}${NC} (id ${CLOUDF
 
 FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
 if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
-  # Auto-populate from Cloudflare API. Operator's .env.bootstrap already
-  # named the zone; copying it into fork.yaml is mechanical work the
-  # bootstrap can do for them. They commit it afterwards.
+  # Auto-populate from Cloudflare API + auto-commit. Operator's .env.bootstrap
+  # already named the zone; copying it into fork.yaml + crafting a commitlint-
+  # compliant message is mechanical work the bootstrap can do for them. They
+  # just push afterwards. Uses the operator's configured git identity.
   yq -i ".domain.root = \"${CLOUDFLARE_ZONE_NAME}\"" "$REPO_ROOT/infra/fork.yaml"
   FORK_ROOT="$CLOUDFLARE_ZONE_NAME"
   log "Auto-populated ${BOLD}infra/fork.yaml::domain.root = ${CLOUDFLARE_ZONE_NAME}${NC} from Cloudflare API."
-  log "  → ${YELLOW}commit this:${NC} git add infra/fork.yaml && git commit -m 'set fork domain' && git push origin main"
+  (
+    cd "$REPO_ROOT"
+    git add infra/fork.yaml
+    # Conventional-format subject (matches commitlint's config-conventional).
+    # Uses operator's configured git identity — fails clearly if unset.
+    if ! git commit -m "chore(bootstrap): set fork.yaml::domain.root from cloudflare api" >/dev/null 2>&1; then
+      err "  Auto-commit failed. Likely missing git identity:"
+      err "    git config user.name  \"<your name>\""
+      err "    git config user.email \"<your@email>\""
+      err "  Then re-run pnpm bootstrap (it will detect fork.yaml is already populated and skip this step)."
+      exit 2
+    fi
+    log "  → committed locally as ${BOLD}chore(bootstrap): set fork.yaml::domain.root from cloudflare api${NC}"
+    log "  → push to your fork: ${BOLD}git push origin \$(git -C $REPO_ROOT branch --show-current)${NC}"
+  )
 elif [[ "$FORK_ROOT" != "$CLOUDFLARE_ZONE_NAME" ]]; then
   err "Mismatch: infra/fork.yaml::domain.root='${FORK_ROOT}' but Cloudflare zone ID ${CLOUDFLARE_ZONE_ID} resolves to '${CLOUDFLARE_ZONE_NAME}'."
   err "Either fork.yaml is stale, .env.bootstrap::CLOUDFLARE_ZONE_ID points at the wrong zone, or you changed zones."
