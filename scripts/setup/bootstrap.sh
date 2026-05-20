@@ -13,6 +13,17 @@
 
 set -euo pipefail
 
+# Bash 4+ preflight — this script + delegates use associative arrays
+# (declare -A) and `mapfile`, both introduced in Bash 4. macOS ships
+# Bash 3.2 by default; fail fast with a one-line fix instead of an opaque
+# "unbound variable" / "mapfile: command not found" 30 lines in.
+if (( BASH_VERSINFO[0] < 4 )); then
+  printf 'bootstrap.sh requires Bash 4+ (current: %s).\n' "$BASH_VERSION" >&2
+  printf 'On macOS:\n  brew install bash\n  export PATH="$(brew --prefix)/bin:$PATH"\n  hash -r\n' >&2
+  printf 'Then re-run.\n' >&2
+  exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BOOT_FILE="$REPO_ROOT/.env.bootstrap"

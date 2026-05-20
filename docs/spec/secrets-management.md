@@ -81,9 +81,11 @@ A human or AI agent can declare a new secret, rotate an existing secret, or revo
 
 13. **NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP.** The bootstrap root token captured by `provision-env-vm.sh` Phase 5b exists during the ~30 min provisioning window only — Phases 5b.3 (eso-reader policy + role), 5b.4 (`<env>-writer` policy + role binding to `default/openbao-operator`), and 5c (initial path seeding) use it imperatively; nothing reads `.local/<env>-openbao-root-token` after Phase 5b exits. Day-2 secret writes mint a short-lived bao token via the writer role:
     ```
-    bao login -method=kubernetes role=<env>-writer \
-      token=$(kubectl create token openbao-operator -n default)
+    export BAO_TOKEN=$(bao write -field=token auth/kubernetes/login \
+      role=<env>-writer \
+      jwt=$(kubectl create token openbao-operator -n default))
     ```
+    (The `bao login -method=kubernetes` client helper is not in OpenBao CLI 2.5.x; the raw API path above is portable across CLI versions.)
     No script reads the bootstrap root token from disk post-bootstrap; no SSH-to-VM-then-kubectl-exec-as-root path exists. The bootstrap window itself is tolerated as the bounded "trust the operator's laptop" moment — v2 closes even this gap by moving provisioning to a GitHub workflow (operator triggers `gh workflow run provision-env.yml`; root token never touches a laptop). Tracked in the follow-up bug. Violation today = re-exporting the root token from `.local/` for day-2 writes, which would re-create the long-lived-superuser-credential-on-a-laptop pattern that `proj.security-hardening`'s motivating incident exists to eliminate.
 
 ---

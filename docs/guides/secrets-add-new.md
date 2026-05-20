@@ -30,9 +30,11 @@ export BAO_ADDR=http://127.0.0.1:8200
 # 2. Authenticate as the openbao-operator SA. provision-env-vm.sh Phase 5b.4
 #    bound a `<env>-writer` role to this SA; the JWT below is exchanged for a
 #    1h bao token scoped to cogni/<env>/* writes only.
-bao login -method=kubernetes role=<env>-writer \
-  token=$(kubectl create token openbao-operator -n default)
-export BAO_TOKEN=$(bao print token)
+#    NOTE: `bao login -method=kubernetes` is NOT in OpenBao CLI 2.5.x. The raw
+#    API path below works across all CLI versions.
+export BAO_TOKEN=$(bao write -field=token auth/kubernetes/login \
+  role=<env>-writer \
+  jwt=$(kubectl create token openbao-operator -n default))
 ```
 
 **Never `cat .local/<env>-openbao-root-token`** into `BAO_TOKEN`. The bootstrap root token is captured during the ~30 min provisioning window only — Phase 5b.4 binds the writer role specifically so day-2 writes never need that token. Reading it from disk would re-create the long-lived-superuser-credential-on-a-laptop pattern that [`proj.security-hardening`](../../work/projects/proj.security-hardening.md) exists to eliminate. Spec: [Invariant 13 NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP](../spec/secrets-management.md).

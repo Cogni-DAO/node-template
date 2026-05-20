@@ -182,9 +182,11 @@ via the writer role bound in Phase 5b.4 (NEVER re-export the root token):**
 # One-time per shell session — substitute <env>.
 kubectl port-forward -n openbao svc/openbao 8200:8200 &
 export BAO_ADDR=http://127.0.0.1:8200
-bao login -method=kubernetes role=<env>-writer \
-  token=$(kubectl create token openbao-operator -n default)
-export BAO_TOKEN=$(bao print token)
+# OpenBao CLI 2.5.x does not implement `bao login -method=kubernetes`; use the
+# raw API path which works across CLI versions.
+export BAO_TOKEN=$(bao write -field=token auth/kubernetes/login \
+  role=<env>-writer \
+  jwt=$(kubectl create token openbao-operator -n default))
 
 # Now write the keys:
 pnpm secrets:set <env> node-template OPENROUTER_API_KEY     # mandatory

@@ -24,6 +24,15 @@
 
 set -euo pipefail
 
+# Bash 4+ preflight — uses `mapfile`/associative arrays via image-tags.sh.
+# macOS Bash 3.2 fails opaquely 100s of lines in; fail clean here instead.
+# (bootstrap.sh also checks; this guards direct invocation.)
+if (( BASH_VERSINFO[0] < 4 )); then
+  printf 'provision-env-vm.sh requires Bash 4+ (current: %s).\n' "$BASH_VERSION" >&2
+  printf 'On macOS:\n  brew install bash\n  export PATH="$(brew --prefix)/bin:$PATH"\n  hash -r\n' >&2
+  exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROVISION_DIR="$REPO_ROOT/infra/provision/cherry/base"
@@ -493,12 +502,30 @@ log_step "Phase 4b.5: Seed deploy/* branches in fork (idempotent)"
 SEED_TOKEN="${GITHUB_ADMIN_PAT:-${GHCR_TOKEN:-${GHCR_DEPLOY_TOKEN:-}}}"
 if [[ -n "$SEED_TOKEN" ]]; then
   export GH_TOKEN="$SEED_TOKEN"
-  MAIN_SHA=$(gh api "repos/${GH_REPO}/branches/main" --jq '.commit.sha' 2>/dev/null || echo "")
-  if [[ -z "$MAIN_SHA" ]]; then
-    log_error "Could not read main's HEAD SHA from ${GH_REPO} (gh api auth issue?)."
+  # Seed source is the operator's currently-checked-out HEAD on the fork —
+  # NOT a hardcoded `main`. This lets a PR reviewer bootstrap-and-validate
+  # the PR branch directly without first merging it to main. The operator
+  # must have already pushed their branch to the fork (the runbook tells
+  # them to). If HEAD isn't reachable on the fork, fall back to main with
+  # a warning so non-PR-validation flows still work.
+  LOCAL_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")
+  SEED_SHA=""
+  if [[ -n "$LOCAL_HEAD" ]] && gh api "repos/${GH_REPO}/commits/${LOCAL_HEAD}" >/dev/null 2>&1; then
+    SEED_SHA="$LOCAL_HEAD"
+    SEED_SRC="local HEAD"
+  else
+    SEED_SHA=$(gh api "repos/${GH_REPO}/branches/main" --jq '.commit.sha' 2>/dev/null || echo "")
+    SEED_SRC="main"
+    [[ -n "$LOCAL_HEAD" ]] && log_warn "  local HEAD ${LOCAL_HEAD:0:8} not on fork — push it first if validating a PR branch"
+  fi
+  if [[ -z "$SEED_SHA" ]]; then
+    log_error "Could not resolve a seed SHA for ${GH_REPO} (neither HEAD nor main reachable)."
     exit 1
   fi
-  # AppSet template generates one Application per catalog entry, not per node.
+  # AppSet template generates one Application per catalog entry. Seed BOTH
+  # the env-wide branch AND the per-app branches from the same SHA so
+  # Phase 4c's patches propagate consistently to whichever branches the
+  # AppSets watch.
   BRANCHES_TO_SEED=("deploy/${DEPLOY_ENV}")
   for target in "${ALL_TARGETS[@]}"; do
     BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${target}")
@@ -510,8 +537,8 @@ if [[ -n "$SEED_TOKEN" ]]; then
     fi
     if gh api -X POST "repos/${GH_REPO}/git/refs" \
         -f "ref=refs/heads/${ref}" \
-        -f "sha=${MAIN_SHA}" >/dev/null 2>&1; then
-      log_info "  ${ref} — seeded from main (${MAIN_SHA:0:8})"
+        -f "sha=${SEED_SHA}" >/dev/null 2>&1; then
+      log_info "  ${ref} — seeded from ${SEED_SRC} (${SEED_SHA:0:8})"
     else
       log_error "  ${ref} — FAILED to seed (check PAT push permission)"
       exit 1
@@ -613,6 +640,21 @@ if ! git diff --cached --quiet; then
   git commit -m "chore(infra): write env-state.yaml for ${DEPLOY_ENV} — VM_IP=${VM_IP} [provision]"
   git push origin "$DEPLOY_BRANCH"
   log_info "Pushed EndpointSlice IP patches to $DEPLOY_BRANCH"
+  PATCHED_SHA=$(git rev-parse HEAD)
+  # AppSets watch per-app deploy branches (deploy/<env>-<target>), not the
+  # env-wide one. Mirror the patched commit to every per-app branch so they
+  # all reflect the same env-state.yaml + vm.<root> + bootstrap_image_tag
+  # patches. Without this the per-app branches stay at the seed (Phase 4b.5)
+  # and Argo deploys unpatched placeholder image tags → ImagePullBackOff.
+  for target in "${ALL_TARGETS[@]}"; do
+    per_app_branch="deploy/${DEPLOY_ENV}-${target}"
+    if git push -f origin "${PATCHED_SHA}:refs/heads/${per_app_branch}"; then
+      log_info "  mirrored to ${per_app_branch} (${PATCHED_SHA:0:8})"
+    else
+      log_error "  ${per_app_branch} — FAILED to mirror (check PAT push permission)"
+      exit 1
+    fi
+  done
 else
   log_info "EndpointSlice IPs already correct on $DEPLOY_BRANCH"
 fi
