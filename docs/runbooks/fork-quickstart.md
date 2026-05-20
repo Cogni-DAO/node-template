@@ -82,7 +82,12 @@ the bot owns.
 
    - Once `gh api user --jq .login` returns the bot, continue silently.
 
-1. PREREQS — auto-install, do not ask. Tools: gh, pnpm, tofu, age, jq, yq.
+1. PREREQS — auto-install, do not ask. Tools: bash (4+), gh, pnpm, tofu, age, jq, yq.
+   - **Bash 4+ is a hard prereq** — `bootstrap.sh` + `provision-env-vm.sh`
+     use associative arrays and `mapfile` which macOS /bin/bash 3.2 does
+     not support. Run this BEFORE anything else, and ensure the resulting
+     bash takes precedence on PATH:
+     bash scripts/bootstrap/install/install-bash.sh
    - The repo ships canonical installer wrappers — use them in preference
      to brew/apt:
      bash scripts/bootstrap/install/install-pnpm.sh

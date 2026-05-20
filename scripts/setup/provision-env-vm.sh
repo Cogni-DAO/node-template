@@ -26,10 +26,11 @@ set -euo pipefail
 
 # Bash 4+ preflight — uses `mapfile`/associative arrays via image-tags.sh.
 # macOS Bash 3.2 fails opaquely 100s of lines in; fail clean here instead.
-# (bootstrap.sh also checks; this guards direct invocation.)
+# Canonical fix is the installer wrapper; bootstrap.sh also checks but this
+# guards direct invocation.
 if (( BASH_VERSINFO[0] < 4 )); then
   printf 'provision-env-vm.sh requires Bash 4+ (current: %s).\n' "$BASH_VERSION" >&2
-  printf 'On macOS:\n  brew install bash\n  export PATH="$(brew --prefix)/bin:$PATH"\n  hash -r\n' >&2
+  printf 'Install via: bash scripts/bootstrap/install/install-bash.sh\n' >&2
   exit 2
 fi
 

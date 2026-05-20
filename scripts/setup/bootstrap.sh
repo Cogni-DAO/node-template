@@ -13,14 +13,15 @@
 
 set -euo pipefail
 
-# Bash 4+ preflight — this script + delegates use associative arrays
-# (declare -A) and `mapfile`, both introduced in Bash 4. macOS ships
-# Bash 3.2 by default; fail fast with a one-line fix instead of an opaque
-# "unbound variable" / "mapfile: command not found" 30 lines in.
+# Bash 4+ preflight — uses associative arrays (declare -A) and `mapfile`,
+# both Bash 4+ features. macOS /bin/bash is 3.2; without this guard the
+# script fails opaquely 30 lines in on `declare -A INSTALLER=(...)`.
+# Canonical fix is the installer wrapper; print the one-line command.
 if (( BASH_VERSINFO[0] < 4 )); then
   printf 'bootstrap.sh requires Bash 4+ (current: %s).\n' "$BASH_VERSION" >&2
-  printf 'On macOS:\n  brew install bash\n  export PATH="$(brew --prefix)/bin:$PATH"\n  hash -r\n' >&2
-  printf 'Then re-run.\n' >&2
+  printf 'Install via the canonical wrapper:\n' >&2
+  printf '  bash scripts/bootstrap/install/install-bash.sh\n' >&2
+  printf 'Then re-run pnpm bootstrap from a shell where `bash --version` reports 4+.\n' >&2
   exit 2
 fi
 
