@@ -128,12 +128,18 @@ the bot owns.
 
 4. INSTALL: `pnpm install`
 
-5. EDIT infra/fork.yaml — set `domain.root` to the Cloudflare zone the
-   human owns (e.g. `opencompany.cc`). Usually leave `fork.slug` empty;
-   bootstrap derives it from the GitHub repo name. Public node URLs come
-   from `domain.root` plus the catalog. VM aliases are repo/env-scoped:
-   `<slug>-candidate-a.vm.<root>`, `<slug>-preview.vm.<root>`,
-   `<slug>.vm.<root>`.
+5. EDIT infra/fork.yaml — **REQUIRED operator input; bootstrap will abort
+   if skipped.** Set `domain.root` to the Cloudflare zone the human owns
+   (e.g. `opencompany.cc`). This must match `.env.bootstrap::CLOUDFLARE_ZONE_ID`.
+   Usually leave `fork.slug` empty; bootstrap derives it from the GitHub
+   repo name. Public node URLs come from `domain.root` plus the catalog.
+   VM aliases are repo/env-scoped: `<slug>-candidate-a.vm.<root>`,
+   `<slug>-preview.vm.<root>`, `<slug>.vm.<root>`.
+
+   The file's committed value is intentionally empty so no fork inherits
+   another fork's zone. Edit + save (committing is good hygiene, not
+   strictly required for bootstrap to read the local file). Then proceed
+   to Step 6.
 
 6. BOOTSTRAP — the only secrets checkpoint.
    - Run: `pnpm bootstrap`
