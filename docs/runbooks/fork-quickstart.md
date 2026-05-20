@@ -82,7 +82,12 @@ the bot owns.
 
    - Once `gh api user --jq .login` returns the bot, continue silently.
 
-1. PREREQS — auto-install, do not ask. Tools: gh, pnpm, tofu, age, jq, yq.
+1. PREREQS — auto-install, do not ask. Tools: bash (4+), gh, pnpm, tofu, age, jq, yq.
+   - **Bash 4+ is a hard prereq** — `bootstrap.sh` + `provision-env-vm.sh`
+     use associative arrays and `mapfile` which macOS /bin/bash 3.2 does
+     not support. Run this BEFORE anything else, and ensure the resulting
+     bash takes precedence on PATH:
+     bash scripts/bootstrap/install/install-bash.sh
    - The repo ships canonical installer wrappers — use them in preference
      to brew/apt:
      bash scripts/bootstrap/install/install-pnpm.sh
@@ -123,12 +128,20 @@ the bot owns.
 
 4. INSTALL: `pnpm install`
 
-5. EDIT infra/fork.yaml — set `domain.root` to the Cloudflare zone the
-   human owns (e.g. `opencompany.cc`). Usually leave `fork.slug` empty;
-   bootstrap derives it from the GitHub repo name. Public node URLs come
-   from `domain.root` plus the catalog. VM aliases are repo/env-scoped:
-   `<slug>-candidate-a.vm.<root>`, `<slug>-preview.vm.<root>`,
+5. infra/fork.yaml — **no manual edit required.** `pnpm bootstrap` auto-
+   populates `domain.root` by querying the Cloudflare API for the zone
+   ID you already provided in `.env.bootstrap::CLOUDFLARE_ZONE_ID`. After
+   the first run, bootstrap prints a one-line `git add … && git commit`
+   to persist the value. Usually leave `fork.slug` empty too — bootstrap
+   derives it from the GitHub repo name.
+
+   Public node URLs come from `domain.root` plus the catalog. VM aliases
+   are repo/env-scoped: `<slug>-candidate-a.vm.<root>`, `<slug>-preview.vm.<root>`,
    `<slug>.vm.<root>`.
+
+   If you previously hand-set `domain.root` and it disagrees with the
+   Cloudflare zone the ID resolves to, bootstrap aborts with a mismatch
+   error instead of silently overwriting — reconcile and re-run.
 
 6. BOOTSTRAP — the only secrets checkpoint.
    - Run: `pnpm bootstrap`
@@ -136,16 +149,89 @@ the bot owns.
      human's editor. In a non-TTY agent shell, it prints the file path
      and exits — that's expected behaviour (script does not open nano
      in non-TTY, which would silently no-op).
-   - Say to the human, exactly once: "Fill the 5 sections in your editor
+   - Say to the human, exactly once: "Fill the 3 sections in your editor
      (mint URLs are inline), save, and close. I'll handle the rest."
    - When the human signals done, re-run `pnpm bootstrap`. This pass
      validates inputs (admin role, push permission, Cloudflare zone,
-     Cherry token), generates ~25 agent secrets, sets them via
-     `gh secret set`, provisions the Cherry VM, configures Cloudflare
-     DNS for public app URLs and the repo-scoped VM alias, stores that
-     alias in GitHub env secret `VM_HOST`, and dispatches
-     promote-and-deploy.yml. Bootstrap fails BEFORE spending Cherry
-     money if any pre-flight check fails.
+     Cherry token), generates agent secrets, provisions the Cherry VM,
+     configures Cloudflare DNS, **installs the secrets substrate
+     (OpenBao + External Secrets Operator), auto-unseals OpenBao
+     (Shamir 1-of-1 default; init artifacts captured to
+     `.local/<env>-openbao-init.json`), binds two Kubernetes auth
+     roles — `eso-reader` for the ESO controller (read-only) and
+     `<env>-writer` for the operator SA `default/openbao-operator`
+     (writes on cogni/<env>/\* only) — and seeds the per-service
+     OpenBao paths with the agent-generated values** — see
+     [`docs/spec/secrets-management.md`](../spec/secrets-management.md).
+     Then it dispatches promote-and-deploy.yml. Bootstrap fails BEFORE
+     spending Cherry money if any pre-flight check fails.
+
+   The substrate now carries app secrets — `pnpm bootstrap` no longer
+   writes ~20 app values to GitHub Environment secrets. Only the
+   chicken-and-egg credentials CI workflows need _before_ the substrate
+   is up (Cherry, GHCR_DEPLOY_TOKEN, ACTIONS_AUTOMATION_BOT_PAT,
+   GIT_READ_TOKEN) plus deploy-time-config (DOMAIN, VM_HOST, SSH key)
+   plus Compose-runtime infra (DB passwords, LITELLM_MASTER_KEY) stay
+   in GH env.
+
+6.3 LOCAL KUBECTL — `pnpm bootstrap` fetches the k3s kubeconfig to
+`.local/<env>-kubeconfig.yaml` (Phase 4a). Export it so every kubectl
+command in subsequent steps runs locally — **never SSH into the VM
+just to run `kubectl`**; that's the laptop-shell anti-pattern at the
+control-plane tier (same shape as the root-token issue, different
+surface).
+
+```
+export KUBECONFIG=$PWD/.local/<env>-kubeconfig.yaml
+kubectl get nodes  # should print the VM node
+```
+
+(v-next: Grafana + Loki + Argo UI become the steady-state visibility
+surface; kubectl becomes operator break-glass. Tracked in the
+observability follow-up.)
+
+6.5 UNSEAL CHECKPOINT — auto-unsealed for 1-of-1 (skip silently). The
+provision script's Phase 5b initialized OpenBao with Shamir 1-of-1
+and unsealed it immediately. The unseal key + root token live at
+`.local/<env>-openbao-init.json` (chmod 600, gitignored). Move those
+into your password manager and delete from disk if you want
+defense-in-depth; the substrate keeps working as long as future
+pod restarts can recover the unseal key (operator-managed for v1).
+
+Multi-operator forks (Shamir 3-of-5) set `OPENBAO_KEY_SHARES=5
+   OPENBAO_KEY_THRESHOLD=3` before re-running bootstrap; init prints
+the 5 keys and the script halts here for you to distribute them
+before unseal can proceed.
+
+6.7 APP SECRETS — enter values for the operator-pass-through keys that
+`pnpm bootstrap` no longer carries. **Prereq: get a short-lived bao token
+via the writer role bound in Phase 5b.4 (NEVER re-export the root token):**
+
+```
+# One-time per shell session — substitute <env>.
+kubectl port-forward -n openbao svc/openbao 8200:8200 &
+export BAO_ADDR=http://127.0.0.1:8200
+# OpenBao CLI 2.5.x does not implement `bao login -method=kubernetes`; use the
+# raw API path which works across CLI versions.
+export BAO_TOKEN=$(bao write -field=token auth/kubernetes/login \
+  role=<env>-writer \
+  jwt=$(kubectl create token openbao-operator -n default))
+
+# Now write the keys:
+pnpm secrets:set <env> node-template OPENROUTER_API_KEY     # mandatory
+pnpm secrets:set <env> node-template GRAFANA_CLOUD_LOKI_API_KEY   # optional
+pnpm secrets:set <env> node-template PROMETHEUS_REMOTE_WRITE_URL # optional
+```
+
+`pnpm bootstrap` prints the full list before exiting; bookmark its
+tail. Without `OPENROUTER_API_KEY` the node-template pod CrashLoops
+on the LLM router call. The exact list of accepted services is
+`ls infra/catalog/*.yaml`.
+
+The CLI uses an interactive secure stdin (`read -s`); pipe input
+also works (`echo -n "v" | pnpm secrets:set ...`). See
+[`docs/guides/secrets-add-new.md`](../guides/secrets-add-new.md)
+for the full add-new playbook.
 
 7. DRIVE TO GREEN.
    - The script already watches CI via `gh run watch`. Let it run.
@@ -155,6 +241,10 @@ the bot owns.
      suspended, Cherry billing block), STOP and report the specific
      failure + the one thing the human needs to do. Log it in
      `hardships.md` first.
+   - If `/readyz` stays red, suspect a missing app secret first:
+     `kubectl describe externalsecret -n cogni-<env> node-template-env-secrets`
+     surfaces missing keys; re-run the relevant `pnpm secrets:set` and
+     `kubectl rollout restart deployment/node-app`.
 
 8. REPORT — when /readyz returns 200, post one line:
    `✓ <domain> /readyz=200 VM=<ip> run=<url>`

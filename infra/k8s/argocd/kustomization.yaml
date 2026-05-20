@@ -1,8 +1,15 @@
 # SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
 # SPDX-FileCopyrightText: 2025 Cogni-DAO
 #
-# Argo CD non-HA install for single-node k3s with ksops secret decryption.
+# Argo CD non-HA install for single-node k3s.
 # Applied during cluster bootstrap, not by Argo itself.
+#
+# Secrets substrate: task.0284 retired the SOPS/ksops scaffold (the sidecar
+# was a placeholder per its own README — no real age keys, no real encrypted
+# files in any cluster). Secrets now flow OpenBao → External Secrets Operator
+# → native k8s Secret. Bootstrap manifests for both controllers live at
+# `infra/k8s/argocd/{openbao,external-secrets}/` and are applied out-of-band
+# by `scripts/ci/deploy-infra.sh` Step 7c, mirroring the image-updater pattern.
 #
 # Usage:
 #   kubectl create namespace argocd
@@ -18,8 +25,6 @@ resources:
   # Pin to Argo CD v2.13 (latest stable as of 2026-03).
   # Non-HA is appropriate for single-node k3s crawl; HA is a P2 concern.
   - https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.4/manifests/install.yaml
-  # ksops CMP plugin ConfigMap
-  - ksops-cmp.yaml
   # ApplicationSets — one per environment.
   # canary was retired in bug.0312; candidate-a replaces it as the pre-merge slot.
   - candidate-a-applicationset.yaml
@@ -27,7 +32,5 @@ resources:
   - production-applicationset.yaml
 
 patches:
-  # Add ksops sidecar to repo-server for SOPS/age secret decryption
-  - path: repo-server-patch.yaml
   # 30s reconciliation for fast dev iteration (default is 180s)
   - path: argocd-cm-patch.yaml
