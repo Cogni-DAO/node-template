@@ -121,16 +121,43 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
   exit 2
 fi
 
-# Fork domain comes from infra/fork.yaml::domain.root, not .env.bootstrap
-# (B2 + P5: single SSOT for fork identity). DOMAIN per env is derived
-# downstream by provision-env-vm.sh from the convention test/preview/"".
-FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
-if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
-  err "infra/fork.yaml::domain.root is missing or empty."
-  err "Edit ${BOLD}infra/fork.yaml${NC} to set the Cloudflare zone you own (e.g. opencompany.cc), commit, then re-run."
+# Fork domain: SSOT is infra/fork.yaml::domain.root. The operator already
+# tells us their Cloudflare zone ID in .env.bootstrap; instead of asking
+# them to copy the zone NAME into fork.yaml separately (DRY violation +
+# brittleness risk), we derive the name from the Cloudflare API and
+# auto-populate fork.yaml if empty. Verifies on mismatch.
+ZONE_RESP=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}")
+ZONE_OK=$(printf '%s' "$ZONE_RESP" | jq -r '.success // false')
+if [[ "$ZONE_OK" != "true" ]]; then
+  err "Cloudflare zone ${CLOUDFLARE_ZONE_ID} unreachable with the provided token."
+  err "Response: $(printf '%s' "$ZONE_RESP" | jq -c '.errors // .' 2>/dev/null || printf '%s' "$ZONE_RESP")"
   exit 2
 fi
-log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (from infra/fork.yaml)"
+CLOUDFLARE_ZONE_NAME=$(printf '%s' "$ZONE_RESP" | jq -r '.result.name')
+[[ -n "$CLOUDFLARE_ZONE_NAME" && "$CLOUDFLARE_ZONE_NAME" != "null" ]] || {
+  err "Cloudflare API returned no zone name for ID ${CLOUDFLARE_ZONE_ID}."
+  exit 2
+}
+log "Cloudflare zone reachable: ${BOLD}${CLOUDFLARE_ZONE_NAME}${NC} (id ${CLOUDFLARE_ZONE_ID})"
+
+FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
+if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
+  # Auto-populate from Cloudflare API. Operator's .env.bootstrap already
+  # named the zone; copying it into fork.yaml is mechanical work the
+  # bootstrap can do for them. They commit it afterwards.
+  yq -i ".domain.root = \"${CLOUDFLARE_ZONE_NAME}\"" "$REPO_ROOT/infra/fork.yaml"
+  FORK_ROOT="$CLOUDFLARE_ZONE_NAME"
+  log "Auto-populated ${BOLD}infra/fork.yaml::domain.root = ${CLOUDFLARE_ZONE_NAME}${NC} from Cloudflare API."
+  log "  → ${YELLOW}commit this:${NC} git add infra/fork.yaml && git commit -m 'set fork domain' && git push origin main"
+elif [[ "$FORK_ROOT" != "$CLOUDFLARE_ZONE_NAME" ]]; then
+  err "Mismatch: infra/fork.yaml::domain.root='${FORK_ROOT}' but Cloudflare zone ID ${CLOUDFLARE_ZONE_ID} resolves to '${CLOUDFLARE_ZONE_NAME}'."
+  err "Either fork.yaml is stale, .env.bootstrap::CLOUDFLARE_ZONE_ID points at the wrong zone, or you changed zones."
+  err "Reconcile and re-run."
+  exit 2
+else
+  log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (fork.yaml + Cloudflare API agree)"
+fi
 
 FORK_SLUG=$(fork_identity_slug "$REPO_ROOT")
 if [[ -z "$FORK_SLUG" ]]; then
@@ -226,12 +253,8 @@ if [[ "$CAN_PUSH" != "true" ]]; then
 fi
 log "Push access verified — bootstrap will not strand a billed VM at Phase 4c."
 
-# Cloudflare zone reachability
-ZONE_OK=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}" \
-  | jq -r '.success // false')
-[[ "$ZONE_OK" == "true" ]] || { err "Cloudflare zone ${CLOUDFLARE_ZONE_ID} unreachable with the provided token."; exit 2; }
-log "Cloudflare zone reachable"
+# Cloudflare zone reachability: already validated earlier when deriving
+# CLOUDFLARE_ZONE_NAME from the same API endpoint. Skip the duplicate call.
 
 # Cherry token validation (use /v1/teams, not /v1/regions — see node-setup SKILL)
 CHERRY_OK=$(curl -sS -o /dev/null -w "%{http_code}" \
