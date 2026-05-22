@@ -128,87 +128,119 @@ the bot owns.
 
 4. INSTALL: `pnpm install`
 
-5. infra/fork.yaml — **no manual edit required.** `pnpm bootstrap` auto-
-   populates `domain.root` by querying the Cloudflare API for the zone
-   ID you already provided in `.env.bootstrap::CLOUDFLARE_ZONE_ID`. After
-   the first run, bootstrap prints a one-line `git add … && git commit`
-   to persist the value. Usually leave `fork.slug` empty too — bootstrap
-   derives it from the GitHub repo name.
+5. infra/fork.yaml — one operator edit. The workflow path (Step 6 below)
+   does not auto-populate `domain.root` from a runner — a runner-side
+   `git commit + push` would either require ambient git identity (we
+   don't grant) or attribute to a bot. Set it locally, commit, push.
+   See Step 6.1 for the exact command. Usually leave `fork.slug` empty —
+   the bootstrap derives it from the GitHub repo name.
 
    Public node URLs come from `domain.root` plus the catalog. VM aliases
    are repo/env-scoped: `<slug>-candidate-a.vm.<root>`, `<slug>-preview.vm.<root>`,
    `<slug>.vm.<root>`.
 
-   If you previously hand-set `domain.root` and it disagrees with the
-   Cloudflare zone the ID resolves to, bootstrap aborts with a mismatch
-   error instead of silently overwriting — reconcile and re-run.
+   The workflow's pre-flight refuses to run if `domain.root` is empty —
+   no half-provisioned VMs on a typo'd config.
 
-6. BOOTSTRAP — the only secrets checkpoint.
-   - Run: `pnpm bootstrap`
-   - First invocation writes .env.bootstrap. In a TTY, it opens the
-     human's editor. In a non-TTY agent shell, it prints the file path
-     and exits — that's expected behaviour (script does not open nano
-     in non-TTY, which would silently no-op).
-   - Say to the human, exactly once: "Fill the 3 sections in your editor
-     (mint URLs are inline), save, and close. I'll handle the rest."
-   - When the human signals done, re-run `pnpm bootstrap`. This pass
-     validates inputs (admin role, push permission, Cloudflare zone,
-     Cherry token), generates agent secrets, provisions the Cherry VM,
-     configures Cloudflare DNS, **installs the secrets substrate
-     (OpenBao + External Secrets Operator), auto-unseals OpenBao
-     (Shamir 1-of-1 default; init artifacts captured to
-     `.local/<env>-openbao-init.json`), binds two Kubernetes auth
-     roles — `eso-reader` for the ESO controller (read-only) and
-     `<env>-writer` for the operator SA `default/openbao-operator`
-     (writes on cogni/<env>/\* only) — and seeds the per-service
-     OpenBao paths with the agent-generated values** — see
-     [`docs/spec/secrets-management.md`](../spec/secrets-management.md).
-     Then it dispatches promote-and-deploy.yml. Bootstrap fails BEFORE
-     spending Cherry money if any pre-flight check fails.
+6. BOOTSTRAP — runs in a workflow, not on your laptop. The substrate +
+   VM provisioning lives at [`.github/workflows/provision-env.yml`](../../.github/workflows/provision-env.yml).
+   You ship 6 GH env secrets + a Cloudflare-zone line in `infra/fork.yaml`;
+   the GHA runner handles the 30-min `tofu apply` + `bao init` + `kubectl`
+   session that used to sit on your laptop. Init artifacts come back
+   passphrase-encrypted.
 
-   The substrate now carries app secrets — `pnpm bootstrap` no longer
-   writes ~20 app values to GitHub Environment secrets. Only the
-   chicken-and-egg credentials CI workflows need _before_ the substrate
-   is up (Cherry, GHCR_DEPLOY_TOKEN, ACTIONS_AUTOMATION_BOT_PAT,
-   GIT_READ_TOKEN) plus deploy-time-config (DOMAIN, VM_HOST, SSH key)
-   plus Compose-runtime infra (DB passwords, LITELLM_MASTER_KEY) stay
-   in GH env.
+   6.1 — populate `infra/fork.yaml::domain.root` once, commit + push:
 
-6.3 LOCAL KUBECTL — `pnpm bootstrap` fetches the k3s kubeconfig to
-`.local/<env>-kubeconfig.yaml` (Phase 4a). Export it so every kubectl
-command in subsequent steps runs locally — **never SSH into the VM
-just to run `kubectl`**; that's the laptop-shell anti-pattern at the
-control-plane tier (same shape as the root-token issue, different
-surface).
+   ```
+   yq -i '.domain.root = "<your-cloudflare-zone-name>"' infra/fork.yaml
+   git add infra/fork.yaml
+   git commit -m "chore(bootstrap): set fork.yaml::domain.root"
+   git push
+   ```
 
-```
-export KUBECONFIG=$PWD/.local/<env>-kubeconfig.yaml
-kubectl get nodes  # should print the VM node
-```
+   6.2 — create the target GH environment + set the 6 minting tokens:
 
-(v-next: Grafana + Loki + Argo UI become the steady-state visibility
-surface; kubectl becomes operator break-glass. Tracked in the
-observability follow-up.)
+   ```
+   REPO=$(git remote get-url origin | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1#')
+   ENV=candidate-a
+   gh api -X PUT repos/$REPO/environments/$ENV
+   for k in CHERRY_AUTH_TOKEN CHERRY_PROJECT_ID CLOUDFLARE_API_TOKEN \
+            CLOUDFLARE_ZONE_ID GITHUB_ADMIN_PAT GITHUB_ADMIN_USERNAME; do
+     gh secret set "$k" --repo "$REPO" --env "$ENV"  # prompts; never echoes
+   done
+   ```
 
-6.5 UNSEAL CHECKPOINT — auto-unsealed for 1-of-1 (skip silently). The
-provision script's Phase 5b initialized OpenBao with Shamir 1-of-1
-and unsealed it immediately. The unseal key + root token live at
-`.local/<env>-openbao-init.json` (chmod 600, gitignored). Move those
-into your password manager and delete from disk if you want
-defense-in-depth; the substrate keeps working as long as future
-pod restarts can recover the unseal key (operator-managed for v1).
+   Tokens are the same set the laptop `.env.bootstrap` used (see [`docs/spec/agentic-fork-bootstrap.md`](../spec/agentic-fork-bootstrap.md)
+   §V1 Credential Floor). The GH-env-secrets path replaces `.env.bootstrap`
+   entirely — your laptop never holds them.
 
-Multi-operator forks (Shamir 3-of-5) set `OPENBAO_KEY_SHARES=5
-   OPENBAO_KEY_THRESHOLD=3` before re-running bootstrap; init prints
-the 5 keys and the script halts here for you to distribute them
-before unseal can proceed.
+   6.3 — generate an init-artifact passphrase (operator-owned, never
+   stored in GH or in this repo):
+
+   ```
+   PP=$(openssl rand -hex 24)  # 48-char hex, ~192 bits
+   echo "$PP"  # save to your password manager BEFORE running the workflow
+   ```
+
+   6.4 — dispatch the workflow:
+
+   ```
+   gh workflow run provision-env.yml --repo "$REPO" \
+     -f env="$ENV" \
+     -f encryption_passphrase="$PP"
+   gh run watch --repo "$REPO" \
+     $(gh run list --repo "$REPO" --workflow provision-env.yml --limit 1 --json databaseId --jq '.[0].databaseId') \
+     --exit-status
+   ```
+
+   The workflow validates inputs (admin role, push permission, Cloudflare
+   zone, Cherry token), generates agent secrets, provisions the Cherry VM,
+   configures Cloudflare DNS, **installs the secrets substrate (OpenBao +
+   External Secrets Operator), auto-unseals OpenBao (Shamir 1-of-1
+   default), binds the writer-role**, seeds the per-service OpenBao
+   paths, then dispatches `promote-and-deploy.yml`. The job FAILS BEFORE
+   spending Cherry money if any pre-flight check fails. See
+   [`docs/spec/secrets-management.md`](../spec/secrets-management.md).
+
+   6.5 — download + decrypt the init artifacts. The workflow's summary
+   prints the exact commands; the short version:
+
+   ```
+   gh run download --repo "$REPO" --name "$ENV-init-artifacts" --dir .local
+   for f in .local/*.enc; do
+     out="${f%.enc}"
+     openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$f" -out "$out" \
+       -pass pass:"$PP"
+   done
+   # Move .local/<env>-openbao-init.json + <env>-vm-key + <env>-kubeconfig.yaml
+   # to your password manager. THEN delete the artifact from the run page
+   # (retention is 1 day — safety net, not the contract).
+   ```
+
+   6.6 — substrate Invariant 13 NEVER-REMINDER. The bootstrap window is
+   the bounded exception where the root token exists at all; day-2 writes
+   use the writer-role JWT (Step 6.7), not the root token. The
+   `<env>-openbao-init.json` you just downloaded is for unseal-key recovery
+   on pod restart only.
+
+   Multi-operator forks (Shamir 3-of-5) override `OPENBAO_KEY_SHARES=5`
+   and `OPENBAO_KEY_THRESHOLD=3` at workflow trigger time (separate input
+   to add when needed). v1 default is 1-of-1; v2 lands multi-operator
+   key distribution as its own slice.
+
+6.3-legacy LAPTOP BOOTSTRAP (deprecated, kept for emergencies).
+`pnpm bootstrap` still works as a laptop fallback when the workflow
+path is unavailable (GHA outage, debugging a runner-specific bug).
+**Do not use for production paths** — the workflow is the contract.
 
 6.7 APP SECRETS — enter values for the operator-pass-through keys that
-`pnpm bootstrap` no longer carries. **Prereq: get a short-lived bao token
-via the writer role bound in Phase 5b.4 (NEVER re-export the root token):**
+the substrate doesn't auto-generate. **Prereq: kubeconfig from the
+workflow artifact (Step 6.5), short-lived bao token via the writer
+role (NEVER re-export the root token):**
 
 ```
 # One-time per shell session — substitute <env>.
+export KUBECONFIG=$PWD/.local/<env>-kubeconfig.yaml
 kubectl port-forward -n openbao svc/openbao 8200:8200 &
 export BAO_ADDR=http://127.0.0.1:8200
 # OpenBao CLI 2.5.x does not implement `bao login -method=kubernetes`; use the
@@ -223,9 +255,9 @@ pnpm secrets:set <env> node-template GRAFANA_CLOUD_LOKI_API_KEY   # optional
 pnpm secrets:set <env> node-template PROMETHEUS_REMOTE_WRITE_URL # optional
 ```
 
-`pnpm bootstrap` prints the full list before exiting; bookmark its
-tail. Without `OPENROUTER_API_KEY` the node-template pod CrashLoops
-on the LLM router call. The exact list of accepted services is
+The workflow scorecard prints the full list. Without
+`OPENROUTER_API_KEY` the node-template pod CrashLoops on the LLM
+router call. The exact list of accepted services is
 `ls infra/catalog/*.yaml`.
 
 The CLI uses an interactive secure stdin (`read -s`); pipe input
