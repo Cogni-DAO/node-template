@@ -829,12 +829,19 @@ ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CON
 # ══════════════════════════════════════════════════════════════
 # Phase 5b: Install OpenBao + ESO + auto-init + auto-unseal + auth bind
 # ══════════════════════════════════════════════════════════════
-# task.0284 — fully automates the substrate bootstrap. Mirrors the
-# image-updater shape (rsync local kustomize layer + `kubectl kustomize
-# --enable-helm | kubectl apply`), then drives OpenBao through init →
-# unseal → KV mount → Kubernetes auth method → eso-reader role bind so
-# `ClusterSecretStore openbao-backend` reaches `Ready=True` with zero
-# operator toil.
+# task.0284 — fully automates the substrate bootstrap. Phase 5b.1 registers
+# Argo Applications for the OpenBao + ESO kustomize layers (Argo renders them
+# via kustomize-with-helm thanks to the argocd-cm patch in bootstrap.yaml).
+# Phase 5b.2 → 5b.5 then drive OpenBao through init → unseal → KV mount →
+# Kubernetes auth method → eso-reader role bind so `ClusterSecretStore
+# openbao-backend` reaches `Ready=True` with zero operator toil.
+#
+# v-next of task.0284 — Phase 5b.1 was previously an imperative `kubectl
+# kustomize --enable-helm | kubectl apply` against the operator's local
+# checkout; Argo never saw the substrate and couldn't reconcile drift.
+# This phase now applies two Argo Application CRs (openbao + external-secrets);
+# the Applications fetch from the fork's own deploy/${DEPLOY_ENV} branch and
+# Argo handles render + apply + drift correction.
 #
 # Default seal shape: Shamir 1-of-1 — appropriate for the single-operator
 # OSS baseline. Multi-operator forks override via OPENBAO_KEY_SHARES +
@@ -843,22 +850,41 @@ ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CON
 # Idempotency: every step short-circuits if its target state already holds
 # (`bao status` initialized, `bao auth list` has kubernetes/, policy + role
 # writes are upsert by design). Re-running Phase 5b after a chart version
-# bump just re-applies the kustomize and re-verifies state.
+# bump just re-applies the Application CRs (no-op if unchanged) and re-verifies
+# state.
 log_step "Phase 5b: Install + initialize OpenBao + ESO"
 
-# ── 5b.1 Install ───────────────────────────────────────────────────────────
-rsync -e "ssh $SSH_OPTS" -az --delete \
-  "$REPO_ROOT/infra/k8s/argocd/openbao/" root@"$VM_IP":/opt/cogni-template-openbao/
-ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-openbao/ | kubectl apply --server-side --force-conflicts -f -"
-log_info "Applied OpenBao bootstrap kustomize"
+# ── 5b.1 Register Argo Applications for the substrate ─────────────────────
+# Substitute ${FORK_REPO} + ${DEPLOY_BRANCH} placeholders, apply the two
+# Application CRs into the argocd namespace, then wait for both to report
+# Healthy. Argo's repo-server clones the deploy branch, runs `kustomize build
+# --enable-helm` (per the bootstrap argocd-cm patch), and applies server-side.
+SUBSTRATE_FORK_REPO="https://github.com/${GH_REPO}.git"
+for substrate in openbao external-secrets; do
+  rendered=$(mktemp)
+  sed -e "s#\${FORK_REPO}#${SUBSTRATE_FORK_REPO}#g" \
+      -e "s#\${DEPLOY_BRANCH}#${DEPLOY_BRANCH}#g" \
+      "$REPO_ROOT/infra/k8s/argocd/${substrate}-application.yaml" >"$rendered"
+  scp $SSH_OPTS "$rendered" root@"$VM_IP":/tmp/${substrate}-application.yaml
+  rm -f "$rendered"
+  ssh $SSH_OPTS root@"$VM_IP" "kubectl apply -f /tmp/${substrate}-application.yaml && rm -f /tmp/${substrate}-application.yaml"
+  log_info "Applied Argo Application: ${substrate} (repo=${SUBSTRATE_FORK_REPO} branch=${DEPLOY_BRANCH})"
+done
 
-rsync -e "ssh $SSH_OPTS" -az --delete \
-  "$REPO_ROOT/infra/k8s/argocd/external-secrets/" root@"$VM_IP":/opt/cogni-template-external-secrets-operator/
-ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-external-secrets-operator/ | kubectl apply --server-side --force-conflicts -f -"
-log_info "Applied External Secrets Operator bootstrap kustomize"
+# Wait for both substrate Applications to reach Healthy. Argo's automated sync
+# kicks in on first reconciliation; Healthy = chart rendered + applied + all
+# resources Healthy. 5min timeout matches the prior `kubectl apply`+rollout
+# window plus Argo's first-sync overhead.
+for substrate in external-secrets openbao; do
+  log_info "Waiting for application/${substrate} to be Healthy (up to 5min)..."
+  ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl -n argocd wait --for=jsonpath='{.status.health.status}'=Healthy --timeout=300s application/${substrate}" \
+    || log_warn "application/${substrate} not Healthy within 5min — re-run provision or inspect: kubectl -n argocd describe application ${substrate}"
+done
 
 # Wait for ExternalSecret + ClusterSecretStore CRDs to be Established before
-# 5b.5 below applies the ClusterSecretStore CR.
+# 5b.5 below applies the ClusterSecretStore CR. Argo Healthy implies CRDs
+# applied, but Established is a separate k8s condition — wait explicitly.
 log_info "Waiting for ESO CRDs to register..."
 ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
   || log_warn "ESO CRDs not yet Established; Phase 6 may fail (TRANSITION_SAFE: re-run provision)."
