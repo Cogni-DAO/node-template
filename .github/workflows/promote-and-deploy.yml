@@ -35,6 +35,11 @@ permissions:
   contents: write
   packages: read
   actions: read
+  # task.0284 — required for GitHub OIDC → OpenBao token exchange. Jobs that
+  # need OpenBao access call `scripts/ci/openbao-oidc-login.sh` early; the
+  # script is a no-op (with a step-summary line) when OPENBAO_ADDR is unset,
+  # so this permission can stay live before the substrate is fully wired.
+  id-token: write
 
 concurrency:
   group: promote-deploy-${{ inputs.environment || github.ref_name }}

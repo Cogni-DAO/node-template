@@ -13,6 +13,18 @@
 
 set -euo pipefail
 
+# Bash 4+ preflight — uses associative arrays (declare -A) and `mapfile`,
+# both Bash 4+ features. macOS /bin/bash is 3.2; without this guard the
+# script fails opaquely 30 lines in on `declare -A INSTALLER=(...)`.
+# Canonical fix is the installer wrapper; print the one-line command.
+if (( BASH_VERSINFO[0] < 4 )); then
+  printf 'bootstrap.sh requires Bash 4+ (current: %s).\n' "$BASH_VERSION" >&2
+  printf 'Install via the canonical wrapper:\n' >&2
+  printf '  bash scripts/bootstrap/install/install-bash.sh\n' >&2
+  printf 'Then re-run pnpm bootstrap from a shell where `bash --version` reports 4+.\n' >&2
+  exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 BOOT_FILE="$REPO_ROOT/.env.bootstrap"
@@ -95,8 +107,10 @@ REQUIRED=(
   CHERRY_AUTH_TOKEN CHERRY_PROJECT_ID
   CLOUDFLARE_API_TOKEN CLOUDFLARE_ZONE_ID
   GITHUB_ADMIN_PAT GITHUB_ADMIN_USERNAME
-  OPENROUTER_API_KEY
 )
+# task.0284 — OPENROUTER_API_KEY moved out of bootstrap; it's an app secret
+# entered via `pnpm secrets:set <env> node-template OPENROUTER_API_KEY` after
+# the substrate (OpenBao + ESO) is up. See docs/guides/secrets-add-new.md.
 MISSING=()
 for v in "${REQUIRED[@]}"; do
   [[ -z "${!v:-}" ]] && MISSING+=("$v")
@@ -107,16 +121,58 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
   exit 2
 fi
 
-# Fork domain comes from infra/fork.yaml::domain.root, not .env.bootstrap
-# (B2 + P5: single SSOT for fork identity). DOMAIN per env is derived
-# downstream by provision-env-vm.sh from the convention test/preview/"".
-FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
-if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
-  err "infra/fork.yaml::domain.root is missing or empty."
-  err "Edit ${BOLD}infra/fork.yaml${NC} to set the Cloudflare zone you own (e.g. opencompany.cc), commit, then re-run."
+# Fork domain: SSOT is infra/fork.yaml::domain.root. The operator already
+# tells us their Cloudflare zone ID in .env.bootstrap; instead of asking
+# them to copy the zone NAME into fork.yaml separately (DRY violation +
+# brittleness risk), we derive the name from the Cloudflare API and
+# auto-populate fork.yaml if empty. Verifies on mismatch.
+ZONE_RESP=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}")
+ZONE_OK=$(printf '%s' "$ZONE_RESP" | jq -r '.success // false')
+if [[ "$ZONE_OK" != "true" ]]; then
+  err "Cloudflare zone ${CLOUDFLARE_ZONE_ID} unreachable with the provided token."
+  err "Response: $(printf '%s' "$ZONE_RESP" | jq -c '.errors // .' 2>/dev/null || printf '%s' "$ZONE_RESP")"
   exit 2
 fi
-log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (from infra/fork.yaml)"
+CLOUDFLARE_ZONE_NAME=$(printf '%s' "$ZONE_RESP" | jq -r '.result.name')
+[[ -n "$CLOUDFLARE_ZONE_NAME" && "$CLOUDFLARE_ZONE_NAME" != "null" ]] || {
+  err "Cloudflare API returned no zone name for ID ${CLOUDFLARE_ZONE_ID}."
+  exit 2
+}
+log "Cloudflare zone reachable: ${BOLD}${CLOUDFLARE_ZONE_NAME}${NC} (id ${CLOUDFLARE_ZONE_ID})"
+
+FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
+if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
+  # Auto-populate from Cloudflare API + auto-commit. Operator's .env.bootstrap
+  # already named the zone; copying it into fork.yaml + crafting a commitlint-
+  # compliant message is mechanical work the bootstrap can do for them. They
+  # just push afterwards. Uses the operator's configured git identity.
+  yq -i ".domain.root = \"${CLOUDFLARE_ZONE_NAME}\"" "$REPO_ROOT/infra/fork.yaml"
+  FORK_ROOT="$CLOUDFLARE_ZONE_NAME"
+  log "Auto-populated ${BOLD}infra/fork.yaml::domain.root = ${CLOUDFLARE_ZONE_NAME}${NC} from Cloudflare API."
+  (
+    cd "$REPO_ROOT"
+    git add infra/fork.yaml
+    # Conventional-format subject (matches commitlint's config-conventional).
+    # Uses operator's configured git identity — fails clearly if unset.
+    if ! git commit -m "chore(bootstrap): set fork.yaml::domain.root from cloudflare api" >/dev/null 2>&1; then
+      err "  Auto-commit failed. Likely missing git identity:"
+      err "    git config user.name  \"<your name>\""
+      err "    git config user.email \"<your@email>\""
+      err "  Then re-run pnpm bootstrap (it will detect fork.yaml is already populated and skip this step)."
+      exit 2
+    fi
+    log "  → committed locally as ${BOLD}chore(bootstrap): set fork.yaml::domain.root from cloudflare api${NC}"
+    log "  → push to your fork: ${BOLD}git push origin \$(git -C $REPO_ROOT branch --show-current)${NC}"
+  )
+elif [[ "$FORK_ROOT" != "$CLOUDFLARE_ZONE_NAME" ]]; then
+  err "Mismatch: infra/fork.yaml::domain.root='${FORK_ROOT}' but Cloudflare zone ID ${CLOUDFLARE_ZONE_ID} resolves to '${CLOUDFLARE_ZONE_NAME}'."
+  err "Either fork.yaml is stale, .env.bootstrap::CLOUDFLARE_ZONE_ID points at the wrong zone, or you changed zones."
+  err "Reconcile and re-run."
+  exit 2
+else
+  log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (fork.yaml + Cloudflare API agree)"
+fi
 
 FORK_SLUG=$(fork_identity_slug "$REPO_ROOT")
 if [[ -z "$FORK_SLUG" ]]; then
@@ -212,12 +268,8 @@ if [[ "$CAN_PUSH" != "true" ]]; then
 fi
 log "Push access verified — bootstrap will not strand a billed VM at Phase 4c."
 
-# Cloudflare zone reachability
-ZONE_OK=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-  "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}" \
-  | jq -r '.success // false')
-[[ "$ZONE_OK" == "true" ]] || { err "Cloudflare zone ${CLOUDFLARE_ZONE_ID} unreachable with the provided token."; exit 2; }
-log "Cloudflare zone reachable"
+# Cloudflare zone reachability: already validated earlier when deriving
+# CLOUDFLARE_ZONE_NAME from the same API endpoint. Skip the duplicate call.
 
 # Cherry token validation (use /v1/teams, not /v1/regions — see node-setup SKILL)
 CHERRY_OK=$(curl -sS -o /dev/null -w "%{http_code}" \
@@ -308,7 +360,6 @@ CHERRY_AUTH_TOKEN=${CHERRY_AUTH_TOKEN}
 CHERRY_PROJECT_ID=${CHERRY_PROJECT_ID}
 CLOUDFLARE_API_TOKEN=${CLOUDFLARE_API_TOKEN}
 CLOUDFLARE_ZONE_ID=${CLOUDFLARE_ZONE_ID}
-OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
 GHCR_DEPLOY_TOKEN=${GITHUB_ADMIN_PAT}
 GHCR_DEPLOY_USERNAME=${GITHUB_ADMIN_USERNAME}
 DOMAIN=${DOMAIN}
@@ -366,16 +417,17 @@ set_env_secret TEMPORAL_DB_USER         "$TEMPORAL_DB_USER"
 set_env_secret POSTGRES_ROOT_USER       "postgres"
 set_env_secret POLY_WALLET_AEAD_KEY_ID  "$POLY_WALLET_AEAD_KEY_ID"
 
-log "Env-level human pass-throughs:"
-set_env_secret OPENROUTER_API_KEY           "$OPENROUTER_API_KEY"
+log "Env-level config (non-secret):"
 set_env_secret DOMAIN                       "$DOMAIN"
 set_repo_var   DOMAIN                       "$DOMAIN"
-set_env_secret GRAFANA_CLOUD_LOKI_URL       "${GRAFANA_CLOUD_LOKI_URL:-}"
-set_env_secret GRAFANA_CLOUD_LOKI_USER      "${GRAFANA_CLOUD_LOKI_USER:-}"
-set_env_secret GRAFANA_CLOUD_LOKI_API_KEY   "${GRAFANA_CLOUD_LOKI_API_KEY:-}"
-set_env_secret PROMETHEUS_REMOTE_WRITE_URL  "${PROMETHEUS_REMOTE_WRITE_URL:-}"
-set_env_secret PROMETHEUS_USERNAME          "${PROMETHEUS_USERNAME:-}"
-set_env_secret PROMETHEUS_PASSWORD          "${PROMETHEUS_PASSWORD:-}"
+# task.0284 — OPENROUTER_API_KEY, GRAFANA_CLOUD_LOKI_*, PROMETHEUS_*, DISCORD_*,
+# OAuth client creds, Privy/Polymarket external creds: ALL moved out of GH env.
+# They flow OpenBao → ESO → native k8s Secret (Spec Invariant 5
+# OPENBAO_IS_SINGLE_SOURCE_OF_TRUTH). Operator enters them post-bootstrap via:
+#   pnpm secrets:set <env> node-template OPENROUTER_API_KEY
+#   pnpm secrets:set <env> node-template GRAFANA_CLOUD_LOKI_API_KEY
+#   ...
+# See docs/guides/secrets-add-new.md. Phase 6 of this script prints the list.
 
 # DSNs — construct from parts. provision-env-vm.sh re-derives with VM IP after
 # tofu apply; this pre-set is for env validation (server-env.ts requires them
@@ -433,11 +485,22 @@ VM IP:        ${VM_IP}
 VM DNS:       ${VM_DNS_HOST}
 GitHub env:   https://github.com/${GH_REPO}/settings/environments
 
+${BOLD}App secrets — enter via the substrate now${NC} (task.0284):
+  Pods that depend on external creds will CrashLoop until you set them.
+
+  pnpm secrets:set ${DEPLOY_ENV} node-template OPENROUTER_API_KEY     # mandatory
+  pnpm secrets:set ${DEPLOY_ENV} node-template GRAFANA_CLOUD_LOKI_API_KEY   # optional
+  pnpm secrets:set ${DEPLOY_ENV} node-template PROMETHEUS_REMOTE_WRITE_URL # optional
+  pnpm secrets:set ${DEPLOY_ENV} node-template PROMETHEUS_PASSWORD         # optional
+
+  Catalog of accepted services: ls infra/catalog/*.yaml
+  Guides: docs/guides/secrets-add-new.md  |  docs/guides/secrets-rotate.md
+
 Re-running ${BOLD}pnpm bootstrap${NC} is safe (idempotent).
 
 Next:
   • To provision preview:    DEPLOY_ENV=preview pnpm bootstrap
   • To provision production: DEPLOY_ENV=production pnpm bootstrap
-  • To delete .env.bootstrap: rm .env.bootstrap  (values persist in GitHub env)
+  • To delete .env.bootstrap: rm .env.bootstrap  (values persist in OpenBao + GitHub env)
 
 EOF

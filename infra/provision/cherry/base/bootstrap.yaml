@@ -160,6 +160,19 @@ write_files:
       k3s --version
       kubectl get nodes
 
+      # ── Helm ────────────────────────────────────────────────
+      # `kubectl kustomize --enable-helm` shells out to `helm`; Phase 5b uses
+      # it on the VM to render OpenBao + ESO chart inflations.
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Installing Helm..."
+      HELM_VERSION=v3.19.2
+      HELM_TMP=$(mktemp -d)
+      curl -fsSL "https://get.helm.sh/helm-$${HELM_VERSION}-linux-amd64.tar.gz" \
+        -o "$${HELM_TMP}/helm.tgz"
+      tar -xzf "$${HELM_TMP}/helm.tgz" -C "$${HELM_TMP}"
+      install -m 0755 "$${HELM_TMP}/linux-amd64/helm" /usr/local/bin/helm
+      rm -rf "$${HELM_TMP}"
+      helm version --short
+
       # ── Argo CD + ksops ──────────────────────────────────────
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Cloning repo for Argo CD manifests..."
       apt-get install -y git
@@ -211,6 +224,7 @@ write_files:
         echo "DOCKER_VERSION=$(docker --version)"
         echo "COMPOSE_VERSION=$(docker compose version)"
         echo "K3S_VERSION=$(k3s --version 2>&1 | head -1)"
+        echo "HELM_VERSION=$(helm version --short 2>&1 | head -1)"
         echo "ARGOCD=installed"
         echo "SOPS_KEY=injected"
       } > "$MARKER_OK"

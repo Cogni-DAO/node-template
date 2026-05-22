@@ -24,6 +24,16 @@
 
 set -euo pipefail
 
+# Bash 4+ preflight — uses `mapfile`/associative arrays via image-tags.sh.
+# macOS Bash 3.2 fails opaquely 100s of lines in; fail clean here instead.
+# Canonical fix is the installer wrapper; bootstrap.sh also checks but this
+# guards direct invocation.
+if (( BASH_VERSINFO[0] < 4 )); then
+  printf 'provision-env-vm.sh requires Bash 4+ (current: %s).\n' "$BASH_VERSION" >&2
+  printf 'Install via: bash scripts/bootstrap/install/install-bash.sh\n' >&2
+  exit 2
+fi
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PROVISION_DIR="$REPO_ROOT/infra/provision/cherry/base"
@@ -422,6 +432,41 @@ done
 log_info "Verifying k3s + Argo CD..."
 ssh $SSH_OPTS root@"$VM_IP" 'kubectl get nodes && echo "---" && kubectl -n argocd get pods --no-headers'
 
+# ── Phase 4a: Fetch k3s kubeconfig to operator's laptop ──────────────────
+# Without this, the operator's only way to talk to the cluster is to SSH
+# into the VM and run kubectl there — the same laptop-shell anti-pattern
+# at the control-plane tier that proj.security-hardening exists to
+# eliminate at the data tier. Fetch + rewrite the API server URL to the
+# public VM IP so local `kubectl` Just Works.
+#
+# Security note: this kubeconfig is the k3s cluster-admin credential. On
+# candidate-a (single-operator fork) the operator IS the admin so this is
+# correct. preview/production should ship a constrained kubeconfig in a
+# follow-up — bound to a dedicated SA with minimum RBAC.
+log_step "Phase 4a: Fetch kubeconfig to .local/${DEPLOY_ENV}-kubeconfig.yaml"
+KUBECONFIG_LOCAL="$REPO_ROOT/.local/${DEPLOY_ENV}-kubeconfig.yaml"
+# k3s issues its server cert for 127.0.0.1 (no SAN for the public VM IP).
+# Rewrite the server URL to the public IP AND drop certificate-authority-data
+# in favor of insecure-skip-tls-verify. Acceptable on candidate-a (fresh-fork,
+# single operator, HTTPS still encrypts the wire). preview/production should
+# either (a) install k3s with `--tls-san <vm-ip>` so the cert is valid, or
+# (b) use an SSH tunnel so the kubeconfig's 127.0.0.1 entry is honored.
+# Both are v-next per .context/followup-bug.0446 + the broader observability
+# track (Grafana/Loki + Argo UI as the visibility surface instead of kubectl).
+ssh $SSH_OPTS root@"$VM_IP" 'cat /etc/rancher/k3s/k3s.yaml' \
+  | sed "s|server: https://127.0.0.1:6443|server: https://${VM_IP}:6443|" \
+  | yq '.clusters[].cluster."insecure-skip-tls-verify" = true | del(.clusters[].cluster."certificate-authority-data")' \
+  > "$KUBECONFIG_LOCAL"
+chmod 600 "$KUBECONFIG_LOCAL"
+if ! KUBECONFIG="$KUBECONFIG_LOCAL" kubectl get nodes >/dev/null 2>&1; then
+  log_warn "  Fetched kubeconfig at $KUBECONFIG_LOCAL but local kubectl can't reach ${VM_IP}:6443."
+  log_warn "  Likely Cherry firewall — check that the k3s API port (6443/tcp) is open."
+else
+  log_info "  Local kubectl works. Operator next step:"
+  log_info "    export KUBECONFIG=$KUBECONFIG_LOCAL"
+  log_info "    kubectl get nodes  # should print the VM node"
+fi
+
 # ApplicationSets applied in Phase 7 (after all prerequisites are in place)
 
 # ══════════════════════════════════════════════════════════════
@@ -493,12 +538,30 @@ log_step "Phase 4b.5: Seed deploy/* branches in fork (idempotent)"
 SEED_TOKEN="${GITHUB_ADMIN_PAT:-${GHCR_TOKEN:-${GHCR_DEPLOY_TOKEN:-}}}"
 if [[ -n "$SEED_TOKEN" ]]; then
   export GH_TOKEN="$SEED_TOKEN"
-  MAIN_SHA=$(gh api "repos/${GH_REPO}/branches/main" --jq '.commit.sha' 2>/dev/null || echo "")
-  if [[ -z "$MAIN_SHA" ]]; then
-    log_error "Could not read main's HEAD SHA from ${GH_REPO} (gh api auth issue?)."
+  # Seed source is the operator's currently-checked-out HEAD on the fork —
+  # NOT a hardcoded `main`. This lets a PR reviewer bootstrap-and-validate
+  # the PR branch directly without first merging it to main. The operator
+  # must have already pushed their branch to the fork (the runbook tells
+  # them to). If HEAD isn't reachable on the fork, fall back to main with
+  # a warning so non-PR-validation flows still work.
+  LOCAL_HEAD=$(git -C "$REPO_ROOT" rev-parse HEAD 2>/dev/null || echo "")
+  SEED_SHA=""
+  if [[ -n "$LOCAL_HEAD" ]] && gh api "repos/${GH_REPO}/commits/${LOCAL_HEAD}" >/dev/null 2>&1; then
+    SEED_SHA="$LOCAL_HEAD"
+    SEED_SRC="local HEAD"
+  else
+    SEED_SHA=$(gh api "repos/${GH_REPO}/branches/main" --jq '.commit.sha' 2>/dev/null || echo "")
+    SEED_SRC="main"
+    [[ -n "$LOCAL_HEAD" ]] && log_warn "  local HEAD ${LOCAL_HEAD:0:8} not on fork — push it first if validating a PR branch"
+  fi
+  if [[ -z "$SEED_SHA" ]]; then
+    log_error "Could not resolve a seed SHA for ${GH_REPO} (neither HEAD nor main reachable)."
     exit 1
   fi
-  # AppSet template generates one Application per catalog entry, not per node.
+  # AppSet template generates one Application per catalog entry. Seed BOTH
+  # the env-wide branch AND the per-app branches from the same SHA so
+  # Phase 4c's patches propagate consistently to whichever branches the
+  # AppSets watch.
   BRANCHES_TO_SEED=("deploy/${DEPLOY_ENV}")
   for target in "${ALL_TARGETS[@]}"; do
     BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${target}")
@@ -510,8 +573,8 @@ if [[ -n "$SEED_TOKEN" ]]; then
     fi
     if gh api -X POST "repos/${GH_REPO}/git/refs" \
         -f "ref=refs/heads/${ref}" \
-        -f "sha=${MAIN_SHA}" >/dev/null 2>&1; then
-      log_info "  ${ref} — seeded from main (${MAIN_SHA:0:8})"
+        -f "sha=${SEED_SHA}" >/dev/null 2>&1; then
+      log_info "  ${ref} — seeded from ${SEED_SRC} (${SEED_SHA:0:8})"
     else
       log_error "  ${ref} — FAILED to seed (check PAT push permission)"
       exit 1
@@ -613,6 +676,21 @@ if ! git diff --cached --quiet; then
   git commit -m "chore(infra): write env-state.yaml for ${DEPLOY_ENV} — VM_IP=${VM_IP} [provision]"
   git push origin "$DEPLOY_BRANCH"
   log_info "Pushed EndpointSlice IP patches to $DEPLOY_BRANCH"
+  PATCHED_SHA=$(git rev-parse HEAD)
+  # AppSets watch per-app deploy branches (deploy/<env>-<target>), not the
+  # env-wide one. Mirror the patched commit to every per-app branch so they
+  # all reflect the same env-state.yaml + vm.<root> + bootstrap_image_tag
+  # patches. Without this the per-app branches stay at the seed (Phase 4b.5)
+  # and Argo deploys unpatched placeholder image tags → ImagePullBackOff.
+  for target in "${ALL_TARGETS[@]}"; do
+    per_app_branch="deploy/${DEPLOY_ENV}-${target}"
+    if git push -f origin "${PATCHED_SHA}:refs/heads/${per_app_branch}"; then
+      log_info "  mirrored to ${per_app_branch} (${PATCHED_SHA:0:8})"
+    else
+      log_error "  ${per_app_branch} — FAILED to mirror (check PAT push permission)"
+      exit 1
+    fi
+  done
 else
   log_info "EndpointSlice IPs already correct on $DEPLOY_BRANCH"
 fi
@@ -749,72 +827,302 @@ scp $SSH_OPTS "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" root@"$VM_IP"
 ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CONTAINER=cogni-runtime-temporal-1 TEMPORAL_TIMEOUT=60 bash /tmp/ensure-temporal-namespace.sh"
 
 # ══════════════════════════════════════════════════════════════
-# Phase 6: Create k8s secrets directly on cluster
+# Phase 5b: Install OpenBao + ESO + auto-init + auto-unseal + auth bind
 # ══════════════════════════════════════════════════════════════
-log_step "Phase 6: Create k8s secrets on cluster"
+# task.0284 — fully automates the substrate bootstrap. Mirrors the
+# image-updater shape (rsync local kustomize layer + `kubectl kustomize
+# --enable-helm | kubectl apply`), then drives OpenBao through init →
+# unseal → KV mount → Kubernetes auth method → eso-reader role bind so
+# `ClusterSecretStore openbao-backend` reaches `Ready=True` with zero
+# operator toil.
+#
+# Default seal shape: Shamir 1-of-1 — appropriate for the single-operator
+# OSS baseline. Multi-operator forks override via OPENBAO_KEY_SHARES +
+# OPENBAO_KEY_THRESHOLD env vars (rare for v1 single-node k3s).
+#
+# Idempotency: every step short-circuits if its target state already holds
+# (`bao status` initialized, `bao auth list` has kubernetes/, policy + role
+# writes are upsert by design). Re-running Phase 5b after a chart version
+# bump just re-applies the kustomize and re-verifies state.
+log_step "Phase 5b: Install + initialize OpenBao + ESO"
 
-# Create namespace (Argo CD creates it on first sync, but secrets need it now)
+# ── 5b.1 Install ───────────────────────────────────────────────────────────
+rsync -e "ssh $SSH_OPTS" -az --delete \
+  "$REPO_ROOT/infra/k8s/argocd/openbao/" root@"$VM_IP":/opt/cogni-template-openbao/
+ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-openbao/ | kubectl apply --server-side --force-conflicts -f -"
+log_info "Applied OpenBao bootstrap kustomize"
+
+rsync -e "ssh $SSH_OPTS" -az --delete \
+  "$REPO_ROOT/infra/k8s/argocd/external-secrets/" root@"$VM_IP":/opt/cogni-template-external-secrets-operator/
+ssh $SSH_OPTS root@"$VM_IP" "kubectl kustomize --enable-helm /opt/cogni-template-external-secrets-operator/ | kubectl apply --server-side --force-conflicts -f -"
+log_info "Applied External Secrets Operator bootstrap kustomize"
+
+# Wait for ExternalSecret + ClusterSecretStore CRDs to be Established before
+# 5b.5 below applies the ClusterSecretStore CR.
+log_info "Waiting for ESO CRDs to register..."
+ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
+  || log_warn "ESO CRDs not yet Established; Phase 6 may fail (TRANSITION_SAFE: re-run provision)."
+
+# Wait for the openbao-0 pod to exist + be running. NOT Ready — sealed pods
+# are Running but not Ready. The chart's readiness probe gates on unsealed
+# status; the pod is functional for init/unseal once it's Running.
+log_info "Waiting for openbao-0 pod to be Running (sealed but accepting init)..."
+ssh $SSH_OPTS root@"$VM_IP" '
+  for i in $(seq 1 60); do
+    phase=$(kubectl -n openbao get pod openbao-0 -o jsonpath="{.status.phase}" 2>/dev/null || echo "")
+    [[ "$phase" == "Running" ]] && exit 0
+    sleep 2
+  done
+  echo "openbao-0 did not reach Running phase within 120s" >&2
+  exit 1
+'
+
+# ── 5b.2 Init + unseal (idempotent — Shamir 1-of-1 default) ───────────────
+OPENBAO_KEY_SHARES="${OPENBAO_KEY_SHARES:-1}"
+OPENBAO_KEY_THRESHOLD="${OPENBAO_KEY_THRESHOLD:-1}"
+OPENBAO_INIT_LOCAL="$REPO_ROOT/.local/${DEPLOY_ENV}-openbao-init.json"
+OPENBAO_ROOT_TOKEN_LOCAL="$REPO_ROOT/.local/${DEPLOY_ENV}-openbao-root-token"
+
+# Check current seal status. Output is JSON when -format=json is passed.
+seal_status=$(ssh $SSH_OPTS root@"$VM_IP" \
+  'kubectl exec -n openbao openbao-0 -- bao status -format=json 2>/dev/null || true')
+
+if [[ -z "$seal_status" ]]; then
+  log_warn "Could not read bao status — openbao-0 may still be coming up. Skipping init/unseal; re-run provision to retry."
+else
+  initialized=$(echo "$seal_status" | jq -r '.initialized // false')
+  sealed=$(echo "$seal_status" | jq -r '.sealed // true')
+
+  if [[ "$initialized" != "true" ]]; then
+    log_info "Initializing OpenBao (Shamir ${OPENBAO_KEY_THRESHOLD}-of-${OPENBAO_KEY_SHARES})..."
+    init_json=$(ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -n openbao openbao-0 -- bao operator init \
+        -key-shares=${OPENBAO_KEY_SHARES} -key-threshold=${OPENBAO_KEY_THRESHOLD} -format=json")
+    # Persist locally — .local/ is gitignored. Sensitive; chmod 600.
+    printf '%s' "$init_json" >"$OPENBAO_INIT_LOCAL"
+    chmod 600 "$OPENBAO_INIT_LOCAL"
+    jq -r '.root_token' <"$OPENBAO_INIT_LOCAL" >"$OPENBAO_ROOT_TOKEN_LOCAL"
+    chmod 600 "$OPENBAO_ROOT_TOKEN_LOCAL"
+    log_info "  Init artifacts saved to $OPENBAO_INIT_LOCAL + $OPENBAO_ROOT_TOKEN_LOCAL (600)"
+    sealed=true
+  else
+    log_info "OpenBao already initialized — reading prior init artifacts from $OPENBAO_INIT_LOCAL"
+    if [[ ! -r "$OPENBAO_INIT_LOCAL" ]]; then
+      log_error "OpenBao is initialized on the VM but $OPENBAO_INIT_LOCAL is missing — cannot unseal/auth."
+      log_error "Recover the unseal key(s) and root token from your password manager (or another operator on a multi-operator fork) and place them in this file before re-running."
+      exit 1
+    fi
+  fi
+
+  if [[ "$sealed" == "true" ]]; then
+    log_info "Unsealing OpenBao..."
+    # Apply unseal keys one at a time until threshold met. For 1-of-1, this
+    # loops exactly once.
+    key_count=$(jq '.unseal_keys_b64 | length' <"$OPENBAO_INIT_LOCAL")
+    threshold=$(jq -r '.unseal_threshold // 1' <"$OPENBAO_INIT_LOCAL")
+    for i in $(seq 0 $((threshold - 1))); do
+      [[ $i -ge $key_count ]] && break
+      key=$(jq -r ".unseal_keys_b64[$i]" <"$OPENBAO_INIT_LOCAL")
+      ssh $SSH_OPTS root@"$VM_IP" \
+        "kubectl exec -n openbao openbao-0 -- bao operator unseal '${key}'" >/dev/null
+    done
+    log_info "  OpenBao unsealed"
+  else
+    log_info "OpenBao already unsealed"
+  fi
+fi
+
+# ── 5b.3 Mount KV v2 + enable kubernetes auth + write eso-reader policy + role ─
+# All four operations are idempotent: `bao secrets enable` errors on
+# re-enable but we short-circuit by listing first; `bao auth enable` same;
+# `bao policy write` and `bao write auth/.../role/...` are upsert.
+if [[ -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
+  ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
+  bao_exec() {
+    # Runs `bao $@` inside the openbao-0 pod with the root token via env.
+    ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao $*"
+  }
+
+  # KV v2 mount at cogni/.
+  if ! bao_exec "secrets list -format=json" 2>/dev/null | jq -e '."cogni/"' >/dev/null 2>&1; then
+    log_info "Mounting KV v2 at cogni/..."
+    bao_exec "secrets enable -path=cogni -version=2 kv" >/dev/null
+  else
+    log_info "KV v2 mount cogni/ already present"
+  fi
+
+  # Kubernetes auth method.
+  if ! bao_exec "auth list -format=json" 2>/dev/null | jq -e '."kubernetes/"' >/dev/null 2>&1; then
+    log_info "Enabling kubernetes auth method..."
+    bao_exec "auth enable kubernetes" >/dev/null
+  else
+    log_info "kubernetes auth method already enabled"
+  fi
+  # Configure (idempotent).
+  bao_exec "write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443" >/dev/null
+
+  # eso-reader policy + role binding (upsert). Used by the in-cluster ESO
+  # controller's ServiceAccount — read-only across all envs.
+  log_info "Writing eso-reader policy + role binding..."
+  ssh $SSH_OPTS root@"$VM_IP" "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao policy write eso-reader -" <<'HCL'
+path "cogni/data/*"     { capabilities = ["read"] }
+path "cogni/metadata/*" { capabilities = ["read", "list"] }
+HCL
+  bao_exec "write auth/kubernetes/role/eso-reader \
+    bound_service_account_names=external-secrets \
+    bound_service_account_namespaces=external-secrets \
+    policies=eso-reader \
+    ttl=1h" >/dev/null
+  log_info "  eso-reader role bound — ESO can now read cogni/* via Kubernetes auth"
+
+  # ── 5b.4 Operator writer role (per-env, post-bootstrap CLI path) ──────────
+  # Closes the post-bootstrap gap: without this, `pnpm secrets:set` would
+  # have nowhere to authenticate except the root token (forbidden by spec
+  # Invariant 13 NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP).
+  #
+  # The operator authenticates as the `openbao-operator` ServiceAccount in
+  # the `default` namespace (created here). They mint a short-lived JWT
+  # via `kubectl create token openbao-operator` and exchange it for a bao
+  # token via `bao login -method=kubernetes role=${DEPLOY_ENV}-writer`.
+  #
+  # Policy is per-env: writers on this env CANNOT touch other envs' paths
+  # (spec Invariant 6 RBAC_VIA_PATH_POLICY). No `delete` capability — destroy
+  # requires admin escalation per CC6.1.
+  log_info "Writing ${DEPLOY_ENV}-writer policy + role binding..."
+  ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl get sa openbao-operator -n default >/dev/null 2>&1 \
+       || kubectl create sa openbao-operator -n default"
+  ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao policy write ${DEPLOY_ENV}-writer -" <<HCL
+path "cogni/data/${DEPLOY_ENV}/*"     { capabilities = ["read", "create", "update", "patch"] }
+path "cogni/metadata/${DEPLOY_ENV}/*" { capabilities = ["read", "list"] }
+HCL
+  bao_exec "write auth/kubernetes/role/${DEPLOY_ENV}-writer \
+    bound_service_account_names=openbao-operator \
+    bound_service_account_namespaces=default \
+    policies=${DEPLOY_ENV}-writer \
+    ttl=1h" >/dev/null
+  log_info "  ${DEPLOY_ENV}-writer role bound — operator: kubectl create token openbao-operator -n default | bao login -method=kubernetes role=${DEPLOY_ENV}-writer"
+else
+  log_warn "No root token at $OPENBAO_ROOT_TOKEN_LOCAL — skipping KV mount + auth setup. Re-run provision after recovering init artifacts."
+fi
+
+# ── 5b.5 Apply ClusterSecretStore (lives at parent of per-env trees) ──────
+CSS_LOCAL="$REPO_ROOT/infra/k8s/secrets/external-secrets/cluster-secret-store.yaml"
+scp $SSH_OPTS "$CSS_LOCAL" root@"$VM_IP":/tmp/cluster-secret-store.yaml
+ssh $SSH_OPTS root@"$VM_IP" "kubectl apply -f /tmp/cluster-secret-store.yaml"
+log_info "Applied ClusterSecretStore openbao-backend"
+
+# ══════════════════════════════════════════════════════════════
+# Phase 5c: Seed OpenBao with auto-generated app secrets (task.0284)
+# ══════════════════════════════════════════════════════════════
+# Phase 2 (above) sourced .env.${DEPLOY_ENV}, which carries every secret
+# auto-generated by bootstrap.sh + every operator pass-through (DATABASE_URL,
+# AUTH_SECRET, ...). Seed them into the OpenBao path the ExternalSecret
+# extracts so Phase 6's `kubectl apply -k` produces a populated k8s Secret,
+# not an empty one.
+#
+# Per-service paths follow spec Invariant 1 (PATH_CONVENTION_PER_SERVICE_PER_ENV):
+#   cogni/<env>/node-template/*    — primary node app
+#   cogni/<env>/scheduler-worker/* — scheduler-worker service
+#
+# Operator-pass-through secrets that DON'T exist in .env.${DEPLOY_ENV}
+# (OPENROUTER_API_KEY, OBSERVABILITY tokens, OAuth client creds, …) are
+# entered post-bootstrap via `pnpm secrets:set` — fork-quickstart Step 6.7.
+# Pods will start with empty values for those keys and fail loudly at runtime
+# (Invariant 12 TRANSITION_SAFE).
+log_step "Phase 5c: Seed OpenBao paths from .env.${DEPLOY_ENV}"
+
+if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
+  log_warn "Skipping seed — no root token (Phase 5b.2 did not produce one)."
+  log_warn "Substrate is up but empty; pods will CrashLoop until secrets are entered manually."
+else
+  ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
+
+  seed_kv() {
+    # seed_kv <service> <KEY> <value>
+    # No-op when value is empty (operator-pass-through that the fork didn't
+    # provide). First write creates the path; later writes patch so existing
+    # keys are preserved.
+    local svc="$1" k="$2" v="$3"
+    [[ -z "$v" ]] && return 0
+    local path="cogni/${DEPLOY_ENV}/${svc}"
+    local op="patch"
+    if ! ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv metadata get '${path}'" \
+      >/dev/null 2>&1; then
+      op="put"
+    fi
+    printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
+      "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv ${op} '${path}' '${k}=-'" \
+      >/dev/null
+  }
+
+  log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
+  for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
+           OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
+           INTERNAL_OPS_TOKEN METRICS_TOKEN GH_WEBHOOK_SECRET \
+           CONNECTIONS_ENCRYPTION_KEY POLY_WALLET_AEAD_KEY_HEX \
+           POLY_WALLET_AEAD_KEY_ID DATABASE_URL DATABASE_SERVICE_URL \
+           POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY \
+           EVM_RPC_URL POLYGON_RPC_URL; do
+    seed_kv node-template "$k" "${!k:-}"
+  done
+  log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."
+  for k in DATABASE_SERVICE_URL SCHEDULER_API_TOKEN GH_REVIEW_APP_ID \
+           GH_REVIEW_APP_PRIVATE_KEY_BASE64 GH_WEBHOOK_SECRET \
+           INTERNAL_OPS_TOKEN; do
+    seed_kv scheduler-worker "$k" "${!k:-}"
+  done
+  log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
+fi
+
+# ══════════════════════════════════════════════════════════════
+# Phase 6: Apply ExternalSecret manifests (ESO materializes the k8s Secrets)
+# ══════════════════════════════════════════════════════════════
+# task.0284 — replaces the pre-substrate imperative `kubectl create secret
+# generic ...` block. App secrets now flow OpenBao → ESO → native k8s Secret.
+# Phase 5b auto-inits + auto-unseals OpenBao + auto-binds the eso-reader role;
+# Phase 5c seeds the per-service paths from .env.${DEPLOY_ENV}. By the time
+# this phase runs the substrate is populated for the keys the fork generated,
+# and ESO can reconcile on first apply.
+#
+# Bootstrap dependency order (enforced by Phase 5 → 6 → 7 sequencing):
+#   1. OpenBao + ESO installed (Phase 5b.1)
+#   2. OpenBao init + unseal + KV mount + Kubernetes auth + eso-reader (5b.2-3)
+#   3. ClusterSecretStore applied (5b.4)
+#   4. OpenBao paths seeded with auto-generated app secrets (Phase 5c)
+#   5. ExternalSecret CRDs applied (this phase) — ESO syncs Secret resources
+#   6. ApplicationSets applied (Phase 7) — pods consume via envFrom: secretRef
+#
+# TRANSITION_SAFE: operator-pass-through keys NOT in .env.${DEPLOY_ENV}
+# (OPENROUTER_API_KEY, GRAFANA_CLOUD_LOKI_*, ...) remain empty until the
+# operator runs `pnpm secrets:set` post-bootstrap (docs/runbooks/
+# fork-quickstart.md Step 6.7). Pods that consume those keys CrashLoop on
+# missing envFrom values — loud-by-design (Spec Invariant 12).
+log_step "Phase 6: Apply ExternalSecret manifests"
+
+# Create namespace (Argo CD creates it on first sync, but ExternalSecret needs it now)
 ssh $SSH_OPTS root@"$VM_IP" "kubectl create namespace ${K8S_NAMESPACE} 2>/dev/null || true"
 
-# Node-app secrets — one per NODE_TARGETS entry (B2: discover from catalog,
-# don't hardcode operator|poly|resy). v1 single-node-per-namespace convention:
-# secret is named `node-app-secrets` (matches base/node-app/deployment.yaml
-# secretRef without overlay namePrefix). DB name normalises hyphens to
-# underscores per postgres name rules.
-# Multi-node-per-namespace (future): adds overlay namePrefix ${node}- and
-# corresponding ${node}-node-app-secrets here. Out of scope for v1.
-for node in "${NODE_TARGETS[@]}"; do
-  db_name="cogni_${node//-/_}"
-
-  NODE_DB_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
-  NODE_DB_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${VM_IP}:5432/${db_name}?sslmode=disable"
-
-  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic node-app-secrets \
-    --from-literal=DATABASE_URL='${NODE_DB_URL}' \
-    --from-literal=DATABASE_SERVICE_URL='${NODE_DB_SERVICE_URL}' \
-    --from-literal=AUTH_SECRET='${AUTH_SECRET}' \
-    --from-literal=LITELLM_MASTER_KEY='${LITELLM_MASTER_KEY}' \
-    --from-literal=OPENROUTER_API_KEY='${OPENROUTER_API_KEY}' \
-    --from-literal=EVM_RPC_URL='${EVM_RPC_URL}' \
-    --from-literal=POLYGON_RPC_URL='${POLYGON_RPC_URL}' \
-    --from-literal=POSTHOG_API_KEY='${POSTHOG_API_KEY}' \
-    --from-literal=POSTHOG_HOST='${POSTHOG_HOST}' \
-    --from-literal=OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
-    --from-literal=OPENCLAW_GITHUB_RW_TOKEN='placeholder-not-needed-for-test' \
-    --from-literal=SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN}' \
-    --from-literal=BILLING_INGEST_TOKEN='${BILLING_INGEST_TOKEN}' \
-    --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
-    --from-literal=METRICS_TOKEN='${METRICS_TOKEN}' \
-    --dry-run=client -o yaml | kubectl apply -f -"
-  log_info "  Created node-app-secrets (node=${node}, db=${db_name})"
-done
-
-# Scheduler-worker secret
-# NOTE: COGNI_NODE_ENDPOINTS and COGNI_NODE_DBS belong in the configmap (set
-# by Kustomize overlay), NOT here. Putting them in the secret shadows the
-# configmap value (envFrom order: configmap first, secret second → secret wins)
-# and caused CrashLoopBackOff when the secret had UUID-only keys without
-# "operator=" named entry. See scorecard row 20.
-ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic scheduler-worker-secrets \
-  --from-literal=DATABASE_URL='${DATABASE_SERVICE_URL}' \
-  --from-literal=SCHEDULER_API_TOKEN='${SCHEDULER_API_TOKEN}' \
-  --from-literal=GH_REVIEW_APP_ID='${GH_REVIEW_APP_ID:-}' \
-  --from-literal=GH_REVIEW_APP_PRIVATE_KEY_BASE64='${GH_REVIEW_APP_PRIVATE_KEY_BASE64:-}' \
-  --from-literal=GH_WEBHOOK_SECRET='${GH_WEBHOOK_SECRET:-}' \
-  --from-literal=INTERNAL_OPS_TOKEN='${INTERNAL_OPS_TOKEN}' \
-  --dry-run=client -o yaml | kubectl apply -f -"
-log_info "  Created scheduler-worker-secrets"
-
-# Sandbox-openclaw secret (placeholder)
-ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} create secret generic sandbox-openclaw-secrets \
-  --from-literal=OPENCLAW_GATEWAY_TOKEN='${OPENCLAW_GATEWAY_TOKEN}' \
-  --from-literal=OPENCLAW_GITHUB_RW_TOKEN='placeholder-not-needed-for-test' \
-  --from-literal=LITELLM_MASTER_KEY='${LITELLM_MASTER_KEY}' \
-  --from-literal=DISCORD_BOT_TOKEN='placeholder' \
-  --dry-run=client -o yaml | kubectl apply -f -"
-log_info "  Created sandbox-openclaw-secrets"
-
-log_info "All k8s secrets created"
+# rsync the env-scoped ExternalSecret tree to the VM and apply via kustomize.
+# We rsync (rather than `kubectl apply -k` over a remote URL) so the version
+# applied matches the operator's local checkout — same authority-of-truth as
+# Phase 7's APPSET_LOCAL → APPSET_RENDERED pattern below.
+ES_DIR_LOCAL="$REPO_ROOT/infra/k8s/secrets/external-secrets/${DEPLOY_ENV}"
+if [[ -d "$ES_DIR_LOCAL" ]]; then
+  rsync -e "ssh $SSH_OPTS" -az --delete \
+    "$ES_DIR_LOCAL/" root@"$VM_IP":/opt/cogni-template-external-secrets/
+  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} apply -k /opt/cogni-template-external-secrets/"
+  log_info "Applied ExternalSecret manifests from ${DEPLOY_ENV}"
+else
+  log_warn "No ExternalSecret manifests for ${DEPLOY_ENV} — expected at $ES_DIR_LOCAL"
+  log_warn "Pods consuming envFrom: secretRef will CrashLoop until the operator"
+  log_warn "(a) adds ExternalSecret manifests for this env to infra/k8s/secrets/"
+  log_warn "    external-secrets/${DEPLOY_ENV}/, OR"
+  log_warn "(b) follows docs/runbooks/fork-quickstart.md Step 6.7 to seed the substrate via pnpm secrets:set."
+fi
 
 # ══════════════════════════════════════════════════════════════
 # Phase 7: Deployment Status Report (Scorecard)
@@ -824,16 +1132,14 @@ log_info "All k8s secrets created"
 # ══════════════════════════════════════════════════════════════
 log_step "Phase 7: Apply ApplicationSets (triggers Argo sync)"
 
-# Gate: verify prerequisites exist before enabling Argo sync.
-# v1 single-node-per-namespace: one `node-app-secrets` per env namespace
-# (not one per NODE_TARGETS entry — see Phase 6 comment).
-ssh $SSH_OPTS root@"$VM_IP" "
-  kubectl -n ${K8S_NAMESPACE} get secret node-app-secrets >/dev/null || { echo 'FATAL: node-app-secrets missing'; exit 1; }
-  kubectl -n ${K8S_NAMESPACE} get secret scheduler-worker-secrets >/dev/null || { echo 'FATAL: scheduler-worker-secrets missing'; exit 1; }
-  echo 'All prerequisite secrets verified'
-"
-
 # Apply the ApplicationSet for this environment via SCP from the local repo checkout.
+# task.0284 — the pre-substrate prerequisite gate (`kubectl get secret node-app-
+# secrets` etc.) is intentionally removed: ESO materializes those Secrets
+# asynchronously from OpenBao, so a hard-gate here would either always fail
+# (cold cluster, OpenBao not yet seeded) or always pass for the wrong reason
+# (stale Secret from a prior provision still cached). The ExternalSecret status
+# is the authoritative readiness signal; surface it via `kubectl describe
+# externalsecret -n ${K8S_NAMESPACE}` post-apply.
 # Bootstrap cloud-init already installed Argo CD. Re-applying the full install conflicts.
 #
 # Why SCP instead of git clone? The ApplicationSet files live in infra/k8s/argocd/ which
@@ -951,22 +1257,28 @@ echo ""
 log_step "Phase 9: Verify /readyz on all nodes (up to 5 min)"
 
 READYZ_OK=true
-for node_port in 30000 30100 30300; do
+for node in "${NODE_TARGETS[@]}"; do
+  catalog_file="$REPO_ROOT/infra/catalog/${node}.yaml"
+  node_port=$(yq -N '.node_port // ""' "$catalog_file" 2>/dev/null)
+  if [[ -z "$node_port" || "$node_port" == "null" ]]; then
+    log_warn "  ${node}: no node_port in ${catalog_file}; skipping /readyz"
+    continue
+  fi
   NODE_OK=false
   for attempt in $(seq 1 30); do
     STATUS=$(ssh $SSH_OPTS root@"$VM_IP" "curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 http://localhost:${node_port}/readyz" 2>/dev/null || echo "000")
     if [[ "$STATUS" == "200" ]]; then
-      log_info "  Port ${node_port}: /readyz 200 ✅"
+      log_info "  ${node} (${node_port}): /readyz 200 ✅"
       NODE_OK=true
       break
     fi
     if (( attempt % 6 == 0 )); then
-      log_info "  Port ${node_port}: waiting... (${attempt}0s, last status: ${STATUS})"
+      log_info "  ${node} (${node_port}): waiting... (${attempt}0s, last status: ${STATUS})"
     fi
     sleep 10
   done
   if [[ "$NODE_OK" != "true" ]]; then
-    log_error "  Port ${node_port}: /readyz FAILED after 5 min ❌"
+    log_error "  ${node} (${node_port}): /readyz FAILED after 5 min ❌"
     READYZ_OK=false
   fi
 done

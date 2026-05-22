@@ -1,0 +1,34 @@
+# SPDX-License-Identifier: LicenseRef-PolyForm-Shield-1.0.0
+# SPDX-FileCopyrightText: 2025 Cogni-DAO
+#
+# External Secrets Operator (ESO) — Tier-1 secrets substrate controller (task.0284).
+# Argo-blessed canonical pattern for OpenBao → native k8s Secret sync. We picked
+# ESO over Vault Agent Injector (per-pod volume mount, less idiomatic), CSI
+# Secrets Store (DaemonSet + mount pattern, more moving parts), and Reflector
+# (no upstream secret-backend support).
+#
+# Bootstrap shape mirrors infra/k8s/argocd/image-updater/: kustomize layer
+# applied out-of-band by scripts/ci/deploy-infra.sh (Step 7c — task.0284),
+# NOT reconciled through Argo CD itself (chicken-and-egg: ESO is what makes
+# Argo's downstream Secret consumption work).
+#
+# Pin: chart 2.5.0 / app v2.5.0 — current major series. ESO v2.x stabilized
+# the SecretStore + ExternalSecret CRD surface; v1.x is no longer receiving
+# new provider work upstream.
+# Validation: `kustomize build --enable-helm infra/k8s/argocd/external-secrets/`
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: external-secrets
+
+resources:
+  - namespace.yaml
+
+helmCharts:
+  - name: external-secrets
+    repo: https://charts.external-secrets.io
+    version: 2.5.0
+    releaseName: external-secrets
+    namespace: external-secrets
+    includeCRDs: true
+    valuesFile: values.yaml

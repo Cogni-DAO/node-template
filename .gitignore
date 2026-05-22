@@ -121,3 +121,8 @@ docs/research/fixtures/market-cache/
 __pycache__/
 *.pyc
 task5002-import-mapping-*.json
+
+# Kustomize helm chart cache — task.0284 (kustomize --enable-helm creates this
+# dir alongside each kustomization.yaml that has helmCharts:). Chart content
+# is pulled from upstream at build time; pinning is via helmCharts[].version.
+infra/k8s/argocd/*/charts/
