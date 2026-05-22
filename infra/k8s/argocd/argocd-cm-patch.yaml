@@ -1,8 +1,14 @@
 # Argo CD ConfigMap overrides for dev/canary environments.
 # 30s reconciliation for fast iteration; production should use 180s (default).
+# kustomize.buildOptions: --enable-helm so Argo can render the OpenBao + ESO
+# Applications (their kustomizations use `helmCharts:`). Mirrored in
+# infra/provision/cherry/base/bootstrap.yaml (the actual bootstrap path
+# imperatively patches argocd-cm after the raw install URL apply); kept in
+# sync here in case the local kustomization is ever wired into bootstrap.
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: argocd-cm
 data:
   timeout.reconciliation: "30s"
+  kustomize.buildOptions: "--enable-helm"

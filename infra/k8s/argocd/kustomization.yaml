@@ -7,9 +7,10 @@
 # Secrets substrate: task.0284 retired the SOPS/ksops scaffold (the sidecar
 # was a placeholder per its own README — no real age keys, no real encrypted
 # files in any cluster). Secrets now flow OpenBao → External Secrets Operator
-# → native k8s Secret. Bootstrap manifests for both controllers live at
-# `infra/k8s/argocd/{openbao,external-secrets}/` and are applied out-of-band
-# by `scripts/ci/deploy-infra.sh` Step 7c, mirroring the image-updater pattern.
+# → native k8s Secret. The OpenBao + ESO kustomize layers live at
+# `infra/k8s/argocd/{openbao,external-secrets}/` and are reconciled by Argo
+# CD via the `openbao-application.yaml` + `external-secrets-application.yaml`
+# Application CRs in this dir (provision-env-vm.sh Phase 5b.1 registers them).
 #
 # Usage:
 #   kubectl create namespace argocd

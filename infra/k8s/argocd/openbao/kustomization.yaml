@@ -7,10 +7,12 @@
 # External Secrets Operator provider plugin as Vault. OSS-sovereign per
 # project constraint (rejected: HashiCorp Vault Community due to BSL drift).
 #
-# Bootstrap shape mirrors infra/k8s/argocd/image-updater/: kustomize layer
-# applied out-of-band by scripts/ci/deploy-infra.sh (Step 7c — task.0284),
-# NOT reconciled through Argo CD itself (chicken-and-egg: Argo can't sync
-# the substrate that authenticates its own secret reads).
+# This kustomization IS the source for the `openbao` Argo Application
+# (infra/k8s/argocd/openbao-application.yaml). Argo's repo-server renders it
+# via `kustomize build --enable-helm` (enabled by the argocd-cm patch in
+# infra/provision/cherry/base/bootstrap.yaml) and reconciles drift on every
+# sync. Provision-env-vm.sh Phase 5b.1 only registers the Application CR;
+# the chart inflation runs inside Argo.
 #
 # Pin: chart 0.28.2 / app v2.5.3 — last upstream release as of 2026-05.
 # Bumping is tied to ESO's vault provider compatibility (chart 2.5.0 / app

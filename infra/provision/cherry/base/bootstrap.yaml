@@ -200,6 +200,15 @@ write_files:
       kubectl apply -n argocd \
         -f https://raw.githubusercontent.com/argoproj/argo-cd/v2.13.4/manifests/install.yaml
 
+      # Enable kustomize --enable-helm so Argo can render the OpenBao + ESO
+      # Applications (their kustomizations use `helmCharts:`). Patch lands on
+      # argocd-cm BEFORE argocd-server reaches Available so the repo-server
+      # picks it up on first start (task.0284 v-next — Argo-managed substrate).
+      echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Patching argocd-cm: kustomize.buildOptions=--enable-helm..."
+      kubectl -n argocd patch configmap argocd-cm \
+        --type merge \
+        -p '{"data":{"kustomize.buildOptions":"--enable-helm"}}'
+
       echo "[$(date -u +%Y-%m-%dT%H:%M:%SZ)] Waiting for Argo CD to be ready..."
       kubectl -n argocd wait --for=condition=Available \
         deployment/argocd-server --timeout=300s
