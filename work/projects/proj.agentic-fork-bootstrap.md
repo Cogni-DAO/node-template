@@ -1,0 +1,147 @@
+---
+id: proj.agentic-fork-bootstrap
+type: project
+primary_charter:
+title: Agentic Fork Bootstrap — Easy-Start Guide for OpenBao-Backed Forks
+state: Active
+priority: 1
+estimate: 21
+summary: Move the node-template fork experience from "manual laptop shell" to "paste one prompt, fill creds once, system does the rest" — a forker (human or agent) gets a working deployed cluster with OpenBao substrate, Argo-managed everything, observability, and self-service day-2 ops via gh-workflow-dispatch. Every manual command in the path is friction against the goal.
+outcome: A new operator opens the repo, runs the canonical one-sentence prompt, fills `.env.bootstrap` once, and ends up with — a provisioned Cherry VM, OpenBao + ESO + Argo CD running, secrets seeded, /readyz=200, dashboards reachable, and a documented self-service path for day-2 operations (rotate secrets, add new services) — without ever running `ssh root@vm`, manually typing `kubectl`, or re-exporting the bootstrap root token. Validation runs as a workflow; substrate drift detects + heals via Argo; production secret writes route through env-protected workflows that never put a value in a human UI.
+assignees: []
+created: 2026-05-19
+updated: 2026-05-19
+labels:
+  [bootstrap, fork-experience, openbao, eso, argo, secrets, soc2, easy-start]
+---
+
+# Agentic Fork Bootstrap — Easy-Start Guide for OpenBao-Backed Forks
+
+## Goal
+
+A forker opens `Cogni-DAO/node-template`, follows the one-sentence prompt at the top of `docs/runbooks/fork-quickstart.md`, fills `.env.bootstrap` once, and reaches `/readyz=200` on their own domain. Every step in between is a system action, not a human action. Day-2 operations (add a secret, rotate a key, deploy a new service) are gh-workflow-dispatch buttons or PR merges, never `ssh root@vm` or `kubectl edit`. The OSS template models the right pattern; forkers inherit clean architecture.
+
+## Constraints
+
+- **node-template is the SSOT for the OSS bootstrap pattern.** If a pattern isn't here, it doesn't exist for forkers. Patterns are defined here, not mirrored from elsewhere.
+- **Every manual command in `fork-quickstart.md` is debt** against the easy-start goal. PRs against this project measure success by "manual-command count reduced by N."
+- **No human ever types a secret VALUE** into a UI in production. Auto-generated, vendor-minted-via-operator-app, or dynamic. Never form-input.
+- **No laptop shell** anywhere in the steady-state forker path. Bootstrap window (~30 min) is the bounded exception per `secrets-management.md` Invariant 13.
+- **Don't break the substrate** that PR #42 + PR #43 shipped. Layer on, don't refactor what works.
+
+## Status matrix — where we are vs. the goal
+
+Last updated: 2026-05-19 (PR #43 in review).
+
+| Capability                                                         | State | Source PR    | Gap                                                                                                  |
+| ------------------------------------------------------------------ | ----- | ------------ | ---------------------------------------------------------------------------------------------------- |
+| OpenBao deployed in-cluster                                        | 🟢    | #42          | —                                                                                                    |
+| ESO deployed in-cluster                                            | 🟢    | #42          | —                                                                                                    |
+| ClusterSecretStore + ExternalSecret per service                    | 🟢    | #42          | —                                                                                                    |
+| Writer-role bind (operator can write without root token)           | 🟢    | #42          | —                                                                                                    |
+| Bootstrap auto-init + auto-unseal                                  | 🟢    | #42          | —                                                                                                    |
+| `pnpm secrets:set` CLI for day-2 writes                            | 🟢    | #42          | Requires manual port-forward + bao login — see "Day-2 UX gap" below                                  |
+| kubeconfig auto-fetched (no ssh-for-kubectl)                       | 🟢    | #42          | —                                                                                                    |
+| Auto-populate `fork.yaml::domain.root` from Cloudflare API         | 🟢    | #42          | —                                                                                                    |
+| Bash 4+ preflight (clean macOS failure)                            | 🟢    | #42          | —                                                                                                    |
+| Branch-aware deploy seeding (PR validation works)                  | 🟢    | #42          | —                                                                                                    |
+| Substrate managed by Argo (drift detection)                        | 🟡    | #43 (review) | —                                                                                                    |
+| Bootstrap runs in a workflow, not on a forker's laptop             | 🔴    | —            | The biggest remaining anti-pattern; bootstrap shell on laptop = imperative provisioning              |
+| Validation runs in a workflow                                      | 🔴    | —            | Validators today type kubectl by hand — same anti-pattern in validator hat                           |
+| Production secret rotation gated via workflow                      | 🔴    | —            | `rotate-secret.yml` not built; spec invariant 9's workflow path not realized                         |
+| New-secret-SHAPE flow is PR-driven (declarative)                   | 🔴    | —            | `vault-config-operator` CRDs not adopted; shape additions still implicit                             |
+| Substrate policies/roles declarative (not imperative `bao` writes) | 🔴    | —            | Phase 5b.3/5b.4 still imperative; no `vault-config-operator`                                         |
+| OpenBao audit pipeline → Loki → alerts                             | 🔴    | —            | Invariant 8 of secrets-management spec unimplemented                                                 |
+| Observability dashboards (Grafana/Loki/Argo UI)                    | 🔴    | —            | Forker has no operational visibility without `kubectl`                                               |
+| Initial pass-through value fill via operator-app UI (preview/prod) | 🔴    | —            | `cogni` operator-app territory; out of node-template scope but blocks easy-start for non-candidate-a |
+| App-overlay drift (containerPort, sslmode, migrator)               | 🔴    | —            | bug.0446 — blocks clean `/readyz=200` cold-start                                                     |
+| `infra/k8s/base/node-app/` → `node-template/` directory rename     | 🔴    | —            | Cosmetic but breaks invariant-2 mental model                                                         |
+
+**Forker manual-command count, current best path** (after PRs #42 + #43 merge, assuming clean fork): ~12 distinct shell invocations from `gh repo fork` to `/readyz=200`. The goal is **≤ 3** (fork, fill `.env.bootstrap`, click "run workflow").
+
+## Roadmap
+
+### Crawl (P0) — eliminate the laptop-shell anti-pattern from the forker path
+
+| Deliverable                                                                                                         | Notes                                                                                                                                                                                                                                                       | Est | Work Item |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | --------- |
+| `.github/workflows/provision-env.yml` — bootstrap runs on a GHA runner, forker triggers via UI or `gh workflow run` | Cherry/Cloudflare/GH-PAT tokens live in env secrets, not on forker's laptop. Workflow runs `scripts/setup/provision-env-vm.sh` from the runner, posts a scorecard to the run summary or fork's first PR comment. Closes the biggest remaining anti-pattern. | 5   | —         |
+| `.github/workflows/validate-pr.yml` — cold-start validation as a workflow                                           | Reuses provision-env.yml infrastructure against a scratch VM. Auto-generates the substrate PASS scorecard from in-cluster state (no humans typing). Posts PASS/FAIL as a PR comment. Eliminates the "manual validator session" anti-pattern entirely.       | 3   | —         |
+| Bash 4+ preflight + install-bash.sh wrapper (alignment with `scripts/bootstrap/install/` pattern)                   | 🟢 Done in PR #42                                                                                                                                                                                                                                           | 0   | —         |
+
+### Walk (P1) — declarative substrate + auto-rotation
+
+| Deliverable                                                                                   | Notes                                                                                                                                                                                                                                                           | Est | Work Item |
+| --------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | --------- |
+| `vault-config-operator` Argo Application — substrate policies + Kubernetes auth roles as CRDs | Replaces imperative Phase 5b.3/5b.4 `bao policy write` + `bao write auth/.../role/...`. Argo reconciles policy drift continuously. Aligns with PR #43's Argo-manages-substrate direction.                                                                       | 5   | —         |
+| `.github/workflows/rotate-secret.yml` — env-protected rotation workflow                       | NOT a generic "secrets-manage" workflow. Specifically for rotating auto-generated values. Inputs: env, service, key. Triggers auto-generation, writes via writer-role token, env-protection gates production. Humans approve rotation events, never see values. | 3   | —         |
+| New-secret-SHAPE flow via PR + `vault-config-operator` CRD                                    | Adding a new key becomes "PR that touches the CRD declaring service `<x>` consumes keys `[A, B, C]`." Argo reconciles. No CLI for shape additions in production.                                                                                                | 2   | —         |
+| ESO `PushSecret` for bootstrap seeding (replaces Phase 5c `seed_kv` shell loop)               | Declarative pattern matching the rest of ESO.                                                                                                                                                                                                                   | 2   | —         |
+| OpenBao audit device enabled + Alloy ship to Loki + alert rule for unexpected-actor writes    | Spec Invariant 8. SOC2 CC7.2 evidence.                                                                                                                                                                                                                          | 3   | —         |
+| `hashicorp/vault-action@v3` replacing `scripts/ci/openbao-oidc-login.sh`                      | CI-side OIDC exchange. Deletes ~95 lines of curl+jq.                                                                                                                                                                                                            | 1   | —         |
+| Tighten preview/production kubeconfig (constrained SA, not cluster-admin)                     | candidate-a's `insecure-skip-tls-verify` cluster-admin is acceptable; preview/prod should use scoped SA + valid cert via `--tls-san` or SSH tunnel.                                                                                                             | 3   | —         |
+
+### Run (P2) — observability + cosmetic alignment
+
+| Deliverable                                                                                                         | Notes                                                                                                                                                                              | Est | Work Item                        |
+| ------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --- | -------------------------------- |
+| Grafana + Loki + Prometheus dashboards as steady-state visibility surface                                           | Forker queries dashboards via HTTPS; `kubectl` becomes break-glass only. Closes the SSH-for-observability anti-pattern at the data-plane tier.                                     | 8   | —                                |
+| `infra/k8s/base/node-app/` → `node-template/` directory rename                                                      | Catalog name becomes the SSOT throughout; Invariant 2 mental model is consistent.                                                                                                  | 2   | —                                |
+| bug.0446 cluster (containerPort kustomize var, sslmode in seeded DB URLs, migrator entrypoint, scheduler ConfigMap) | Pre-existing app/overlay drift; blocks clean `/readyz=200`.                                                                                                                        | 5   | —                                |
+| Operator-app UI for vendor-key initial-fill (preview/prod)                                                          | Lives in `cogni` operator-app repo. node-template ships the substrate-side; operator-app ships the UI. Coordination point: the `secret.declare` MCP tool path in spec Invariant 9. | —   | (operator-app PR, separate repo) |
+
+## Dependencies
+
+- **Cherry Servers + OpenTofu** — provisioning substrate; no change planned.
+- **Argo CD v2.13.4** — manages app deploys; PR #43 extends to substrate.
+- **GitHub Actions environments + protection rules** — env-gated workflows for `rotate-secret.yml`.
+- **`cogni` operator-app** — coordination point for the vendor-key UI (out of this project; tracked in operator-app repo).
+
+## Anti-patterns this project actively eliminates
+
+- **Laptop shell anywhere in the steady-state forker path.** Bootstrap window is the only bounded exception.
+- **Human typing a secret VALUE into a UI** (whether GitHub workflow_dispatch, web form, or shell prompt). Values are auto-generated, vendor-minted-via-operator-app, or dynamic. Never form-input.
+- **Generic "do X to secret Y" workflows.** Each operation gets its own scoped workflow (`rotate-secret.yml`), not a `secrets-manage.yml` catch-all that's a UI for "type whatever you want."
+- **Imperative `kubectl apply` of substrate** — PR #43 closed this. Don't regress.
+- **SSH-for-kubectl, SSH-for-logs, SSH-for-anything** — kubeconfig is local (Phase 4a), observability ships to dashboards (P2), `kubectl` is break-glass.
+- **Substrate state divorced from git** — policies/roles live in OpenBao but should be reconciled from `vault-config-operator` CRDs in git.
+- **Manual validator sessions** — same shape as laptop bootstrap. Validation belongs in a workflow.
+
+## SOC2 mapping
+
+| Control                        | Where this project lands it                                                                         |
+| ------------------------------ | --------------------------------------------------------------------------------------------------- |
+| **CC6.1** Logical access       | Writer-role + per-env policy bound by Phase 5b.4 (#42); workflow env-protection for rotation (Walk) |
+| **CC6.6** Data confidentiality | OpenBao encrypts at rest; kubeconfig scoped tighter for preview/prod (Walk)                         |
+| **CC7.2** Anomaly detection    | Audit pipeline (Walk) — Loki alert rules for off-hours / unexpected-actor writes                    |
+| **CC8.1** Change management    | All ops via workflow_dispatch (Crawl + Walk); rotation event is the auditable change                |
+
+## Open questions
+
+- **Initial vendor-key fill on production.** node-template's CLI is candidate-a-only by design. Preview/production initial fills need the operator-app UI. Coordination point: which repo owns the vendor-key submission form? Likely `cogni` operator-app; node-template provides the OpenBao API surface.
+- **Multi-operator forks.** Spec mentions Shamir 3-of-5 but the bootstrap script auto-unseals 1-of-1 silently. Multi-operator forks need explicit support in the workflow-driven provisioning (Walk row 1's `provision-env.yml`).
+- **Forker's GitHub identity.** `Step 0 IDENTITY GATE` of fork-quickstart.md requires a bot account + PAT. Is this requirement going to chafe for solo-forker UX? Possibly — but the audit-trail benefit is real.
+
+## As-Built Specs
+
+- [`docs/spec/secrets-management.md`](../../docs/spec/secrets-management.md) — canonical contract for the substrate layer (Invariants 1-13). Shipped with PR #42; Invariant 13 (NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP) added in the same PR.
+- [`docs/spec/agentic-fork-bootstrap.md`](../../docs/spec/agentic-fork-bootstrap.md) — the broader bootstrap design rationale. Crawl/Walk/Run deliverables each land their own spec sections under `docs/spec/` as they ship; tracking issues link from here as the project advances.
+
+## Design Notes
+
+- **node-template as OSS template SSOT.** This project's patterns ARE the OSS template forks copy. There is no upstream-of-this-pattern repository to mirror; the canonical lives here. Other Cogni repos (`cogni`, `cogni-poly`) consume / extend this template downstream, not the other way around.
+- **Out of scope vs [`proj.security-hardening`](./proj.security-hardening.md).** That project covers SOC2 controls on the data tier (admin API + maker-checker for `poly_wallet_grants` etc.). This project covers the secrets-substrate tier + the forker-experience UX. The two intersect at "operator actions flow through authenticated control planes, never raw SSH+shell" — same principle, different surface.
+- **Out of scope vs bug.0446 (cluster).** App-overlay drift (containerPort kustomize var, sslmode in seeded DB URLs, migrator entrypoint, scheduler ConfigMap) blocks clean `/readyz=200` but is orthogonal to the substrate + workflow-driven-ops refactor this project owns. Filed separately so it can ship independently.
+- **No human types a secret VALUE into a UI.** The killer rule in the anti-patterns list. Auto-generated, vendor-minted via operator-app, or dynamic. The original spec's generic `secrets-manage.yml` workflow_dispatch was a category error (form-input is the laptop-shell anti-pattern wearing GitHub's clothes); per-operation workflows replace it.
+- **The OSS bootstrap is hand-rolled, the substrate is standardized.** Top-0.1% SOC2-compliant OSS teams assemble the same components we are (OpenBao + ESO + Argo + vault-config-operator + Loki/Alloy + Reloader + vault-action + cert-manager). What every team hand-rolls is the cold-start bootstrap; node-template's value-add is publishing that hand-roll as a reusable template so forks inherit a well-assembled stack instead of re-deriving it.
+
+## Related
+
+- [`docs/spec/secrets-management.md`](../../docs/spec/secrets-management.md) — canonical secrets contract (Invariants 1-13)
+- [`docs/spec/agentic-fork-bootstrap.md`](../../docs/spec/agentic-fork-bootstrap.md) — the spec this project implements
+- [`docs/runbooks/fork-quickstart.md`](../../docs/runbooks/fork-quickstart.md) — the easy-start runbook itself; THIS is the measurable artifact (manual-command count)
+- [`docs/guides/secrets-add-new.md`](../../docs/guides/secrets-add-new.md) — day-2 secret-add flow
+- [`docs/guides/secrets-rotate.md`](../../docs/guides/secrets-rotate.md) — rotation playbook (current state is manual; Walk row 2 makes it workflow-driven)
+- [`proj.security-hardening`](./proj.security-hardening.md) — sibling project for SOC2 data-tier controls; intersects at "operator actions through authenticated control planes"
+- [PR #42](https://github.com/Cogni-DAO/node-template/pull/42) — substrate stand-up
+- [PR #43](https://github.com/Cogni-DAO/node-template/pull/43) — Argo-managed substrate
