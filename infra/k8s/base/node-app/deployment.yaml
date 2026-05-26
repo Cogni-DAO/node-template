@@ -56,7 +56,15 @@ spec:
         - name: app
           image: ghcr.io/cogni-dao/cogni-node-template:placeholder
           ports:
-            - containerPort: 3000
+            # containerPort MUST match infra/catalog/node-template.yaml::port,
+            # which equals the Dockerfile's `ENV PORT=` (Next.js standalone
+            # reads PORT at boot — see nodes/node-template/app/Dockerfile).
+            # Kustomize cannot interpolate from a sibling YAML, so this value
+            # is duplicated; the lint-comment is the coherence contract.
+            # Probes + Service.targetPort reach this via the named port
+            # `http`, so a change here is the only edit required.
+            # Tracked in bug.0446 H9.
+            - containerPort: 3200
               name: http
               protocol: TCP
           livenessProbe:

@@ -21,7 +21,12 @@ data:
   # Each entry maps nodeId/slug to the node's internal Service.
   # scripts/rename-node.sh rewrites the slug; rotate the UUID in .cogni/repo-spec.yaml
   # post-fork (placeholder below is the .cogni/repo-spec.yaml seed).
-  COGNI_NODE_ENDPOINTS: "node-template=http://node-app:3000,00000000-0000-4000-a000-000000000000=http://node-app:3000"
+  # The `operator=` entry is required: scheduler-worker resolves callbacks via
+  # this key on a cold-start (bug.0446 H8b — without it the worker CrashLoops
+  # on the first task lookup). The "operator" identifier is the scheduler's
+  # canonical name for the node-app surface and is independent of the
+  # catalog slug (which forks rename via scripts/rename-node.sh).
+  COGNI_NODE_ENDPOINTS: "operator=http://node-app:3000,node-template=http://node-app:3000,00000000-0000-4000-a000-000000000000=http://node-app:3000"
 
   # Observability
   LOG_LEVEL: "info"
