@@ -395,7 +395,17 @@ log_info "DATABASE_URLs updated with VM IP: $VM_IP"
 cd "$REPO_ROOT"
 
 SSH_KEY="$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
-SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
+# ConnectTimeout=10 + ConnectionAttempts=1: bound the connect phase to 10s
+# and refuse TCP SYN retries. Default OpenSSH retries SYN for ~2min before
+# giving up, which on a dropped-packet network (Cherry VM still booting,
+# firewall not yet open, transient ISP loss) causes the Phase 4 wait loop
+# to silently consume the workflow's full 60-min budget — exactly the
+# failure signature on PR #46's first validator run
+# (https://github.com/i-am-coco/node-template/actions/runs/26473976287,
+# 60-min wall-clock = timeout = cancelled).
+# ServerAliveInterval/CountMax govern an established session; ConnectTimeout
+# governs the dial. Both apply.
+SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ConnectionAttempts=1 -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
 
 # ══════════════════════════════════════════════════════════════
 # Phase 4: Wait for cloud-init bootstrap
@@ -403,9 +413,42 @@ SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o S
 # Clear stale host key — Cherry reuses IPs across VM recreations
 ssh-keygen -R "$VM_IP" 2>/dev/null || true
 
-log_step "Phase 4: Wait for bootstrap (~3-5 min)"
+log_step "Phase 4: Wait for bootstrap (~3-5 min, hard cap 10 min wall-clock)"
 
-for attempt in $(seq 1 60); do
+# Wall-clock budget — the previous `for attempt in $(seq 1 60); sleep 10`
+# pattern claimed "10 min" but each iteration made TWO ssh calls; with
+# OpenSSH's default ~2-min TCP SYN retry on dropped packets, one stalled
+# iteration consumed ~4 min and the whole loop overran the workflow's
+# 60-min timeout (see SSH_OPTS comment above). ConnectTimeout=10 bounds
+# each ssh dial to 10s; the budget guard below bounds the outer loop
+# regardless of how many iterations fit.
+PHASE_4_BUDGET_SECS=600
+PHASE_4_START=$SECONDS
+attempt=0
+while true; do
+  attempt=$((attempt + 1))
+  elapsed=$(( SECONDS - PHASE_4_START ))
+  if (( elapsed > PHASE_4_BUDGET_SECS )); then
+    log_error "Bootstrap did not complete within ${PHASE_4_BUDGET_SECS}s wall-clock (attempt=${attempt})."
+    # One diagnostic SSH with hard-bounded timeout. Distinguishes
+    # "VM still booting, just slow" from "packets dropped, VM unreachable" —
+    # the former produces log output, the latter times out the diagnostic too.
+    log_info "Attempting diagnostic SSH (10s budget) to dump VM bootstrap state..."
+    set +e
+    ssh -i "$SSH_KEY" \
+        -o StrictHostKeyChecking=no \
+        -o ConnectTimeout=10 \
+        -o ConnectionAttempts=1 \
+        root@"$VM_IP" \
+        '{ test -r /var/log/cogni-bootstrap.log && tail -100 /var/log/cogni-bootstrap.log; } 2>&1 || { test -r /var/log/cloud-init-output.log && tail -100 /var/log/cloud-init-output.log; } 2>&1 || echo "(neither log readable on VM)"'
+    diag_rc=$?
+    set -e
+    if [[ $diag_rc -ne 0 ]]; then
+      log_warn "  diagnostic SSH itself failed (rc=${diag_rc}) — VM likely unreachable (network drop, not slow bootstrap)."
+    fi
+    log_error "SSH in to debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
+    exit 1
+  fi
   if ssh $SSH_OPTS root@"$VM_IP" 'test -f /var/lib/cogni/bootstrap.ok' 2>/dev/null; then
     log_info "Bootstrap complete!"
     ssh $SSH_OPTS root@"$VM_IP" 'cat /var/lib/cogni/bootstrap.ok'
@@ -416,14 +459,11 @@ for attempt in $(seq 1 60); do
     ssh $SSH_OPTS root@"$VM_IP" 'cat /var/lib/cogni/bootstrap.fail; tail -50 /var/log/cogni-bootstrap.log'
     exit 1
   fi
-  if [[ $attempt -eq 60 ]]; then
-    log_error "Bootstrap did not complete after 10 minutes."
-    log_error "SSH in to debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
-    exit 1
-  fi
-  # Show progress every 30s
+  # Show progress every ~30s (3 iterations; iterations are bounded by
+  # ConnectTimeout=10 + sleep 10 = 10-30s, so logs land roughly every minute
+  # in the worst case where every ssh dial times out).
   if (( attempt % 3 == 0 )); then
-    log_info "  Waiting... (${attempt}0s elapsed)"
+    log_info "  Waiting... (${elapsed}s elapsed of ${PHASE_4_BUDGET_SECS}s budget, attempt=${attempt})"
   fi
   sleep 10
 done
