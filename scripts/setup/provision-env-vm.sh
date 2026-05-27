@@ -563,15 +563,34 @@ fi
 # issue until the hourly window resets. See .claude/skills/dns-ops/SKILL.md.
 
 # ══════════════════════════════════════════════════════════════
-# Phase 4b.5: Seed missing deploy/* branches in the fork from main
+# Phase 4b.5: Seed (or content-align) deploy/* branches in the fork
 # ══════════════════════════════════════════════════════════════
 # B1 (deploy machinery) — node-template ships only `main`; per-node
 # deploy branches don't exist until first promote-and-deploy run. But
 # Phase 4c (env-state push) AND the AppSet generators (Phase 7) both
-# need them present. Seed from main's HEAD SHA via `gh api /git/refs`
-# when missing. Idempotent: existing branches are left alone. Requires
-# GITHUB_ADMIN_PAT (set by bootstrap.sh) — exported as GH_TOKEN.
-log_step "Phase 4b.5: Seed deploy/* branches in fork (idempotent)"
+# need them present. Seed from the operator's local HEAD SHA via
+# `gh api /git/refs` when missing. Requires GITHUB_ADMIN_PAT (set by
+# bootstrap.sh) — exported as GH_TOKEN.
+#
+# Per-env drift policy (validator's third run surfaced this — an
+# existing branch at a stale pre-PR-#42 SHA was missing the
+# infra/k8s/argocd/{openbao,external-secrets}/ dirs Argo Applications
+# reference, producing a downstream ComparisonError):
+#   * Branch absent             → create at SEED_SHA.
+#   * Branch == SEED_SHA        → no-op (true idempotency).
+#   * Branch != SEED_SHA AND
+#     DEPLOY_ENV is candidate-* → force-update to SEED_SHA. Experiment
+#                                  slots reset cleanly; Phase 4c re-writes
+#                                  env-state.yaml downstream so per-run
+#                                  drift self-heals.
+#   * Branch != SEED_SHA AND
+#     DEPLOY_ENV is preview/
+#     production               → FAIL HARD. Persistent slots must not
+#                                  be blindly stomped (history loss).
+#                                  Operator merges SEED_SHA's content
+#                                  forward OR deletes the branch and
+#                                  re-runs.
+log_step "Phase 4b.5: Seed deploy/* branches in fork (content-aware idempotent)"
 
 # bootstrap.sh writes GHCR_DEPLOY_TOKEN=GITHUB_ADMIN_PAT into .env.operator;
 # this script reads it as GHCR_TOKEN. Use whichever the caller set.
@@ -607,10 +626,42 @@ if [[ -n "$SEED_TOKEN" ]]; then
     BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${target}")
   done
   for ref in "${BRANCHES_TO_SEED[@]}"; do
-    if gh api "repos/${GH_REPO}/branches/${ref}" >/dev/null 2>&1; then
-      log_info "  ${ref} — already exists"
+    existing_sha=$(gh api "repos/${GH_REPO}/branches/${ref}" --jq '.commit.sha' 2>/dev/null || echo "")
+    if [[ -n "$existing_sha" ]]; then
+      if [[ "$existing_sha" == "$SEED_SHA" ]]; then
+        log_info "  ${ref} — already at seed SHA ${SEED_SHA:0:8}"
+        continue
+      fi
+      # Branch exists but at a different SHA. Resolution depends on env.
+      case "$DEPLOY_ENV" in
+        candidate-*)
+          log_warn "  ${ref} — exists at ${existing_sha:0:8}, force-updating to ${SEED_SHA:0:8} (${SEED_SRC})"
+          if gh api -X PATCH "repos/${GH_REPO}/git/refs/heads/${ref}" \
+              -f "sha=${SEED_SHA}" \
+              -F force=true >/dev/null 2>&1; then
+            log_info "  ${ref} — force-updated"
+          else
+            log_error "  ${ref} — FAILED to force-update (check PAT push permission)"
+            exit 1
+          fi
+          ;;
+        preview|production)
+          log_error "  ${ref} — exists at ${existing_sha:0:8}, diverged from seed ${SEED_SHA:0:8} (${SEED_SRC})"
+          log_error "    candidate-* slots auto-resolve via force-update; ${DEPLOY_ENV} does not."
+          log_error "    Reconcile manually then re-run, e.g.:"
+          log_error "      git fetch origin ${ref} && git merge ${SEED_SHA} && git push origin ${ref}"
+          log_error "    Or delete + re-seed (destroys env-state Phase 4c wrote previously):"
+          log_error "      gh api -X DELETE repos/${GH_REPO}/git/refs/heads/${ref}"
+          exit 1
+          ;;
+        *)
+          log_error "  ${ref} — exists at ${existing_sha:0:8}, diverged. Unknown DEPLOY_ENV='${DEPLOY_ENV}', refusing to force-update."
+          exit 1
+          ;;
+      esac
       continue
     fi
+    # Branch absent → create at SEED_SHA.
     if gh api -X POST "repos/${GH_REPO}/git/refs" \
         -f "ref=refs/heads/${ref}" \
         -f "sha=${SEED_SHA}" >/dev/null 2>&1; then
