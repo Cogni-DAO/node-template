@@ -16,4 +16,4 @@ preview_branch: deploy/preview-scheduler-worker
 production_branch: deploy/production-scheduler-worker
 path_prefix: services/scheduler-worker/
 # See infra/catalog/node-template.yaml for the rationale on bootstrap_image_tag.
-bootstrap_image_tag: "pr-18-61bf2177d2b9ee19f7d0ad393695ae460c70a819-scheduler-worker"
+bootstrap_image_tag: "pr-46-675893a17224f524c5cb657147694efeb51c8724-scheduler-worker"

@@ -9,7 +9,7 @@ port: 3200
 # its first push-to-main publishes them. Bump this when the pinned upstream
 # build goes stale (GHCR retention, upstream restructure, etc.) — see PR
 # #22 / docs/spec/agentic-fork-bootstrap.md §Bootstrap Image.
-bootstrap_image_tag: "pr-18-61bf2177d2b9ee19f7d0ad393695ae460c70a819-node-template"
+bootstrap_image_tag: "pr-46-675893a17224f524c5cb657147694efeb51c8724-node-template"
 # K8s NodePort exposed for Compose→k8s gateway access (LiteLLM billing
 # callbacks via host.docker.internal:${node_port}). Read by both
 # provision-env-vm.sh (writes COGNI_NODE_ENDPOINTS) and the per-env overlay
