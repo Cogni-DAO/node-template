@@ -143,6 +143,48 @@ The dependency arrows above dictate the order in which capabilities can ship:
 
 **Parallelism map:** P1 and P2 can ship concurrently — P1 is L3-only, P2 is L0+L2 only, they share no critical path. P5 is the first phase that requires BOTH branches converged. Compose-infra → OpenBao migration lives entirely within L3 and can ship any time after P1.
 
+## SOC2 readiness status
+
+Score against the top-0.1% reference stack (HashiCorp Vault production reference architecture + CNCF cloud-native security guidance + NIST 800-53 AC/AU/SC control families). Updated when any 🔴 row closes.
+
+```
+   ┌─────────────────────────────────────────────────────────────────┐
+   │  OUR STACK            │  TOP-0.1% STACK                │ STATUS │
+   ├───────────────────────┼────────────────────────────────┼────────┤
+   │  OpenBao (Vault fork) │  Vault / OpenBao / hosted KMS  │   🟢   │
+   │  External Secrets Op  │  External Secrets Op (CNCF)    │   🟢   │
+   │  OpenFGA RBAC         │  OpenFGA / Cedar               │   🟢   │
+   │  envFrom secretRef    │  envFrom secretRef             │   🟢   │
+   │  Loki audit pipeline  │  Loki  +  tamper-evident sink  │   🔴   │
+   │  Shamir keys on disk  │  Cloud KMS auto-unseal         │   🔴   │
+   │  Static DB passwords  │  Vault DB engine (1h TTL)      │   🔴   │
+   │  K8s SA JWT auth      │  SPIFFE/SPIRE (preferred)      │   🟡   │
+   │  Quarterly access rev │  SCIM + JIT elevation          │   🟡   │
+   │  FIPS 140-2 crypto    │  Vault Enterprise / Cloud KMS  │   🟡   │
+   └───────────────────────┴────────────────────────────────┴────────┘
+   🟢 = aligned     🟡 = OK today, document tradeoff     🔴 = audit-blocking
+```
+
+### Audit-blocking gaps (🔴)
+
+| Gap                                                                | Why it blocks a SOC2 Type II audit                                               | Task                                                     |
+| ------------------------------------------------------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Cloud KMS auto-unseal — eliminate `.local/<env>-openbao-init.json` | CC6.1 — unseal keys must not sit on operator laptops                             | [`task.5065`](https://cognidao.org/work/items/task.5065) |
+| WORM / Object-Lock audit sink alongside Loki                       | CC7.2 + CC8.1 — Loki alone is mutable; auditor needs tamper-evident copy         | [`task.5066`](https://cognidao.org/work/items/task.5066) |
+| Dynamic DB credentials via OpenBao DB engine                       | CC6.1 — long-lived `APP_DB_PASSWORD` fails "when was this last rotated" question | [`task.5067`](https://cognidao.org/work/items/task.5067) |
+
+### Acceptable tradeoffs to document (🟡)
+
+| Gap                                  | Why deferred                                                    | When to revisit                                                                          |
+| ------------------------------------ | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| SPIFFE/SPIRE workload identity       | K8s SA JWT is HashiCorp-recommended for k8s-only stacks         | Lands when Compose→OpenBao migration crosses substrate boundary                          |
+| Quarterly access review (SCIM + JIT) | No IdP integration yet; small org                               | When org grows past ~10 humans or first enterprise tenant asks                           |
+| FIPS 140-2 validated crypto          | OpenBao CE is not FIPS-validated; not required for vanilla SOC2 | Migrate to Vault Enterprise or AWS KMS if a tenant needs FedRAMP / financial attestation |
+
+### Aligned with top-tier (🟢)
+
+We are NOT meaningfully reinventing wheels. Every primitive in the current stack — OpenBao, ESO, OpenFGA, Kubernetes auth method, KV v2 versioning, NIST 800-57 key-lifecycle vocabulary — is the canonical choice for a Vault-class SOC2 deployment. The 🔴 rows are vendor-blessed additions to OpenBao, not parallel systems.
+
 ## Open questions
 
 - [ ] L3 multi-tenant secret paths: should `cogni/<env>/_tenants/<billing_account_id>/*` live alongside `cogni/<env>/<service>/*`, or under it? Resolution gates P5.
