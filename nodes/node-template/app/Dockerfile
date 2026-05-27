@@ -63,6 +63,12 @@ RUN --mount=type=cache,id=next-cache-node-template,target=/app/nodes/node-templa
 FROM base AS migrator
 WORKDIR /app
 
+# pnpm-installed binaries (tsx, drizzle-kit) live in node_modules/.bin which
+# is not on the alpine default PATH. Without this prepend the CMD below — and
+# any k8s init container reusing this image with `command: [tsx, ...]` — fail
+# with `exec: "tsx": executable file not found in $PATH`. bug.0446 H8 follow-up.
+ENV PATH="/app/node_modules/.bin:${PATH}"
+
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/nodes/node-template/drizzle.config.ts ./nodes/node-template/drizzle.config.ts
