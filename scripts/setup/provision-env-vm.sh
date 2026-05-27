@@ -1456,6 +1456,59 @@ echo ""
 # ══════════════════════════════════════════════════════════════
 # Phase 9: Verify /readyz on all nodes (exit code = green/red)
 # ══════════════════════════════════════════════════════════════
+# Diagnostic dump on /readyz failure — same shape as the Phase 4 + 5b
+# helpers. The app tier has its own state surfaces worth capturing on a
+# RED outcome: pod conditions (Init:Error vs CrashLoopBackOff vs Pending),
+# the init-container's actual log (this is where bug.0446 H8a class
+# failures surface), ExternalSecret sync state (Invariant 12 — pods
+# fail loud when their secret is empty), the Secret's data keys
+# (NEVER values — only key NAMES, to surface missing-key wiring vs
+# missing-value cases), and recent events. Without this, validators
+# see a pod LIST and have to guess which surface to interrogate.
+phase_9_diagnostic() {
+  log_info "Attempting Phase 9 diagnostic dump (10s ssh budget)..."
+  set +e
+  ssh -i "$SSH_KEY" \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=10 \
+      -o ConnectionAttempts=1 \
+      root@"$VM_IP" "
+echo '=== pods (${K8S_NAMESPACE}) ==='
+kubectl -n ${K8S_NAMESPACE} get pods -o wide 2>&1
+echo
+echo '=== node-app pod describe (tail) ==='
+kubectl -n ${K8S_NAMESPACE} describe pod -l app.kubernetes.io/name=node-app 2>&1 | tail -80
+echo
+echo '=== node-app init (migrate) logs — prefer --previous, fallback current ==='
+pod=\$(kubectl -n ${K8S_NAMESPACE} get pod -l app.kubernetes.io/name=node-app -o name | head -1)
+kubectl -n ${K8S_NAMESPACE} logs \$pod -c migrate --tail=80 --previous 2>&1 || kubectl -n ${K8S_NAMESPACE} logs \$pod -c migrate --tail=80 2>&1
+echo
+echo '=== node-app main container logs (tail 80) ==='
+kubectl -n ${K8S_NAMESPACE} logs \$pod -c app --tail=80 --previous 2>&1 || kubectl -n ${K8S_NAMESPACE} logs \$pod -c app --tail=80 2>&1
+echo
+echo '=== scheduler-worker pod describe (tail) ==='
+kubectl -n ${K8S_NAMESPACE} describe pod -l app.kubernetes.io/name=scheduler-worker 2>&1 | tail -80
+echo
+echo '=== scheduler-worker logs (tail 80, prefer --previous) ==='
+sw=\$(kubectl -n ${K8S_NAMESPACE} get pod -l app.kubernetes.io/name=scheduler-worker -o name | head -1)
+kubectl -n ${K8S_NAMESPACE} logs \$sw --tail=80 --previous 2>&1 || kubectl -n ${K8S_NAMESPACE} logs \$sw --tail=80 2>&1
+echo
+echo '=== ExternalSecrets sync state ==='
+kubectl -n ${K8S_NAMESPACE} get externalsecret -o wide 2>&1
+echo
+echo '=== k8s Secret data keys (key NAMES only, never values) ==='
+kubectl -n ${K8S_NAMESPACE} get secret node-template-env-secrets -o jsonpath='{.data}' 2>&1 | jq 'keys' 2>&1 || echo '(secret not yet materialized by ESO)'
+echo
+echo '=== recent events (sorted, ${K8S_NAMESPACE}, last 40) ==='
+kubectl -n ${K8S_NAMESPACE} get events --sort-by=.lastTimestamp 2>&1 | tail -40
+"
+  local diag_rc=$?
+  set -e
+  if [[ $diag_rc -ne 0 ]]; then
+    log_warn "  diagnostic SSH itself failed (rc=${diag_rc}) — VM may be unreachable."
+  fi
+}
+
 log_step "Phase 9: Verify /readyz on all nodes (up to 5 min)"
 
 READYZ_OK=true
@@ -1491,6 +1544,7 @@ if [[ "$READYZ_OK" == "true" ]]; then
   exit 0
 else
   log_error "═══ SOME NODES FAILED /readyz — CANARY IS RED ═══"
+  phase_9_diagnostic
   log_error "Debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP 'kubectl -n ${K8S_NAMESPACE} logs -l app.kubernetes.io/name=node-app --tail=20'"
   exit 1
 fi
