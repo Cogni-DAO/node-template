@@ -453,27 +453,14 @@ set_env_secret DATABASE_SERVICE_URL "postgresql://${APP_DB_SERVICE_USER}:${GEN[A
 # SSH key + age key → GitHub env (provision-env-vm.sh wrote them to .local/)
 set_env_secret SSH_DEPLOY_KEY "$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key")"
 
-# ── Phase 5: trigger deploy + watch ──────────────────────────────────────────
-step "Phase 5 · Dispatch promote-and-deploy + watch"
-gh workflow run promote-and-deploy.yml \
-  --repo "$GH_REPO" \
-  --ref main \
-  -f environment="$DEPLOY_ENV" >/dev/null
-log "Workflow dispatched. Tailing latest run…"
-sleep 4
-RUN_ID=$(gh run list --repo "$GH_REPO" --workflow promote-and-deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')
-log "Run ID: ${RUN_ID}"
-gh run watch "$RUN_ID" --repo "$GH_REPO" --exit-status
-
-# ── Phase 6: smoke check ─────────────────────────────────────────────────────
-step "Phase 6 · Smoke /readyz"
-sleep 5
-if curl -fsS -o /dev/null -w "%{http_code}" "https://${DOMAIN}/readyz" | grep -q 200; then
-  log "${GREEN}${BOLD}✓ ${DOMAIN} /readyz returned 200${NC}"
-else
-  warn "${DOMAIN} /readyz did not return 200 yet. DNS may still be propagating or Caddy is still obtaining its cert."
-  warn "Re-check in 2-5 min: curl -I https://${DOMAIN}/readyz"
-fi
+# Deploy + readyz verification happens inside provision-env-vm.sh:
+#   • Phase 7 applies the ApplicationSets — Argo reconciles deploy/* automatically
+#   • Phase 9 polls /readyz on each node with a 5-min budget and reports green/red
+# No further dispatch needed here. The legacy `gh workflow run
+# promote-and-deploy.yml -f environment=candidate-a` call belonged to a
+# pre-Argo-substrate architecture; that workflow only accepts preview |
+# production and returns HTTP 422 for candidate-a (bug.0446 post-green
+# blocker surfaced on validator run 26544140153).
 
 cat <<EOF
 
