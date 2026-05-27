@@ -12,8 +12,11 @@ metadata:
     app.kubernetes.io/name: scheduler-worker
     app.kubernetes.io/part-of: cogni
 data:
-  # Temporal connection — overridden per-env by overlay
-  TEMPORAL_ADDRESS: "temporal:7233"
+  # Temporal connection — overridden per-env by overlay.
+  # Service name `temporal-external` (ExternalName → Compose-infra on the VM)
+  # matches node-app's configmap.yaml. Plain `temporal` has no Service and
+  # fails DNS resolution at scheduler boot.
+  TEMPORAL_ADDRESS: "temporal-external:7233"
   TEMPORAL_NAMESPACE: "cogni-staging"
   TEMPORAL_TASK_QUEUE: "scheduler-tasks"
 
