@@ -49,6 +49,40 @@ interface Secret {
   transform?: (value: string) => string;
 }
 
+/**
+ * Routing tier per `docs/spec/secrets-classification.md`. Bound to each
+ * catalog entry below via SECRET_ROUTING. Definitions:
+ *  - "A1": k8s app baseline. OpenBao `cogni/<env>/<service>/<KEY>` → ESO.
+ *  - "A2": k8s app node-specific (downstream nodes like poly). Same wire, bare-name service.
+ *  - "B":  Compose-infra (containers outside k3s). GH env → .env on VM.
+ *  - "D":  CI-only. Consumed by `.github/workflows/`, never by runtime.
+ *  - "E":  Repo-level (cross-env). Set on the repo, not the environment.
+ *  - "F":  Local-only. `.env.local`. Not in this catalog (never `gh secret set`).
+ *  - "G":  Derived from repo state at provision time (e.g. `nodes/*` listing).
+ */
+type Tier = "A1" | "A2" | "B" | "D" | "E" | "F" | "G";
+
+interface SecretRouting {
+  tier: Tier;
+  /**
+   * OpenBao service path component for A1/A2. For A1: catalog name from
+   * `infra/catalog/<service>.yaml`, or `_shared` for cross-service keys.
+   * For A2: bare node name (e.g. `poly`) matching `nodes/<node>/`.
+   * For G: `_system` (deploy-time only) or `_shared`.
+   * Omit for B/D/E (no OpenBao path applies).
+   */
+  service?: string;
+  /**
+   * Set true when the same value is consumed by BOTH k8s app AND a
+   * Compose-infra container. Example: LITELLM_MASTER_KEY (app calls
+   * LiteLLM; LiteLLM container also needs it). The setup script writes
+   * GH env (for Compose); `provision-env-vm.sh` Phase 5c reads .env.<env>
+   * to seed OpenBao (for k8s). Both stores must agree. Annotation, not
+   * a separate tier — see secrets-classification.md.
+   */
+  coConsumed?: boolean;
+}
+
 // ── Generators ───────────────────────────────────────────────────────────────
 
 function rand64(bytes = 32): string {
@@ -931,6 +965,139 @@ const SECRETS: Secret[] = [
     },
   },
 ];
+
+// ── Routing ─────────────────────────────────────────────────────────────────
+//
+// Single source of truth for per-secret routing. Co-located with the catalog
+// to prevent drift; spec lives at `docs/spec/secrets-classification.md`.
+//
+// REPO constant below is hardcoded to "Cogni-DAO/cogni" — this script today
+// targets the cogni-template org for secret writes regardless of which fork
+// hosts the source tree. Fork-aware REPO resolution is a separate task.
+
+const SECRET_ROUTING: Record<string, SecretRouting> = {
+  // ── A1: k8s app baseline ──
+  AUTH_SECRET: { tier: "A1", service: "node-template" },
+  LITELLM_MASTER_KEY: { tier: "A1", service: "_shared", coConsumed: true },
+  OPENCLAW_GATEWAY_TOKEN: {
+    tier: "A1",
+    service: "node-template",
+    coConsumed: true,
+  },
+  SCHEDULER_API_TOKEN: { tier: "A1", service: "_shared" },
+  BILLING_INGEST_TOKEN: { tier: "A1", service: "_shared", coConsumed: true },
+  INTERNAL_OPS_TOKEN: { tier: "A1", service: "node-template" },
+  METRICS_TOKEN: { tier: "A1", service: "node-template", coConsumed: true },
+  GH_WEBHOOK_SECRET: { tier: "A1", service: "node-template" },
+  OPENROUTER_API_KEY: { tier: "B" },
+  EVM_RPC_URL: { tier: "A1", service: "node-template" },
+  OPENCLAW_GITHUB_RW_TOKEN: { tier: "B" },
+  TAVILY_API_KEY: { tier: "A1", service: "node-template" },
+  POSTHOG_API_KEY: { tier: "A1", service: "node-template" },
+  POSTHOG_HOST: { tier: "A1", service: "node-template" },
+  DOMAIN: { tier: "A1", service: "node-template", coConsumed: true },
+  APP_DB_NAME: { tier: "A1", service: "node-template", coConsumed: true },
+  APP_DB_USER: { tier: "A1", service: "node-template", coConsumed: true },
+  APP_DB_PASSWORD: { tier: "A1", service: "node-template", coConsumed: true },
+  APP_DB_SERVICE_USER: {
+    tier: "A1",
+    service: "node-template",
+    coConsumed: true,
+  },
+  APP_DB_SERVICE_PASSWORD: {
+    tier: "A1",
+    service: "node-template",
+    coConsumed: true,
+  },
+  GH_REVIEW_APP_ID: { tier: "A1", service: "node-template" },
+  GH_REVIEW_APP_PRIVATE_KEY_BASE64: { tier: "A1", service: "node-template" },
+  GH_OAUTH_CLIENT_ID: { tier: "A1", service: "node-template" },
+  GH_OAUTH_CLIENT_SECRET: { tier: "A1", service: "node-template" },
+  DISCORD_OAUTH_CLIENT_ID: { tier: "A1", service: "node-template" },
+  DISCORD_OAUTH_CLIENT_SECRET: { tier: "A1", service: "node-template" },
+  GOOGLE_OAUTH_CLIENT_ID: { tier: "A1", service: "node-template" },
+  GOOGLE_OAUTH_CLIENT_SECRET: { tier: "A1", service: "node-template" },
+  DISCORD_BOT_TOKEN: { tier: "A1", service: "node-template" },
+  GRAFANA_URL: { tier: "A1", service: "node-template" },
+  GRAFANA_SERVICE_ACCOUNT_TOKEN: { tier: "A1", service: "node-template" },
+  GRAFANA_PDC_NETWORK_UUID: { tier: "A1", service: "node-template" },
+  PROMETHEUS_READ_USERNAME: { tier: "A1", service: "node-template" },
+  PROMETHEUS_READ_PASSWORD: { tier: "A1", service: "node-template" },
+  LANGFUSE_PUBLIC_KEY: { tier: "A1", service: "node-template" },
+  LANGFUSE_SECRET_KEY: { tier: "A1", service: "node-template" },
+  LANGFUSE_BASE_URL: { tier: "A1", service: "node-template" },
+  PRIVY_APP_ID: { tier: "A1", service: "node-template" },
+  PRIVY_APP_SECRET: { tier: "A1", service: "node-template" },
+  PRIVY_SIGNING_KEY: { tier: "A1", service: "node-template" },
+  NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID: {
+    tier: "A1",
+    service: "node-template",
+  },
+
+  // ── A2: k8s app node-specific (poly) ──
+  // The script today marks POLYGON_RPC_URL `required: true` for all envs, but
+  // node-template baseline has no code consuming it. Treated as A2 here
+  // (reserved poly-only path). On cogni-poly port this row stays A2; on
+  // node-template baseline the script's `required` flag should be relaxed.
+  POLYGON_RPC_URL: { tier: "A2", service: "poly" },
+  PRIVY_USER_WALLETS_APP_ID: { tier: "A2", service: "poly" },
+  PRIVY_USER_WALLETS_APP_SECRET: { tier: "A2", service: "poly" },
+  PRIVY_USER_WALLETS_SIGNING_KEY: { tier: "A2", service: "poly" },
+  POLY_WALLET_AEAD_KEY_HEX: { tier: "A2", service: "poly" },
+  POLY_WALLET_AEAD_KEY_ID: { tier: "A2", service: "poly" },
+
+  // ── B: Compose-infra ──
+  POSTGRES_ROOT_USER: { tier: "B" },
+  POSTGRES_ROOT_PASSWORD: { tier: "B" },
+  APP_DB_READONLY_USER: { tier: "B" },
+  APP_DB_READONLY_PASSWORD: { tier: "B" },
+  TEMPORAL_DB_USER: { tier: "B" },
+  TEMPORAL_DB_PASSWORD: { tier: "B" },
+  GRAFANA_PDC_SIGNING_TOKEN: { tier: "B" },
+  GRAFANA_PDC_HOSTED_GRAFANA_ID: { tier: "B" },
+  GRAFANA_PDC_CLUSTER: { tier: "B" },
+  GRAFANA_CLOUD_LOKI_URL: { tier: "B" },
+  GRAFANA_CLOUD_LOKI_USER: { tier: "B" },
+  GRAFANA_CLOUD_LOKI_API_KEY: { tier: "B" },
+  PROMETHEUS_REMOTE_WRITE_URL: { tier: "B" },
+  PROMETHEUS_USERNAME: { tier: "B" },
+  PROMETHEUS_PASSWORD: { tier: "B" },
+
+  // ── D: CI-only ──
+  SSH_DEPLOY_KEY: { tier: "D" },
+  VM_HOST: { tier: "D" },
+
+  // ── E: Repo-level (cross-env, CI consumption) ──
+  CHERRY_AUTH_TOKEN: { tier: "E" },
+  GHCR_DEPLOY_TOKEN: { tier: "E" },
+  ACTIONS_AUTOMATION_BOT_PAT: { tier: "E" },
+  GIT_READ_TOKEN: { tier: "E" },
+  SONAR_TOKEN: { tier: "E" },
+
+  // ── G: Derived from repo state ──
+  COGNI_NODE_DBS: { tier: "G", service: "_system" },
+  COGNI_NODE_ENDPOINTS: { tier: "G", service: "_shared", coConsumed: true },
+};
+
+// Load-time assertion: every catalog entry MUST have a routing decision.
+// Prevents drift when new secrets are added without classifying them.
+for (const s of SECRETS) {
+  if (!SECRET_ROUTING[s.name]) {
+    throw new Error(
+      `setup-secrets: ${s.name} has no SECRET_ROUTING entry. ` +
+        `Add one per docs/spec/secrets-classification.md.`
+    );
+  }
+}
+// And the inverse — no orphan routings.
+for (const name of Object.keys(SECRET_ROUTING)) {
+  if (!SECRETS.find((s) => s.name === name)) {
+    throw new Error(
+      `setup-secrets: SECRET_ROUTING has entry for ${name} ` +
+        `but no matching catalog Secret. Remove the orphan or add the catalog entry.`
+    );
+  }
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
