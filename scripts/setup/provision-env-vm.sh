@@ -894,11 +894,72 @@ ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CON
 # state.
 log_step "Phase 5b: Install + initialize OpenBao + ESO"
 
+# Wall-clock budget — same shape as Phase 4. Phase 5b's individual kubectl
+# waits compound (Argo sync + CRD Established + pod Running); without an
+# outer guard, a slow-but-not-stuck cluster could silently consume the
+# workflow's full budget. Validator run 26481178062 (i-am-coco fork) failed
+# Phase 5b inside ~12 min wall-clock but for a different reason: the prior
+# Health.Status=Healthy wait false-positived in 9 seconds on a brand-new
+# Application (Argo defaults Health to "Healthy" vacuously when no resources
+# are tracked yet) → script proceeded against an unprepped cluster →
+# cascade failure. Strengthen the Application wait + bump generous timeouts
+# + this wall-clock guard so the next iteration fails LOUDLY at a real
+# boundary rather than silently at a stale signal.
+PHASE_5B_BUDGET_SECS=900
+PHASE_5B_START=$SECONDS
+
+# Diagnostic dump on Phase 5b timeout — same shape as the Phase 4 one. The
+# substrate side has three independent state surfaces worth capturing
+# (Argo Application state, openbao namespace pod state, recent events
+# across the cluster); together they distinguish "Argo can't render"
+# vs "render OK but pod can't pull image" vs "all OK but slow".
+phase_5b_timeout() {
+  local reason="$1"
+  local elapsed=$(( SECONDS - PHASE_5B_START ))
+  log_error "Phase 5b failed (${reason}) — elapsed=${elapsed}s of ${PHASE_5B_BUDGET_SECS}s budget."
+  log_info "Attempting Phase 5b diagnostic dump (10s ssh budget)..."
+  set +e
+  ssh -i "$SSH_KEY" \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=10 \
+      -o ConnectionAttempts=1 \
+      root@"$VM_IP" '
+        echo "=== argocd applications ==="
+        kubectl -n argocd get applications -o wide 2>&1
+        echo
+        echo "=== application/openbao describe (tail) ==="
+        kubectl -n argocd describe application openbao 2>&1 | tail -80
+        echo
+        echo "=== application/external-secrets describe (tail) ==="
+        kubectl -n argocd describe application external-secrets 2>&1 | tail -80
+        echo
+        echo "=== openbao namespace state ==="
+        kubectl -n openbao get all 2>&1
+        echo
+        echo "=== openbao-0 describe (tail) ==="
+        kubectl -n openbao describe pod openbao-0 2>&1 | tail -60
+        echo
+        echo "=== external-secrets namespace state ==="
+        kubectl -n external-secrets get all 2>&1
+        echo
+        echo "=== recent events (sorted, all namespaces, last 50) ==="
+        kubectl get events --sort-by=.lastTimestamp -A 2>&1 | tail -50
+      '
+  local diag_rc=$?
+  set -e
+  if [[ $diag_rc -ne 0 ]]; then
+    log_warn "  diagnostic SSH itself failed (rc=${diag_rc}) — VM may be unreachable."
+  fi
+  log_error "SSH in to debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
+  exit 1
+}
+
 # ── 5b.1 Register Argo Applications for the substrate ─────────────────────
 # Substitute ${FORK_REPO} + ${DEPLOY_BRANCH} placeholders, apply the two
-# Application CRs into the argocd namespace, then wait for both to report
-# Healthy. Argo's repo-server clones the deploy branch, runs `kustomize build
-# --enable-helm` (per the bootstrap argocd-cm patch), and applies server-side.
+# Application CRs into the argocd namespace, then wait for both to complete
+# their first sync. Argo's repo-server clones the deploy branch, runs
+# `kustomize build --enable-helm` (per the bootstrap argocd-cm patch), and
+# applies server-side.
 SUBSTRATE_FORK_REPO="https://github.com/${GH_REPO}.git"
 for substrate in openbao external-secrets; do
   rendered=$(mktemp)
@@ -911,37 +972,61 @@ for substrate in openbao external-secrets; do
   log_info "Applied Argo Application: ${substrate} (repo=${SUBSTRATE_FORK_REPO} branch=${DEPLOY_BRANCH})"
 done
 
-# Wait for both substrate Applications to reach Healthy. Argo's automated sync
-# kicks in on first reconciliation; Healthy = chart rendered + applied + all
-# resources Healthy. 5min timeout matches the prior `kubectl apply`+rollout
-# window plus Argo's first-sync overhead.
+# Wait for both substrate Applications to complete their first sync.
+# `operationState.phase=Succeeded` is picked over the previous
+# `health.status=Healthy` because the latter false-positives on a brand-new
+# Application CR (Argo defaults Health to "Healthy" vacuously when no
+# resources are tracked yet) — exactly the failure mode in validator run
+# 26481178062. The operationState field only populates after a real sync
+# operation runs, so this wait blocks until Argo has actually rendered,
+# applied, and reported success. Hard-fail (no `|| log_warn`) — if the
+# substrate sync hasn't completed, nothing downstream can succeed.
+#
+# Per-substrate timeouts: ESO is just a Deployment + CRDs (~2-3min real,
+# 5min budget); OpenBao is a StatefulSet + PVC bind + image pull
+# (~3-5min real, 10min budget — validator's previous 120s pod-Running
+# wait was the actual root failure of this signal).
 for substrate in external-secrets openbao; do
-  log_info "Waiting for application/${substrate} to be Healthy (up to 5min)..."
+  case "$substrate" in
+    external-secrets) wait_timeout=300s ;;
+    openbao)          wait_timeout=600s ;;
+  esac
+  log_info "Waiting for application/${substrate} operationState.phase=Succeeded (up to ${wait_timeout})..."
   ssh $SSH_OPTS root@"$VM_IP" \
-    "kubectl -n argocd wait --for=jsonpath='{.status.health.status}'=Healthy --timeout=300s application/${substrate}" \
-    || log_warn "application/${substrate} not Healthy within 5min — re-run provision or inspect: kubectl -n argocd describe application ${substrate}"
+    "kubectl -n argocd wait --for=jsonpath='{.status.operationState.phase}'=Succeeded --timeout=${wait_timeout} application/${substrate}" \
+    || phase_5b_timeout "application/${substrate} first sync did not complete"
+  if (( SECONDS - PHASE_5B_START > PHASE_5B_BUDGET_SECS )); then
+    phase_5b_timeout "wall-clock budget exhausted after application/${substrate} wait"
+  fi
 done
 
 # Wait for ExternalSecret + ClusterSecretStore CRDs to be Established before
-# 5b.5 below applies the ClusterSecretStore CR. Argo Healthy implies CRDs
-# applied, but Established is a separate k8s condition — wait explicitly.
+# 5b.5 below applies the ClusterSecretStore CR. Argo Succeeded implies the
+# CRD manifests were applied; Establishment is a separate API-server loop
+# that can lag briefly. Bumped 120s → 300s for that lag plus headroom.
 log_info "Waiting for ESO CRDs to register..."
-ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
-  || log_warn "ESO CRDs not yet Established; Phase 6 may fail (TRANSITION_SAFE: re-run provision)."
+ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=300s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
+  || phase_5b_timeout "ESO CRDs not Established"
 
-# Wait for the openbao-0 pod to exist + be running. NOT Ready — sealed pods
+# Wait for the openbao-0 pod to exist + be Running. NOT Ready — sealed pods
 # are Running but not Ready. The chart's readiness probe gates on unsealed
 # status; the pod is functional for init/unseal once it's Running.
-log_info "Waiting for openbao-0 pod to be Running (sealed but accepting init)..."
+# Bumped from 60×2s=120s to 60×10s=600s. StatefulSet pod create + PVC bind
+# + first image pull is realistically 3-5min on GHA-runner-network k3s; the
+# previous 120s budget was flake-by-design.
+log_info "Waiting for openbao-0 pod to be Running (sealed but accepting init, up to 600s)..."
 ssh $SSH_OPTS root@"$VM_IP" '
   for i in $(seq 1 60); do
     phase=$(kubectl -n openbao get pod openbao-0 -o jsonpath="{.status.phase}" 2>/dev/null || echo "")
     [[ "$phase" == "Running" ]] && exit 0
-    sleep 2
+    sleep 10
   done
-  echo "openbao-0 did not reach Running phase within 120s" >&2
+  echo "openbao-0 did not reach Running phase within 600s" >&2
   exit 1
-'
+' || phase_5b_timeout "openbao-0 not Running"
+if (( SECONDS - PHASE_5B_START > PHASE_5B_BUDGET_SECS )); then
+  phase_5b_timeout "wall-clock budget exhausted after openbao-0 Running wait"
+fi
 
 # ── 5b.2 Init + unseal (idempotent — Shamir 1-of-1 default) ───────────────
 OPENBAO_KEY_SHARES="${OPENBAO_KEY_SHARES:-1}"
