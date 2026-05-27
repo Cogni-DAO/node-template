@@ -310,8 +310,15 @@ log_info "COGNI_NODE_ENDPOINTS (derived from catalog): ${COGNI_NODE_ENDPOINTS}"
 # DATABASE_URLs (constructed from parts — same derivation as setup-secrets.ts)
 # DATABASE_URLs use VM_IP placeholder — replaced after Phase 3 when IP is known.
 # Inside k8s pods, 127.0.0.1 is the pod's loopback, NOT the host.
-DATABASE_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@VM_IP_PLACEHOLDER:5432/${PRIMARY_NODE_DB}"
-DATABASE_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@VM_IP_PLACEHOLDER:5432/${PRIMARY_NODE_DB}"
+#
+# sslmode=disable: the Postgres that backs the k8s app pods runs in the
+# Compose-infra stack on the VM host (no in-cluster TLS termination). The
+# postgres-js driver defaults to "prefer TLS"; against a non-TLS server it
+# surfaces as a connect-time error and /readyz fails 503 on a cold-start.
+# Forks that front Postgres with TLS (cert-manager + pgbouncer) override
+# this seed value. Tracked in bug.0446 H10.
+DATABASE_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@VM_IP_PLACEHOLDER:5432/${PRIMARY_NODE_DB}?sslmode=disable"
+DATABASE_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@VM_IP_PLACEHOLDER:5432/${PRIMARY_NODE_DB}?sslmode=disable"
 
 log_info "All secrets loaded from .env.${DEPLOY_ENV}"
 
