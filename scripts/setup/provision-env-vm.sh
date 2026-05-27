@@ -764,6 +764,25 @@ for target in "${ALL_TARGETS[@]}"; do
     "$overlay_file"
   rm -f "${overlay_file}.bak"
   log_info "  ${target} → ${boot_tag}"
+
+  # Migrator placeholder (bug.0446 H8). Derive boot tag by replacing the
+  # runner suffix with the migrator suffix from the same catalog entry, then
+  # sed-rewrite the parallel placeholder declared in the overlay's images
+  # block. Skipped silently when migrator_tag_suffix is absent (service-type
+  # targets like scheduler-worker).
+  app_suffix=$(yq -N '.image_tag_suffix // ""' "$catalog_file" 2>/dev/null)
+  migrator_suffix=$(yq -N '.migrator_tag_suffix // ""' "$catalog_file" 2>/dev/null)
+  if [[ -n "$migrator_suffix" && "$migrator_suffix" != "null" \
+        && -n "$app_suffix" && "$app_suffix" != "null" ]]; then
+    # boot_tag ends with app_suffix (e.g. -node-template); swap to migrator
+    # suffix (e.g. -node-template-migrate) to derive the migrator boot tag.
+    migrator_boot_tag="${boot_tag%${app_suffix}}${migrator_suffix}"
+    migrator_placeholder="${OVERLAY_DIR}-placeholder${migrator_suffix}"
+    sed -i.bak -E "s|newTag: \"${migrator_placeholder}\"|newTag: \"${migrator_boot_tag}\"|g" \
+      "$overlay_file"
+    rm -f "${overlay_file}.bak"
+    log_info "  ${target} migrator → ${migrator_boot_tag}"
+  fi
 done
 
 cd "$DEPLOY_TMP"
