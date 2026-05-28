@@ -840,11 +840,15 @@ scp $SSH_OPTS "$REPO_ROOT/infra/images/litellm/cogni_callbacks.py" root@"$VM_IP"
 # Write .env files
 log_info "Writing .env files..."
 
+# NODE_UPSTREAM points Caddy at the k3s NodePort on the host. Single-node
+# fork: one site block, one upstream (bug.5001). Multi-node forks add
+# additional NODE_UPSTREAM_<slug> blocks rather than reintroducing the
+# multi-key pattern. Port is catalog-driven (catalog::node_port is the
+# canonical source — node-template ships 30000).
+NODE_PORT_FROM_CATALOG=$(yq -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/node-template.yaml")
 ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-edge/.env << 'ENVEOF'
 DOMAIN=${DOMAIN}
-OPERATOR_UPSTREAM=host.docker.internal:30000
-POLY_UPSTREAM=host.docker.internal:30100
-RESY_UPSTREAM=host.docker.internal:30300
+NODE_UPSTREAM=host.docker.internal:${NODE_PORT_FROM_CATALOG}
 ENVEOF"
 
 # All required vars must be in .env — Docker Compose validates ALL services at parse time,

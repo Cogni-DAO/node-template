@@ -15,7 +15,7 @@ www.{$DOMAIN} {
   redir https://{$DOMAIN}{uri} permanent
 }
 
-# ── Single-node fork (node-template) → k3s NodePort 30200 ───────────────
+# ── Single-node fork (node-template) → k3s NodePort 30000 ───────────────
 # bug.5001: this file used to carry separate operator / poly / resy site
 # blocks with their own {$*_DOMAIN} keys. On single-node forks, the unused
 # *_DOMAIN env vars render as bare `{` site openers → Caddy parser reads
@@ -23,12 +23,16 @@ www.{$DOMAIN} {
 # Single-node has exactly one domain, exactly one upstream — collapse to
 # one site block. Multi-node forks should add additional blocks per node
 # rather than reintroduce the empty-key pattern.
+#
+# Default upstream port is 30000 to match infra/catalog/node-template.yaml
+# ::node_port — that's the SSOT. provision-env-vm.sh derives NODE_UPSTREAM
+# from the same catalog field and writes it into /opt/cogni-template-edge/.env.
 {$DOMAIN} {
   encode zstd gzip
 
   @public path /api/v1/public/*
   handle @public {
-    reverse_proxy {$NODE_UPSTREAM:host.docker.internal:30200} {
+    reverse_proxy {$NODE_UPSTREAM:host.docker.internal:30000} {
       header_up X-Real-IP {remote_host}
       transport http {
         response_header_timeout 10s
@@ -36,7 +40,7 @@ www.{$DOMAIN} {
     }
   }
 
-  reverse_proxy {$NODE_UPSTREAM:host.docker.internal:30200}
+  reverse_proxy {$NODE_UPSTREAM:host.docker.internal:30000}
 
   log {
     format json
