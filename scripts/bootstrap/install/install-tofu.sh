@@ -35,20 +35,37 @@ install_brew_package() {
     fi
 }
 
-# Install OpenTofu
+# Install OpenTofu. The binary is `tofu`, not `opentofu` — check by the
+# binary name. The previous version checked `command -v opentofu` and
+# silently exited 0 on Linux, leaving `command -v tofu` to fail at the
+# next step of the workflow.
 if [[ "$OSTYPE" == "darwin"* ]]; then
-    # Check for Homebrew
     if ! check_command brew; then
         log_warn "Homebrew not found. Please install Homebrew first."
         exit 1
     fi
-    
-    install_brew_package opentofu
+    if ! check_command tofu; then
+        log_info "Installing OpenTofu via Homebrew..."
+        brew install opentofu
+    fi
 else
-    if ! check_command opentofu; then
-        log_warn "Non-macOS system detected. Please install OpenTofu manually:"
-        log_warn "- OpenTofu: https://opentofu.org/docs/intro/install/"
+    # Linux (GHA runners + dev VMs): official OpenTofu standalone installer.
+    # GHA ubuntu-latest runs as root → installs to /usr/local/bin cleanly.
+    if ! check_command tofu; then
+        log_info "Installing OpenTofu via official standalone installer..."
+        TMP_INSTALLER=$(mktemp)
+        curl --proto '=https' --tlsv1.2 -fsSL \
+            https://get.opentofu.org/install-opentofu.sh -o "$TMP_INSTALLER"
+        chmod +x "$TMP_INSTALLER"
+        "$TMP_INSTALLER" --install-method standalone
+        rm -f "$TMP_INSTALLER"
     fi
 fi
 
-log_info "✅ OpenTofu installation complete!"
+if ! check_command tofu; then
+    log_warn "OpenTofu install attempted but \`tofu\` is still not on PATH."
+    log_warn "Verify https://opentofu.org/docs/intro/install/ for your platform."
+    exit 1
+fi
+
+log_info "✅ OpenTofu installation complete: $(tofu version | head -n1)"
