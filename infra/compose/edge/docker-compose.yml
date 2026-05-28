@@ -25,11 +25,12 @@ services:
     environment:
       - DOMAIN=${DOMAIN}
       # Single-node fork: Caddy reaches the k3s pod via the host NodePort
-      # (base/node-app service binds 30200 by overlay convention). Override
-      # via .env if a fork uses a different node port. Multi-block *_DOMAIN
-      # / *_UPSTREAM env vars removed in bug.5001 cleanup — the Caddyfile
-      # no longer references them.
-      - NODE_UPSTREAM=${NODE_UPSTREAM:-host.docker.internal:30200}
+      # (catalog::node_port — node-template ships 30000). Override via .env
+      # if a fork uses a different node port. provision-env-vm.sh writes
+      # NODE_UPSTREAM into .env at bootstrap, derived from the same catalog
+      # field. Multi-block *_DOMAIN / *_UPSTREAM env vars removed in bug.5001
+      # cleanup — the Caddyfile no longer references them.
+      - NODE_UPSTREAM=${NODE_UPSTREAM:-host.docker.internal:30000}
     volumes:
       - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

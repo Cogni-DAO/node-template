@@ -63,6 +63,12 @@ RUN --mount=type=cache,id=next-cache-node-template,target=/app/nodes/node-templa
 FROM base AS migrator
 WORKDIR /app
 
+# pnpm-installed binaries (tsx, drizzle-kit) live in node_modules/.bin which
+# is not on the alpine default PATH. Without this prepend the CMD below — and
+# any k8s init container reusing this image with `command: [tsx, ...]` — fail
+# with `exec: "tsx": executable file not found in $PATH`. bug.0446 H8 follow-up.
+ENV PATH="/app/node_modules/.bin:${PATH}"
+
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/nodes/node-template/drizzle.config.ts ./nodes/node-template/drizzle.config.ts
@@ -94,15 +100,11 @@ COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/.next/sta
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/.next/static ./nodes/node-template/app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/public ./nodes/node-template/app/public
 
-# Migrator entrypoint — bundled into the runner image so the k8s Deployment
-# init container (infra/k8s/base/node-app/deployment.yaml) can run
-# `node /app/nodes/node-template/app/migrate.mjs /app/nodes/node-template/app/migrations`
-# without pulling a second image. drizzle-orm/postgres-js + postgres are
-# already in the traced standalone node_modules (next.config.ts lists both
-# under serverExternalPackages, so the trace includes the full packages).
-# Tracked in bug.0446 H8a.
-COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate.mjs ./nodes/node-template/app/migrate.mjs
-COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/src/adapters/server/db/migrations ./nodes/node-template/app/migrations
+# Migrations live in the `migrator` stage (built/pushed as a separate image:
+# ghcr.io/cogni-dao/cogni-node-template-migrate). The k8s Deployment's init
+# container pulls that image and runs drizzle-kit migrate against the app DB.
+# Runner stays lean — Next.js standalone trace doesn't reliably resolve
+# `drizzle-orm` via ESM for an inlined migrate.mjs (bug.0446 H8 cascade).
 
 # Repo-spec: DAO config (node_id, chain, governance). Updated every CI build.
 COPY --from=builder --chown=nextjs:nodejs /app/.cogni ./.cogni

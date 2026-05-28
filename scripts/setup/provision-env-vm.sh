@@ -402,7 +402,17 @@ log_info "DATABASE_URLs updated with VM IP: $VM_IP"
 cd "$REPO_ROOT"
 
 SSH_KEY="$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
-SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
+# ConnectTimeout=10 + ConnectionAttempts=1: bound the connect phase to 10s
+# and refuse TCP SYN retries. Default OpenSSH retries SYN for ~2min before
+# giving up, which on a dropped-packet network (Cherry VM still booting,
+# firewall not yet open, transient ISP loss) causes the Phase 4 wait loop
+# to silently consume the workflow's full 60-min budget — exactly the
+# failure signature on PR #46's first validator run
+# (https://github.com/i-am-coco/node-template/actions/runs/26473976287,
+# 60-min wall-clock = timeout = cancelled).
+# ServerAliveInterval/CountMax govern an established session; ConnectTimeout
+# governs the dial. Both apply.
+SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ConnectTimeout=10 -o ConnectionAttempts=1 -o ServerAliveInterval=15 -o ServerAliveCountMax=12"
 
 # ══════════════════════════════════════════════════════════════
 # Phase 4: Wait for cloud-init bootstrap
@@ -410,9 +420,42 @@ SSH_OPTS="-i $SSH_KEY -o StrictHostKeyChecking=no -o ServerAliveInterval=15 -o S
 # Clear stale host key — Cherry reuses IPs across VM recreations
 ssh-keygen -R "$VM_IP" 2>/dev/null || true
 
-log_step "Phase 4: Wait for bootstrap (~3-5 min)"
+log_step "Phase 4: Wait for bootstrap (~3-5 min, hard cap 10 min wall-clock)"
 
-for attempt in $(seq 1 60); do
+# Wall-clock budget — the previous `for attempt in $(seq 1 60); sleep 10`
+# pattern claimed "10 min" but each iteration made TWO ssh calls; with
+# OpenSSH's default ~2-min TCP SYN retry on dropped packets, one stalled
+# iteration consumed ~4 min and the whole loop overran the workflow's
+# 60-min timeout (see SSH_OPTS comment above). ConnectTimeout=10 bounds
+# each ssh dial to 10s; the budget guard below bounds the outer loop
+# regardless of how many iterations fit.
+PHASE_4_BUDGET_SECS=600
+PHASE_4_START=$SECONDS
+attempt=0
+while true; do
+  attempt=$((attempt + 1))
+  elapsed=$(( SECONDS - PHASE_4_START ))
+  if (( elapsed > PHASE_4_BUDGET_SECS )); then
+    log_error "Bootstrap did not complete within ${PHASE_4_BUDGET_SECS}s wall-clock (attempt=${attempt})."
+    # One diagnostic SSH with hard-bounded timeout. Distinguishes
+    # "VM still booting, just slow" from "packets dropped, VM unreachable" —
+    # the former produces log output, the latter times out the diagnostic too.
+    log_info "Attempting diagnostic SSH (10s budget) to dump VM bootstrap state..."
+    set +e
+    ssh -i "$SSH_KEY" \
+        -o StrictHostKeyChecking=no \
+        -o ConnectTimeout=10 \
+        -o ConnectionAttempts=1 \
+        root@"$VM_IP" \
+        '{ test -r /var/log/cogni-bootstrap.log && tail -100 /var/log/cogni-bootstrap.log; } 2>&1 || { test -r /var/log/cloud-init-output.log && tail -100 /var/log/cloud-init-output.log; } 2>&1 || echo "(neither log readable on VM)"'
+    diag_rc=$?
+    set -e
+    if [[ $diag_rc -ne 0 ]]; then
+      log_warn "  diagnostic SSH itself failed (rc=${diag_rc}) — VM likely unreachable (network drop, not slow bootstrap)."
+    fi
+    log_error "SSH in to debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
+    exit 1
+  fi
   if ssh $SSH_OPTS root@"$VM_IP" 'test -f /var/lib/cogni/bootstrap.ok' 2>/dev/null; then
     log_info "Bootstrap complete!"
     ssh $SSH_OPTS root@"$VM_IP" 'cat /var/lib/cogni/bootstrap.ok'
@@ -423,14 +466,11 @@ for attempt in $(seq 1 60); do
     ssh $SSH_OPTS root@"$VM_IP" 'cat /var/lib/cogni/bootstrap.fail; tail -50 /var/log/cogni-bootstrap.log'
     exit 1
   fi
-  if [[ $attempt -eq 60 ]]; then
-    log_error "Bootstrap did not complete after 10 minutes."
-    log_error "SSH in to debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
-    exit 1
-  fi
-  # Show progress every 30s
+  # Show progress every ~30s (3 iterations; iterations are bounded by
+  # ConnectTimeout=10 + sleep 10 = 10-30s, so logs land roughly every minute
+  # in the worst case where every ssh dial times out).
   if (( attempt % 3 == 0 )); then
-    log_info "  Waiting... (${attempt}0s elapsed)"
+    log_info "  Waiting... (${elapsed}s elapsed of ${PHASE_4_BUDGET_SECS}s budget, attempt=${attempt})"
   fi
   sleep 10
 done
@@ -480,7 +520,34 @@ fi
 # Phase 4b: Create/update DNS records
 # ══════════════════════════════════════════════════════════════
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
-  log_step "Phase 4b: Create DNS records"
+  log_step "Phase 4b: Create DNS records + set Cloudflare SSL mode"
+
+  # ── Zone SSL mode = Full ─────────────────────────────────────────────
+  # Cloudflare proxies our DNS (proxied:true below). Browsers terminate
+  # TLS at Cloudflare's edge (Universal SSL — always trusted). The
+  # origin (Caddy) uses self-signed certs via `tls internal`; Cloudflare
+  # "Full" SSL mode talks HTTPS to origin but trusts any cert. This
+  # eliminates LE entirely + the 50-certs/week/domain rate limit that
+  # blocked iterating bootstrap across many provisions.
+  #
+  # Token needs Zone:Zone Settings:Edit scope (in addition to Zone:DNS:Edit
+  # the bootstrap floor already requires). Failure here surfaces the gap
+  # clearly rather than letting Caddy hit a downstream TLS error.
+  SSL_RESP=$(curl -sS -X PATCH \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/settings/ssl" \
+    -d '{"value":"full"}')
+  SSL_OK=$(echo "$SSL_RESP" | python3 -c 'import json,sys; r=json.load(sys.stdin); print("OK" if r.get("success") else r.get("errors",[{}])[0].get("message","FAIL"))' 2>/dev/null || echo "FAIL")
+  if [[ "$SSL_OK" != "OK" ]]; then
+    log_error "Failed to set Cloudflare SSL mode to 'full': $SSL_OK"
+    log_error "Your CLOUDFLARE_API_TOKEN needs the Zone:Zone Settings:Edit scope."
+    log_error "Mint a token at https://dash.cloudflare.com/profile/api-tokens with:"
+    log_error "  Permissions: Zone:DNS:Edit + Zone:Zone Settings:Edit"
+    log_error "  Zone Resources: Include — Specific zone — <your zone>"
+    exit 1
+  fi
+  log_info "Cloudflare SSL mode → full (zone $CLOUDFLARE_ZONE_ID)"
 
   # FQDNs come from two sources (B2):
   #   1. DOMAIN — the apex/operator-host (Caddy listens here for TLS)
@@ -507,6 +574,19 @@ if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; t
     else
       sub="${fqdn%.cognidao.org}"
     fi
+    # Proxy state per record:
+    #   • Browser-facing (DOMAIN apex + per-node public URLs) → proxied=true
+    #     so Cloudflare terminates TLS at the edge with Universal SSL
+    #     (browser-trusted always; no LE involvement).
+    #   • VM_DNS_HOST → proxied=false so SSH (port 22) + diagnostic NodePort
+    #     access (port 30000+) still reach the origin directly. Cloudflare
+    #     proxy only forwards 80/443 — non-standard ports get dropped on
+    #     proxied records.
+    if [[ "$fqdn" == "$VM_DNS_HOST" ]]; then
+      proxied="false"
+    else
+      proxied="true"
+    fi
     EXISTING=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
       "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?name=${fqdn}&type=A" \
       | python3 -c "import json,sys; [print(x['id']) for x in json.load(sys.stdin).get('result',[])]" 2>/dev/null)
@@ -516,9 +596,9 @@ if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; t
     done
     RESULT=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
       "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
-      -d "{\"type\":\"A\",\"name\":\"${sub}\",\"content\":\"${VM_IP}\",\"ttl\":300,\"proxied\":false}")
+      -d "{\"type\":\"A\",\"name\":\"${sub}\",\"content\":\"${VM_IP}\",\"ttl\":300,\"proxied\":${proxied}}")
     OK=$(echo "$RESULT" | python3 -c 'import json,sys; print("OK" if json.load(sys.stdin).get("success") else "FAIL")' 2>/dev/null)
-    log_info "  ${fqdn} → ${VM_IP}: $OK"
+    log_info "  ${fqdn} → ${VM_IP} (proxied=${proxied}): $OK"
   done
 else
   log_warn "Skipping DNS — CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID not set"
@@ -530,15 +610,34 @@ fi
 # issue until the hourly window resets. See .claude/skills/dns-ops/SKILL.md.
 
 # ══════════════════════════════════════════════════════════════
-# Phase 4b.5: Seed missing deploy/* branches in the fork from main
+# Phase 4b.5: Seed (or content-align) deploy/* branches in the fork
 # ══════════════════════════════════════════════════════════════
 # B1 (deploy machinery) — node-template ships only `main`; per-node
 # deploy branches don't exist until first promote-and-deploy run. But
 # Phase 4c (env-state push) AND the AppSet generators (Phase 7) both
-# need them present. Seed from main's HEAD SHA via `gh api /git/refs`
-# when missing. Idempotent: existing branches are left alone. Requires
-# GITHUB_ADMIN_PAT (set by bootstrap.sh) — exported as GH_TOKEN.
-log_step "Phase 4b.5: Seed deploy/* branches in fork (idempotent)"
+# need them present. Seed from the operator's local HEAD SHA via
+# `gh api /git/refs` when missing. Requires GITHUB_ADMIN_PAT (set by
+# bootstrap.sh) — exported as GH_TOKEN.
+#
+# Per-env drift policy (validator's third run surfaced this — an
+# existing branch at a stale pre-PR-#42 SHA was missing the
+# infra/k8s/argocd/{openbao,external-secrets}/ dirs Argo Applications
+# reference, producing a downstream ComparisonError):
+#   * Branch absent             → create at SEED_SHA.
+#   * Branch == SEED_SHA        → no-op (true idempotency).
+#   * Branch != SEED_SHA AND
+#     DEPLOY_ENV is candidate-* → force-update to SEED_SHA. Experiment
+#                                  slots reset cleanly; Phase 4c re-writes
+#                                  env-state.yaml downstream so per-run
+#                                  drift self-heals.
+#   * Branch != SEED_SHA AND
+#     DEPLOY_ENV is preview/
+#     production               → FAIL HARD. Persistent slots must not
+#                                  be blindly stomped (history loss).
+#                                  Operator merges SEED_SHA's content
+#                                  forward OR deletes the branch and
+#                                  re-runs.
+log_step "Phase 4b.5: Seed deploy/* branches in fork (content-aware idempotent)"
 
 # bootstrap.sh writes GHCR_DEPLOY_TOKEN=GITHUB_ADMIN_PAT into .env.operator;
 # this script reads it as GHCR_TOKEN. Use whichever the caller set.
@@ -574,10 +673,42 @@ if [[ -n "$SEED_TOKEN" ]]; then
     BRANCHES_TO_SEED+=("deploy/${DEPLOY_ENV}-${target}")
   done
   for ref in "${BRANCHES_TO_SEED[@]}"; do
-    if gh api "repos/${GH_REPO}/branches/${ref}" >/dev/null 2>&1; then
-      log_info "  ${ref} — already exists"
+    existing_sha=$(gh api "repos/${GH_REPO}/branches/${ref}" --jq '.commit.sha' 2>/dev/null || echo "")
+    if [[ -n "$existing_sha" ]]; then
+      if [[ "$existing_sha" == "$SEED_SHA" ]]; then
+        log_info "  ${ref} — already at seed SHA ${SEED_SHA:0:8}"
+        continue
+      fi
+      # Branch exists but at a different SHA. Resolution depends on env.
+      case "$DEPLOY_ENV" in
+        candidate-*)
+          log_warn "  ${ref} — exists at ${existing_sha:0:8}, force-updating to ${SEED_SHA:0:8} (${SEED_SRC})"
+          if gh api -X PATCH "repos/${GH_REPO}/git/refs/heads/${ref}" \
+              -f "sha=${SEED_SHA}" \
+              -F force=true >/dev/null 2>&1; then
+            log_info "  ${ref} — force-updated"
+          else
+            log_error "  ${ref} — FAILED to force-update (check PAT push permission)"
+            exit 1
+          fi
+          ;;
+        preview|production)
+          log_error "  ${ref} — exists at ${existing_sha:0:8}, diverged from seed ${SEED_SHA:0:8} (${SEED_SRC})"
+          log_error "    candidate-* slots auto-resolve via force-update; ${DEPLOY_ENV} does not."
+          log_error "    Reconcile manually then re-run, e.g.:"
+          log_error "      git fetch origin ${ref} && git merge ${SEED_SHA} && git push origin ${ref}"
+          log_error "    Or delete + re-seed (destroys env-state Phase 4c wrote previously):"
+          log_error "      gh api -X DELETE repos/${GH_REPO}/git/refs/heads/${ref}"
+          exit 1
+          ;;
+        *)
+          log_error "  ${ref} — exists at ${existing_sha:0:8}, diverged. Unknown DEPLOY_ENV='${DEPLOY_ENV}', refusing to force-update."
+          exit 1
+          ;;
+      esac
       continue
     fi
+    # Branch absent → create at SEED_SHA.
     if gh api -X POST "repos/${GH_REPO}/git/refs" \
         -f "ref=refs/heads/${ref}" \
         -f "sha=${SEED_SHA}" >/dev/null 2>&1; then
@@ -673,6 +804,25 @@ for target in "${ALL_TARGETS[@]}"; do
     "$overlay_file"
   rm -f "${overlay_file}.bak"
   log_info "  ${target} → ${boot_tag}"
+
+  # Migrator placeholder (bug.0446 H8). Derive boot tag by replacing the
+  # runner suffix with the migrator suffix from the same catalog entry, then
+  # sed-rewrite the parallel placeholder declared in the overlay's images
+  # block. Skipped silently when migrator_tag_suffix is absent (service-type
+  # targets like scheduler-worker).
+  app_suffix=$(yq -N '.image_tag_suffix // ""' "$catalog_file" 2>/dev/null)
+  migrator_suffix=$(yq -N '.migrator_tag_suffix // ""' "$catalog_file" 2>/dev/null)
+  if [[ -n "$migrator_suffix" && "$migrator_suffix" != "null" \
+        && -n "$app_suffix" && "$app_suffix" != "null" ]]; then
+    # boot_tag ends with app_suffix (e.g. -node-template); swap to migrator
+    # suffix (e.g. -node-template-migrate) to derive the migrator boot tag.
+    migrator_boot_tag="${boot_tag%${app_suffix}}${migrator_suffix}"
+    migrator_placeholder="${OVERLAY_DIR}-placeholder${migrator_suffix}"
+    sed -i.bak -E "s|newTag: \"${migrator_placeholder}\"|newTag: \"${migrator_boot_tag}\"|g" \
+      "$overlay_file"
+    rm -f "${overlay_file}.bak"
+    log_info "  ${target} migrator → ${migrator_boot_tag}"
+  fi
 done
 
 cd "$DEPLOY_TMP"
@@ -730,11 +880,25 @@ scp $SSH_OPTS "$REPO_ROOT/infra/images/litellm/cogni_callbacks.py" root@"$VM_IP"
 # Write .env files
 log_info "Writing .env files..."
 
+# NODE_UPSTREAM points Caddy at the k3s NodePort on the host. Single-node
+# fork: one site block, one upstream (bug.5001). Multi-node forks add
+# additional NODE_UPSTREAM_<slug> blocks rather than reintroducing the
+# multi-key pattern. Port is catalog-driven (catalog::node_port is the
+# canonical source — node-template ships 30000).
+NODE_PORT_FROM_CATALOG=$(yq -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/node-template.yaml")
+# ACME issuer: default LE PROD for every env. Browser-trusted HTTPS is
+# the contract — candidate-a / preview / production all serve real
+# traffic. The caller may override via ACME_CA in the dispatching env
+# (e.g. validators iterating against a shared test domain may set it
+# to https://acme-staging-v02.api.letsencrypt.org/directory to avoid
+# the production-CA 50-certs/week/registered-domain rate limit).
+# Proper fix for rate-limit + iteration is cert persistence via
+# Cloudflare Origin CA — Walk-tier on proj.agentic-fork-bootstrap.
+ACME_CA_URL="${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}"
 ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-edge/.env << 'ENVEOF'
 DOMAIN=${DOMAIN}
-OPERATOR_UPSTREAM=host.docker.internal:30000
-POLY_UPSTREAM=host.docker.internal:30100
-RESY_UPSTREAM=host.docker.internal:30300
+NODE_UPSTREAM=host.docker.internal:${NODE_PORT_FROM_CATALOG}
+ACME_CA=${ACME_CA_URL}
 ENVEOF"
 
 # All required vars must be in .env — Docker Compose validates ALL services at parse time,
@@ -861,11 +1025,72 @@ ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CON
 # state.
 log_step "Phase 5b: Install + initialize OpenBao + ESO"
 
+# Wall-clock budget — same shape as Phase 4. Phase 5b's individual kubectl
+# waits compound (Argo sync + CRD Established + pod Running); without an
+# outer guard, a slow-but-not-stuck cluster could silently consume the
+# workflow's full budget. Validator run 26481178062 (i-am-coco fork) failed
+# Phase 5b inside ~12 min wall-clock but for a different reason: the prior
+# Health.Status=Healthy wait false-positived in 9 seconds on a brand-new
+# Application (Argo defaults Health to "Healthy" vacuously when no resources
+# are tracked yet) → script proceeded against an unprepped cluster →
+# cascade failure. Strengthen the Application wait + bump generous timeouts
+# + this wall-clock guard so the next iteration fails LOUDLY at a real
+# boundary rather than silently at a stale signal.
+PHASE_5B_BUDGET_SECS=900
+PHASE_5B_START=$SECONDS
+
+# Diagnostic dump on Phase 5b timeout — same shape as the Phase 4 one. The
+# substrate side has three independent state surfaces worth capturing
+# (Argo Application state, openbao namespace pod state, recent events
+# across the cluster); together they distinguish "Argo can't render"
+# vs "render OK but pod can't pull image" vs "all OK but slow".
+phase_5b_timeout() {
+  local reason="$1"
+  local elapsed=$(( SECONDS - PHASE_5B_START ))
+  log_error "Phase 5b failed (${reason}) — elapsed=${elapsed}s of ${PHASE_5B_BUDGET_SECS}s budget."
+  log_info "Attempting Phase 5b diagnostic dump (10s ssh budget)..."
+  set +e
+  ssh -i "$SSH_KEY" \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=10 \
+      -o ConnectionAttempts=1 \
+      root@"$VM_IP" '
+        echo "=== argocd applications ==="
+        kubectl -n argocd get applications -o wide 2>&1
+        echo
+        echo "=== application/openbao describe (tail) ==="
+        kubectl -n argocd describe application openbao 2>&1 | tail -80
+        echo
+        echo "=== application/external-secrets describe (tail) ==="
+        kubectl -n argocd describe application external-secrets 2>&1 | tail -80
+        echo
+        echo "=== openbao namespace state ==="
+        kubectl -n openbao get all 2>&1
+        echo
+        echo "=== openbao-0 describe (tail) ==="
+        kubectl -n openbao describe pod openbao-0 2>&1 | tail -60
+        echo
+        echo "=== external-secrets namespace state ==="
+        kubectl -n external-secrets get all 2>&1
+        echo
+        echo "=== recent events (sorted, all namespaces, last 50) ==="
+        kubectl get events --sort-by=.lastTimestamp -A 2>&1 | tail -50
+      '
+  local diag_rc=$?
+  set -e
+  if [[ $diag_rc -ne 0 ]]; then
+    log_warn "  diagnostic SSH itself failed (rc=${diag_rc}) — VM may be unreachable."
+  fi
+  log_error "SSH in to debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP"
+  exit 1
+}
+
 # ── 5b.1 Register Argo Applications for the substrate ─────────────────────
 # Substitute ${FORK_REPO} + ${DEPLOY_BRANCH} placeholders, apply the two
-# Application CRs into the argocd namespace, then wait for both to report
-# Healthy. Argo's repo-server clones the deploy branch, runs `kustomize build
-# --enable-helm` (per the bootstrap argocd-cm patch), and applies server-side.
+# Application CRs into the argocd namespace, then wait for both to complete
+# their first sync. Argo's repo-server clones the deploy branch, runs
+# `kustomize build --enable-helm` (per the bootstrap argocd-cm patch), and
+# applies server-side.
 SUBSTRATE_FORK_REPO="https://github.com/${GH_REPO}.git"
 for substrate in openbao external-secrets; do
   rendered=$(mktemp)
@@ -878,37 +1103,61 @@ for substrate in openbao external-secrets; do
   log_info "Applied Argo Application: ${substrate} (repo=${SUBSTRATE_FORK_REPO} branch=${DEPLOY_BRANCH})"
 done
 
-# Wait for both substrate Applications to reach Healthy. Argo's automated sync
-# kicks in on first reconciliation; Healthy = chart rendered + applied + all
-# resources Healthy. 5min timeout matches the prior `kubectl apply`+rollout
-# window plus Argo's first-sync overhead.
+# Wait for both substrate Applications to complete their first sync.
+# `operationState.phase=Succeeded` is picked over the previous
+# `health.status=Healthy` because the latter false-positives on a brand-new
+# Application CR (Argo defaults Health to "Healthy" vacuously when no
+# resources are tracked yet) — exactly the failure mode in validator run
+# 26481178062. The operationState field only populates after a real sync
+# operation runs, so this wait blocks until Argo has actually rendered,
+# applied, and reported success. Hard-fail (no `|| log_warn`) — if the
+# substrate sync hasn't completed, nothing downstream can succeed.
+#
+# Per-substrate timeouts: ESO is just a Deployment + CRDs (~2-3min real,
+# 5min budget); OpenBao is a StatefulSet + PVC bind + image pull
+# (~3-5min real, 10min budget — validator's previous 120s pod-Running
+# wait was the actual root failure of this signal).
 for substrate in external-secrets openbao; do
-  log_info "Waiting for application/${substrate} to be Healthy (up to 5min)..."
+  case "$substrate" in
+    external-secrets) wait_timeout=300s ;;
+    openbao)          wait_timeout=600s ;;
+  esac
+  log_info "Waiting for application/${substrate} operationState.phase=Succeeded (up to ${wait_timeout})..."
   ssh $SSH_OPTS root@"$VM_IP" \
-    "kubectl -n argocd wait --for=jsonpath='{.status.health.status}'=Healthy --timeout=300s application/${substrate}" \
-    || log_warn "application/${substrate} not Healthy within 5min — re-run provision or inspect: kubectl -n argocd describe application ${substrate}"
+    "kubectl -n argocd wait --for=jsonpath='{.status.operationState.phase}'=Succeeded --timeout=${wait_timeout} application/${substrate}" \
+    || phase_5b_timeout "application/${substrate} first sync did not complete"
+  if (( SECONDS - PHASE_5B_START > PHASE_5B_BUDGET_SECS )); then
+    phase_5b_timeout "wall-clock budget exhausted after application/${substrate} wait"
+  fi
 done
 
 # Wait for ExternalSecret + ClusterSecretStore CRDs to be Established before
-# 5b.5 below applies the ClusterSecretStore CR. Argo Healthy implies CRDs
-# applied, but Established is a separate k8s condition — wait explicitly.
+# 5b.5 below applies the ClusterSecretStore CR. Argo Succeeded implies the
+# CRD manifests were applied; Establishment is a separate API-server loop
+# that can lag briefly. Bumped 120s → 300s for that lag plus headroom.
 log_info "Waiting for ESO CRDs to register..."
-ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=120s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
-  || log_warn "ESO CRDs not yet Established; Phase 6 may fail (TRANSITION_SAFE: re-run provision)."
+ssh $SSH_OPTS root@"$VM_IP" "kubectl wait --for=condition=Established --timeout=300s crd/externalsecrets.external-secrets.io crd/clustersecretstores.external-secrets.io" \
+  || phase_5b_timeout "ESO CRDs not Established"
 
-# Wait for the openbao-0 pod to exist + be running. NOT Ready — sealed pods
+# Wait for the openbao-0 pod to exist + be Running. NOT Ready — sealed pods
 # are Running but not Ready. The chart's readiness probe gates on unsealed
 # status; the pod is functional for init/unseal once it's Running.
-log_info "Waiting for openbao-0 pod to be Running (sealed but accepting init)..."
+# Bumped from 60×2s=120s to 60×10s=600s. StatefulSet pod create + PVC bind
+# + first image pull is realistically 3-5min on GHA-runner-network k3s; the
+# previous 120s budget was flake-by-design.
+log_info "Waiting for openbao-0 pod to be Running (sealed but accepting init, up to 600s)..."
 ssh $SSH_OPTS root@"$VM_IP" '
   for i in $(seq 1 60); do
     phase=$(kubectl -n openbao get pod openbao-0 -o jsonpath="{.status.phase}" 2>/dev/null || echo "")
     [[ "$phase" == "Running" ]] && exit 0
-    sleep 2
+    sleep 10
   done
-  echo "openbao-0 did not reach Running phase within 120s" >&2
+  echo "openbao-0 did not reach Running phase within 600s" >&2
   exit 1
-'
+' || phase_5b_timeout "openbao-0 not Running"
+if (( SECONDS - PHASE_5B_START > PHASE_5B_BUDGET_SECS )); then
+  phase_5b_timeout "wall-clock budget exhausted after openbao-0 Running wait"
+fi
 
 # ── 5b.2 Init + unseal (idempotent — Shamir 1-of-1 default) ───────────────
 OPENBAO_KEY_SHARES="${OPENBAO_KEY_SHARES:-1}"
@@ -1287,6 +1536,59 @@ echo ""
 # ══════════════════════════════════════════════════════════════
 # Phase 9: Verify /readyz on all nodes (exit code = green/red)
 # ══════════════════════════════════════════════════════════════
+# Diagnostic dump on /readyz failure — same shape as the Phase 4 + 5b
+# helpers. The app tier has its own state surfaces worth capturing on a
+# RED outcome: pod conditions (Init:Error vs CrashLoopBackOff vs Pending),
+# the init-container's actual log (this is where bug.0446 H8a class
+# failures surface), ExternalSecret sync state (Invariant 12 — pods
+# fail loud when their secret is empty), the Secret's data keys
+# (NEVER values — only key NAMES, to surface missing-key wiring vs
+# missing-value cases), and recent events. Without this, validators
+# see a pod LIST and have to guess which surface to interrogate.
+phase_9_diagnostic() {
+  log_info "Attempting Phase 9 diagnostic dump (10s ssh budget)..."
+  set +e
+  ssh -i "$SSH_KEY" \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=10 \
+      -o ConnectionAttempts=1 \
+      root@"$VM_IP" "
+echo '=== pods (${K8S_NAMESPACE}) ==='
+kubectl -n ${K8S_NAMESPACE} get pods -o wide 2>&1
+echo
+echo '=== node-app pod describe (tail) ==='
+kubectl -n ${K8S_NAMESPACE} describe pod -l app.kubernetes.io/name=node-app 2>&1 | tail -80
+echo
+echo '=== node-app init (migrate) logs — prefer --previous, fallback current ==='
+pod=\$(kubectl -n ${K8S_NAMESPACE} get pod -l app.kubernetes.io/name=node-app -o name | head -1)
+kubectl -n ${K8S_NAMESPACE} logs \$pod -c migrate --tail=80 --previous 2>&1 || kubectl -n ${K8S_NAMESPACE} logs \$pod -c migrate --tail=80 2>&1
+echo
+echo '=== node-app main container logs (tail 80) ==='
+kubectl -n ${K8S_NAMESPACE} logs \$pod -c app --tail=80 --previous 2>&1 || kubectl -n ${K8S_NAMESPACE} logs \$pod -c app --tail=80 2>&1
+echo
+echo '=== scheduler-worker pod describe (tail) ==='
+kubectl -n ${K8S_NAMESPACE} describe pod -l app.kubernetes.io/name=scheduler-worker 2>&1 | tail -80
+echo
+echo '=== scheduler-worker logs (tail 80, prefer --previous) ==='
+sw=\$(kubectl -n ${K8S_NAMESPACE} get pod -l app.kubernetes.io/name=scheduler-worker -o name | head -1)
+kubectl -n ${K8S_NAMESPACE} logs \$sw --tail=80 --previous 2>&1 || kubectl -n ${K8S_NAMESPACE} logs \$sw --tail=80 2>&1
+echo
+echo '=== ExternalSecrets sync state ==='
+kubectl -n ${K8S_NAMESPACE} get externalsecret -o wide 2>&1
+echo
+echo '=== k8s Secret data keys (key NAMES only, never values) ==='
+kubectl -n ${K8S_NAMESPACE} get secret node-template-env-secrets -o jsonpath='{.data}' 2>&1 | jq 'keys' 2>&1 || echo '(secret not yet materialized by ESO)'
+echo
+echo '=== recent events (sorted, ${K8S_NAMESPACE}, last 40) ==='
+kubectl -n ${K8S_NAMESPACE} get events --sort-by=.lastTimestamp 2>&1 | tail -40
+"
+  local diag_rc=$?
+  set -e
+  if [[ $diag_rc -ne 0 ]]; then
+    log_warn "  diagnostic SSH itself failed (rc=${diag_rc}) — VM may be unreachable."
+  fi
+}
+
 log_step "Phase 9: Verify /readyz on all nodes (up to 5 min)"
 
 READYZ_OK=true
@@ -1322,6 +1624,7 @@ if [[ "$READYZ_OK" == "true" ]]; then
   exit 0
 else
   log_error "═══ SOME NODES FAILED /readyz — CANARY IS RED ═══"
+  phase_9_diagnostic
   log_error "Debug: ssh -i .local/${DEPLOY_ENV}-vm-key root@$VM_IP 'kubectl -n ${K8S_NAMESPACE} logs -l app.kubernetes.io/name=node-app --tail=20'"
   exit 1
 fi

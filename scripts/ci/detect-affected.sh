@@ -150,7 +150,14 @@ else
         break
         ;;
       nodes/node-template/*)
-        selection_reason="non-deployable-node-template-change:${path}"
+        # node-template's app source lives under nodes/node-template/. Its
+        # Dockerfile + k8s base manifests sit under `node-app` for historical
+        # reasons (cosmetic dir rename deferred — proj.agentic-fork-bootstrap
+        # Run-tier). A change here IS deployable: forks pin this image via
+        # infra/catalog/node-template.yaml::bootstrap_image_tag and need the
+        # rebuild on every source change. bug.0446 H8 cascade surfaced this.
+        add_target "node-template"
+        selection_reason="node-template-source-change:${path}"
         ;;
       *)
         for target in "${ALL_TARGETS[@]}"; do
@@ -161,6 +168,14 @@ else
             "infra/k8s/base/${target}/"*) add_target "$target" ;;
           esac
         done
+        # The node-template image's k8s base lives under infra/k8s/base/node-app/
+        # (deployment name = "node-app", catalog target = "node-template"); the
+        # generic loop above can't reconcile that name mismatch, so map
+        # explicitly. Without this, NODE_NAME / probes / image-reference edits
+        # in the base never trigger a node-template image rebuild.
+        case "$path" in
+          infra/k8s/base/node-app/*) add_target "node-template" ;;
+        esac
         ;;
     esac
   done <<< "$changed_paths"

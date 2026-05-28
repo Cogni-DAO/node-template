@@ -30,16 +30,20 @@ spec:
     spec:
       terminationGracePeriodSeconds: 30
       initContainers:
-        # Postgres migrations. Same image as `app` — runtime image bundles
-        # migrate.mjs + migrations under /app/nodes/$NODE_NAME/app/. Overlay's
-        # `images:` block patches both this and the main container image to the
-        # same per-PR digest. task.0370 step 1.
+        # Postgres migrations via the migrator stage (separate image:
+        # ghcr.io/cogni-dao/cogni-node-template-migrate). Its WORKDIR is
+        # /app with full node_modules (drizzle-kit + tsx + drizzle-orm)
+        # and the node's drizzle.config.ts at nodes/node-template/. Per-PR
+        # CI builds + pushes this stage alongside the runner; the overlay's
+        # `images:` block patches both image references to the same SHA.
+        # bug.0446 H8 — replaces the prior in-runner migrate.mjs attempt.
         - name: migrate
-          image: ghcr.io/cogni-dao/cogni-node-template:placeholder
+          image: ghcr.io/cogni-dao/cogni-node-template-migrate:placeholder
           command:
-            - /bin/sh
-            - -c
-            - exec node /app/nodes/$(NODE_NAME)/app/migrate.mjs /app/nodes/$(NODE_NAME)/app/migrations
+            - tsx
+            - node_modules/drizzle-kit/bin.cjs
+            - migrate
+            - --config=nodes/node-template/drizzle.config.ts
           envFrom:
             - configMapRef:
                 name: node-app-config

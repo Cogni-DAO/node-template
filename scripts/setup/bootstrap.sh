@@ -141,6 +141,43 @@ CLOUDFLARE_ZONE_NAME=$(printf '%s' "$ZONE_RESP" | jq -r '.result.name')
 }
 log "Cloudflare zone reachable: ${BOLD}${CLOUDFLARE_ZONE_NAME}${NC} (id ${CLOUDFLARE_ZONE_ID})"
 
+# Probe Zone:Zone Settings:Edit scope. provision-env-vm.sh Phase 4b PATCHes
+# zone settings/ssl → 'full' to enable the cloudflare-proxy + tls-internal
+# architecture. If the token only has DNS:Edit, Phase 4b fails AFTER the
+# Cherry VM has been provisioned and billed. Fail-fast here, before any
+# side effects, with a literal template the operator can copy/paste.
+SSL_PROBE_CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+  -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+  "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}/settings/ssl")
+if [[ "$SSL_PROBE_CODE" != "200" ]]; then
+  cat <<EOF >&2
+
+🛑 CLOUDFLARE_API_TOKEN is missing the Zone:Zone Settings:Edit scope.
+   (HTTP ${SSL_PROBE_CODE} from GET /zones/${CLOUDFLARE_ZONE_ID}/settings/ssl)
+
+Bootstrap PATCHes zone SSL mode to 'Full' at Phase 4b — that's the
+cloudflare-proxy + tls-internal architecture (see Step 6.2 of
+docs/runbooks/fork-quickstart.md).
+
+Fix (one-time):
+  1. Open https://dash.cloudflare.com/profile/api-tokens
+  2. Either edit the existing token, or create a new one ('Create Token'
+     → 'Get started' under 'Custom token').
+  3. Set permissions to BOTH:
+       • Zone — DNS — Edit
+       • Zone — Zone Settings — Edit
+  4. Zone Resources: Include — Specific zone — ${CLOUDFLARE_ZONE_NAME}
+  5. Save and copy the token.
+  6. Update the fork's GH env secret:
+       gh secret set CLOUDFLARE_API_TOKEN --repo <owner>/<repo> --env ${DEPLOY_ENV:-candidate-a}
+  7. Re-trigger provision-env.yml.
+
+EOF
+  err "Cloudflare token scope check failed. Aborting before VM provisioning."
+  exit 2
+fi
+log "Cloudflare token scope: DNS:Edit + Zone Settings:Edit ✓"
+
 FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
 if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
   # Auto-populate from Cloudflare API + auto-commit. Operator's .env.bootstrap
@@ -453,27 +490,14 @@ set_env_secret DATABASE_SERVICE_URL "postgresql://${APP_DB_SERVICE_USER}:${GEN[A
 # SSH key + age key → GitHub env (provision-env-vm.sh wrote them to .local/)
 set_env_secret SSH_DEPLOY_KEY "$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key")"
 
-# ── Phase 5: trigger deploy + watch ──────────────────────────────────────────
-step "Phase 5 · Dispatch promote-and-deploy + watch"
-gh workflow run promote-and-deploy.yml \
-  --repo "$GH_REPO" \
-  --ref main \
-  -f environment="$DEPLOY_ENV" >/dev/null
-log "Workflow dispatched. Tailing latest run…"
-sleep 4
-RUN_ID=$(gh run list --repo "$GH_REPO" --workflow promote-and-deploy.yml --limit 1 --json databaseId --jq '.[0].databaseId')
-log "Run ID: ${RUN_ID}"
-gh run watch "$RUN_ID" --repo "$GH_REPO" --exit-status
-
-# ── Phase 6: smoke check ─────────────────────────────────────────────────────
-step "Phase 6 · Smoke /readyz"
-sleep 5
-if curl -fsS -o /dev/null -w "%{http_code}" "https://${DOMAIN}/readyz" | grep -q 200; then
-  log "${GREEN}${BOLD}✓ ${DOMAIN} /readyz returned 200${NC}"
-else
-  warn "${DOMAIN} /readyz did not return 200 yet. DNS may still be propagating or Caddy is still obtaining its cert."
-  warn "Re-check in 2-5 min: curl -I https://${DOMAIN}/readyz"
-fi
+# Deploy + readyz verification happens inside provision-env-vm.sh:
+#   • Phase 7 applies the ApplicationSets — Argo reconciles deploy/* automatically
+#   • Phase 9 polls /readyz on each node with a 5-min budget and reports green/red
+# No further dispatch needed here. The legacy `gh workflow run
+# promote-and-deploy.yml -f environment=candidate-a` call belonged to a
+# pre-Argo-substrate architecture; that workflow only accepts preview |
+# production and returns HTTP 422 for candidate-a (bug.0446 post-green
+# blocker surfaced on validator run 26544140153).
 
 cat <<EOF
 

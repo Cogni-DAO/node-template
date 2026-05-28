@@ -126,6 +126,52 @@ build_target() {
     .
 }
 
+# Build the migrator stage if the Dockerfile defines one. Pushes to the
+# IMAGE_NAME_MIGRATOR package (bug.0344 split) with the catalog's
+# migrator_tag_suffix. Skipped silently for targets whose Dockerfile lacks
+# a `migrator` stage (scheduler-worker etc.) so callers can invoke this
+# unconditionally per target. Mirrors cogni monorepo's per-node migrator
+# pattern (pr-{N}-{sha}-{node}-migrate).
+build_migrator_target() {
+  local target="$1"
+  local migrator_tag="$2"
+
+  local dockerfile
+  dockerfile=$(yq -r ".dockerfile" "infra/catalog/${target}.yaml" 2>/dev/null || echo "")
+  if [ -z "$dockerfile" ] || [ "$dockerfile" = "null" ]; then
+    return 0
+  fi
+  if ! grep -qE '^FROM .* AS migrator' "$dockerfile" 2>/dev/null; then
+    return 0
+  fi
+
+  docker buildx build \
+    --platform "$PLATFORM" \
+    --file "$dockerfile" \
+    --target migrator \
+    --build-arg "BUILD_SHA=${git_sha}" \
+    --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY:-cogni-dao/node-template}" \
+    --label "org.opencontainers.image.revision=${git_sha}" \
+    --label "org.opencontainers.image.created=${build_timestamp}" \
+    --cache-from "type=gha,scope=build-${target}-migrate" \
+    --cache-to "type=gha,mode=max,scope=build-${target}-migrate" \
+    --tag "$migrator_tag" \
+    --push \
+    .
+}
+
+# Compute the migrator tag for a target. Returns empty string when the
+# catalog entry omits migrator_tag_suffix.
+resolve_migrator_tag() {
+  local target="$1"
+  local migrator_suffix
+  migrator_suffix=$(yq -r ".migrator_tag_suffix // \"\"" "infra/catalog/${target}.yaml" 2>/dev/null)
+  if [ -z "$migrator_suffix" ] || [ "$migrator_suffix" = "null" ]; then
+    return 0
+  fi
+  printf '%s:%s%s' "${IMAGE_NAME_MIGRATOR}" "${IMAGE_TAG}" "${migrator_suffix}"
+}
+
 resolve_digest_ref() {
   local tag="$1"
   local digest
@@ -151,6 +197,17 @@ for target in "${requested_targets[@]}"; do
   build_target "$target" "$full_tag"
   digest_ref=$(resolve_digest_ref "$full_tag")
   log_info "Resolved ${target} digest: ${digest_ref}"
+
+  # Migrator stage (bug.0446 follow-up). For node-type targets the Dockerfile
+  # has a `migrator` stage with drizzle-kit + tsx + full node_modules; the
+  # k8s deployment's init container references this image (NOT the runner —
+  # Next.js standalone trace doesn't resolve drizzle-orm via ESM from a
+  # bundled-in migrate.mjs). Service-type targets skip silently.
+  migrator_tag=$(resolve_migrator_tag "$target") || true
+  if [ -n "$migrator_tag" ]; then
+    log_info "Building and pushing ${target} migrator -> ${migrator_tag}"
+    build_migrator_target "$target" "$migrator_tag"
+  fi
 
   json_items+=("    {\n      \"target\": \"${target}\",\n      \"tag\": \"${full_tag}\",\n      \"digest\": \"${digest_ref}\"\n    }")
   built_targets+=("$target")

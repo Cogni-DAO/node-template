@@ -20,6 +20,9 @@ images:
   - name: ghcr.io/cogni-dao/cogni-node-template
     newName: ghcr.io/cogni-dao/cogni-node-template
     newTag: "preview-placeholder-node-template"
+  - name: ghcr.io/cogni-dao/cogni-node-template-migrate
+    newName: ghcr.io/cogni-dao/cogni-node-template-migrate
+    newTag: "preview-placeholder-node-template-migrate"
 
 patches:
   - target:

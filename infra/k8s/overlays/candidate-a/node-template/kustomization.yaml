@@ -20,6 +20,13 @@ images:
   - name: ghcr.io/cogni-dao/cogni-node-template
     newName: ghcr.io/cogni-dao/cogni-node-template
     newTag: "candidate-a-placeholder-node-template"
+  # Migrator stage — separate GHCR package per bug.0344. Init container in
+  # the base Deployment references this image. Placeholder is sed-rewritten
+  # by provision-env-vm.sh Phase 4c (derives migrator boot tag from
+  # bootstrap_image_tag + migrator_tag_suffix).
+  - name: ghcr.io/cogni-dao/cogni-node-template-migrate
+    newName: ghcr.io/cogni-dao/cogni-node-template-migrate
+    newTag: "candidate-a-placeholder-node-template-migrate"
 
 patches:
   - target:

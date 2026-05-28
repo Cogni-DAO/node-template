@@ -11,7 +11,11 @@ data:
   # All deployed envs (preview, candidate-a, canary, production) run in production mode.
   APP_ENV: "production"
   AUTH_TRUST_HOST: "true"
-  NODE_NAME: "node-app"
+  # NODE_NAME selects the on-disk app dir under /app/nodes/$NODE_NAME/.
+  # Dockerfile COPYs the standalone build + migrate.mjs to nodes/node-template/,
+  # so this MUST be "node-template" — not the k8s deployment name "node-app".
+  # Tracked in bug.0446 H8 (init container module-not-found cascade).
+  NODE_NAME: "node-template"
   # Internal service URLs (same for all nodes on same VM)
   LITELLM_BASE_URL: "http://litellm-external:4000"
   TEMPORAL_ADDRESS: "temporal-external:7233"
