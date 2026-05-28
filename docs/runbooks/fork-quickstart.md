@@ -126,30 +126,50 @@ git push
 
 ##### 6.2 · Create the target GH environment + set 7 minting tokens
 
-GitHub reserves the `GITHUB_*` secret-name prefix (returns HTTP 422). Use `GH_ADMIN_*`; the workflow maps them back internally.
+The 7 tokens live in the fork's **GitHub Actions environment secrets** — nowhere else. No `.env.bootstrap` file, no operator laptop path, no `~/dev/...`. The workflow runner reads them and seeds OpenBao; after bootstrap, OpenBao is the only place these values exist at runtime.
+
+GitHub reserves the `GITHUB_*` secret-name prefix (HTTP 422 on set). Use `GH_ADMIN_*`; the workflow maps them back internally.
+
+For each secret below, the agent should: (a) emit the URL to the human, (b) tell them what to copy, (c) paste the value into the `gh secret set` prompt. Each `gh secret set` prompt reads stdin silently and never echoes the value.
 
 ```
 REPO=$(git remote get-url origin | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1#')
 ENV=candidate-a
 gh api -X PUT repos/$REPO/environments/$ENV
+```
+
+Per-secret walkthrough:
+
+| #   | Secret                 | Where to get it                                                                                                                                                                                                                                                                                                     | Notes                                                                                        |
+| --- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 1   | `CHERRY_AUTH_TOKEN`    | <https://portal.cherryservers.com/settings/api-keys> → "Create new API key"                                                                                                                                                                                                                                         | Provisions the VM. Free tier OK for candidate-a.                                             |
+| 2   | `CHERRY_PROJECT_ID`    | <https://portal.cherryservers.com/> → click your project → copy the numeric ID from the URL (`/projects/<ID>/`)                                                                                                                                                                                                     | One per Cherry account; OK to reuse across envs.                                             |
+| 3   | `CLOUDFLARE_API_TOKEN` | <https://dash.cloudflare.com/profile/api-tokens> → "Create Token" → "Custom token"                                                                                                                                                                                                                                  | **Two scopes required** (see below).                                                         |
+| 4   | `CLOUDFLARE_ZONE_ID`   | <https://dash.cloudflare.com/> → click your domain → right sidebar → **API** section → copy "Zone ID"                                                                                                                                                                                                               | One per zone; reusable across envs.                                                          |
+| 5   | `GH_ADMIN_PAT`         | <https://github.com/settings/tokens?type=beta> (signed in **as the bot**, not the human) → "Generate new token" (fine-grained) → Resource owner = the fork's owner; Repository access = the fork repo; Permissions: Contents R/W + Pull requests R/W + Actions R/W + Workflows R/W + Environments R/W + Secrets R/W | Workflow uses this to write back into the fork (GHCR pulls, env-secret writes, etc.).        |
+| 6   | `GH_ADMIN_USERNAME`    | `gh api user --jq .login` (run as the bot)                                                                                                                                                                                                                                                                          | Just the bot account's GitHub login string.                                                  |
+| 7   | `OPENROUTER_API_KEY`   | <https://openrouter.ai/keys> → "Create key"                                                                                                                                                                                                                                                                         | LiteLLM uses it to reach providers. Without it, `/api/v1/chat/completions` returns HTTP 000. |
+
+Then set all 7:
+
+```
 for k in CHERRY_AUTH_TOKEN CHERRY_PROJECT_ID CLOUDFLARE_API_TOKEN \
          CLOUDFLARE_ZONE_ID GH_ADMIN_PAT GH_ADMIN_USERNAME \
          OPENROUTER_API_KEY; do
-  gh secret set "$k" --repo "$REPO" --env "$ENV"   # prompts; never echoes
+  gh secret set "$k" --repo "$REPO" --env "$ENV"
 done
 ```
 
-`OPENROUTER_API_KEY` is the one external app credential the bootstrap needs: LiteLLM uses it to reach LLM providers. Without it, every `/api/v1/chat/completions` call returns HTTP 000 at the agent — the app boots but the first prompt fails. Get one at <https://openrouter.ai/keys>.
+**`CLOUDFLARE_API_TOKEN` scopes (both required):**
 
-**`CLOUDFLARE_API_TOKEN` scope:** the bootstrap sets the zone's SSL mode to "Full" (Cloudflare proxies the public domain; origin serves a self-signed cert via Caddy's `tls internal`). The token needs **Zone:DNS:Edit AND Zone:Zone Settings:Edit** scopes (the dns-ops skill's default template only covers DNS:Edit — add the Zone Settings:Edit permission too). Mint at <https://dash.cloudflare.com/profile/api-tokens>.
+- **Zone — DNS — Edit** (creates the A records)
+- **Zone — Zone Settings — Edit** (flips zone SSL mode to "Full" so Cloudflare's edge-trusted cert covers the origin via Caddy's `tls internal`)
 
-`bootstrap.sh` Phase 1 probes the token scope BEFORE Cherry VM provisioning. If only DNS:Edit is present, the run fails fast at zero spend with a literal copy-pasteable template (same pattern as Step 0's identity gate) — no half-provisioned VMs, no orphaned tofu state.
+Zone Resources: **Include — Specific zone — `<your zone>`**.
 
-**`CLOUDFLARE_API_TOKEN` needs two scopes** (the bootstrap will fail-fast at Phase 4b otherwise): `Zone:DNS:Edit` AND `Zone:Zone Settings:Edit`. The DNS scope creates records; the Zone Settings scope flips SSL mode to "Full" so Cloudflare's edge-trusted cert covers the origin. Mint at <https://dash.cloudflare.com/profile/api-tokens>.
+The dns-ops skill's default template only covers DNS:Edit; add the Zone Settings:Edit permission too. `bootstrap.sh` Phase 1 probes both scopes BEFORE the Cherry VM is provisioned — if only DNS:Edit is present, the run fails fast at zero spend with a literal copy-pasteable mint-token template (same shape as Step 0's identity gate).
 
 These 7 cover the MVP path (substrate boot + agent register + chat + work-items). Feature-gated externals — Posthog telemetry, OAuth providers (Discord/Google/GitHub), on-chain RPC, Tavily web search, etc. — go through Step 6.6 (writer-role → OpenBao path). Paste only what your fork actually uses; the app schema treats all of them as optional.
-
-Tokens are the same set the laptop `.env.bootstrap` used (see [`docs/spec/agentic-fork-bootstrap.md`](../spec/agentic-fork-bootstrap.md) §V1 Credential Floor). The GH-env-secrets path replaces `.env.bootstrap` entirely — your laptop never holds them.
 
 ##### 6.3 · Generate the init-artifact passphrase
 
@@ -265,9 +285,9 @@ Then commit + push `hardships.md` if you haven't already.
 - Don't resolve "tofu apply: resource already exists" by deleting the conflicting resource. The script's idempotency is for resources it owns; cross-system collisions are out-of-contract. STOP and surface.
 - Don't run `bootstrap.sh` while `origin` points at `Cogni-DAO/node-template` or `Cogni-DAO/cogni`. The script self-aborts (running it inside the upstream template would corrupt shared state), but trust the gate — don't test it.
 
-### Legacy fallback
+### Legacy fallback (do not use for fork bootstrap)
 
-`pnpm bootstrap` runs a laptop-side equivalent of `provision-env.yml`. Kept for GHA outages or runner-specific debugging. Don't use for production paths — the workflow is the contract.
+`pnpm bootstrap` is a laptop-side equivalent of `provision-env.yml`. It reads `.env.bootstrap` instead of GH env secrets. **Forkers and validation agents must not use this path** — it puts secrets on the operator's laptop (against `secrets-management.md` Invariant 13), and the GH-env-secrets workflow path (Step 6 above) replaces it entirely. The only sanctioned reason to run `pnpm bootstrap` is debugging a runner-specific issue during GHA outages, on a maintainer's laptop, in a session that ends with `shred -u .env.bootstrap`. If you find yourself referencing any `.env.bootstrap` path on someone's laptop (e.g. `~/dev/.env.bootstrap`), you are off the contract — re-read Step 6.
 
 ## Reference
 
