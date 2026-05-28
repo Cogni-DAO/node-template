@@ -39,11 +39,6 @@ on:
         description: "Operator-typed passphrase for the init artifact (NEVER stored)"
         required: true
         type: string
-      pr_number:
-        description: "Optional PR number to post the scorecard on (blank = workflow summary only)"
-        required: false
-        type: string
-        default: ""
 
 permissions:
   contents: read
@@ -70,8 +65,12 @@ jobs:
       CHERRY_PROJECT_ID: ${{ secrets.CHERRY_PROJECT_ID }}
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ZONE_ID: ${{ secrets.CLOUDFLARE_ZONE_ID }}
-      GITHUB_ADMIN_PAT: ${{ secrets.GITHUB_ADMIN_PAT }}
-      GITHUB_ADMIN_USERNAME: ${{ secrets.GITHUB_ADMIN_USERNAME }}
+      # GitHub reserves the GITHUB_* secret-name prefix (HTTP 422 on set). The
+      # operator-facing secret names are GH_ADMIN_*; we re-export here as the
+      # GITHUB_ADMIN_* env vars bootstrap.sh consumes internally. See
+      # docs/runbooks/fork-quickstart.md §6.2.
+      GITHUB_ADMIN_PAT: ${{ secrets.GH_ADMIN_PAT }}
+      GITHUB_ADMIN_USERNAME: ${{ secrets.GH_ADMIN_USERNAME }}
       # `bootstrap.sh` and `provision-env-vm.sh` both run non-interactively
       # on the runner; the editor-open branch in bootstrap.sh already
       # detects non-TTY and skips (scripts/setup/bootstrap.sh line 61).
@@ -281,21 +280,24 @@ jobs:
             echo "### Argo Applications"
             echo '```'
             kubectl -n argocd get application openbao external-secrets \
-              -o custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status \
+              -o 'custom-columns=NAME:.metadata.name,SYNC:.status.sync.status,HEALTH:.status.health.status' \
               2>&1 || echo "(query failed)"
             echo '```'
             echo ""
             echo "### ClusterSecretStore"
             echo '```'
+            # JSONPath uses ?(@.type=="Ready") — single-quote the whole
+            # `custom-columns` value so bash doesn't try to parse the `()` as
+            # a subshell. Validator run 26545120228 syntax-erred without this.
             kubectl get clustersecretstore openbao-backend \
-              -o custom-columns=NAME:.metadata.name,READY:.status.conditions[?(@.type==\"Ready\")].status \
+              -o 'custom-columns=NAME:.metadata.name,READY:.status.conditions[?(@.type=="Ready")].status' \
               2>&1 || echo "(query failed)"
             echo '```'
             echo ""
             echo "### ExternalSecrets (cogni-${DEPLOY_ENV} namespace)"
             echo '```'
             kubectl -n "cogni-${DEPLOY_ENV}" get externalsecrets \
-              -o custom-columns=NAME:.metadata.name,READY:.status.conditions[?(@.type==\"Ready\")].status,STORE:.spec.secretStoreRef.name \
+              -o 'custom-columns=NAME:.metadata.name,READY:.status.conditions[?(@.type=="Ready")].status,STORE:.spec.secretStoreRef.name' \
               2>&1 || echo "(query failed)"
             echo '```'
             echo ""
@@ -312,19 +314,13 @@ jobs:
             echo 'Move the decrypted files to your password manager + DELETE the artifact from the run page (retention is a safety net, not the contract).'
           } >>"$GITHUB_STEP_SUMMARY"
 
-      - name: Post scorecard to PR (optional)
-        if: always() && inputs.pr_number != ''
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ inputs.pr_number }}
-        run: |
-          set -euo pipefail
-          if [[ ! -r "$GITHUB_STEP_SUMMARY" ]]; then
-            echo "::warning::no step summary to post"
-            exit 0
-          fi
-          gh pr comment "$PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
-            --body-file "$GITHUB_STEP_SUMMARY" || true
+      # The scorecard lives in the workflow run summary (GITHUB_STEP_SUMMARY
+      # above). No PR-comment side-channel: forkers' first run has no PR;
+      # validators dispatch cold against their own forks; auto-posting to a
+      # hardcoded PR number is future-fragile (one fork's PR #46 is another
+      # fork's PR #1, or no PR at all). If you want the scorecard on a PR,
+      # `gh pr comment <N> --body-file <(gh run view <RUN_ID> --log)` from
+      # any laptop after the fact.
 
       # ─────────────────────────────────────────────────────────────
       # Cleanup — always() runs regardless of upstream success/fail.
