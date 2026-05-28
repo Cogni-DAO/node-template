@@ -141,7 +141,9 @@ done
 
 `OPENROUTER_API_KEY` is the one external app credential the bootstrap needs: LiteLLM uses it to reach LLM providers. Without it, every `/api/v1/chat/completions` call returns HTTP 000 at the agent — the app boots but the first prompt fails. Get one at <https://openrouter.ai/keys>.
 
-**`CLOUDFLARE_API_TOKEN` scope:** the bootstrap sets the zone's SSL mode to "Full" (Cloudflare proxies the public domain; origin serves a self-signed cert via Caddy's `tls internal`). The token needs **Zone:DNS:Edit + Zone:Zone Settings:Edit** scopes (the dns-ops skill's default template only covers DNS:Edit — add the Zone Settings:Edit permission when minting). Mint at <https://dash.cloudflare.com/profile/api-tokens>.
+**`CLOUDFLARE_API_TOKEN` scope:** the bootstrap sets the zone's SSL mode to "Full" (Cloudflare proxies the public domain; origin serves a self-signed cert via Caddy's `tls internal`). The token needs **Zone:DNS:Edit AND Zone:Zone Settings:Edit** scopes (the dns-ops skill's default template only covers DNS:Edit — add the Zone Settings:Edit permission too). Mint at <https://dash.cloudflare.com/profile/api-tokens>.
+
+`bootstrap.sh` Phase 1 probes the token scope BEFORE Cherry VM provisioning. If only DNS:Edit is present, the run fails fast at zero spend with a literal copy-pasteable template (same pattern as Step 0's identity gate) — no half-provisioned VMs, no orphaned tofu state.
 
 **`CLOUDFLARE_API_TOKEN` needs two scopes** (the bootstrap will fail-fast at Phase 4b otherwise): `Zone:DNS:Edit` AND `Zone:Zone Settings:Edit`. The DNS scope creates records; the Zone Settings scope flips SSL mode to "Full" so Cloudflare's edge-trusted cert covers the origin. Mint at <https://dash.cloudflare.com/profile/api-tokens>.
 
