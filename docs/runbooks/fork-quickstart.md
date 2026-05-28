@@ -141,6 +141,8 @@ done
 
 `OPENROUTER_API_KEY` is the one external app credential the bootstrap needs: LiteLLM uses it to reach LLM providers. Without it, every `/api/v1/chat/completions` call returns HTTP 000 at the agent — the app boots but the first prompt fails. Get one at <https://openrouter.ai/keys>.
 
+These 7 cover the MVP path (substrate boot + agent register + chat + work-items). Feature-gated externals — Posthog telemetry, OAuth providers (Discord/Google/GitHub), on-chain RPC, Tavily web search, etc. — go through Step 6.6 (writer-role → OpenBao path). Paste only what your fork actually uses; the app schema treats all of them as optional.
+
 Tokens are the same set the laptop `.env.bootstrap` used (see [`docs/spec/agentic-fork-bootstrap.md`](../spec/agentic-fork-bootstrap.md) §V1 Credential Floor). The GH-env-secrets path replaces `.env.bootstrap` entirely — your laptop never holds them.
 
 ##### 6.3 · Generate the init-artifact passphrase

@@ -148,10 +148,15 @@ jobs:
       - name: Install runner prereqs (tofu, age, yq)
         run: |
           set -euo pipefail
-          # OpenTofu — repo's canonical wrapper (handles arch + checksum).
+          # Tools NOT shipped with ubuntu-latest by default: tofu, age, yq.
+          # Each has a canonical installer wrapper in scripts/bootstrap/install/
+          # that's idempotent (no-op if already present) and platform-aware.
+          # ssh-keygen + openssl + jq + gh ARE pre-installed on ubuntu-latest.
           bash scripts/bootstrap/install/install-tofu.sh
-          # age + ssh-keygen are present on ubuntu-latest; yq + jq + openssl + gh too.
-          # Confirm presence to fail fast on a runner-image regression.
+          bash scripts/bootstrap/install/install-age.sh
+          bash scripts/bootstrap/install/install-yq.sh
+          # Fail fast if anything is still missing (runner-image regression
+          # or installer bug).
           for t in tofu age age-keygen ssh-keygen openssl jq yq gh; do
             command -v "$t" >/dev/null || { echo "::error::missing prereq: $t"; exit 2; }
           done
