@@ -206,12 +206,38 @@ Without a real `OPENROUTER_API_KEY`, LLM router calls fail at runtime. The workf
 - If `/readyz` stays red, suspect a missing app secret first:
   `kubectl describe externalsecret -n cogni-<env> node-template-env-secrets` surfaces missing keys; re-run the relevant `pnpm secrets:set` and `kubectl rollout restart deployment/node-app`.
 
-#### 8 · Report
+#### 8 · Agent-API scorecard
 
-When `/readyz` returns 200, post one line:
+Don't trust `/readyz=200` alone — it only proves the pod is alive. Exercise the canonical agent surfaces against the deployed `<DOMAIN>` (derive from `infra/fork.yaml::domain.root` + the env subdomain) and emit a scorecard. Follow [`docs/guides/agent-api-validation.md`](../guides/agent-api-validation.md) for the exact `curl` shapes.
+
+Verdict cells: 🟢 pass · 🟡 partial / unverified · 🔴 fail · n/a not applicable. Each row records the HTTP status (or "no-grafana-data-available" for the obs cell when Loki creds aren't wired) and a one-line evidence excerpt.
 
 ```
-✓ <domain> /readyz=200 VM=<ip> run=<url>
+| # | Surface                              | Probe                                                  | Status | Obs (Loki)                | Verdict |
+| - | ------------------------------------ | ------------------------------------------------------ | ------ | ------------------------- | ------- |
+| 1 | Public DNS /readyz                   | GET https://<DOMAIN>/readyz                            | <code> | <log-line-or-no-data>     |   🟢    |
+| 2 | Agent registration                   | POST /api/v1/agent/register {"name":"quickstart-bot"}  | <code> | <log-line-or-no-data>     |   🟢    |
+| 3 | Free-graph hello world               | POST /api/v1/chat/completions graph_name=poet          | <code> | graph-run started/done    |   🟢    |
+| 4 | Knowledge inbox: create              | POST /api/v1/work/items type=inbox                     | <code> | <log-line-or-no-data>     |   🟢    |
+```
+
+vNext (filed against `proj.agentic-fork-bootstrap`, not gating today's bootstrap):
+
+```
+| 5 | Grafana/Loki query auth              | GET <GRAFANA_URL>/api/datasources                       | <code> | self-trace at marker tag  |  vNext  |
+| 6 | Knowledge inbox: agent review        | PATCH /api/v1/work/items/<id> status review            | <code> | <log-line-or-no-data>     |  vNext  |
+| 7 | Operator GH App integration          | POST /api/v1/vcs/flight {prNumber:<n>}                  | <code> | flight dispatched         |  vNext  |
+```
+
+A 🟢 row requires (a) the HTTP status matches the contract AND (b) a feature-specific Loki line tied to the same exercise window — generic `request received` traffic is 🟡 at best. No-Loki environments are 🟡 with `no-grafana-data-available`, not 🟢.
+
+#### 9 · Report
+
+When the scorecard is assembled, post one line plus the matrix:
+
+```
+✓ <domain> /readyz=200 VM=<ip> run=<url>  scorecard: 4/4 🟢 (0 🟡, 0 🔴)
+<paste the matrix>
 ```
 
 Then commit + push `hardships.md` if you haven't already.
