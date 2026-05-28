@@ -1,12 +1,16 @@
 {
-  # ACME endpoint per environment. Validators iterate candidate-a frequently
-  # — each cold-start provisions a fresh Caddy that requests a cert for the
-  # same domain. Let's Encrypt PROD's 50-certs/week-per-registered-domain
-  # rate limit gets eaten within a few days, after which TLS fails with
-  # `internal error` (no cert in storage, ACME blocked by rate limit).
-  # Default to STAGING (300/day per account, daily reset, untrusted by
-  # browsers but works with `curl -k`). production env overrides to PROD.
-  acme_ca {$ACME_CA:https://acme-staging-v02.api.letsencrypt.org/directory}
+  # ACME endpoint. Default LE PROD so every provisioned env (candidate-*,
+  # preview, production) serves browser-trusted HTTPS — that's the
+  # contract. The ACME_CA env override exists as an escape hatch (set to
+  # the LE staging URL via .env) when a caller wants to iterate without
+  # consuming the production-CA rate limit; do NOT default to staging
+  # because browser-untrusted certs are a real-world regression.
+  #
+  # Caddy is fresh per VM provision today, so repeat cold-starts on a
+  # shared domain accumulate against LE's 50-certs/week/registered-domain
+  # quota. The proper fix is Cloudflare Origin CA cert (15-yr validity,
+  # no LE involvement) — filed as Walk-tier on proj.agentic-fork-bootstrap.
+  acme_ca {$ACME_CA:https://acme-v02.api.letsencrypt.org/directory}
 
   log {
     level INFO

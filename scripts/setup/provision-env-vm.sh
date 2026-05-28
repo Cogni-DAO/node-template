@@ -846,14 +846,15 @@ log_info "Writing .env files..."
 # multi-key pattern. Port is catalog-driven (catalog::node_port is the
 # canonical source — node-template ships 30000).
 NODE_PORT_FROM_CATALOG=$(yq -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/node-template.yaml")
-# ACME issuer: production env uses LE PROD (browser-trusted certs);
-# everything else uses LE STAGING to avoid the 50-certs/week/domain rate
-# limit that bites validators iterating cold-starts on a fixed domain.
-if [[ "$DEPLOY_ENV" == "production" ]]; then
-  ACME_CA_URL="https://acme-v02.api.letsencrypt.org/directory"
-else
-  ACME_CA_URL="https://acme-staging-v02.api.letsencrypt.org/directory"
-fi
+# ACME issuer: default LE PROD for every env. Browser-trusted HTTPS is
+# the contract — candidate-a / preview / production all serve real
+# traffic. The caller may override via ACME_CA in the dispatching env
+# (e.g. validators iterating against a shared test domain may set it
+# to https://acme-staging-v02.api.letsencrypt.org/directory to avoid
+# the production-CA 50-certs/week/registered-domain rate limit).
+# Proper fix for rate-limit + iteration is cert persistence via
+# Cloudflare Origin CA — Walk-tier on proj.agentic-fork-bootstrap.
+ACME_CA_URL="${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}"
 ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-edge/.env << 'ENVEOF'
 DOMAIN=${DOMAIN}
 NODE_UPSTREAM=host.docker.internal:${NODE_PORT_FROM_CATALOG}
