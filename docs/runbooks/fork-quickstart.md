@@ -141,6 +141,10 @@ done
 
 `OPENROUTER_API_KEY` is the one external app credential the bootstrap needs: LiteLLM uses it to reach LLM providers. Without it, every `/api/v1/chat/completions` call returns HTTP 000 at the agent — the app boots but the first prompt fails. Get one at <https://openrouter.ai/keys>.
 
+**`CLOUDFLARE_API_TOKEN` scope:** the bootstrap sets the zone's SSL mode to "Full" (Cloudflare proxies the public domain; origin serves a self-signed cert via Caddy's `tls internal`). The token needs **Zone:DNS:Edit + Zone:Zone Settings:Edit** scopes (the dns-ops skill's default template only covers DNS:Edit — add the Zone Settings:Edit permission when minting). Mint at <https://dash.cloudflare.com/profile/api-tokens>.
+
+**`CLOUDFLARE_API_TOKEN` needs two scopes** (the bootstrap will fail-fast at Phase 4b otherwise): `Zone:DNS:Edit` AND `Zone:Zone Settings:Edit`. The DNS scope creates records; the Zone Settings scope flips SSL mode to "Full" so Cloudflare's edge-trusted cert covers the origin. Mint at <https://dash.cloudflare.com/profile/api-tokens>.
+
 These 7 cover the MVP path (substrate boot + agent register + chat + work-items). Feature-gated externals — Posthog telemetry, OAuth providers (Discord/Google/GitHub), on-chain RPC, Tavily web search, etc. — go through Step 6.6 (writer-role → OpenBao path). Paste only what your fork actually uses; the app schema treats all of them as optional.
 
 Tokens are the same set the laptop `.env.bootstrap` used (see [`docs/spec/agentic-fork-bootstrap.md`](../spec/agentic-fork-bootstrap.md) §V1 Credential Floor). The GH-env-secrets path replaces `.env.bootstrap` entirely — your laptop never holds them.

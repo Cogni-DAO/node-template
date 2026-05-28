@@ -31,11 +31,6 @@ services:
       # field. Multi-block *_DOMAIN / *_UPSTREAM env vars removed in bug.5001
       # cleanup — the Caddyfile no longer references them.
       - NODE_UPSTREAM=${NODE_UPSTREAM:-host.docker.internal:30000}
-      # ACME issuer URL. Empty → Caddyfile default (LE PROD = browser-trusted).
-      # Override via .env (provision-env-vm.sh propagates the caller's
-      # ACME_CA when set) for rapid-iteration scenarios that would otherwise
-      # exhaust LE PROD's per-domain weekly quota.
-      - ACME_CA=${ACME_CA:-}
     volumes:
       - ./configs/Caddyfile.tmpl:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

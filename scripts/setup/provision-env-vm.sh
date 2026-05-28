@@ -520,7 +520,34 @@ fi
 # Phase 4b: Create/update DNS records
 # ══════════════════════════════════════════════════════════════
 if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; then
-  log_step "Phase 4b: Create DNS records"
+  log_step "Phase 4b: Create DNS records + set Cloudflare SSL mode"
+
+  # ── Zone SSL mode = Full ─────────────────────────────────────────────
+  # Cloudflare proxies our DNS (proxied:true below). Browsers terminate
+  # TLS at Cloudflare's edge (Universal SSL — always trusted). The
+  # origin (Caddy) uses self-signed certs via `tls internal`; Cloudflare
+  # "Full" SSL mode talks HTTPS to origin but trusts any cert. This
+  # eliminates LE entirely + the 50-certs/week/domain rate limit that
+  # blocked iterating bootstrap across many provisions.
+  #
+  # Token needs Zone:Zone Settings:Edit scope (in addition to Zone:DNS:Edit
+  # the bootstrap floor already requires). Failure here surfaces the gap
+  # clearly rather than letting Caddy hit a downstream TLS error.
+  SSL_RESP=$(curl -sS -X PATCH \
+    -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+    -H "Content-Type: application/json" \
+    "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/settings/ssl" \
+    -d '{"value":"full"}')
+  SSL_OK=$(echo "$SSL_RESP" | python3 -c 'import json,sys; r=json.load(sys.stdin); print("OK" if r.get("success") else r.get("errors",[{}])[0].get("message","FAIL"))' 2>/dev/null || echo "FAIL")
+  if [[ "$SSL_OK" != "OK" ]]; then
+    log_error "Failed to set Cloudflare SSL mode to 'full': $SSL_OK"
+    log_error "Your CLOUDFLARE_API_TOKEN needs the Zone:Zone Settings:Edit scope."
+    log_error "Mint a token at https://dash.cloudflare.com/profile/api-tokens with:"
+    log_error "  Permissions: Zone:DNS:Edit + Zone:Zone Settings:Edit"
+    log_error "  Zone Resources: Include — Specific zone — <your zone>"
+    exit 1
+  fi
+  log_info "Cloudflare SSL mode → full (zone $CLOUDFLARE_ZONE_ID)"
 
   # FQDNs come from two sources (B2):
   #   1. DOMAIN — the apex/operator-host (Caddy listens here for TLS)
@@ -547,6 +574,19 @@ if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; t
     else
       sub="${fqdn%.cognidao.org}"
     fi
+    # Proxy state per record:
+    #   • Browser-facing (DOMAIN apex + per-node public URLs) → proxied=true
+    #     so Cloudflare terminates TLS at the edge with Universal SSL
+    #     (browser-trusted always; no LE involvement).
+    #   • VM_DNS_HOST → proxied=false so SSH (port 22) + diagnostic NodePort
+    #     access (port 30000+) still reach the origin directly. Cloudflare
+    #     proxy only forwards 80/443 — non-standard ports get dropped on
+    #     proxied records.
+    if [[ "$fqdn" == "$VM_DNS_HOST" ]]; then
+      proxied="false"
+    else
+      proxied="true"
+    fi
     EXISTING=$(curl -s -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
       "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records?name=${fqdn}&type=A" \
       | python3 -c "import json,sys; [print(x['id']) for x in json.load(sys.stdin).get('result',[])]" 2>/dev/null)
@@ -556,9 +596,9 @@ if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; t
     done
     RESULT=$(curl -s -X POST -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H "Content-Type: application/json" \
       "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/dns_records" \
-      -d "{\"type\":\"A\",\"name\":\"${sub}\",\"content\":\"${VM_IP}\",\"ttl\":300,\"proxied\":false}")
+      -d "{\"type\":\"A\",\"name\":\"${sub}\",\"content\":\"${VM_IP}\",\"ttl\":300,\"proxied\":${proxied}}")
     OK=$(echo "$RESULT" | python3 -c 'import json,sys; print("OK" if json.load(sys.stdin).get("success") else "FAIL")' 2>/dev/null)
-    log_info "  ${fqdn} → ${VM_IP}: $OK"
+    log_info "  ${fqdn} → ${VM_IP} (proxied=${proxied}): $OK"
   done
 else
   log_warn "Skipping DNS — CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID not set"
