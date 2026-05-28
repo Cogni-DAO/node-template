@@ -71,6 +71,13 @@ jobs:
       # docs/runbooks/fork-quickstart.md §6.2.
       GITHUB_ADMIN_PAT: ${{ secrets.GH_ADMIN_PAT }}
       GITHUB_ADMIN_USERNAME: ${{ secrets.GH_ADMIN_USERNAME }}
+      # App-tier pass-through (forker-provided). Without this, LiteLLM
+      # falls back to a placeholder key in `provision-env-vm.sh:204` and
+      # every chat/completions call returns HTTP 000 at the agent. This is
+      # the only external app credential the bootstrap needs to function
+      # end-to-end on /readyz=200 + agent API validation; everything else
+      # the apps need is generated server-side or sits in OpenBao already.
+      OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
       # `bootstrap.sh` and `provision-env-vm.sh` both run non-interactively
       # on the runner; the editor-open branch in bootstrap.sh already
       # detects non-TTY and skips (scripts/setup/bootstrap.sh line 61).

@@ -124,7 +124,7 @@ git commit -m "chore(bootstrap): set fork.yaml::domain.root"
 git push
 ```
 
-##### 6.2 · Create the target GH environment + set 6 minting tokens
+##### 6.2 · Create the target GH environment + set 7 minting tokens
 
 GitHub reserves the `GITHUB_*` secret-name prefix (returns HTTP 422). Use `GH_ADMIN_*`; the workflow maps them back internally.
 
@@ -133,10 +133,13 @@ REPO=$(git remote get-url origin | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1
 ENV=candidate-a
 gh api -X PUT repos/$REPO/environments/$ENV
 for k in CHERRY_AUTH_TOKEN CHERRY_PROJECT_ID CLOUDFLARE_API_TOKEN \
-         CLOUDFLARE_ZONE_ID GH_ADMIN_PAT GH_ADMIN_USERNAME; do
+         CLOUDFLARE_ZONE_ID GH_ADMIN_PAT GH_ADMIN_USERNAME \
+         OPENROUTER_API_KEY; do
   gh secret set "$k" --repo "$REPO" --env "$ENV"   # prompts; never echoes
 done
 ```
+
+`OPENROUTER_API_KEY` is the one external app credential the bootstrap needs: LiteLLM uses it to reach LLM providers. Without it, every `/api/v1/chat/completions` call returns HTTP 000 at the agent — the app boots but the first prompt fails. Get one at <https://openrouter.ai/keys>.
 
 Tokens are the same set the laptop `.env.bootstrap` used (see [`docs/spec/agentic-fork-bootstrap.md`](../spec/agentic-fork-bootstrap.md) §V1 Credential Floor). The GH-env-secrets path replaces `.env.bootstrap` entirely — your laptop never holds them.
 
@@ -213,20 +216,22 @@ Don't trust `/readyz=200` alone — it only proves the pod is alive. Exercise th
 Verdict cells: 🟢 pass · 🟡 partial / unverified · 🔴 fail · n/a not applicable. Each row records the HTTP status (or "no-grafana-data-available" for the obs cell when Loki creds aren't wired) and a one-line evidence excerpt.
 
 ```
-| # | Surface                              | Probe                                                  | Status | Obs (Loki)                | Verdict |
-| - | ------------------------------------ | ------------------------------------------------------ | ------ | ------------------------- | ------- |
-| 1 | Public DNS /readyz                   | GET https://<DOMAIN>/readyz                            | <code> | <log-line-or-no-data>     |   🟢    |
-| 2 | Agent registration                   | POST /api/v1/agent/register {"name":"quickstart-bot"}  | <code> | <log-line-or-no-data>     |   🟢    |
-| 3 | Free-graph hello world               | POST /api/v1/chat/completions graph_name=poet          | <code> | graph-run started/done    |   🟢    |
-| 4 | Knowledge inbox: create              | POST /api/v1/work/items type=inbox                     | <code> | <log-line-or-no-data>     |   🟢    |
+| # | Surface                              | Probe                                                       | Status | Obs (Loki)              | Verdict |
+| - | ------------------------------------ | ----------------------------------------------------------- | ------ | ----------------------- | ------- |
+| 1 | Public DNS /readyz                   | GET https://<DOMAIN>/readyz                                 | <code> | <log-line-or-no-data>   |   🟢    |
+| 2 | Agent registration                   | POST /api/v1/agent/register {"name":"quickstart-bot"}       | <code> | <log-line-or-no-data>   |   🟢    |
+| 3 | Free-graph hello world               | POST /api/v1/chat/completions graph_name=poet               | <code> | graph-run started/done  |   🟢    |
+| 4 | Work item create                     | POST /api/v1/work/items {type:"story", title:"...", ...}    | <code> | work-item-write line    |   🟢    |
 ```
+
+Row 4 covers what node-template actually serves today: the work-items API against the operator's Doltgres. Knowledge primitives (`entryType=html|text` writes, knowledge-data-plane reads) live in the `cogni` operator-app + adopting nodes' `doltgres-schema` packages — node-template has none today, so a knowledge probe would be probing a surface that doesn't exist. Valid work-item types: `task | bug | story | spike | subtask` (per `work/_templates/item.md`); `inbox` is not valid.
 
 vNext (filed against `proj.agentic-fork-bootstrap`, not gating today's bootstrap):
 
 ```
-| 5 | Grafana/Loki query auth              | GET <GRAFANA_URL>/api/datasources                       | <code> | self-trace at marker tag  |  vNext  |
-| 6 | Knowledge inbox: agent review        | PATCH /api/v1/work/items/<id> status review            | <code> | <log-line-or-no-data>     |  vNext  |
-| 7 | Operator GH App integration          | POST /api/v1/vcs/flight {prNumber:<n>}                  | <code> | flight dispatched         |  vNext  |
+| 5 | Grafana/Loki query auth              | GET <GRAFANA_URL>/api/datasources                            | <code> | self-trace at marker   |  vNext  |
+| 6 | Knowledge entry write (cogni-side)   | once node-template adopts a doltgres-schema package          | <code> | dolt_log entry          |  vNext  |
+| 7 | Operator GH App integration          | POST /api/v1/vcs/flight {prNumber:<n>}                       | <code> | flight dispatched      |  vNext  |
 ```
 
 A 🟢 row requires (a) the HTTP status matches the contract AND (b) a feature-specific Loki line tied to the same exercise window — generic `request received` traffic is 🟡 at best. No-Loki environments are 🟡 with `no-grafana-data-available`, not 🟢.
