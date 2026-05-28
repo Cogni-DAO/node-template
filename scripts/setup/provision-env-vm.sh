@@ -846,9 +846,18 @@ log_info "Writing .env files..."
 # multi-key pattern. Port is catalog-driven (catalog::node_port is the
 # canonical source — node-template ships 30000).
 NODE_PORT_FROM_CATALOG=$(yq -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/node-template.yaml")
+# ACME issuer: production env uses LE PROD (browser-trusted certs);
+# everything else uses LE STAGING to avoid the 50-certs/week/domain rate
+# limit that bites validators iterating cold-starts on a fixed domain.
+if [[ "$DEPLOY_ENV" == "production" ]]; then
+  ACME_CA_URL="https://acme-v02.api.letsencrypt.org/directory"
+else
+  ACME_CA_URL="https://acme-staging-v02.api.letsencrypt.org/directory"
+fi
 ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-edge/.env << 'ENVEOF'
 DOMAIN=${DOMAIN}
 NODE_UPSTREAM=host.docker.internal:${NODE_PORT_FROM_CATALOG}
+ACME_CA=${ACME_CA_URL}
 ENVEOF"
 
 # All required vars must be in .env — Docker Compose validates ALL services at parse time,

@@ -1,4 +1,13 @@
 {
+  # ACME endpoint per environment. Validators iterate candidate-a frequently
+  # — each cold-start provisions a fresh Caddy that requests a cert for the
+  # same domain. Let's Encrypt PROD's 50-certs/week-per-registered-domain
+  # rate limit gets eaten within a few days, after which TLS fails with
+  # `internal error` (no cert in storage, ACME blocked by rate limit).
+  # Default to STAGING (300/day per account, daily reset, untrusted by
+  # browsers but works with `curl -k`). production env overrides to PROD.
+  acme_ca {$ACME_CA:https://acme-staging-v02.api.letsencrypt.org/directory}
+
   log {
     level INFO
     format json
