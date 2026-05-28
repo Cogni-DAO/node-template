@@ -1297,6 +1297,27 @@ ssh $SSH_OPTS root@"$VM_IP" "kubectl apply -f /tmp/cluster-secret-store.yaml"
 log_info "Applied ClusterSecretStore openbao-backend"
 
 # ══════════════════════════════════════════════════════════════
+# seed_kv: <service> <KEY> <value> → cogni/${DEPLOY_ENV}/<service>
+# File-scope helper used by Phase 5c (app secrets) AND Phase 5e (auto-mint).
+# No-op when value is empty. First write creates the path (put); later writes
+# patch so existing keys are preserved. Requires ROOT_TOKEN to be set by the
+# caller (read from $OPENBAO_ROOT_TOKEN_LOCAL after Phase 5b.2 produces it).
+seed_kv() {
+  local svc="$1" k="$2" v="$3"
+  [[ -z "$v" ]] && return 0
+  local path="cogni/${DEPLOY_ENV}/${svc}"
+  local op="patch"
+  if ! ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv metadata get '${path}'" \
+    >/dev/null 2>&1; then
+    op="put"
+  fi
+  printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv ${op} '${path}' '${k}=-'" \
+    >/dev/null
+}
+
+# ══════════════════════════════════════════════════════════════
 # Phase 5c: Seed OpenBao with auto-generated app secrets (task.0284)
 # ══════════════════════════════════════════════════════════════
 # Phase 2 (above) sourced .env.${DEPLOY_ENV}, which carries every secret
@@ -1322,25 +1343,6 @@ if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
 else
   ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
 
-  seed_kv() {
-    # seed_kv <service> <KEY> <value>
-    # No-op when value is empty (operator-pass-through that the fork didn't
-    # provide). First write creates the path; later writes patch so existing
-    # keys are preserved.
-    local svc="$1" k="$2" v="$3"
-    [[ -z "$v" ]] && return 0
-    local path="cogni/${DEPLOY_ENV}/${svc}"
-    local op="patch"
-    if ! ssh $SSH_OPTS root@"$VM_IP" \
-      "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv metadata get '${path}'" \
-      >/dev/null 2>&1; then
-      op="put"
-    fi
-    printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
-      "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv ${op} '${path}' '${k}=-'" \
-      >/dev/null
-  }
-
   log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
   for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
            OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
@@ -1358,6 +1360,58 @@ else
     seed_kv scheduler-worker "$k" "${!k:-}"
   done
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
+fi
+
+# ══════════════════════════════════════════════════════════════
+# Phase 5e: Grafana child-SA auto-mint (work/handoffs/handoff-grafana-auto-mint.md)
+# ══════════════════════════════════════════════════════════════
+# Operator pastes ONE glsa_* stack-admin SA token + GRAFANA_URL into GH-env-
+# secrets. This phase calls the Grafana instance HTTP API (not the Cloud
+# access-policy API) to mint a per-env Viewer-role child SA + token. The
+# minted child token authorizes:
+#   - GET /api/datasources                 (validator scorecard row 5)
+#   - GET /api/datasources/proxy/uid/.../  (Loki + Prom + Postgres queries)
+#   - GET /api/ds/query                    (panel-style queries)
+#
+# Output:
+#   1. cogni/${DEPLOY_ENV}/_shared/{GRAFANA_SERVICE_ACCOUNT_TOKEN, GRAFANA_URL}
+#      (spec Invariant 1 cross-service path; matches existing setup-secrets.ts
+#      env-var names consumed by scripts/loki-query.sh + grafana-postgres-*.sh)
+#   2. .local/${DEPLOY_ENV}-grafana-sa-token.json
+#      (one-shot bootstrap snapshot for the operator's laptop; encrypted by the
+#      "Encrypt init artifacts" step in provision-env.yml)
+#
+# Graceful skip: if GRAFANA_PARENT_SA_TOKEN/GRAFANA_URL are unset, the mint
+# script logs + exit 0 with no output. Bootstrap continues; scorecard row 5
+# stays 🟡. Observability is optional, never blocks bootstrap.
+log_step "Phase 5e: Grafana child-SA auto-mint (optional)"
+
+if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
+  log_warn "Skipping Phase 5e — no OpenBao root token; cannot seed cogni/${DEPLOY_ENV}/_shared"
+elif [[ -z "${GRAFANA_PARENT_SA_TOKEN:-}" || -z "${GRAFANA_URL:-}" ]]; then
+  log_info "Phase 5e skipped — GRAFANA_PARENT_SA_TOKEN/GRAFANA_URL unset (scorecard row 5 stays 🟡)"
+else
+  ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
+
+  # Mint runs on the runner — parent token never travels to the VM.
+  MINT_OUT=$(REPO_ROOT="$REPO_ROOT" DEPLOY_ENV="$DEPLOY_ENV" FORK_SLUG="$FORK_SLUG" \
+              GRAFANA_PARENT_SA_TOKEN="$GRAFANA_PARENT_SA_TOKEN" \
+              GRAFANA_URL="$GRAFANA_URL" \
+              bash "$REPO_ROOT/scripts/setup/provision-grafana-child-sa.sh") \
+    || { log_error "Grafana child-SA mint failed — continuing bootstrap; re-run after fixing creds"; MINT_OUT=""; }
+
+  if [[ -n "$MINT_OUT" ]]; then
+    CHILD_TOKEN=$(printf '%s\n' "$MINT_OUT" | sed -n 's/^GRAFANA_SERVICE_ACCOUNT_TOKEN=//p')
+    CHILD_URL=$(printf '%s\n' "$MINT_OUT" | sed -n 's/^GRAFANA_URL=//p')
+    if [[ -n "$CHILD_TOKEN" && -n "$CHILD_URL" ]]; then
+      log_info "Seeding cogni/${DEPLOY_ENV}/_shared/GRAFANA_SERVICE_ACCOUNT_TOKEN + GRAFANA_URL"
+      seed_kv _shared GRAFANA_SERVICE_ACCOUNT_TOKEN "$CHILD_TOKEN"
+      seed_kv _shared GRAFANA_URL "$CHILD_URL"
+      log_info "Grafana auto-mint complete for ${DEPLOY_ENV}"
+    else
+      log_info "Phase 5e: mint script produced no derived keys (graceful skip)"
+    fi
+  fi
 fi
 
 # ══════════════════════════════════════════════════════════════

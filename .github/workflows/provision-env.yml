@@ -78,6 +78,16 @@ jobs:
       # end-to-end on /readyz=200 + agent API validation; everything else
       # the apps need is generated server-side or sits in OpenBao already.
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Optional observability auto-mint (1 root token in, 1 derived child SA out).
+      # Phase 5e calls the Grafana instance HTTP API with the parent SA token to
+      # find-or-create a Viewer-role child SA + mint a fresh read-only token.
+      # The child token lands at cogni/<env>/_shared (Invariant 1) and in the
+      # encrypted artifact bundle. Skip = scorecard row 5 stays 🟡 (no log
+      # visibility); bootstrap still completes. Parent token (glsa_*) lives
+      # only in the runner env; never written to OpenBao, never reaches the VM.
+      # See docs/design/observability-creds-shared.md.
+      GRAFANA_PARENT_SA_TOKEN: ${{ secrets.GH_GRAFANA_PARENT_SA_TOKEN }}
+      GRAFANA_URL: ${{ secrets.GH_GRAFANA_URL }}
       # `bootstrap.sh` and `provision-env-vm.sh` both run non-interactively
       # on the runner; the editor-open branch in bootstrap.sh already
       # detects non-TTY and skips (scripts/setup/bootstrap.sh line 61).
@@ -229,7 +239,8 @@ jobs:
           encrypted_count=0
           for src in .local/${DEPLOY_ENV}-openbao-init.json \
                      .local/${DEPLOY_ENV}-vm-key \
-                     .local/${DEPLOY_ENV}-kubeconfig.yaml; do
+                     .local/${DEPLOY_ENV}-kubeconfig.yaml \
+                     .local/${DEPLOY_ENV}-grafana-sa-token.json; do
             [[ -r "$src" ]] || { echo "::warning::missing source: $src (provision may not have produced it)"; continue; }
             base=$(basename "$src")
             out=".local/encrypted/${base}.enc"

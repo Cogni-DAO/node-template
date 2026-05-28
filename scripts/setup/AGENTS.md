@@ -9,13 +9,14 @@
 
 ## Purpose
 
-**Current:** Design docs and planning for future setup automation.  
-**Future:** Will contain TypeScript scripts to automate repository setup for contributors and fork owners.
+Repository + environment setup scripts. Bash-first for substrate provisioning (called from `.github/workflows/provision-env.yml`); TypeScript planned for laptop-side setup.
 
 ## Pointers
 
 - [SETUP_DESIGN.md](./SETUP_DESIGN.md): Future architecture and implementation plan
 - [README.md](../../README.md): Current manual setup instructions
+- `bootstrap.sh` — laptop-side bootstrap orchestrator (auto-generates `.env.<env>` from `.env.bootstrap`)
+- `provision-env-vm.sh` — full substrate bring-up (VM, DNS, k3s, OpenBao, ESO, Argo). Called from `provision-env.yml`. Phase 5c seeds per-service + `_shared` OpenBao paths from `.env.<env>` (including observability creds — see `docs/design/observability-creds-shared.md`).
 
 ## Boundaries
 
@@ -36,8 +37,8 @@
 
 ## Responsibilities
 
-- This directory **does**: Contains design docs for future setup automation
-- This directory **does not**: Contain any working automation scripts yet
+- This directory **does**: Substrate provisioning scripts (VM/DNS/k3s/OpenBao/ESO/Argo), Grafana child-SA mint, bootstrap orchestrator.
+- This directory **does not**: Contain runtime app code or business logic. No imports from `nodes/*/app/src/**`.
 
 ## Usage
 
