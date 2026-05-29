@@ -153,24 +153,28 @@ jobs:
             echo "::error::Set BOTH GH_GRAFANA_CLOUD_ADMIN_TOKEN and GH_GRAFANA_URL, or neither. See Step 6.2 of docs/runbooks/fork-quickstart.md."
             exit 2
           fi
-          MINT_URL="https://grafana.com/orgs/<org>/access-policies"
-          SCOPES="stacks:read, stack-service-accounts:write, accesspolicies:read, accesspolicies:write"
+          MINT_URL="https://grafana.com/orgs/<your-org-slug>/access-policies"
+          SCOPES="stacks:read, stack-service-accounts:write, accesspolicies:read, accesspolicies:write (use 'Add scope' dropdown — these are NOT the default data-plane checkboxes)"
+          WALKTHROUGH="Full walkthrough: docs/runbooks/fork-quickstart.md §6.2 row 9."
           case "$GRAFANA_CLOUD_ADMIN_TOKEN" in
             glsa_*)
               echo "::error::GH_GRAFANA_CLOUD_ADMIN_TOKEN is a glsa_* stack service-account token."
               echo "::error::Phase 5e now derives BOTH read + write paths from ONE Cloud admin token (glc_*) — glsa_ cannot mint Cloud access-policies."
               echo "::error::Mint a glc_ token at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
               exit 2
               ;;
             glb_*)
               echo "::error::GH_GRAFANA_CLOUD_ADMIN_TOKEN is a glb_* bearer token — not supported."
               echo "::error::Mint a glc_ token at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
               exit 2
               ;;
             glc_*) : ;;
             *)
               echo "::error::GH_GRAFANA_CLOUD_ADMIN_TOKEN does not start with glc_ — refusing."
               echo "::error::Mint at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
               exit 2
               ;;
           esac
@@ -187,6 +191,7 @@ jobs:
             403)
               echo "::error::Cloud admin token missing scopes (HTTP 403 from grafana.com/api/orgs)."
               echo "::error::Recreate the access-policy at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
               exit 2
               ;;
             000)
