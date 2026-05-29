@@ -1,6 +1,6 @@
 ---
 name: cicd-secrets-expert
-description: "Secrets architecture reference for node-template — when to use OpenBao+ESO vs GitHub env secrets, which operation pattern fits which write/rotate/add flow, the load-bearing invariants from the spec, and where to find the canonical implementation. Use when adding/rotating a secret, designing a service that consumes secrets, debugging an ExternalSecret or writer-role login, deciding between substrate and Compose-infra routing, touching `pnpm secrets:set` / `scripts/secrets/` / `infra/k8s/argocd/{openbao,external-secrets}/` / `infra/k8s/secrets/external-secrets/`, or evaluating any new workflow that touches secret values. Triggers: 'add a secret', 'rotate a key', 'OpenBao', 'ESO', 'ExternalSecret', 'writer role', 'bao login', 'vault-action', 'vault-config-operator', 'secrets-manage', 'secret in GH env vs OpenBao', 'where do I put this credential'."
+description: "Secrets architecture reference for node-template — when to use OpenBao+ESO vs GitHub env secrets, which operation pattern fits which write/rotate/add flow, the load-bearing invariants from the spec, the YAML catalog + Zod-loader the script consumes, and where to find the canonical implementation. Use when adding/rotating a secret, designing a service that consumes secrets, debugging an ExternalSecret or writer-role login, deciding between substrate and Compose-infra routing, touching `pnpm secrets:set` / `scripts/secrets/` / `scripts/lib/secrets-catalog-loader.ts` / `nodes/<node>/.cogni/secrets-catalog.yaml` / `infra/secrets-catalog.yaml` / `infra/k8s/argocd/{openbao,external-secrets}/` / per-node ExternalSecret manifests, or evaluating any new workflow that touches secret values. Triggers: 'add a secret', 'add a node secret', 'rotate a key', 'OpenBao', 'ESO', 'ExternalSecret', 'secrets-catalog', 'catalog tier', 'A1', 'A2', 'B-tier', 'writer role', 'bao login', 'vault-action', 'vault-config-operator', 'secrets-manage', 'secret in GH env vs OpenBao', 'where do I put this credential', 'per-node catalog'."
 ---
 
 # CI/CD Secrets Expert
@@ -29,14 +29,19 @@ From [`docs/spec/secrets-management.md`](../../../docs/spec/secrets-management.m
 
 ## Decision tree — where does the value live?
 
-| Consumed by                                                              | Path                                                           | Source of truth        |
-| ------------------------------------------------------------------------ | -------------------------------------------------------------- | ---------------------- |
-| k8s pod (anything under `nodes/<n>/app/`)                                | OpenBao `cogni/<env>/<service>/*` → ESO → k8s Secret → envFrom | OpenBao                |
-| Compose-infra service (postgres, litellm, temporal, redis, alloy, caddy) | GH Env Secret → `deploy-infra.sh` → `.env` on VM               | GH Environment Secrets |
-| Local dev only                                                           | `.env.local` (gitignored)                                      | Operator's laptop      |
-| CI test runtime only                                                     | `.github/workflows/ci.yaml` env block                          | GH repo/env secrets    |
+| Tier | Consumed by                                                              | Path                                                           | Source of truth        |
+| ---- | ------------------------------------------------------------------------ | -------------------------------------------------------------- | ---------------------- |
+| A1   | k8s pod baseline (anything under `nodes/<n>/app/`, every fork)           | OpenBao `cogni/<env>/<service>/*` → ESO → k8s Secret → envFrom | OpenBao                |
+| A2   | k8s pod node-specific (downstream node like `poly`)                      | OpenBao `cogni/<env>/<node>/*` → ESO → k8s Secret → envFrom    | OpenBao                |
+| B    | Compose-infra service (postgres, litellm, temporal, redis, alloy, caddy) | GH Env Secret → `deploy-infra.sh` → `.env` on VM               | GH Environment Secrets |
+| D    | CI-only (workflow consumption, never runtime)                            | GH Env Secret → workflow `env:` block                          | GH Environment Secrets |
+| E    | Repo-level CI (cross-env, one value per repo)                            | GH Repo Secret                                                 | GH Repo Secrets        |
+| F    | Local dev only                                                           | `.env.local` (gitignored)                                      | Operator's laptop      |
+| G    | Derived from repo state at provision time (e.g. `nodes/*` listing)       | Computed by loader; written alongside other catalog values     | Auto-generated         |
 
-Routing checklist: [`.claude/commands/env-update.md`](../../commands/env-update.md) §0.5.
+Full tier definitions + invariants: [`docs/spec/secrets-classification.md`](../../../docs/spec/secrets-classification.md).
+Layer-cake framing (Identity → AuthN → AuthZ → Secrets → DAO → Operator): [`docs/spec/access-control-charter.md`](../../../docs/spec/access-control-charter.md).
+Routing checklist (file-by-file propagation): [`.claude/commands/env-update.md`](../../commands/env-update.md) §0.5.
 
 ## Decision tree — how do I write / rotate the value?
 
@@ -62,19 +67,39 @@ The killer rule: **no human types a secret VALUE into a UI in production.** Auto
 - `valueFrom: secretKeyRef` per env var in pod spec — violates Invariant 3.
 - Base64-in-git "encryption" — violates Invariant 4.
 - Sealed Secrets / SOPS+ksops — explicitly rejected per `proj.security-hardening` Design Notes.
+- Editing `scripts/setup-secrets.ts` to add/remove a SECRETS array entry — there isn't one. The script loads YAML via `scripts/lib/secrets-catalog-loader.ts`. Edit the appropriate `secrets-catalog.yaml` instead.
+- ExternalSecret manifests under `infra/k8s/secrets/external-secrets/<env>/<node>/` for node-template — they moved to `nodes/node-template/k8s/external-secrets/<env>/` (node-domain). The aggregator references the node-tree path.
+
+## The catalog (per-node YAML + Zod loader)
+
+`scripts/setup-secrets.ts` does NOT hold a hardcoded SECRETS array. It calls a Zod-validated loader that walks YAML catalogs:
+
+| File                                       | Domain                                                                             | Holds                                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `nodes/<node>/.cogni/secrets-catalog.yaml` | **node-domain** (single-node-scope: poly engineer can add a poly secret in ONE PR) | A1/A2 entries the node owns; `service:` auto-fills from parent dir         |
+| `infra/secrets-catalog.yaml`               | **operator-domain**                                                                | `_shared`, `_system`, B/D/E/G entries + A2 placeholders for unported nodes |
+| `scripts/lib/secrets-catalog-loader.ts`    | **operator-domain (substrate)**                                                    | Zod schema + walker + uniqueness + service-allowlist assertions            |
+
+**To add a secret to your node:** edit `nodes/<your-node>/.cogni/secrets-catalog.yaml`. One PR, your node domain. Don't touch operator-domain files.
+**To add an operator-domain secret (B/D/E/G, or `_shared` cross-cutting):** edit `infra/secrets-catalog.yaml`. Operator-domain PR.
+**The loader rejects at module load:** missing `tier`, name collision across files, per-node `service:` mismatch with parent dir, unknown `service:` value not in the allowlist (`_shared`/`_system` + present nodes + canonical-future-domain names from `node-ci-cd-contract.md`).
 
 ## Files to read by topic
 
 | If you're doing…                              | Read                                                                                                                                                                   |
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Adding a new secret to an existing service    | [`docs/guides/secrets-add-new.md`](../../../docs/guides/secrets-add-new.md)                                                                                            |
+| Understanding the tier system + invariants    | [`docs/spec/secrets-classification.md`](../../../docs/spec/secrets-classification.md)                                                                                  |
+| The layered authority model (Identity → DAO)  | [`docs/spec/access-control-charter.md`](../../../docs/spec/access-control-charter.md)                                                                                  |
+| Adding a new secret to your node              | Edit `nodes/<node>/.cogni/secrets-catalog.yaml` + read [`docs/guides/secrets-add-new.md`](../../../docs/guides/secrets-add-new.md)                                     |
+| Adding a `_shared` / B / D / E / G secret     | Edit `infra/secrets-catalog.yaml`                                                                                                                                      |
 | Rotating an existing secret                   | [`docs/guides/secrets-rotate.md`](../../../docs/guides/secrets-rotate.md)                                                                                              |
 | Following the bootstrap flow                  | [`docs/runbooks/fork-quickstart.md`](../../../docs/runbooks/fork-quickstart.md)                                                                                        |
-| Adding a new service (new k8s Deployment)     | [`docs/guides/node-formation-guide.md`](../../../docs/guides/node-formation-guide.md) + ESO ExternalSecret dir                                                         |
+| Adding a new service (new k8s Deployment)     | [`docs/guides/node-formation-guide.md`](../../../docs/guides/node-formation-guide.md) + add ExternalSecret under `nodes/<node>/k8s/external-secrets/<env>/`            |
 | Touching substrate provisioning               | [`scripts/setup/provision-env-vm.sh`](../../../scripts/setup/provision-env-vm.sh) Phases 5b.1–5b.5                                                                     |
 | Touching the CLI                              | [`scripts/secrets/set-secret.sh`](../../../scripts/secrets/set-secret.sh) + test [`scripts/ci/tests/set-secret.test.sh`](../../../scripts/ci/tests/set-secret.test.sh) |
-| Touching ExternalSecret manifests             | `infra/k8s/secrets/external-secrets/<env>/<service>/` (+ ClusterSecretStore at parent)                                                                                 |
-| Touching substrate Argo Applications          | `infra/k8s/argocd/{openbao,external-secrets}-application.yaml` (PR #43)                                                                                                |
+| Touching the loader / catalog schema          | [`scripts/lib/secrets-catalog-loader.ts`](../../../scripts/lib/secrets-catalog-loader.ts) (Zod schema + walker)                                                        |
+| Touching node-template's ExternalSecret       | `nodes/node-template/k8s/external-secrets/<env>/` (per-node, node-domain). Aggregator at `infra/k8s/secrets/external-secrets/<env>/kustomization.yaml`                 |
+| Touching substrate Argo Applications          | `infra/k8s/argocd/{openbao,external-secrets}-application.yaml`                                                                                                         |
 | Touching the env-var classification routing   | [`.claude/commands/env-update.md`](../../commands/env-update.md) — k8s app vs Compose-infra split                                                                      |
 | Designing a new workflow that handles secrets | This file + `proj.agentic-fork-bootstrap` anti-patterns. Run it past the killer rule.                                                                                  |
 
