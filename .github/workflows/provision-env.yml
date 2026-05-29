@@ -159,13 +159,23 @@ jobs:
           # The stack-level /api/serviceaccounts endpoint is glsa_-only; not
           # used here.
           # Optional path: all unset → log + continue (Phase 5e graceful skip).
-          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" && -z "${GRAFANA_URL}" && -z "${GRAFANA_CLOUD_ORG_SLUG}" ]]; then
-            echo "::notice::Grafana auto-mint disabled — GH_GRAFANA_CLOUD_ADMIN_TOKEN/GH_GRAFANA_URL/GH_GRAFANA_ORG_SLUG unset. Scorecard row 5 will stay 🟡."
+          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" && -z "${GRAFANA_URL}" ]]; then
+            echo "::notice::Grafana auto-mint disabled — GH_GRAFANA_CLOUD_ADMIN_TOKEN/GH_GRAFANA_URL unset. Scorecard row 5 will stay 🟡."
             exit 0
           fi
-          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" || -z "${GRAFANA_URL}" || -z "${GRAFANA_CLOUD_ORG_SLUG}" ]]; then
-            echo "::error::Set ALL THREE of GH_GRAFANA_CLOUD_ADMIN_TOKEN + GH_GRAFANA_URL + GH_GRAFANA_ORG_SLUG, or none. See Step 6.2 of docs/runbooks/fork-quickstart.md."
+          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" || -z "${GRAFANA_URL}" ]]; then
+            echo "::error::Set BOTH GH_GRAFANA_CLOUD_ADMIN_TOKEN and GH_GRAFANA_URL, or neither. See Step 6.2 of docs/runbooks/fork-quickstart.md."
             exit 2
+          fi
+          # Auto-derive org slug from URL host when GH_GRAFANA_ORG_SLUG unset.
+          # Grafana Cloud stack URLs are typically https://<slug>.grafana.net
+          # where <slug> matches the org slug for single-stack orgs (common
+          # case). Multi-stack orgs or custom domains: set GH_GRAFANA_ORG_SLUG
+          # explicitly to disambiguate.
+          if [[ -z "${GRAFANA_CLOUD_ORG_SLUG}" ]]; then
+            HOST="${GRAFANA_URL#https://}"; HOST="${HOST%%/*}"
+            GRAFANA_CLOUD_ORG_SLUG="${HOST%.grafana.net}"
+            echo "::notice::GH_GRAFANA_ORG_SLUG unset — derived '${GRAFANA_CLOUD_ORG_SLUG}' from GRAFANA_URL host. Set GH_GRAFANA_ORG_SLUG explicitly if your org slug differs from your stack subdomain."
           fi
           MINT_URL="https://grafana.com/orgs/${GRAFANA_CLOUD_ORG_SLUG}/access-policies"
           SCOPES="stacks:read, stack-service-accounts:write, accesspolicies:read, accesspolicies:write (use 'Add scope' dropdown — these are NOT the default data-plane checkboxes)"

@@ -76,20 +76,22 @@ PUSH_POLICY_NAME="cogni-${FORK_SLUG}-${DEPLOY_ENV}-push"
 CLOUD_API="https://grafana.com/api"
 
 # ─── Graceful skip ───────────────────────────────────────────────────
-# All three Cloud inputs unset → skip Phase 5e (scorecard row 5 stays 🟡).
-# GRAFANA_CLOUD_ORG_SLUG was added when the 403-on-/api/orgs bug surfaced
-# (access-policy tokens scoped to one org cannot list all orgs); see the
-# preflight comment in provision-env.yml for the verified endpoint matrix.
-if [[ -z "${GH_GRAFANA_CLOUD_ADMIN_TOKEN:-}" && -z "${GRAFANA_URL:-}" && -z "${GRAFANA_CLOUD_ORG_SLUG:-}" ]]; then
-  log_info "GH_GRAFANA_CLOUD_ADMIN_TOKEN / GRAFANA_URL / GRAFANA_CLOUD_ORG_SLUG all unset — skipping (scorecard row 5 stays 🟡)"
+# Token + URL both unset → skip Phase 5e (scorecard row 5 stays 🟡).
+if [[ -z "${GH_GRAFANA_CLOUD_ADMIN_TOKEN:-}" && -z "${GRAFANA_URL:-}" ]]; then
+  log_info "GH_GRAFANA_CLOUD_ADMIN_TOKEN / GRAFANA_URL both unset — skipping (scorecard row 5 stays 🟡)"
   exit 0
 fi
-# Partial config is a setup error (the workflow preflight catches this, but
-# a direct script invocation needs the same gate).
-if [[ -z "${GH_GRAFANA_CLOUD_ADMIN_TOKEN:-}" || -z "${GRAFANA_URL:-}" || -z "${GRAFANA_CLOUD_ORG_SLUG:-}" ]]; then
-  log_error "Set ALL THREE of GH_GRAFANA_CLOUD_ADMIN_TOKEN + GRAFANA_URL + GRAFANA_CLOUD_ORG_SLUG, or none."
-  log_error "See docs/runbooks/fork-quickstart.md §6.2 rows 8-10."
+if [[ -z "${GH_GRAFANA_CLOUD_ADMIN_TOKEN:-}" || -z "${GRAFANA_URL:-}" ]]; then
+  log_error "Set BOTH GH_GRAFANA_CLOUD_ADMIN_TOKEN and GRAFANA_URL, or neither."
   exit 1
+fi
+# Auto-derive org slug from URL host when not explicitly set.
+# https://<slug>.grafana.net → <slug>. Override via GH_GRAFANA_ORG_SLUG for
+# multi-stack orgs or custom domains where slug ≠ subdomain.
+if [[ -z "${GRAFANA_CLOUD_ORG_SLUG:-}" ]]; then
+  HOST="${GRAFANA_URL#https://}"; HOST="${HOST%%/*}"
+  GRAFANA_CLOUD_ORG_SLUG="${HOST%.grafana.net}"
+  log_info "GRAFANA_CLOUD_ORG_SLUG unset — derived '$GRAFANA_CLOUD_ORG_SLUG' from URL host"
 fi
 
 # ─── Preflight: MUST be a glc_ Cloud admin token ─────────────────────
