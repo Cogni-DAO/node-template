@@ -231,17 +231,18 @@ fi
 [[ -n "$STACK" && "$STACK" != "null" ]] || { log_error "no stack found for org $ORG_SLUG"; exit 1; }
 
 STACK_SLUG=$(echo "$STACK" | jq -r '.slug')
+STACK_ID=$(echo "$STACK" | jq -r '.id')
 REGION_SLUG=$(echo "$STACK" | jq -r '.regionSlug')
 LOKI_WRITE_URL=$(echo "$STACK" | jq -r '.hlInstanceUrl + "/loki/api/v1/push"')
 LOKI_USERNAME=$(echo "$STACK" | jq -r '.hlInstanceId')
 PROMETHEUS_REMOTE_WRITE_URL=$(echo "$STACK" | jq -r '.hmInstancePromUrl + "/api/prom/push"')
 PROMETHEUS_USERNAME=$(echo "$STACK" | jq -r '.hmInstancePromId')
 
-for v in STACK_SLUG REGION_SLUG LOKI_WRITE_URL LOKI_USERNAME PROMETHEUS_REMOTE_WRITE_URL PROMETHEUS_USERNAME; do
+for v in STACK_SLUG STACK_ID REGION_SLUG LOKI_WRITE_URL LOKI_USERNAME PROMETHEUS_REMOTE_WRITE_URL PROMETHEUS_USERNAME; do
   val="${!v}"
   [[ -n "$val" && "$val" != "null" ]] || { log_error "missing $v in stack response: $STACK"; exit 1; }
 done
-log_info "  stack slug=$STACK_SLUG region=$REGION_SLUG"
+log_info "  stack slug=$STACK_SLUG id=$STACK_ID region=$REGION_SLUG"
 log_info "  loki=$LOKI_WRITE_URL (user $LOKI_USERNAME)"
 log_info "  prom=$PROMETHEUS_REMOTE_WRITE_URL (user $PROMETHEUS_USERNAME)"
 
@@ -376,7 +377,7 @@ if [[ -z "$POLICY_ID" || "$POLICY_ID" == "null" ]]; then
   POLICY_BODY=$(jq -n \
     --arg n "$PUSH_POLICY_NAME" \
     --arg d "$PUSH_POLICY_NAME" \
-    --arg id "$STACK_SLUG" \
+    --arg id "$STACK_ID" \
     '{name:$n, displayName:$d,
       scopes:["logs:write","metrics:write","logs:read","metrics:read"],
       realms:[{type:"stack", identifier:$id, labelPolicies:[]}]}')
@@ -385,11 +386,19 @@ if [[ -z "$POLICY_ID" || "$POLICY_ID" == "null" ]]; then
   case "$CODE" in
     200|201) POLICY_ID=$(echo "$BODY" | jq -r '.id') ;;
     409)
-      log_warn "  409 on create — re-searching"
+      log_warn "  409 on create: $BODY"
+      log_warn "  re-searching by name + falling back to full list match"
       RESP=$(cloud_call GET "$CLOUD_API/v1/accesspolicies?region=$REGION_SLUG&name=$PUSH_POLICY_NAME")
       SPLIT_RESP "$RESP"
-      [[ "$CODE" == "200" ]] || { log_error "re-search HTTP $CODE"; exit 1; }
+      [[ "$CODE" == "200" ]] || { log_error "re-search HTTP $CODE: $BODY"; exit 1; }
       POLICY_ID=$(echo "$BODY" | jq -r --arg n "$PUSH_POLICY_NAME" '.items[]? | select(.name == $n) | .id' | head -1)
+      if [[ -z "$POLICY_ID" || "$POLICY_ID" == "null" ]]; then
+        RESP=$(cloud_call GET "$CLOUD_API/v1/accesspolicies?region=$REGION_SLUG")
+        SPLIT_RESP "$RESP"
+        [[ "$CODE" == "200" ]] || { log_error "full-list search HTTP $CODE: $BODY"; exit 1; }
+        POLICY_ID=$(echo "$BODY" | jq -r --arg n "$PUSH_POLICY_NAME" '.items[]? | select(.name == $n) | .id' | head -1)
+        [[ -n "$POLICY_ID" && "$POLICY_ID" != "null" ]] || { log_error "409 but no policy with name=$PUSH_POLICY_NAME in region=$REGION_SLUG — likely a non-name-conflict 409 (e.g. invalid realm). Raw policies: $(echo "$BODY" | jq -c '.items | map({id,name,realms})')"; exit 1; }
+      fi
       ;;
     *) log_error "access-policy create HTTP $CODE: $BODY"; exit 1 ;;
   esac
