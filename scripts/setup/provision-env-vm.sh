@@ -1325,11 +1325,11 @@ if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
 else
   ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
 
-  # APP_BASE_URL + NEXTAUTH_URL are derived from DOMAIN (catalog tier A1,
-  # generate.kind: derive-env). Compute here once for the seed loop — the
-  # Compose .env write at Phase 5 already emits APP_BASE_URL the same way.
-  # If either of these drifts from DOMAIN, secrets-classification.md
-  # `derive-env` generator semantics are violated — keep them aligned.
+  # Derive APP_BASE_URL + NEXTAUTH_URL from DOMAIN (catalog kind: derive-env).
+  # TODO(proj.agentic-fork-bootstrap Walk-row 4): replace this parallel render
+  # with one call into the catalog generator once Phase 5c moves to ESO
+  # PushSecret / a yq-loop over the catalog.
+  : "${DOMAIN:?DOMAIN must be set before Phase 5c — required for derive-env keys}"
   export APP_BASE_URL="https://${DOMAIN}"
   export NEXTAUTH_URL="https://${DOMAIN}"
 

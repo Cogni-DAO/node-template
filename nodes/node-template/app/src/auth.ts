@@ -39,6 +39,7 @@ import {
   userProfiles,
   users,
 } from "@/shared/db/schema";
+import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
 export const authSecret =
@@ -133,11 +134,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           const siwe = new SiweMessage(credentials.message as string);
-          // NEXTAUTH_URL is Zod-required (server-env.ts); fail-loud at boot
-          // is the contract per secrets-management.md Invariant 12. The
-          // prior `?? "http://localhost:3000"` fallback masked Phase-5c
-          // seed-loop drift (the incident that surfaced this code path).
-          const nextAuthUrl = new URL(process.env.NEXTAUTH_URL as string);
+          const nextAuthUrl = new URL(serverEnv().NEXTAUTH_URL);
 
           // Convert Headers to plain object for getCsrfToken
           const headers: Record<string, string> = {};
