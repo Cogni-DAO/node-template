@@ -194,10 +194,41 @@ export function loadSecretsCatalog(opts: LoadOptions): LoadResult {
   }
 
   // 2. Load operator-domain catalog (single file).
+  // Build the set of valid operator-catalog `service:` values: pseudo-services
+  // (_shared/_system) + present-day node directories + canonical-but-future
+  // node domains from node-ci-cd-contract.md (poly, resy). The future-domain
+  // allowlist exists so A2 placeholder entries in node-template baseline
+  // don't fail the loader before cogni-poly imports them. Catches typos like
+  // `service: nodee-template` that would otherwise produce an unreconcilable
+  // OpenBao path silently.
+  const knownNodes = existsSync(nodesAbsDir)
+    ? new Set(readdirSync(nodesAbsDir))
+    : new Set<string>();
+  const CANONICAL_FUTURE_DOMAINS = new Set([
+    "poly",
+    "resy",
+    "node-template",
+    "operator",
+  ]);
+  const operatorServiceAllowlist = new Set<string>([
+    "_shared",
+    "_system",
+    ...knownNodes,
+    ...CANONICAL_FUTURE_DOMAINS,
+  ]);
+
   const operatorAbs = join(opts.repoRoot, operatorCatalogPath);
   if (existsSync(operatorAbs)) {
     const parsed = parseFile(operatorAbs);
     for (const entry of parsed.secrets) {
+      if (
+        entry.service !== undefined &&
+        !operatorServiceAllowlist.has(entry.service)
+      ) {
+        throw new Error(
+          `${operatorAbs}: entry ${entry.name} declares service: "${entry.service}" which is not one of [${[...operatorServiceAllowlist].sort().join(", ")}]. Add a nodes/<name>/ directory or use _shared/_system; for future-node placeholders, the name must match a canonical domain in node-ci-cd-contract.md.`
+        );
+      }
       allEntries.push({ entry, source: operatorAbs });
     }
   }

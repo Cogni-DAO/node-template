@@ -36,7 +36,12 @@ A node engineer can add, rotate, or remove a secret consumed by their node in **
 
 ## Design
 
-### Proposed file layout
+### Shipped file layout
+
+(Differs slightly from the initial proposal — consolidated to two file types
+instead of one-file-per-service. Reason: fewer files, single read path in the
+loader, and `_shared` / `_system` are small enough that splitting them adds
+churn without separation value.)
 
 ```
 nodes/<node>/
@@ -48,23 +53,30 @@ nodes/<node>/
       candidate-a/
         external-secret.yaml
         kustomization.yaml
-      preview/
-      production/
+      preview/                         ← (empty until preview env spins up)
+      production/                      ← (empty until production env spins up)
 
 infra/
   catalog/
-    <node>.yaml                        ← stays: per-service infra topology (operator owns)
+    <node>.yaml                        ← stays: per-service infra topology
     _schema.json                       ← stays
-    _shared-secrets.yaml               ← NEW: cross-node baseline secrets
+    secrets-catalog.yaml               ← NEW: ONE consolidated operator-domain catalog
+                                           — _shared, _system, B/D/E, A2 placeholders
   k8s/secrets/external-secrets/
-    cluster-secret-store.yaml          ← stays: substrate, env-agnostic, operator owns
-    candidate-a/_shared/               ← optional: ExternalSecret for _shared path
+    cluster-secret-store.yaml          ← stays: substrate, env-agnostic
+    candidate-a/
+      kustomization.yaml               ← aggregator: references node-tree paths
+      scheduler-worker/                ← stays operator-domain (not a node)
 
 scripts/
-  setup-secrets.ts                     ← REFACTORED: loader walks nodes/*/.cogni/
+  lib/
+    secrets-catalog-loader.ts          ← NEW: Zod-validated YAML loader
+  setup-secrets.ts                     ← REFACTORED: loader-driven, ~600 lines (was ~1600)
 ```
 
-The split: **substrate** (CSS, policies, loader, ExternalSecret reconciliation) stays operator-domain. **Per-node declarations** (which secrets, which tier, which OpenBao path, which ExternalSecret) move to node-domain.
+The split: **substrate** (CSS, policies, loader, ExternalSecret reconciliation)
+stays operator-domain. **Per-node declarations** (which secrets, which tier,
+which OpenBao path, which ExternalSecret) move to node-domain.
 
 ### Proposed YAML schema for `nodes/<node>/.cogni/secrets-catalog.yaml`
 
@@ -108,9 +120,16 @@ The `service:` field is the OpenBao path component (per `secrets-classification.
 
 `generate:` is a declarative tag interpreted by the loader (`{ kind: hex, bytes: 32 }` → `openssl rand -hex 32`). Avoids embedding JS lambdas in YAML. Supported kinds: `hex`, `base64`, `sk-cogni`, `static` (with `value:`).
 
-### `infra/catalog/_shared-secrets.yaml`
+### `infra/catalog/secrets-catalog.yaml` (operator-domain)
 
-Same schema, `service: _shared`. Holds cross-node baseline secrets (`LITELLM_MASTER_KEY`, `SCHEDULER_API_TOKEN`, `BILLING_INGEST_TOKEN`, etc.). Operator-domain because cross-cutting.
+Same schema, but each entry declares its own `service:` field. Holds:
+
+- `service: _shared` — cross-node A1 baseline (LITELLM_MASTER_KEY, SCHEDULER_API_TOKEN, BILLING_INGEST_TOKEN, GRAFANA_URL, GRAFANA_SERVICE_ACCOUNT_TOKEN)
+- `service: _system` — G-tier derived (COGNI_NODE_DBS)
+- `service: <node>` for A2 placeholders (poly entries, until cogni-poly ports them to `nodes/poly/.cogni/secrets-catalog.yaml`)
+- no `service:` field — B/D/E tiers (Compose-infra, CI-only, repo-level)
+
+Loader validates that `service:` (when declared) matches `_shared | _system | <known nodes/ dir>` — typos like `nodee-template` are rejected at module load.
 
 ### Loader change in `scripts/setup-secrets.ts`
 

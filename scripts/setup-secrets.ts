@@ -200,16 +200,22 @@ function applyTransform(secret: Secret, value: string): string {
 
 /**
  * Categorize a secret as belonging to a specific node (--node <name> filter).
- * Routing-driven: a secret belongs to <node> iff its OpenBao service matches
- * the node name OR it's a cross-cutting `_shared` entry the node also needs
- * to provision. Replaces the legacy hardcoded `isPolySecret`.
+ * Routing-driven: a secret belongs to <node> iff its OpenBao service is
+ *   - the node name itself (A1/A2 entries the node owns), OR
+ *   - `_shared` (cross-service A1 entries the node also needs), OR
+ *   - `_system` (G-tier derived entries — node-list dependent and provisioned
+ *     alongside any node's catalog).
  *
- * Excludes `_system` (derived from repo state, provisioned irrespective of
- * --node) and operator-domain B/D/E entries (no service in OpenBao).
+ * Excludes operator-domain B/D/E entries (no service in OpenBao; Compose-infra
+ * and CI-only). Replaces the legacy hardcoded `isPolySecret`.
  */
 function isNodeSecret(secret: Secret, nodeName: string): boolean {
   const r = SECRET_ROUTING[secret.name];
-  return r?.service === nodeName || r?.service === "_shared";
+  return (
+    r?.service === nodeName ||
+    r?.service === "_shared" ||
+    r?.service === "_system"
+  );
 }
 
 // ── Database DSN helpers ─────────────────────────────────────────────────────
