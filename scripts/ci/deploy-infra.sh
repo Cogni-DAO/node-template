@@ -815,8 +815,12 @@ fi
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 3: Authenticate to GHCR
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-log_info "Logging into GHCR for private image pulls..."
-echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+if [[ -n "${GHCR_DEPLOY_TOKEN:-}" && -n "${GHCR_USERNAME:-}" ]]; then
+  log_info "Logging into GHCR for private image pulls..."
+  echo "${GHCR_DEPLOY_TOKEN}" | docker login ghcr.io -u "${GHCR_USERNAME}" --password-stdin
+else
+  log_info "GHCR creds empty — skipping login (fresh fork w/o access to private images; local builds + public pulls only)"
+fi
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 # Step 3.5: Pull sandbox images (may update on :latest)
