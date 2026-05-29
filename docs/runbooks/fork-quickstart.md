@@ -248,6 +248,33 @@ If you set `GH_GRAFANA_PARENT_SA_TOKEN` at Step 6.2, observability creds (`GRAFA
 
 Without a real `OPENROUTER_API_KEY`, LLM router calls fail at runtime. The workflow scorecard prints the full pass-through list; `ls infra/catalog/*.yaml` is the canonical inventory. See [`docs/guides/secrets-add-new.md`](../guides/secrets-add-new.md) for the full playbook.
 
+##### 6.7 · Post-bootstrap Grafana / Loki access (for the next agent)
+
+After Step 6.5 decrypted the init-artifact bundle, the auto-minted Grafana child SA token lives at:
+
+```
+.local/<env>-grafana-sa-token.json
+```
+
+This is the canonical read-token home for laptop-side and CI ad-hoc queries. **Future agents do not need to mint, copy, or re-source anything** — the helper and skills below auto-source it.
+
+| Surface                                      | What it is                      | How it gets the token                                                                                          |
+| -------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `scripts/loki-query.sh`                      | Shell helper, no MCP dependency | Auto-sources `.local/<env>-grafana-sa-token.json` if `GRAFANA_URL` / `GRAFANA_SERVICE_ACCOUNT_TOKEN` are unset |
+| `.claude/commands/logs.md`                   | `/logs` slash command           | Calls `scripts/loki-query.sh` when the Grafana MCP is unavailable                                              |
+| `.claude/skills/validate-candidate/SKILL.md` | `/validate-candidate` scorecard | Calls `scripts/loki-query.sh` for the observability column when MCP is down                                    |
+
+Verify your fork's auto-source works (no env vars needed):
+
+```
+unset GRAFANA_URL GRAFANA_SERVICE_ACCOUNT_TOKEN
+scripts/loki-query.sh '{namespace="cogni-<env>"}' 10 5 | jq '.data.result | length'
+```
+
+Should print an integer > 0 once Alloy push is wired. **If it prints 0**: read access works but nothing is shipping — Alloy push is a separate Walk-tier item (`proj.agentic-fork-bootstrap.md`). Mint succeeded; logs aren't flowing yet.
+
+Post-rotation (token rotates on every re-run of `provision-env.yml`): the artifact stays the bootstrap snapshot; the canonical post-rotation source is `bao kv get -mount=cogni <env>/_shared`. For most uses, re-decrypting the latest run's artifact is simpler.
+
 #### 7 · Drive to green
 
 - On transient failure (network, rate-limit, eventual-consistency), diagnose then retry yourself. Don't escalate.

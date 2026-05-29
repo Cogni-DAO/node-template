@@ -9,8 +9,11 @@
 #   GRAFANA_URL                      e.g. https://<org>.grafana.net/
 #   GRAFANA_SERVICE_ACCOUNT_TOKEN    `glsa_…` token w/ datasource:read + logs:read
 #
-# Auto-sources (if env vars are missing): $COGNI_ENV_FILE, then
-# ./.env.canary and ./.env.local in the current working directory.
+# Auto-sources (if env vars are missing), in this order:
+#   1. $COGNI_ENV_FILE, ./.env.cogni, ./.env.canary, ./.env.local
+#   2. .local/${DEPLOY_ENV:-candidate-a}-grafana-sa-token.json  (the Phase 5e
+#      auto-mint artifact bundle — see fork-quickstart.md Step 6.5)
+#   3. .local/*-grafana-sa-token.json  (fallback: any decrypted artifact)
 #
 # Usage:
 #   scripts/loki-query.sh '<logql>' [minutes_back=30] [limit=200] [datasource_uid=grafanacloud-logs]
@@ -42,6 +45,26 @@ if [[ -z "${GRAFANA_URL:-}" || -z "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
       set -a; . "$candidate"; set +a
     fi
   done
+fi
+
+# Phase 5e bootstrap-artifact fallback — if the operator decrypted the init
+# artifact bundle (fork-quickstart.md Step 6.5), the auto-minted child SA
+# token lives at .local/<env>-grafana-sa-token.json. Pick it up so /logs +
+# /validate-candidate + ad-hoc CLI queries work out-of-the-box on a fresh
+# fork. Honors DEPLOY_ENV first; falls back to any matching artifact.
+if [[ -z "${GRAFANA_URL:-}" || -z "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+  if command -v jq >/dev/null 2>&1; then
+    shopt -s nullglob
+    artifact_candidates=(".local/${DEPLOY_ENV:-candidate-a}-grafana-sa-token.json" \
+                         .local/*-grafana-sa-token.json)
+    shopt -u nullglob
+    for f in "${artifact_candidates[@]}"; do
+      [[ -r "$f" ]] || continue
+      : "${GRAFANA_URL:=$(jq -r '.url // empty' "$f" 2>/dev/null)}"
+      : "${GRAFANA_SERVICE_ACCOUNT_TOKEN:=$(jq -r '.token // empty' "$f" 2>/dev/null)}"
+      [[ -n "${GRAFANA_URL:-}" && -n "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]] && break
+    done
+  fi
 fi
 
 : "${GRAFANA_URL:?GRAFANA_URL not set (export it or point COGNI_ENV_FILE at an .env with it)}"
