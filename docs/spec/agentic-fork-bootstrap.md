@@ -72,28 +72,22 @@ spread across script literals**, not one declarative source.
 After this PR, identity has three clean layers, each with one source of
 truth:
 
-| Layer    | SSOT                                   | Used for                                                              |
-| -------- | -------------------------------------- | --------------------------------------------------------------------- |
-| **Repo** | `git remote get-url origin` (implicit) | `COGNI_REPO_URL`, push targets, GH API repo arg                       |
-| **Fork** | **`infra/fork.yaml`** (new)            | `domain.root` (Cloudflare zone) — composes all FQDNs                  |
-| **Node** | `infra/catalog/<node>.yaml` (existing) | `NODE_TARGETS`, per-env subdomain prefix, image tags, deploy branches |
+| Layer    | SSOT                                    | Used for                                                                  |
+| -------- | --------------------------------------- | ------------------------------------------------------------------------- |
+| **Repo** | `git remote get-url origin` (implicit)  | `COGNI_REPO_URL`, push targets, GH API repo arg                           |
+| **Fork** | **`FORK_DOMAIN_ROOT` GH repo variable** | Cloudflare zone — composes all FQDNs (non-secret, plaintext, fork-scoped) |
+| **Node** | `infra/catalog/<node>.yaml` (existing)  | `NODE_TARGETS`, per-env subdomain prefix, image tags, deploy branches     |
 
-`infra/fork.yaml` declares one field:
-
-```yaml
-schema_version: 1
-domain:
-  root: cognidao.org # Cloudflare zone you own
-```
-
-Forking changes that one value. Every URL re-derives. No script literal
-references the zone name; no `for node in operator poly resy` lives in
-provisioning code. The agent walks the catalog and the fork-spec.
+`FORK_DOMAIN_ROOT` is set once per fork via `gh variable set` — no file
+commit, no upstream-merge conflict. Forking changes that one value.
+Every URL re-derives. No script literal references the zone name; no
+`for node in operator poly resy` lives in provisioning code. The agent
+walks the catalog and the fork-spec.
 
 Composition rule: `public_url_for_target(env, node)` reads
 `infra/catalog/<node>.yaml::public_url.<env>` (the **subdomain prefix**;
-empty string = root domain) and composes with `infra/fork.yaml::domain.root`
-as `https://<prefix>.<root>` (or `https://<root>` if prefix is empty).
+empty string = root domain) and composes with `FORK_DOMAIN_ROOT` as
+`https://<prefix>.<root>` (or `https://<root>` if prefix is empty).
 
 ## V1 Credential Floor — 5 Services, 8 Lines
 

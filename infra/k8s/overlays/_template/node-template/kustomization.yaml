@@ -5,7 +5,7 @@
 # (infra/k8s/overlays/<env>/node-template/) references this directory for
 # the env-agnostic parts: NodePort, EndpointSlice deletions, and a
 # placeholder ExternalName host (`vm.cognidao.org`) that provision-env-vm.sh
-# rewrites to `<env>.vm.<fork.yaml::domain.root>` per deploy branch.
+# rewrites to `<env>.vm.<FORK_DOMAIN_ROOT>` per deploy branch.
 #
 # Per-env wrappers add ONLY:
 #   • namespace

@@ -55,15 +55,15 @@ image_tag_for_target() {
   printf '%s:%s%s' "$image_name" "$base_tag" "$suffix"
 }
 
-# Per-env public URL composer. Reads two files:
+# Per-env public URL composer. Reads:
 #   • infra/catalog/<target>.yaml::public_url.<env>  → subdomain prefix
 #       (empty string = root domain; omitted entirely = no public Ingress)
-#   • infra/fork.yaml::domain.root                    → Cloudflare zone
+#   • FORK_DOMAIN_ROOT env var                       → Cloudflare zone
 # Composes `https://<prefix>.<root>` (or `https://<root>` if prefix empty).
 #
 # Returns "" if the catalog entry omits `public_url.<env>` (service-type
-# targets, e.g. scheduler-worker) OR if fork.yaml is missing — callers
-# treat "" as a skip (no Ingress to verify). bug.5002 + B2 (fork-portability).
+# targets, e.g. scheduler-worker) OR if FORK_DOMAIN_ROOT is unset —
+# callers treat "" as a skip (no Ingress to verify). bug.5002 + B2.
 public_url_for_target() {
   local env="$1" target="$2" prefix root catalog_file
   if [ -z "${_image_tags_suffix_cache[$target]+x}" ]; then
@@ -80,10 +80,8 @@ public_url_for_target() {
   prefix=$(yq ".public_url.\"${env}\"" "$catalog_file")
   [ "$prefix" = "null" ] && prefix=""
 
-  root=$(yq -N '.domain.root // ""' "${_image_tags_repo_root}/infra/fork.yaml" 2>/dev/null)
-  # bash precedence: must use explicit `if`, not `A || B && return`. The
-  # short-circuit `||` would skip the `return 0` when A is true.
-  if [ -z "$root" ] || [ "$root" = "null" ]; then
+  root="${FORK_DOMAIN_ROOT:-}"
+  if [ -z "$root" ]; then
     return 0
   fi
 

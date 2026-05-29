@@ -78,7 +78,7 @@ case "$DEPLOY_ENV" in
     # spinning up candidate-b, candidate-c, ... only needs (1) a matching
     # infra/k8s/argocd/${slot}-applicationset.yaml and (2) a matching
     # infra/k8s/overlays/${slot}/ overlay tree. DNS + DOMAIN come from
-    # infra/fork.yaml::domain.root composed with the convention below.
+    # FORK_DOMAIN_ROOT env var composed with the convention below.
     SLOT="$DEPLOY_ENV"
     BRANCH="main"
     DEPLOY_BRANCH="deploy/${SLOT}"
@@ -95,19 +95,21 @@ case "$DEPLOY_ENV" in
     ;;
 esac
 
-# Public DOMAIN derives from infra/fork.yaml::domain.root if not explicitly
-# overridden. VM_DNS_HOST always includes the fork slug so sibling repos under
-# one Cloudflare zone do not share generic candidate-a.vm/preview.vm aliases.
+# Public DOMAIN derives from the FORK_DOMAIN_ROOT env var (GH repo
+# variable in the GHA path; exported shell var in the laptop fallback).
+# VM_DNS_HOST always includes the fork slug so sibling repos under one
+# Cloudflare zone do not share generic candidate-a.vm/preview.vm aliases.
 # (B2 + P5 — replaces POLY_DOMAIN/RESY_DOMAIN hardcodes.)
-FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
-if [ -z "$FORK_ROOT" ] || [ "$FORK_ROOT" = "null" ]; then
-  echo "[ERROR] infra/fork.yaml::domain.root missing or empty." >&2
-  echo "[ERROR] Edit infra/fork.yaml to set the Cloudflare zone you own, or export DOMAIN=." >&2
+FORK_ROOT="${FORK_DOMAIN_ROOT:-}"
+if [ -z "$FORK_ROOT" ]; then
+  echo "[ERROR] FORK_DOMAIN_ROOT is not set." >&2
+  echo "[ERROR] Set the GitHub repo variable: gh variable set FORK_DOMAIN_ROOT --body <zone-name>" >&2
+  echo "[ERROR] Or for laptop runs: export FORK_DOMAIN_ROOT=<zone-name>" >&2
   exit 1
 fi
 FORK_SLUG=$(fork_identity_slug "$REPO_ROOT")
 if [ -z "$FORK_SLUG" ]; then
-  echo "[ERROR] Unable to derive fork slug from infra/fork.yaml::fork.slug or git origin." >&2
+  echo "[ERROR] Unable to derive fork slug from FORK_SLUG env var or git origin." >&2
   exit 1
 fi
 VM_DNS_HOST=$(vm_host_for_env "$DEPLOY_ENV" "$FORK_ROOT" "$FORK_SLUG")
@@ -577,7 +579,7 @@ if [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -n "${CLOUDFLARE_ZONE_ID:-}" ]]; t
   done
 
   for fqdn in "${DNS_RECORDS[@]}"; do
-    # Subdomain = FQDN minus the zone root. Use fork.yaml.root if available;
+    # Subdomain = FQDN minus the zone root. Use FORK_DOMAIN_ROOT if available;
     # else fall back to the legacy cognidao.org suffix strip.
     sub="$fqdn"
     if [[ -n "$FORK_ROOT" && "$FORK_ROOT" != "null" ]]; then

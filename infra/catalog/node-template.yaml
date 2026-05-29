@@ -23,11 +23,11 @@ candidate_a_branch: deploy/candidate-a-node-template
 preview_branch: deploy/preview-node-template
 production_branch: deploy/production-node-template
 path_prefix: nodes/node-template/
-# Per-env subdomain prefix. Composed with infra/fork.yaml::domain.root
-# at read time via public_url_for_target (bug.5002 + B2 fork-portability).
+# Per-env subdomain prefix. Composed with FORK_DOMAIN_ROOT env var at
+# read time via public_url_for_target (bug.5002 + B2 fork-portability).
 # Empty string = root domain (typical for production at the apex). Omit
 # the env key entirely to mean "no public Ingress for this env".
-# Forks: leave these prefixes alone — change infra/fork.yaml::domain.root.
+# Forks: leave these prefixes alone — set FORK_DOMAIN_ROOT GH variable.
 public_url:
   candidate-a: node-template-test
   preview: node-template-preview

@@ -121,11 +121,10 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
   exit 2
 fi
 
-# Fork domain: SSOT is infra/fork.yaml::domain.root. The operator already
-# tells us their Cloudflare zone ID in .env.bootstrap; instead of asking
-# them to copy the zone NAME into fork.yaml separately (DRY violation +
-# brittleness risk), we derive the name from the Cloudflare API and
-# auto-populate fork.yaml if empty. Verifies on mismatch.
+# Fork domain: SSOT is FORK_DOMAIN_ROOT (GH repo variable in the GHA
+# path; exported shell var in the laptop fallback). The operator's
+# .env.bootstrap::CLOUDFLARE_ZONE_ID resolves to a zone name we cross-
+# check FORK_DOMAIN_ROOT against. Mismatch = clear abort.
 ZONE_RESP=$(curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
   "https://api.cloudflare.com/client/v4/zones/${CLOUDFLARE_ZONE_ID}")
 ZONE_OK=$(printf '%s' "$ZONE_RESP" | jq -r '.success // false')
@@ -178,51 +177,47 @@ EOF
 fi
 log "Cloudflare token scope: DNS:Edit + Zone Settings:Edit ✓"
 
-FORK_ROOT=$(fork_identity_root "$REPO_ROOT" || echo "")
-if [[ -z "$FORK_ROOT" || "$FORK_ROOT" == "null" ]]; then
-  # Auto-populate from Cloudflare API + auto-commit. Operator's .env.bootstrap
-  # already named the zone; copying it into fork.yaml + crafting a commitlint-
-  # compliant message is mechanical work the bootstrap can do for them. They
-  # just push afterwards. Uses the operator's configured git identity.
-  yq -i ".domain.root = \"${CLOUDFLARE_ZONE_NAME}\"" "$REPO_ROOT/infra/fork.yaml"
-  FORK_ROOT="$CLOUDFLARE_ZONE_NAME"
-  log "Auto-populated ${BOLD}infra/fork.yaml::domain.root = ${CLOUDFLARE_ZONE_NAME}${NC} from Cloudflare API."
-  (
-    cd "$REPO_ROOT"
-    git add infra/fork.yaml
-    # Conventional-format subject (matches commitlint's config-conventional).
-    # Uses operator's configured git identity — fails clearly if unset.
-    if ! git commit -m "chore(bootstrap): set fork.yaml::domain.root from cloudflare api" >/dev/null 2>&1; then
-      err "  Auto-commit failed. Likely missing git identity:"
-      err "    git config user.name  \"<your name>\""
-      err "    git config user.email \"<your@email>\""
-      err "  Then re-run pnpm bootstrap (it will detect fork.yaml is already populated and skip this step)."
-      exit 2
-    fi
-    log "  → committed locally as ${BOLD}chore(bootstrap): set fork.yaml::domain.root from cloudflare api${NC}"
-    log "  → push to your fork: ${BOLD}git push origin \$(git -C $REPO_ROOT branch --show-current)${NC}"
-  )
+FORK_ROOT="${FORK_DOMAIN_ROOT:-}"
+if [[ -z "$FORK_ROOT" ]]; then
+  cat <<EOF >&2
+
+🛑 FORK_DOMAIN_ROOT is not set.
+
+This is the non-secret Cloudflare zone name your fork owns
+(e.g. example.com). Used to derive every public URL.
+
+Set it as a GitHub repo variable:
+  gh variable set FORK_DOMAIN_ROOT --repo <owner>/<repo> --body ${CLOUDFLARE_ZONE_NAME}
+
+For the laptop-fallback path, export it before running:
+  export FORK_DOMAIN_ROOT=${CLOUDFLARE_ZONE_NAME}
+
+(Or add FORK_DOMAIN_ROOT=${CLOUDFLARE_ZONE_NAME} to .env.bootstrap;
+bootstrap.sh sources it under \`set -a\`.)
+
+EOF
+  err "FORK_DOMAIN_ROOT unset. Aborting before VM provisioning."
+  exit 2
 elif [[ "$FORK_ROOT" != "$CLOUDFLARE_ZONE_NAME" ]]; then
-  err "Mismatch: infra/fork.yaml::domain.root='${FORK_ROOT}' but Cloudflare zone ID ${CLOUDFLARE_ZONE_ID} resolves to '${CLOUDFLARE_ZONE_NAME}'."
-  err "Either fork.yaml is stale, .env.bootstrap::CLOUDFLARE_ZONE_ID points at the wrong zone, or you changed zones."
-  err "Reconcile and re-run."
+  err "Mismatch: FORK_DOMAIN_ROOT='${FORK_ROOT}' but Cloudflare zone ID ${CLOUDFLARE_ZONE_ID} resolves to '${CLOUDFLARE_ZONE_NAME}'."
+  err "Reconcile FORK_DOMAIN_ROOT or .env.bootstrap::CLOUDFLARE_ZONE_ID and re-run."
   exit 2
 else
-  log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (fork.yaml + Cloudflare API agree)"
+  log "Fork domain root: ${BOLD}${FORK_ROOT}${NC} (FORK_DOMAIN_ROOT + Cloudflare API agree)"
 fi
 
 FORK_SLUG=$(fork_identity_slug "$REPO_ROOT")
 if [[ -z "$FORK_SLUG" ]]; then
-  err "Unable to derive fork slug from infra/fork.yaml::fork.slug or git origin."
+  err "Unable to derive fork slug from FORK_SLUG env var or git origin."
   exit 2
 fi
 log "Fork infra slug: ${BOLD}${FORK_SLUG}${NC} (used for VM DNS aliases)"
 
 # Derive DOMAIN from FORK_ROOT + DEPLOY_ENV using the same convention as
-# provision-env-vm.sh. Single source (fork.yaml.root), two consumers
-# (bootstrap.sh writes secrets here; provision-env-vm.sh re-derives the
-# same value). Both compute the same answer — no drift risk because the
-# convention is shared.
+# provision-env-vm.sh. Single source (FORK_DOMAIN_ROOT env var), two
+# consumers (bootstrap.sh writes secrets here; provision-env-vm.sh
+# re-derives the same value). Both compute the same answer — no drift
+# risk because the convention is shared.
 DOMAIN=$(domain_for_env "$DEPLOY_ENV" "$FORK_ROOT") || { err "Unsupported DEPLOY_ENV: $DEPLOY_ENV"; exit 2; }
 VM_DNS_HOST=$(vm_host_for_env "$DEPLOY_ENV" "$FORK_ROOT" "$FORK_SLUG")
 log "Derived DOMAIN: ${BOLD}${DOMAIN}${NC} (for $DEPLOY_ENV)"

@@ -59,6 +59,10 @@ jobs:
     timeout-minutes: 60
     env:
       DEPLOY_ENV: ${{ inputs.env }}
+      # Non-secret fork config — GH repo variable, plaintext, fork-owned.
+      # See docs/runbooks/fork-quickstart.md §6.1. Empty/unset → preflight
+      # below aborts with a copy-pasteable `gh variable set` instruction.
+      FORK_DOMAIN_ROOT: ${{ vars.FORK_DOMAIN_ROOT }}
       # Operator minting authority — surfaced from GH env secrets. Loaded
       # into bootstrap.sh via the .env.bootstrap file the next step writes.
       CHERRY_AUTH_TOKEN: ${{ secrets.CHERRY_AUTH_TOKEN }}
@@ -234,26 +238,21 @@ jobs:
               ;;
           esac
 
-      - name: Pre-flight — infra/fork.yaml::domain.root populated
-        # fork.yaml::domain.root is the operator's Cloudflare-zone declaration.
-        # bootstrap.sh's auto-populate-from-API path requires a local git
-        # identity + push permission to commit back, which we deliberately
-        # skip on a runner (Derek's review on PR #43 / handoff). Operator
-        # pre-populates + pushes fork.yaml once per fork; the workflow
-        # rejects an empty value rather than risking a runner-side commit
-        # that would either fail (no identity) or attribute to a bot.
+      - name: Pre-flight — FORK_DOMAIN_ROOT set
+        # FORK_DOMAIN_ROOT is the operator's Cloudflare-zone declaration —
+        # a NON-secret per-fork GH repo variable (plaintext, fork-owned).
+        # No code commit, no upstream-merge conflict. The workflow rejects
+        # an empty value at zero VM spend.
         run: |
           set -euo pipefail
-          root=$(yq -N '.domain.root // ""' infra/fork.yaml)
-          if [[ -z "$root" || "$root" == "null" ]]; then
-            echo "::error::infra/fork.yaml::domain.root is empty."
-            echo "::error::Populate it locally with your Cloudflare zone name, commit, push, then re-run."
-            echo "::error::Example:"
-            echo "::error::  yq -i '.domain.root = \"example.com\"' infra/fork.yaml"
-            echo "::error::  git add infra/fork.yaml && git commit -m 'chore(bootstrap): set fork.yaml::domain.root' && git push"
+          if [[ -z "${FORK_DOMAIN_ROOT:-}" ]]; then
+            echo "::error::FORK_DOMAIN_ROOT GH repo variable is not set."
+            echo "::error::Set it with your Cloudflare zone name:"
+            echo "::error::  gh variable set FORK_DOMAIN_ROOT --repo <owner>/<repo> --body example.com"
+            echo "::error::Then re-run this workflow."
             exit 2
           fi
-          echo "fork.yaml::domain.root = $root"
+          echo "FORK_DOMAIN_ROOT = $FORK_DOMAIN_ROOT"
 
       - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
 
@@ -310,11 +309,11 @@ jobs:
           done
           echo ".env.bootstrap written (${DEPLOY_ENV}, 6 keys populated)"
 
-      - name: Configure git identity (for fork.yaml idempotent no-op + any internal commit)
-        # bootstrap.sh's fork.yaml auto-commit step is a no-op when domain.root
-        # is already populated (the pre-flight above asserts this), but it still
-        # calls `git commit` if the working tree is dirty. Set a bot identity so
-        # that path doesn't crash on a runner.
+      - name: Configure git identity (for any internal commits)
+        # bootstrap.sh's downstream phases (e.g. seed deploy/* branches in
+        # the fork) make commits via gh api. Some git subcommands need a
+        # local identity. Set a bot identity so any such path doesn't
+        # crash on a runner.
         run: |
           git config user.name  "cogni-provision-bot"
           git config user.email "ops+provision@cognidao.org"
