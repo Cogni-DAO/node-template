@@ -5,7 +5,7 @@ title: Secrets Classification — Routing Tiers
 status: draft
 spec_state: proposed
 trust: draft
-summary: Defines the routing tiers (A1 / A2 / B / D / E / F / G) every secret in `scripts/setup-secrets.ts` is classified into, plus the naming conventions for OpenBao paths, ExternalSecret manifests, and k8s Secret targets. The per-secret routing data lives in `SECRET_ROUTING` in the script (co-located with the catalog to prevent drift); this spec defines the categories and the rules that determine which tier a new secret belongs to.
+summary: Defines the routing tiers (A1 / A2 / B / D / E / F / G) every secret in the catalog is classified into, plus the naming conventions for OpenBao paths, ExternalSecret manifests, and k8s Secret targets. The per-secret data lives in YAML — `nodes/<node>/.cogni/secrets-catalog.yaml` (node-domain) and `infra/catalog/secrets-catalog.yaml` (operator-domain) — loaded by `scripts/lib/secrets-catalog-loader.ts` with Zod validation. This spec defines the categories and the rules; the loader binds each secret to one routing decision.
 read_when: Adding a new secret (decide its tier); porting node-template substrate to cogni or cogni-poly; designing the Compose-infra→OpenBao migration; auditing routing decisions.
 owner: derekg1729
 created: 2026-05-27
@@ -25,27 +25,28 @@ Make every secret in the catalog route to exactly one substrate (OpenBao path, G
 
 ## Non-Goals
 
-- Listing every secret in markdown. The per-secret data lives in `SECRET_ROUTING` in `scripts/setup-secrets.ts` — co-located with the catalog to prevent drift. This spec defines the categories; the script binds each secret to one.
+- Listing every secret in markdown. The per-secret data lives in YAML — `nodes/<node>/.cogni/secrets-catalog.yaml` (node-domain) and `infra/catalog/secrets-catalog.yaml` (operator-domain). This spec defines the categories; the YAML binds each secret to one.
 - Defining OpenBao install topology, ESO chart pinning, or rotation cadence — those live in [`secrets-management.md`](./secrets-management.md).
 - Specifying GitHub-side secret naming conventions for CI-only secrets — [`node-ci-cd-contract.md`](./node-ci-cd-contract.md) §Workflow Entrypoints owns that.
 
 ## Context
 
 [`secrets-management.md`](./secrets-management.md) defines the OpenBao + ESO contract — the _shape_ of how secrets flow.
-[`scripts/setup-secrets.ts`](../../scripts/setup-secrets.ts) is the **executable catalog** — what secrets exist, how they get provisioned, and (via `SECRET_ROUTING` defined at the top of the script) which tier each one belongs to.
+[`scripts/setup-secrets.ts`](../../scripts/setup-secrets.ts) is the **runtime tool** — it loads the catalog from YAML, walks GH env, prompts for human values, generates agent values, and writes them to GitHub + `.env.<env>`.
+[`scripts/lib/secrets-catalog-loader.ts`](../../scripts/lib/secrets-catalog-loader.ts) is the **loader** — Zod-validates the YAML, asserts uniqueness, and emits the `Secret[]` + routing record the script consumes.
 [`.claude/commands/env-update.md`](../../.claude/commands/env-update.md) §0.5 gives the routing rule at the four-row decision-table level.
 
-This spec is the **rules** layer between them: the tier definitions, the decision flow for adding a new secret, and the naming conventions for OpenBao paths / ExternalSecret manifests / k8s Secret targets. The per-secret routing decisions live in `SECRET_ROUTING` in the script — a load-time assertion in the script guarantees every catalog entry has exactly one routing decision.
+This spec is the **rules** layer between them: the tier definitions, the decision flow for adding a new secret, and the naming conventions for OpenBao paths / ExternalSecret manifests / k8s Secret targets. The per-secret routing decisions live as inline `tier:` fields on each YAML entry — the loader's load-time validation guarantees every catalog entry has exactly one routing decision.
 
 > **Source-of-truth split (intentional):**
 > Rules + invariants → this file.
-> Per-secret data → `SECRET_ROUTING` in `scripts/setup-secrets.ts`.
+> Per-secret data → YAML catalogs (node-domain or operator-domain).
 > No table of "all 60+ secrets" lives in markdown anywhere — it would rot.
 
 ## Invariants
 
-1. **EVERY_SECRET_HAS_EXACTLY_ONE_TIER.** Each catalog entry in `scripts/setup-secrets.ts` SECRETS has exactly one matching `SECRET_ROUTING` entry. Enforced at module load by a runtime assertion in the script — adding a secret without a routing entry crashes the script.
-2. **NO_ORPHAN_ROUTINGS.** Inverse of (1): every `SECRET_ROUTING` key matches a catalog `Secret.name`. Also enforced at module load.
+1. **EVERY_SECRET_HAS_EXACTLY_ONE_TIER.** Each YAML catalog entry has a required `tier:` field. The loader's Zod schema rejects entries without it.
+2. **NO_NAME_COLLISIONS.** The loader asserts no secret `name:` appears in two catalog files. Trying to declare the same secret in both `nodes/poly/.cogni/secrets-catalog.yaml` and `infra/catalog/secrets-catalog.yaml` crashes the loader with both file paths in the error.
 3. **CO_CONSUMED_IS_AN_ANNOTATION_NOT_A_TIER.** When a secret is needed by both a k8s pod (A-tier) AND a Compose container (B-tier), its primary tier remains whichever determines origination; `coConsumed: true` is a property on the routing entry, not a separate tier. Prevents tier proliferation.
 4. **A2_NAMING_IS_BARE_NODE.** A2 service names match `nodes/<node>/` directory names exactly — no `-node` suffix in catalog file, OpenBao path, or ExternalSecret directory. ([node-ci-cd-contract.md](./node-ci-cd-contract.md) §Domains is the anchor.)
 5. **F_TIER_NEVER_ENTERS_THE_SCRIPT.** `.env.local`-only secrets MUST NOT appear in `setup-secrets.ts` SECRETS — they have no `gh secret set` call site. If you find an F-tier entry in the script, that's a bug.
@@ -100,17 +101,17 @@ The two stores must agree. There is **no atomic dual-write** today; consistency 
 Aligned to [`node-ci-cd-contract.md`](./node-ci-cd-contract.md) §Domains (the four canonical domains today are `poly`, `resy`, `node-template`, `operator`):
 
 - Node directory: `nodes/<node>/` — bare name, no `-node` suffix.
-- Catalog file: `infra/catalog/<node>.yaml` with `name: <node>` matching the directory.
+- Catalog file: `nodes/<node>/.cogni/secrets-catalog.yaml` (per-node, node-domain). Loader auto-fills `service: <node>` from the parent directory.
 - OpenBao service path: `cogni/<env>/<node>` — `<service>` IS the bare node name for node-domain services.
-- ExternalSecret manifest dir: `infra/k8s/secrets/external-secrets/<env>/<node>/`.
+- ExternalSecret manifest dir: `nodes/<node>/k8s/external-secrets/<env>/` (per-node, node-domain). Aggregator at `infra/k8s/secrets/external-secrets/<env>/kustomization.yaml` references the node-tree path.
 - k8s Secret target name: `<node>-env-secrets` (per Invariant 2 of secrets-management.md).
 - Pod envFrom: `secretRef: name: <node>-env-secrets`.
 
 If any of those four artifacts (catalog → ExternalSecret manifest → k8s Secret name → pod envFrom) disagrees, the secret has been introduced incorrectly.
 
-**Status in node-template:** the path namespace is reserved; no code under `nodes/node-template/app/` currently consumes any A2 secret. `SECRET_ROUTING` in the script tags the poly-only entries (`POLYGON_RPC_URL`, `PRIVY_USER_WALLETS_*`, `POLY_WALLET_AEAD_KEY_*`) as A2 against `service: poly`. When cogni-poly ports (task.5053) those entries become live.
+**Status in node-template:** the path namespace is reserved; no code under `nodes/node-template/app/` currently consumes any A2 secret. The poly-only entries (`POLYGON_RPC_URL`, `PRIVY_USER_WALLETS_*`, `POLY_WALLET_AEAD_KEY_*`) live in `infra/catalog/secrets-catalog.yaml` with `service: poly` as placeholders. When cogni-poly ports (`task.5053`), those entries should be moved to `nodes/poly/.cogni/secrets-catalog.yaml` in the cogni-poly tree — a single node-domain PR.
 
-**Caveat from setup-secrets.ts inspection:** `POLYGON_RPC_URL` is currently marked `required: true` in the script. node-template baseline has no consumer code; the flag is over-specified for the baseline fork. Recommended fix in a follow-up: relax to `required: false` in node-template, leave `required: true` only in cogni-poly's fork-customized version of the script.
+**Caveat:** `POLYGON_RPC_URL` is currently marked `required: true` in the YAML. node-template baseline has no consumer code; the flag is over-specified for the baseline fork. Recommended fix in a follow-up: relax to `required: false` in node-template, leave `required: true` in cogni-poly's per-node catalog.
 
 **Renaming on port — cogni / cogni-poly current state (read before task.5052 / task.5053).** Today cogni and cogni-poly create k8s Secrets imperatively (`kubectl create secret`) with the name `<node>-node-app-secrets` (e.g., `poly-node-app-secrets`), set via a kustomize overlay patch on `infra/k8s/base/node-app/deployment.yaml` (base name `node-app-secrets`, overlay-rebranded per node). Reference: cogni-monorepo `docs/guides/node-formation-guide.md` §"Create k8s secrets" + `infra/k8s/overlays/canary/poly/kustomization.yaml`. On ESO port, the manifest naming changes from `<node>-node-app-secrets` (imperative) to `<node>-env-secrets` (ESO-managed). Migration path:
 
@@ -140,7 +141,10 @@ This is the only material naming change the port imposes. The catalog file, node
    - Used only locally? → F (don't add to `setup-secrets.ts`).
    - Auto-derived from repo state? → G.
 2. **If A-tier:** confirm the OpenBao service path matches `infra/catalog/<service>.yaml::name`. If a new service, add the catalog entry + ExternalSecret first.
-3. **Add the secret to `SECRETS` in `scripts/setup-secrets.ts`** AND a corresponding entry to `SECRET_ROUTING` in the same file. The load-time assertion will fail loudly if one is added without the other.
+3. **Add the entry to the right YAML catalog:**
+   - Node-specific (A1 consumed by the node, or A2) → `nodes/<node>/.cogni/secrets-catalog.yaml`. Single PR scoped to that node domain.
+   - Cross-cutting (`_shared`, `_system`, or any B/D/E/G entry) → `infra/catalog/secrets-catalog.yaml`. Operator-domain PR.
+   - The loader's Zod schema enforces required fields at module load. Missing `tier`, malformed `service`, or name collision = the script fails loudly on next invocation.
 4. **Follow [`.claude/commands/env-update.md`](../../.claude/commands/env-update.md)** for the file-by-file propagation across server-env.ts, .env.local.example, ci.yaml, docker-compose.yml, deploy-infra.sh, etc.
 
 ## Compose-infra → OpenBao migration (future)
@@ -159,7 +163,7 @@ Out-of-scope here; tracked in a separate spec + task to be filed.
 
 ## Open follow-ups
 
-- `setup-secrets.ts:937` hardcodes `REPO = "Cogni-DAO/cogni"` regardless of which fork hosts the source tree. Fork-aware REPO resolution is a separate task; today this script is org-admin tooling that targets the cogni-template GH org for secret writes.
+- `setup-secrets.ts` hardcodes `REPO = "Cogni-DAO/cogni"` regardless of which fork hosts the source tree. Fork-aware REPO resolution is a separate task; today this script is org-admin tooling that targets the cogni-template GH org for secret writes.
 - `OPENCLAW_GITHUB_RW_TOKEN` is tagged `tier: B` based on SETUP_DESIGN.md's "host-side git relay" description. If openclaw becomes a k8s pod (vs Compose container), retag.
 - `POLYGON_RPC_URL` `required: true` flag is over-specified for node-template baseline (no consumer). Relax in node-template, keep tight in cogni-poly fork.
 
@@ -168,10 +172,15 @@ Out-of-scope here; tracked in a separate spec + task to be filed.
 - [Secrets Management](./secrets-management.md) — the OpenBao + ESO contract
 - [Node CI/CD Contract](./node-ci-cd-contract.md) — single-node-scope domains; A2 service naming is anchored here
 - [Access Control Charter](./access-control-charter.md) — L3 layer and dependencies
-- [`scripts/setup-secrets.ts`](../../scripts/setup-secrets.ts) — executable catalog + `SECRET_ROUTING` (the per-secret data this spec delegates to)
+- [`scripts/setup-secrets.ts`](../../scripts/setup-secrets.ts) — runtime tool that consumes the loader output
+- [`scripts/lib/secrets-catalog-loader.ts`](../../scripts/lib/secrets-catalog-loader.ts) — Zod-validated YAML loader (the per-secret data this spec delegates to)
+- [`nodes/node-template/.cogni/secrets-catalog.yaml`](../../nodes/node-template/.cogni/secrets-catalog.yaml) — node-template's per-node catalog (example for new nodes)
+- [`infra/catalog/secrets-catalog.yaml`](../../infra/catalog/secrets-catalog.yaml) — operator-domain catalog (`_shared`, `_system`, B/D/E/G, A2 placeholders)
+- [`docs/design/secrets-catalog-per-node.md`](../design/secrets-catalog-per-node.md) — rationale for the YAML-per-node layout
 - [`scripts/setup/SETUP_DESIGN.md`](../../scripts/setup/SETUP_DESIGN.md) — design-doc companion to the script (descriptive, not authoritative for routing)
 - [`.claude/commands/env-update.md`](../../.claude/commands/env-update.md) — file-by-file propagation checklist
 - [`task.5052`](https://cognidao.org/work/items/task.5052) — cogni port (consumes this catalog)
 - [`task.5053`](https://cognidao.org/work/items/task.5053) — cogni-poly port (consumes this catalog + A2 rows)
 - [`task.5062`](https://cognidao.org/work/items/task.5062) — live-VM E2E runbook
-- [`task.5063`](https://cognidao.org/work/items/task.5063) — this spec + charter + `SECRET_ROUTING`
+- [`task.5063`](https://cognidao.org/work/items/task.5063) — this spec + charter
+- [`task.5071`](https://cognidao.org/work/items/task.5071) — the per-node catalog refactor (this PR)
