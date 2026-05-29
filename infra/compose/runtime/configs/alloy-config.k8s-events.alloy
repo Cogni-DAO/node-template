@@ -53,6 +53,46 @@ loki.process "k8s_events" {
   forward_to = [loki.write.loki.receiver]
 }
 
+// ── OpenBao audit device → pod stdout → Loki (Invariant 8) ──
+// OpenBao writes audit records as JSON to its pod stdout (provision-env-vm.sh
+// Phase 5b enables the file/ audit device with file_path=/dev/stdout). Kubelet
+// captures it; this block ships those records to Loki tagged service=openbao-audit.
+// MVP: pure pass-through, no alert rules, no dashboard. SOC2 evidence-gathering
+// only — alerting is a separate follow-up row on proj.agentic-fork-bootstrap.
+discovery.kubernetes "openbao_pods" {
+  role = "pod"
+
+  namespaces {
+    names = ["openbao"]
+  }
+
+  client {
+    kubeconfig_file = "/etc/rancher/k3s/k3s.yaml"
+  }
+}
+
+loki.source.kubernetes "openbao_audit" {
+  targets    = discovery.kubernetes.openbao_pods.targets
+  forward_to = [loki.process.openbao_audit.receiver]
+
+  client {
+    kubeconfig_file = "/etc/rancher/k3s/k3s.yaml"
+  }
+}
+
+loki.process "openbao_audit" {
+  stage.static_labels {
+    values = {
+      app     = "cogni-template",
+      env     = sys.env("DEPLOY_ENVIRONMENT"),
+      service = "openbao-audit",
+      source  = "openbao-audit",
+    }
+  }
+
+  forward_to = [loki.write.loki.receiver]
+}
+
 loki.write "loki" {
   endpoint {
     url = sys.env("LOKI_WRITE_URL")
