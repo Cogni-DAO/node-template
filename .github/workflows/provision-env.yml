@@ -93,6 +93,12 @@ jobs:
       # See docs/design/observability-creds-shared.md.
       GRAFANA_CLOUD_ADMIN_TOKEN: ${{ secrets.GH_GRAFANA_CLOUD_ADMIN_TOKEN }}
       GRAFANA_URL: ${{ secrets.GH_GRAFANA_URL }}
+      # Org slug for the Cloud API (the segment in https://grafana.com/orgs/<slug>).
+      # Required when the admin token is set — needed for org-scoped endpoints
+      # (/api/orgs/<slug>, /api/orgs/<slug>/instances). The list endpoint
+      # /api/orgs requires `orgs:read` which is NOT in the recommended scope
+      # set; using the org-specific path works with the 4 documented scopes.
+      GRAFANA_CLOUD_ORG_SLUG: ${{ secrets.GH_GRAFANA_ORG_SLUG }}
       # `bootstrap.sh` and `provision-env-vm.sh` both run non-interactively
       # on the runner; the editor-open branch in bootstrap.sh already
       # detects non-TTY and skips (scripts/setup/bootstrap.sh line 61).
@@ -136,26 +142,34 @@ jobs:
         env:
           GRAFANA_CLOUD_ADMIN_TOKEN: ${{ secrets.GH_GRAFANA_CLOUD_ADMIN_TOKEN }}
           GRAFANA_URL: ${{ secrets.GH_GRAFANA_URL }}
+          GRAFANA_CLOUD_ORG_SLUG: ${{ secrets.GH_GRAFANA_ORG_SLUG }}
         run: |
           set -euo pipefail
           # Fail BEFORE Cherry VM spend if the operator pasted the wrong token
           # type (glsa_* / glb_* vs glc_*) or a token Grafana rejects.
-          # Probes grafana.com/api/orgs (NOT the stack /api/serviceaccounts —
-          # that endpoint takes glsa_, not glc_; testing it against the wrong
-          # surface would mislead). Mirrors Cloudflare scope preflight at
-          # bootstrap.sh:149-176.
-          # Optional path: both unset → log + continue (Phase 5e graceful skip).
-          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" && -z "${GRAFANA_URL}" ]]; then
-            echo "::notice::Grafana auto-mint disabled — GH_GRAFANA_CLOUD_ADMIN_TOKEN/GH_GRAFANA_URL unset. Scorecard row 5 will stay 🟡."
+          # Probes grafana.com/api/orgs/<slug> (the ORG-SPECIFIC endpoint, not
+          # the list endpoint /api/orgs — the latter requires `orgs:read` which
+          # is NOT in the recommended 4-scope set, so a correctly-configured
+          # access-policy token 403s on it). Verified against access-policy
+          # token with scopes [stacks:read, stack-service-accounts:write,
+          # accesspolicies:read, accesspolicies:write]:
+          #   GET /api/orgs                       → 403 (needs orgs:read)
+          #   GET /api/orgs/<slug>                → 200 ✓
+          #   GET /api/orgs/<slug>/instances      → 200 ✓
+          # The stack-level /api/serviceaccounts endpoint is glsa_-only; not
+          # used here.
+          # Optional path: all unset → log + continue (Phase 5e graceful skip).
+          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" && -z "${GRAFANA_URL}" && -z "${GRAFANA_CLOUD_ORG_SLUG}" ]]; then
+            echo "::notice::Grafana auto-mint disabled — GH_GRAFANA_CLOUD_ADMIN_TOKEN/GH_GRAFANA_URL/GH_GRAFANA_ORG_SLUG unset. Scorecard row 5 will stay 🟡."
             exit 0
           fi
-          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" || -z "${GRAFANA_URL}" ]]; then
-            echo "::error::Set BOTH GH_GRAFANA_CLOUD_ADMIN_TOKEN and GH_GRAFANA_URL, or neither. See Step 6.2 of docs/runbooks/fork-quickstart.md."
+          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" || -z "${GRAFANA_URL}" || -z "${GRAFANA_CLOUD_ORG_SLUG}" ]]; then
+            echo "::error::Set ALL THREE of GH_GRAFANA_CLOUD_ADMIN_TOKEN + GH_GRAFANA_URL + GH_GRAFANA_ORG_SLUG, or none. See Step 6.2 of docs/runbooks/fork-quickstart.md."
             exit 2
           fi
-          MINT_URL="https://grafana.com/orgs/<your-org-slug>/access-policies"
+          MINT_URL="https://grafana.com/orgs/${GRAFANA_CLOUD_ORG_SLUG}/access-policies"
           SCOPES="stacks:read, stack-service-accounts:write, accesspolicies:read, accesspolicies:write (use 'Add scope' dropdown — these are NOT the default data-plane checkboxes)"
-          WALKTHROUGH="Full walkthrough: docs/runbooks/fork-quickstart.md §6.2 row 9."
+          WALKTHROUGH="Full walkthrough: docs/runbooks/fork-quickstart.md §6.2 rows 8-10."
           case "$GRAFANA_CLOUD_ADMIN_TOKEN" in
             glsa_*)
               echo "::error::GH_GRAFANA_CLOUD_ADMIN_TOKEN is a glsa_* stack service-account token."
@@ -178,20 +192,26 @@ jobs:
               exit 2
               ;;
           esac
+          PROBE_URL="https://grafana.com/api/orgs/${GRAFANA_CLOUD_ORG_SLUG}"
           CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
             -H "Authorization: Bearer $GRAFANA_CLOUD_ADMIN_TOKEN" \
-            "https://grafana.com/api/orgs" || echo "000")
+            "$PROBE_URL" || echo "000")
           case "$CODE" in
-            200) echo "Grafana Cloud preflight ok — grafana.com/api/orgs responded 200" ;;
+            200) echo "Grafana Cloud preflight ok — $PROBE_URL responded 200" ;;
             401)
-              echo "::error::Grafana Cloud rejected the admin token (HTTP 401 from grafana.com/api/orgs)."
+              echo "::error::Grafana Cloud rejected the admin token (HTTP 401 from $PROBE_URL)."
               echo "::error::The token was revoked. Re-mint at $MINT_URL and re-set GH_GRAFANA_CLOUD_ADMIN_TOKEN."
               exit 2
               ;;
             403)
-              echo "::error::Cloud admin token missing scopes (HTTP 403 from grafana.com/api/orgs)."
+              echo "::error::Cloud admin token missing scopes (HTTP 403 from $PROBE_URL)."
               echo "::error::Recreate the access-policy at $MINT_URL with scopes: $SCOPES"
               echo "::error::$WALKTHROUGH"
+              exit 2
+              ;;
+            404)
+              echo "::error::Org slug \"${GRAFANA_CLOUD_ORG_SLUG}\" not found (HTTP 404 from $PROBE_URL)."
+              echo "::error::Check the slug in your Grafana Cloud URL: https://grafana.com/orgs/<slug>. Update GH_GRAFANA_ORG_SLUG."
               exit 2
               ;;
             000)
@@ -199,7 +219,7 @@ jobs:
               exit 2
               ;;
             *)
-              echo "::error::Grafana Cloud preflight got HTTP $CODE from grafana.com/api/orgs. Bootstrap aborted before VM spend."
+              echo "::error::Grafana Cloud preflight got HTTP $CODE from $PROBE_URL. Bootstrap aborted before VM spend."
               exit 2
               ;;
           esac

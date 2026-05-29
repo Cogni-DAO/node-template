@@ -32,6 +32,10 @@
 #   GH_GRAFANA_CLOUD_ADMIN_TOKEN  glc_* Cloud admin token (see scope list above)
 #   GRAFANA_URL                   stack URL (https://<stack>.grafana.net) — used
 #                                  to disambiguate when an org has multiple stacks
+#   GRAFANA_CLOUD_ORG_SLUG        org slug (the segment in https://grafana.com/orgs/<slug>).
+#                                  Required because access-policy tokens scoped
+#                                  to one org cannot list /api/orgs; the script
+#                                  uses /api/orgs/<slug> and /api/orgs/<slug>/instances.
 #   DEPLOY_ENV                    env name (candidate-a | preview | production)
 #   FORK_SLUG                     fork slug for SA + policy naming
 #   REPO_ROOT                     absolute path to repo root
@@ -48,9 +52,11 @@
 #     PROMETHEUS_USERNAME=<hmInstancePromId>
 #     PROMETHEUS_PASSWORD=<glc_ push token>
 #
-# Graceful skip: if GH_GRAFANA_CLOUD_ADMIN_TOKEN or GRAFANA_URL is empty, log
-# + exit 0 with no artifact and no stdout (scorecard row 5 stays 🟡, bootstrap
-# continues). Per design invariant GRAFANA_AUTOMINT_GRACEFUL_SKIP.
+# Graceful skip: if all three (GH_GRAFANA_CLOUD_ADMIN_TOKEN + GRAFANA_URL +
+# GRAFANA_CLOUD_ORG_SLUG) are empty, log + exit 0 with no artifact and no
+# stdout (scorecard row 5 stays 🟡, bootstrap continues). Partial config is
+# a setup error (caught by workflow preflight; this script also re-checks).
+# Per design invariant GRAFANA_AUTOMINT_GRACEFUL_SKIP.
 
 set -euo pipefail
 
@@ -70,9 +76,20 @@ PUSH_POLICY_NAME="cogni-${FORK_SLUG}-${DEPLOY_ENV}-push"
 CLOUD_API="https://grafana.com/api"
 
 # ─── Graceful skip ───────────────────────────────────────────────────
-if [[ -z "${GH_GRAFANA_CLOUD_ADMIN_TOKEN:-}" || -z "${GRAFANA_URL:-}" ]]; then
-  log_info "GH_GRAFANA_CLOUD_ADMIN_TOKEN or GRAFANA_URL unset — skipping (scorecard row 5 stays 🟡)"
+# All three Cloud inputs unset → skip Phase 5e (scorecard row 5 stays 🟡).
+# GRAFANA_CLOUD_ORG_SLUG was added when the 403-on-/api/orgs bug surfaced
+# (access-policy tokens scoped to one org cannot list all orgs); see the
+# preflight comment in provision-env.yml for the verified endpoint matrix.
+if [[ -z "${GH_GRAFANA_CLOUD_ADMIN_TOKEN:-}" && -z "${GRAFANA_URL:-}" && -z "${GRAFANA_CLOUD_ORG_SLUG:-}" ]]; then
+  log_info "GH_GRAFANA_CLOUD_ADMIN_TOKEN / GRAFANA_URL / GRAFANA_CLOUD_ORG_SLUG all unset — skipping (scorecard row 5 stays 🟡)"
   exit 0
+fi
+# Partial config is a setup error (the workflow preflight catches this, but
+# a direct script invocation needs the same gate).
+if [[ -z "${GH_GRAFANA_CLOUD_ADMIN_TOKEN:-}" || -z "${GRAFANA_URL:-}" || -z "${GRAFANA_CLOUD_ORG_SLUG:-}" ]]; then
+  log_error "Set ALL THREE of GH_GRAFANA_CLOUD_ADMIN_TOKEN + GRAFANA_URL + GRAFANA_CLOUD_ORG_SLUG, or none."
+  log_error "See docs/runbooks/fork-quickstart.md §6.2 rows 8-10."
+  exit 1
 fi
 
 # ─── Preflight: MUST be a glc_ Cloud admin token ─────────────────────
@@ -157,19 +174,34 @@ ts_suffix() {
 }
 
 # ─── Step 1: Cloud lookup — org + stack + region + push endpoints ────
-log_info "Step 1: looking up org + stack at $GRAFANA_URL"
+# Org slug is operator-provided (GRAFANA_CLOUD_ORG_SLUG) rather than
+# discovered via GET /api/orgs. The list endpoint requires `orgs:read`
+# which is NOT in the recommended 4-scope set (stacks:read,
+# stack-service-accounts:write, accesspolicies:*); a correctly-configured
+# access-policy token will 403 on it. Verified against access-policy:
+#   GET /api/orgs                       → 403 (needs orgs:read)
+#   GET /api/orgs/<slug>                → 200 ✓
+#   GET /api/orgs/<slug>/instances      → 200 ✓
+log_info "Step 1: looking up org=$GRAFANA_CLOUD_ORG_SLUG + stack at $GRAFANA_URL"
 
-RESP=$(cloud_call GET "$CLOUD_API/orgs")
+ORG_SLUG="$GRAFANA_CLOUD_ORG_SLUG"
+RESP=$(cloud_call GET "$CLOUD_API/orgs/$ORG_SLUG")
 SPLIT_RESP "$RESP"
 case "$CODE" in
   200) : ;;
   401)
-    log_error "Cloud admin token rejected (HTTP 401 on GET /api/orgs). Token revoked or wrong type."
+    log_error "Cloud admin token rejected (HTTP 401 on GET /api/orgs/$ORG_SLUG). Token revoked or wrong type."
     exit 1
     ;;
   403)
-    log_error "Cloud admin token missing scopes (HTTP 403 on GET /api/orgs)."
+    log_error "Cloud admin token missing scopes (HTTP 403 on GET /api/orgs/$ORG_SLUG)."
     log_error "Required: stacks:read, stack-service-accounts:write, accesspolicies:read, accesspolicies:write"
+    log_error "Recreate the access-policy at https://grafana.com/orgs/$ORG_SLUG/access-policies (use 'Add scope' dropdown)."
+    exit 1
+    ;;
+  404)
+    log_error "Org slug \"$ORG_SLUG\" not found (HTTP 404 on GET /api/orgs/$ORG_SLUG)."
+    log_error "Update GRAFANA_CLOUD_ORG_SLUG / GH_GRAFANA_ORG_SLUG to match your Grafana Cloud URL: https://grafana.com/orgs/<slug>."
     exit 1
     ;;
   *)
@@ -177,9 +209,7 @@ case "$CODE" in
     exit 1
     ;;
 esac
-ORG_SLUG=$(echo "$BODY" | jq -r '.items[0].slug // .items[0].login // empty')
-[[ -n "$ORG_SLUG" ]] || { log_error "no org returned in /api/orgs response: $BODY"; exit 1; }
-log_info "  org slug=$ORG_SLUG"
+log_info "  org slug=$ORG_SLUG (verified)"
 
 RESP=$(cloud_call GET "$CLOUD_API/orgs/$ORG_SLUG/instances")
 SPLIT_RESP "$RESP"
