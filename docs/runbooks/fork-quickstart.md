@@ -3,7 +3,7 @@ id: fork-quickstart-runbook
 type: runbook
 title: Fork Quickstart — From Zero to Green Deploy
 status: draft
-summary: Hand-off prompt + autonomous agent guide that drives a node-template fork from zero to `/readyz=200`. Human role is bounded to a bot PAT, 6 env secrets, and a one-line domain edit. Companion to docs/spec/agentic-fork-bootstrap.md.
+summary: Hand-off prompt + autonomous agent guide that drives a node-template fork from zero to `/readyz=200`. Human role is bounded to a bot PAT, 7 GH env secrets, and one `gh variable set FORK_DOMAIN_ROOT`. Companion to docs/spec/agentic-fork-bootstrap.md.
 read_when: A new user wants their own node-template instance; an external agent is dropped in cold.
 owner: derekg1729
 created: 2026-05-17
@@ -19,7 +19,7 @@ Paste this into a fresh Claude Code (or equivalent) session, in whatever parent 
 
 > Follow `docs/runbooks/fork-quickstart.md` in github.com/Cogni-DAO/node-template end-to-end.
 
-The agent reads this file and drives. You touch the keyboard for: a bot PAT, `infra/fork.yaml::domain.root`, and 6 env secrets via `gh secret set` prompts.
+The agent reads this file and drives. You touch the keyboard for: a bot PAT, one `gh variable set FORK_DOMAIN_ROOT`, and 6 env secrets via `gh secret set` prompts.
 
 ## Agent guide
 
@@ -105,23 +105,19 @@ Commit + push at the end of each working session. Empty `hardships.md` is suspic
 pnpm install
 ```
 
-#### 5 · `infra/fork.yaml::domain.root` — one operator edit
+#### 5 · `FORK_DOMAIN_ROOT` — one GH repo variable, no commit
 
-The workflow preflight refuses to run if `domain.root` is empty (no half-provisioned VMs on a typo'd config). Set locally, commit, push — done in 6.1 below. `fork.slug` defaults to the GitHub repo name; leave blank unless you have a reason.
-
-Public node URLs derive from `domain.root` + the catalog. VM aliases are repo/env-scoped: `<slug>-candidate-a.vm.<root>`, etc.
+Non-secret, plaintext, fork-scoped. The workflow preflight refuses to run if it's unset (no half-provisioned VMs on a missing zone). Public node URLs derive from this + the catalog. VM aliases are repo/env-scoped: `<slug>-candidate-a.vm.<FORK_DOMAIN_ROOT>`, etc. The fork slug auto-derives from the GitHub repo name (override via `FORK_SLUG` env if needed).
 
 #### 6 · Bootstrap — runs in a workflow, not on your laptop
 
-Substrate + VM provisioning lives at [`.github/workflows/provision-env.yml`](../../.github/workflows/provision-env.yml). You ship 6 env secrets + a Cloudflare-zone line in `infra/fork.yaml`; the runner handles the 30-min `tofu apply` + `bao init` + `kubectl` session. Init artifacts come back passphrase-encrypted.
+Substrate + VM provisioning lives at [`.github/workflows/provision-env.yml`](../../.github/workflows/provision-env.yml). You ship one GH repo variable + 7 GH env secrets; the runner handles the 30-min `tofu apply` + `bao init` + `kubectl` session. Init artifacts come back passphrase-encrypted.
 
-##### 6.1 · Set `domain.root`
+##### 6.1 · Set `FORK_DOMAIN_ROOT`
 
 ```
-yq -i '.domain.root = "<your-cloudflare-zone-name>"' infra/fork.yaml
-git add infra/fork.yaml
-git commit -m "chore(bootstrap): set fork.yaml::domain.root"
-git push
+REPO=$(git remote get-url origin | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1#')
+gh variable set FORK_DOMAIN_ROOT --repo "$REPO" --body "<your-cloudflare-zone-name>"
 ```
 
 ##### 6.2 · Create the target GH environment + set 7 minting tokens
@@ -296,7 +292,7 @@ Post-rotation (tokens rotate on every re-run of `provision-env.yml`): the artifa
 
 #### 8 · Agent-API scorecard
 
-Don't trust `/readyz=200` alone — it only proves the pod is alive. Exercise the canonical agent surfaces against the deployed `<DOMAIN>` (derive from `infra/fork.yaml::domain.root` + the env subdomain) and emit a scorecard. Follow [`docs/guides/agent-api-validation.md`](../guides/agent-api-validation.md) for the exact `curl` shapes.
+Don't trust `/readyz=200` alone — it only proves the pod is alive. Exercise the canonical agent surfaces against the deployed `<DOMAIN>` (derive from `FORK_DOMAIN_ROOT` + the env subdomain) and emit a scorecard. Follow [`docs/guides/agent-api-validation.md`](../guides/agent-api-validation.md) for the exact `curl` shapes.
 
 Verdict cells: 🟢 pass · 🟡 partial / unverified · 🔴 fail · n/a not applicable. Each row records the HTTP status (or "no-grafana-data-available" for the obs cell when Loki creds aren't wired) and a one-line evidence excerpt.
 

@@ -4,19 +4,16 @@
 #
 # Fork identity helpers for setup/provision scripts. This file is sourced;
 # callers own shell options.
-
-fork_identity_root() {
-  local repo_root="$1"
-  yq -N '.domain.root // ""' "${repo_root}/infra/fork.yaml" 2>/dev/null
-}
+#
+# Fork domain root is read from the FORK_DOMAIN_ROOT env var (GitHub repo
+# variable in the GHA path; exported via shell or .env.bootstrap in the
+# laptop fallback). Callers use `${FORK_DOMAIN_ROOT:?…}` with their own
+# error when they need the value.
 
 fork_identity_slug() {
-  local repo_root="$1" configured origin repo slug
+  local repo_root="$1" origin repo slug
 
-  configured=$(yq -N '.fork.slug // .identity.slug // ""' "${repo_root}/infra/fork.yaml" 2>/dev/null || echo "")
-  if [[ -n "$configured" && "$configured" != "null" ]]; then
-    slug="$configured"
-  elif [[ -n "${FORK_SLUG:-}" ]]; then
+  if [[ -n "${FORK_SLUG:-}" ]]; then
     slug="$FORK_SLUG"
   else
     origin=$(git -C "$repo_root" remote get-url origin 2>/dev/null || echo "")
