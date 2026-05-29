@@ -616,11 +616,6 @@ else
   log_warn "Skipping DNS — CLOUDFLARE_API_TOKEN or CLOUDFLARE_ZONE_ID not set"
 fi
 
-# WARNING: Caddy (Phase 5) will attempt Let's Encrypt ACME HTTP-01 challenges
-# immediately on startup. If DNS hasn't globally propagated by then, ACME fails
-# and burns through the 5-failures-per-hostname-per-hour rate limit. Certs won't
-# issue until the hourly window resets. See .claude/skills/dns-ops/SKILL.md.
-
 # ══════════════════════════════════════════════════════════════
 # Phase 4b.5: Seed (or content-align) deploy/* branches in the fork
 # ══════════════════════════════════════════════════════════════
@@ -898,19 +893,12 @@ log_info "Writing .env files..."
 # multi-key pattern. Port is catalog-driven (catalog::node_port is the
 # canonical source — node-template ships 30000).
 NODE_PORT_FROM_CATALOG=$(yq -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/node-template.yaml")
-# ACME issuer: default LE PROD for every env. Browser-trusted HTTPS is
-# the contract — candidate-a / preview / production all serve real
-# traffic. The caller may override via ACME_CA in the dispatching env
-# (e.g. validators iterating against a shared test domain may set it
-# to https://acme-staging-v02.api.letsencrypt.org/directory to avoid
-# the production-CA 50-certs/week/registered-domain rate limit).
-# Proper fix for rate-limit + iteration is cert persistence via
-# Cloudflare Origin CA — Walk-tier on proj.agentic-fork-bootstrap.
-ACME_CA_URL="${ACME_CA:-https://acme-v02.api.letsencrypt.org/directory}"
+# Caddy serves a self-signed origin cert via `tls internal`; Cloudflare's
+# Full SSL mode trusts any origin cert. No ACME, no LE rate limit, no
+# cert-loss-on-reprovision. See infra/compose/edge/configs/Caddyfile.tmpl.
 ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-edge/.env << 'ENVEOF'
 DOMAIN=${DOMAIN}
 NODE_UPSTREAM=host.docker.internal:${NODE_PORT_FROM_CATALOG}
-ACME_CA=${ACME_CA_URL}
 ENVEOF"
 
 # All required vars must be in .env — Docker Compose validates ALL services at parse time,
@@ -1798,6 +1786,53 @@ for node in "${NODE_TARGETS[@]}"; do
     READYZ_OK=false
   fi
 done
+
+# ══════════════════════════════════════════════════════════════
+# Phase 9a: Verify public /readyz via Cloudflare → Caddy → app
+# ══════════════════════════════════════════════════════════════
+# Phase 9 confirmed the app responds at the k3s NodePort on the VM's
+# loopback. Phase 9a probes the full edge path that real users hit:
+# Cloudflare proxy → Caddy (tls internal, CF Full mode) → app. This
+# catches:
+#   * Caddy `tls internal` cold-start race (Caddy needs ~1-5s to
+#     generate its internal CA cert on first request — Cloudflare
+#     probing in that window returns 525)
+#   * CF zone SSL mode misconfiguration (Phase 4b sets "full"; if
+#     someone manually flipped to "full strict" the self-signed
+#     origin cert would be rejected)
+#   * DNS propagation gaps (Phase 4b just created the records; CF
+#     proxied records propagate within ~30s in practice)
+#
+# SOFT-WARN by design: Phase 9 already hard-fails if the app is
+# genuinely broken at the NodePort; Phase 9a is a pure edge-path
+# observability check. A transient edge failure should not block
+# artifact encryption + upload — the validator scorecard surfaces
+# the result. Persistent failure here = ops investigation.
+log_step "Phase 9a: Verify public /readyz via Cloudflare (up to 2 min)"
+
+if [[ -z "${DOMAIN:-}" ]]; then
+  log_warn "  DOMAIN unset — skipping public probe"
+else
+  PUBLIC_OK=false
+  for attempt in $(seq 1 24); do
+    STATUS=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 "https://${DOMAIN}/readyz" 2>/dev/null || echo "000")
+    if [[ "$STATUS" == "200" ]]; then
+      log_info "  https://${DOMAIN}/readyz 200 ✅ (after $((attempt * 5))s)"
+      PUBLIC_OK=true
+      break
+    fi
+    if (( attempt % 4 == 0 )); then
+      log_info "  https://${DOMAIN}/readyz waiting... ($((attempt * 5))s, last status: ${STATUS})"
+    fi
+    sleep 5
+  done
+  if [[ "$PUBLIC_OK" != "true" ]]; then
+    log_warn "  https://${DOMAIN}/readyz did not return 200 within 120s (last status: ${STATUS})"
+    log_warn "  This is a SOFT warn — Phase 9 already verified the app at the NodePort."
+    log_warn "  Likely causes: Caddy tls-internal CA cold-start race; CF SSL mode != 'full';"
+    log_warn "  DNS propagation lag. Re-probe manually: curl -I https://${DOMAIN}/readyz"
+  fi
+fi
 
 echo ""
 if [[ "$READYZ_OK" == "true" ]]; then
