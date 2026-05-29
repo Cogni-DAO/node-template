@@ -1461,7 +1461,12 @@ log_step "Phase 5f: Bring up full Compose runtime (deploy-infra.sh)"
 mkdir -p ~/.ssh && chmod 700 ~/.ssh
 cp "$SSH_KEY" ~/.ssh/deploy_key
 chmod 600 ~/.ssh/deploy_key
-ssh-keyscan -T 10 -H "$VM_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+KEYSCAN_OUT=$(ssh-keyscan -T 10 -H "$VM_IP" 2>/dev/null || true)
+if [[ -n "$KEYSCAN_OUT" ]]; then
+  printf '%s\n' "$KEYSCAN_OUT" >>~/.ssh/known_hosts
+else
+  log_warn "ssh-keyscan returned no host keys for $VM_IP — deploy-infra.sh's StrictHostKeyChecking=yes will likely fail next."
+fi
 
 REF_FOR_INFRA="${GITHUB_SHA:-$(git -C "$REPO_ROOT" rev-parse HEAD)}"
 log_info "Invoking deploy-infra.sh --ref ${REF_FOR_INFRA} (VM_HOST=${VM_IP})"
