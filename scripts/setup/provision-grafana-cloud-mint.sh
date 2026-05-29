@@ -246,9 +246,13 @@ log_info "  loki=$LOKI_WRITE_URL (user $LOKI_USERNAME)"
 log_info "  prom=$PROMETHEUS_REMOTE_WRITE_URL (user $PROMETHEUS_USERNAME)"
 
 # ─── Step 2: Cloud-side bootstrap minter SA (idempotent) ─────────────
-# This Editor-role SA gives us a glsa_ token authorized against the stack
-# instance HTTP API (which the Cloud-API token cannot directly call for
-# /api/serviceaccounts management).
+# This Admin-role SA gives us a glsa_ token authorized against the stack
+# instance HTTP API for service-account management. Editor role lacks
+# serviceaccounts:read (validator caught this: GET /api/serviceaccounts/search
+# returns 403 with role=Editor). Admin is the minimum role that includes
+# serviceaccounts:* capabilities. The SA is long-lived but its tokens are
+# short-lived (each provision mints a fresh one); future tightening could
+# delete-after-use to make Admin role transient too.
 log_info "Step 2: find-or-create Cloud-side bootstrap SA name=$CLOUD_SA_NAME"
 
 RESP=$(cloud_call GET "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts/search?query=$CLOUD_SA_NAME")
@@ -259,7 +263,7 @@ CLOUD_SA_ID=$(echo "$BODY" | jq -r --arg n "$CLOUD_SA_NAME" '.serviceAccounts[]?
 if [[ -z "$CLOUD_SA_ID" || "$CLOUD_SA_ID" == "null" ]]; then
   log_info "  creating Cloud SA"
   RESP=$(cloud_call POST "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts" \
-    "$(jq -n --arg n "$CLOUD_SA_NAME" '{name:$n, role:"Editor", isDisabled:false}')")
+    "$(jq -n --arg n "$CLOUD_SA_NAME" '{name:$n, role:"Admin", isDisabled:false}')")
   SPLIT_RESP "$RESP"
   case "$CODE" in
     200|201)
@@ -280,6 +284,19 @@ if [[ -z "$CLOUD_SA_ID" || "$CLOUD_SA_ID" == "null" ]]; then
 fi
 [[ -n "$CLOUD_SA_ID" && "$CLOUD_SA_ID" != "null" ]] || { log_error "could not resolve Cloud SA id"; exit 1; }
 log_info "  Cloud SA id=$CLOUD_SA_ID"
+
+# Promote the SA to Admin if find-or-create returned an existing Editor-role
+# SA from a prior PR-head run (the original implementation requested Editor;
+# the validator caught that Editor lacks serviceaccounts:read). Idempotent —
+# PATCH to Admin when already Admin is a no-op.
+log_info "  ensuring Cloud SA role=Admin (idempotent)"
+RESP=$(cloud_call PATCH "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts/$CLOUD_SA_ID" \
+  "$(jq -n '{role:"Admin"}')")
+SPLIT_RESP "$RESP"
+case "$CODE" in
+  200|204) : ;;
+  *) log_warn "  Cloud SA role-promote HTTP $CODE: $BODY (continuing — may already be Admin)" ;;
+esac
 
 # Mint a fresh glsa_ token on the Cloud-side SA. Tokens cannot be "reused" —
 # secret material is only returned at create time; we always mint a new one
