@@ -228,23 +228,32 @@ source "$ENV_FILE"
 set +a
 log_info "Loaded secrets from $ENV_FILE"
 
-# SSH keypair — per-VM, not in .env file (uploaded to Cherry, saved to .local/)
-# Reuse if VM exists, generate if fresh
+# SSH keypair — per-VM, uploaded to Cherry, saved to .local/.
+# IMPORTANT (re-run gap): `.local/` is laptop-side state. On the GHA runner
+# (the canonical bootstrap surface per Step 6 doctrine) it never persists
+# across runs, so the else-branch ALWAYS fires on re-runs. Phase 3's
+# `tofu apply` then tries to upload a fresh public key to the operator's
+# Cherry account under the same resource name → conflict if the prior
+# VM/key from a previous run still exists. Fresh-fork bootstrap works;
+# re-runs against the same Cherry account collide. Tracked as the
+# "Cherry SSH key re-run conflict" Walk-tier row in
+# proj.agentic-fork-bootstrap.md. Workaround until fixed: destroy the
+# prior VM + Cherry SSH key in the portal before re-running.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" ]]; then
-  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key"
+  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key (laptop-side path)"
 else
   TMPDIR=$(mktemp -d)
-  log_info "Generating ephemeral SSH keypair..."
+  log_info "Generating ephemeral SSH keypair (GHA runner — no laptop .local/ state)"
   ssh-keygen -t ed25519 -f "$TMPDIR/deploy_key" -C "cogni-${DEPLOY_ENV}-vm" -N "" -q
   cp "$TMPDIR/deploy_key.pub" "$PROVISION_DIR/keys/cogni_${DEPLOY_ENV}_deploy.pub"
   cp "$TMPDIR/deploy_key" "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
   chmod 600 "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
 fi
 
-# SOPS age keypair — per-VM, reuse if exists
+# SOPS age keypair — per-VM. Same re-run gap as the SSH key above.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key" ]]; then
   AGE_PRIVATE_KEY=$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key")
-  log_info "Reusing existing SOPS age key"
+  log_info "Reusing existing SOPS age key (laptop-side path)"
 else
   AGE_TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SOPS age keypair..."
