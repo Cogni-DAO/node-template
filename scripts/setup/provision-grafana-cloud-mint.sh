@@ -253,50 +253,56 @@ log_info "  prom=$PROMETHEUS_REMOTE_WRITE_URL (user $PROMETHEUS_USERNAME)"
 # serviceaccounts:* capabilities. The SA is long-lived but its tokens are
 # short-lived (each provision mints a fresh one); future tightening could
 # delete-after-use to make Admin role transient too.
-log_info "Step 2: find-or-create Cloud-side bootstrap SA name=$CLOUD_SA_NAME"
+log_info "Step 2: ensure-Admin Cloud-side bootstrap SA name=$CLOUD_SA_NAME"
 
+# Validator caught that the prior PATCH-to-promote approach didn't reliably
+# update the SA's role (the Cloud API endpoint either doesn't support role
+# updates or silently no-op'd, and our log_warn path swallowed the failure).
+# Switch to delete-and-recreate: if the SA exists, DELETE it and create fresh
+# with role=Admin. The SA's only purpose is to mint a transient glsa_ token
+# for Step 3; deleting it invalidates any leaked prior tokens for free.
 RESP=$(cloud_call GET "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts/search?query=$CLOUD_SA_NAME")
 SPLIT_RESP "$RESP"
 [[ "$CODE" == "200" ]] || { log_error "Cloud SA search HTTP $CODE: $BODY"; exit 1; }
-CLOUD_SA_ID=$(echo "$BODY" | jq -r --arg n "$CLOUD_SA_NAME" '.serviceAccounts[]? | select(.name == $n) | .id' | head -1)
+EXISTING_SA_ID=$(echo "$BODY" | jq -r --arg n "$CLOUD_SA_NAME" '.serviceAccounts[]? | select(.name == $n) | .id' | head -1)
 
-if [[ -z "$CLOUD_SA_ID" || "$CLOUD_SA_ID" == "null" ]]; then
-  log_info "  creating Cloud SA"
-  RESP=$(cloud_call POST "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts" \
-    "$(jq -n --arg n "$CLOUD_SA_NAME" '{name:$n, role:"Admin", isDisabled:false}')")
+if [[ -n "$EXISTING_SA_ID" && "$EXISTING_SA_ID" != "null" ]]; then
+  log_info "  existing Cloud SA id=$EXISTING_SA_ID — deleting to force Admin recreate"
+  RESP=$(cloud_call DELETE "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts/$EXISTING_SA_ID")
   SPLIT_RESP "$RESP"
   case "$CODE" in
-    200|201)
-      CLOUD_SA_ID=$(echo "$BODY" | jq -r '.id')
-      ;;
-    409)
-      log_warn "  409 on create — re-searching"
-      RESP=$(cloud_call GET "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts/search?query=$CLOUD_SA_NAME")
-      SPLIT_RESP "$RESP"
-      [[ "$CODE" == "200" ]] || { log_error "re-search HTTP $CODE"; exit 1; }
-      CLOUD_SA_ID=$(echo "$BODY" | jq -r --arg n "$CLOUD_SA_NAME" '.serviceAccounts[]? | select(.name == $n) | .id' | head -1)
-      ;;
-    *)
-      log_error "Cloud SA create HTTP $CODE: $BODY"
-      exit 1
-      ;;
+    200|204) : ;;
+    404) log_info "  already gone (race?) — proceeding to create" ;;
+    *) log_warn "  delete HTTP $CODE: $BODY — proceeding to create anyway" ;;
   esac
 fi
-[[ -n "$CLOUD_SA_ID" && "$CLOUD_SA_ID" != "null" ]] || { log_error "could not resolve Cloud SA id"; exit 1; }
-log_info "  Cloud SA id=$CLOUD_SA_ID"
 
-# Promote the SA to Admin if find-or-create returned an existing Editor-role
-# SA from a prior PR-head run (the original implementation requested Editor;
-# the validator caught that Editor lacks serviceaccounts:read). Idempotent —
-# PATCH to Admin when already Admin is a no-op.
-log_info "  ensuring Cloud SA role=Admin (idempotent)"
-RESP=$(cloud_call PATCH "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts/$CLOUD_SA_ID" \
-  "$(jq -n '{role:"Admin"}')")
+log_info "  creating Cloud SA with role=Admin"
+RESP=$(cloud_call POST "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts" \
+  "$(jq -n --arg n "$CLOUD_SA_NAME" '{name:$n, role:"Admin", isDisabled:false}')")
 SPLIT_RESP "$RESP"
 case "$CODE" in
-  200|204) : ;;
-  *) log_warn "  Cloud SA role-promote HTTP $CODE: $BODY (continuing — may already be Admin)" ;;
+  200|201)
+    CLOUD_SA_ID=$(echo "$BODY" | jq -r '.id')
+    ;;
+  409)
+    # Eventual-consistency race: DELETE didn't fully propagate before CREATE.
+    # Sleep + retry once.
+    log_warn "  409 on create — DELETE may not have propagated; retrying after 3s"
+    sleep 3
+    RESP=$(cloud_call POST "$CLOUD_API/instances/$STACK_SLUG/api/serviceaccounts" \
+      "$(jq -n --arg n "$CLOUD_SA_NAME" '{name:$n, role:"Admin", isDisabled:false}')")
+    SPLIT_RESP "$RESP"
+    [[ "$CODE" == "200" || "$CODE" == "201" ]] || { log_error "Cloud SA create retry HTTP $CODE: $BODY"; exit 1; }
+    CLOUD_SA_ID=$(echo "$BODY" | jq -r '.id')
+    ;;
+  *)
+    log_error "Cloud SA create HTTP $CODE: $BODY"
+    exit 1
+    ;;
 esac
+[[ -n "$CLOUD_SA_ID" && "$CLOUD_SA_ID" != "null" ]] || { log_error "could not resolve Cloud SA id"; exit 1; }
+log_info "  Cloud SA id=$CLOUD_SA_ID (role=Admin)"
 
 # Mint a fresh glsa_ token on the Cloud-side SA. Tokens cannot be "reused" —
 # secret material is only returned at create time; we always mint a new one
