@@ -78,6 +78,27 @@ jobs:
       # end-to-end on /readyz=200 + agent API validation; everything else
       # the apps need is generated server-side or sits in OpenBao already.
       OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+      # Optional observability auto-mint — ONE Cloud admin token in, derives
+      # BOTH read (glsa_ child SA) AND write (glc_ Loki/Prom push) tokens.
+      # Phase 5e:
+      #   1. Cloud API → lookup org + stack + region + push endpoints
+      #   2. Cloud API → mint a transient stack SA (Editor) for Step 3 auth
+      #   3. Stack instance API → find-or-create Viewer child SA + glsa_ read
+      #   4. Cloud access-policy API → find-or-create push policy (4 scopes)
+      #   5. Cloud token API → mint glc_ push token (Loki + Prom remote write)
+      # All 8 derived fields land at cogni/<env>/_shared (Invariant 1) +
+      # encrypted artifact bundle. The glc_ admin root lives ONLY in the
+      # runner env: never written to OpenBao, never reaches the VM.
+      # Skip = scorecard row 5 stays 🟡; bootstrap still completes.
+      # See docs/design/observability-creds-shared.md.
+      GRAFANA_CLOUD_ADMIN_TOKEN: ${{ secrets.GH_GRAFANA_CLOUD_ADMIN_TOKEN }}
+      GRAFANA_URL: ${{ secrets.GH_GRAFANA_URL }}
+      # Org slug for the Cloud API (the segment in https://grafana.com/orgs/<slug>).
+      # Required when the admin token is set — needed for org-scoped endpoints
+      # (/api/orgs/<slug>, /api/orgs/<slug>/instances). The list endpoint
+      # /api/orgs requires `orgs:read` which is NOT in the recommended scope
+      # set; using the org-specific path works with the 4 documented scopes.
+      GRAFANA_CLOUD_ORG_SLUG: ${{ secrets.GH_GRAFANA_ORG_SLUG }}
       # `bootstrap.sh` and `provision-env-vm.sh` both run non-interactively
       # on the runner; the editor-open branch in bootstrap.sh already
       # detects non-TTY and skips (scripts/setup/bootstrap.sh line 61).
@@ -116,6 +137,102 @@ jobs:
         with:
           ref: ${{ github.ref }}
           fetch-depth: 0
+
+      - name: Pre-flight — Grafana Cloud admin token (optional)
+        env:
+          GRAFANA_CLOUD_ADMIN_TOKEN: ${{ secrets.GH_GRAFANA_CLOUD_ADMIN_TOKEN }}
+          GRAFANA_URL: ${{ secrets.GH_GRAFANA_URL }}
+          GRAFANA_CLOUD_ORG_SLUG: ${{ secrets.GH_GRAFANA_ORG_SLUG }}
+        run: |
+          set -euo pipefail
+          # Fail BEFORE Cherry VM spend if the operator pasted the wrong token
+          # type (glsa_* / glb_* vs glc_*) or a token Grafana rejects.
+          # Probes grafana.com/api/orgs/<slug> (the ORG-SPECIFIC endpoint, not
+          # the list endpoint /api/orgs — the latter requires `orgs:read` which
+          # is NOT in the recommended 4-scope set, so a correctly-configured
+          # access-policy token 403s on it). Verified against access-policy
+          # token with scopes [stacks:read, stack-service-accounts:write,
+          # accesspolicies:read, accesspolicies:write]:
+          #   GET /api/orgs                       → 403 (needs orgs:read)
+          #   GET /api/orgs/<slug>                → 200 ✓
+          #   GET /api/orgs/<slug>/instances      → 200 ✓
+          # The stack-level /api/serviceaccounts endpoint is glsa_-only; not
+          # used here.
+          # Optional path: all unset → log + continue (Phase 5e graceful skip).
+          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" && -z "${GRAFANA_URL}" ]]; then
+            echo "::notice::Grafana auto-mint disabled — GH_GRAFANA_CLOUD_ADMIN_TOKEN/GH_GRAFANA_URL unset. Scorecard row 5 will stay 🟡."
+            exit 0
+          fi
+          if [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN}" || -z "${GRAFANA_URL}" ]]; then
+            echo "::error::Set BOTH GH_GRAFANA_CLOUD_ADMIN_TOKEN and GH_GRAFANA_URL, or neither. See Step 6.2 of docs/runbooks/fork-quickstart.md."
+            exit 2
+          fi
+          # Auto-derive org slug from URL host when GH_GRAFANA_ORG_SLUG unset.
+          # Grafana Cloud stack URLs are typically https://<slug>.grafana.net
+          # where <slug> matches the org slug for single-stack orgs (common
+          # case). Multi-stack orgs or custom domains: set GH_GRAFANA_ORG_SLUG
+          # explicitly to disambiguate.
+          if [[ -z "${GRAFANA_CLOUD_ORG_SLUG}" ]]; then
+            HOST="${GRAFANA_URL#https://}"; HOST="${HOST%%/*}"
+            GRAFANA_CLOUD_ORG_SLUG="${HOST%.grafana.net}"
+            echo "::notice::GH_GRAFANA_ORG_SLUG unset — derived '${GRAFANA_CLOUD_ORG_SLUG}' from GRAFANA_URL host. Set GH_GRAFANA_ORG_SLUG explicitly if your org slug differs from your stack subdomain."
+          fi
+          MINT_URL="https://grafana.com/orgs/${GRAFANA_CLOUD_ORG_SLUG}/access-policies"
+          SCOPES="stacks:read, stack-service-accounts:write, accesspolicies:read, accesspolicies:write (use 'Add scope' dropdown — these are NOT the default data-plane checkboxes)"
+          WALKTHROUGH="Full walkthrough: docs/runbooks/fork-quickstart.md §6.2 rows 8-10."
+          case "$GRAFANA_CLOUD_ADMIN_TOKEN" in
+            glsa_*)
+              echo "::error::GH_GRAFANA_CLOUD_ADMIN_TOKEN is a glsa_* stack service-account token."
+              echo "::error::Phase 5e now derives BOTH read + write paths from ONE Cloud admin token (glc_*) — glsa_ cannot mint Cloud access-policies."
+              echo "::error::Mint a glc_ token at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
+              exit 2
+              ;;
+            glb_*)
+              echo "::error::GH_GRAFANA_CLOUD_ADMIN_TOKEN is a glb_* bearer token — not supported."
+              echo "::error::Mint a glc_ token at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
+              exit 2
+              ;;
+            glc_*) : ;;
+            *)
+              echo "::error::GH_GRAFANA_CLOUD_ADMIN_TOKEN does not start with glc_ — refusing."
+              echo "::error::Mint at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
+              exit 2
+              ;;
+          esac
+          PROBE_URL="https://grafana.com/api/orgs/${GRAFANA_CLOUD_ORG_SLUG}"
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GRAFANA_CLOUD_ADMIN_TOKEN" \
+            "$PROBE_URL" || echo "000")
+          case "$CODE" in
+            200) echo "Grafana Cloud preflight ok — $PROBE_URL responded 200" ;;
+            401)
+              echo "::error::Grafana Cloud rejected the admin token (HTTP 401 from $PROBE_URL)."
+              echo "::error::The token was revoked. Re-mint at $MINT_URL and re-set GH_GRAFANA_CLOUD_ADMIN_TOKEN."
+              exit 2
+              ;;
+            403)
+              echo "::error::Cloud admin token missing scopes (HTTP 403 from $PROBE_URL)."
+              echo "::error::Recreate the access-policy at $MINT_URL with scopes: $SCOPES"
+              echo "::error::$WALKTHROUGH"
+              exit 2
+              ;;
+            404)
+              echo "::error::Org slug \"${GRAFANA_CLOUD_ORG_SLUG}\" not found (HTTP 404 from $PROBE_URL)."
+              echo "::error::Check the slug in your Grafana Cloud URL: https://grafana.com/orgs/<slug>. Update GH_GRAFANA_ORG_SLUG."
+              exit 2
+              ;;
+            000)
+              echo "::error::Could not reach grafana.com — runner network issue."
+              exit 2
+              ;;
+            *)
+              echo "::error::Grafana Cloud preflight got HTTP $CODE from $PROBE_URL. Bootstrap aborted before VM spend."
+              exit 2
+              ;;
+          esac
 
       - name: Pre-flight — infra/fork.yaml::domain.root populated
         # fork.yaml::domain.root is the operator's Cloudflare-zone declaration.
@@ -229,7 +346,8 @@ jobs:
           encrypted_count=0
           for src in .local/${DEPLOY_ENV}-openbao-init.json \
                      .local/${DEPLOY_ENV}-vm-key \
-                     .local/${DEPLOY_ENV}-kubeconfig.yaml; do
+                     .local/${DEPLOY_ENV}-kubeconfig.yaml \
+                     .local/${DEPLOY_ENV}-grafana-sa-token.json; do
             [[ -r "$src" ]] || { echo "::warning::missing source: $src (provision may not have produced it)"; continue; }
             base=$(basename "$src")
             out=".local/encrypted/${base}.enc"

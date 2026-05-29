@@ -228,23 +228,32 @@ source "$ENV_FILE"
 set +a
 log_info "Loaded secrets from $ENV_FILE"
 
-# SSH keypair — per-VM, not in .env file (uploaded to Cherry, saved to .local/)
-# Reuse if VM exists, generate if fresh
+# SSH keypair — per-VM, uploaded to Cherry, saved to .local/.
+# IMPORTANT (re-run gap): `.local/` is laptop-side state. On the GHA runner
+# (the canonical bootstrap surface per Step 6 doctrine) it never persists
+# across runs, so the else-branch ALWAYS fires on re-runs. Phase 3's
+# `tofu apply` then tries to upload a fresh public key to the operator's
+# Cherry account under the same resource name → conflict if the prior
+# VM/key from a previous run still exists. Fresh-fork bootstrap works;
+# re-runs against the same Cherry account collide. Tracked as the
+# "Cherry SSH key re-run conflict" Walk-tier row in
+# proj.agentic-fork-bootstrap.md. Workaround until fixed: destroy the
+# prior VM + Cherry SSH key in the portal before re-running.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" ]]; then
-  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key"
+  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key (laptop-side path)"
 else
   TMPDIR=$(mktemp -d)
-  log_info "Generating ephemeral SSH keypair..."
+  log_info "Generating ephemeral SSH keypair (GHA runner — no laptop .local/ state)"
   ssh-keygen -t ed25519 -f "$TMPDIR/deploy_key" -C "cogni-${DEPLOY_ENV}-vm" -N "" -q
   cp "$TMPDIR/deploy_key.pub" "$PROVISION_DIR/keys/cogni_${DEPLOY_ENV}_deploy.pub"
   cp "$TMPDIR/deploy_key" "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
   chmod 600 "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
 fi
 
-# SOPS age keypair — per-VM, reuse if exists
+# SOPS age keypair — per-VM. Same re-run gap as the SSH key above.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key" ]]; then
   AGE_PRIVATE_KEY=$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key")
-  log_info "Reusing existing SOPS age key"
+  log_info "Reusing existing SOPS age key (laptop-side path)"
 else
   AGE_TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SOPS age keypair..."
@@ -267,7 +276,10 @@ DEPLOY_ENVIRONMENT="${DEPLOY_ENV}"
 
 # Per-node databases derive from NODE_TARGETS (B2). Hyphens → underscores
 # for postgres-name legality: node-template → cogni_node_template.
-COGNI_NODE_DBS=$(IFS=','; printf '%s' "${NODE_TARGETS[*]/#/cogni_}" | sed 's/-/_/g')
+# Exported because Phase 5f invokes deploy-infra.sh via an explicit env
+# prefix that forwards only a fixed subset; db-provision container reads
+# COGNI_NODE_DBS from the VM's runtime/.env and aborts if empty.
+export COGNI_NODE_DBS=$(IFS=','; printf '%s' "${NODE_TARGETS[*]/#/cogni_}" | sed 's/-/_/g')
 LITELLM_DB_NAME="litellm"
 # Primary node DB (first NODE_TARGETS entry) — used for DATABASE_URL defaults
 # before per-node secrets are written in Phase 6. Each node gets its own DB
@@ -970,32 +982,12 @@ done
 log_info "Starting edge stack (Caddy)..."
 ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-edge --env-file /opt/cogni-template-edge/.env -f /opt/cogni-template-edge/docker-compose.yml up -d'
 
-log_info "Starting infra services (postgres, temporal, litellm, redis)..."
-ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml up -d --no-build postgres temporal-postgres temporal redis litellm autoheal'
-
-# Wait for postgres
-log_info "Waiting for postgres to become healthy..."
-for i in $(seq 1 30); do
-  if ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml ps postgres --format "{{.Health}}"' 2>/dev/null | grep -q "healthy"; then
-    log_info "Postgres is healthy"
-    break
-  fi
-  if [[ $i -eq 30 ]]; then
-    log_error "Postgres did not become healthy after 60s"
-    ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs postgres --tail 30'
-    exit 1
-  fi
-  sleep 2
-done
-
-# DB provisioning
-log_info "Running database provisioning..."
-ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml run --rm db-provision'
-
-# Temporal namespace bootstrap (idempotent — same script used by deploy-infra.sh)
-log_info "Ensuring Temporal namespace exists..."
-scp $SSH_OPTS "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" root@"$VM_IP":/tmp/ensure-temporal-namespace.sh
-ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CONTAINER=cogni-runtime-temporal-1 TEMPORAL_TIMEOUT=60 bash /tmp/ensure-temporal-namespace.sh"
+# Runtime stack (postgres, temporal, redis, litellm, alloy, alloy-k8s-events,
+# autoheal, repo-init, git-sync) + db-provision + temporal-namespace bootstrap
+# are deferred to Phase 5f (below), which reuses scripts/ci/deploy-infra.sh — the
+# canonical primitive used by candidate-flight-infra.yml + promote-and-deploy.yml.
+# Phase 5e mints Grafana Cloud read/write tokens that Alloy needs; deploy-infra
+# can therefore only run AFTER 5b/5c/5e have populated the runner env.
 
 # ══════════════════════════════════════════════════════════════
 # Phase 5b: Install OpenBao + ESO + auto-init + auto-unseal + auth bind
@@ -1297,6 +1289,27 @@ ssh $SSH_OPTS root@"$VM_IP" "kubectl apply -f /tmp/cluster-secret-store.yaml"
 log_info "Applied ClusterSecretStore openbao-backend"
 
 # ══════════════════════════════════════════════════════════════
+# seed_kv: <service> <KEY> <value> → cogni/${DEPLOY_ENV}/<service>
+# File-scope helper used by Phase 5c (app secrets) AND Phase 5e (auto-mint).
+# No-op when value is empty. First write creates the path (put); later writes
+# patch so existing keys are preserved. Requires ROOT_TOKEN to be set by the
+# caller (read from $OPENBAO_ROOT_TOKEN_LOCAL after Phase 5b.2 produces it).
+seed_kv() {
+  local svc="$1" k="$2" v="$3"
+  [[ -z "$v" ]] && return 0
+  local path="cogni/${DEPLOY_ENV}/${svc}"
+  local op="patch"
+  if ! ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv metadata get '${path}'" \
+    >/dev/null 2>&1; then
+    op="put"
+  fi
+  printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv ${op} '${path}' '${k}=-'" \
+    >/dev/null
+}
+
+# ══════════════════════════════════════════════════════════════
 # Phase 5c: Seed OpenBao with auto-generated app secrets (task.0284)
 # ══════════════════════════════════════════════════════════════
 # Phase 2 (above) sourced .env.${DEPLOY_ENV}, which carries every secret
@@ -1322,25 +1335,6 @@ if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
 else
   ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
 
-  seed_kv() {
-    # seed_kv <service> <KEY> <value>
-    # No-op when value is empty (operator-pass-through that the fork didn't
-    # provide). First write creates the path; later writes patch so existing
-    # keys are preserved.
-    local svc="$1" k="$2" v="$3"
-    [[ -z "$v" ]] && return 0
-    local path="cogni/${DEPLOY_ENV}/${svc}"
-    local op="patch"
-    if ! ssh $SSH_OPTS root@"$VM_IP" \
-      "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv metadata get '${path}'" \
-      >/dev/null 2>&1; then
-      op="put"
-    fi
-    printf '%s' "$v" | ssh $SSH_OPTS root@"$VM_IP" \
-      "kubectl exec -i -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv ${op} '${path}' '${k}=-'" \
-      >/dev/null
-  }
-
   log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
   for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
            OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
@@ -1358,6 +1352,193 @@ else
     seed_kv scheduler-worker "$k" "${!k:-}"
   done
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
+fi
+
+# ══════════════════════════════════════════════════════════════
+# Phase 5e: Grafana Cloud auto-mint (read + write) — one-root-token derivation
+# ══════════════════════════════════════════════════════════════
+# Operator pastes ONE Grafana Cloud admin token (glc_*) + GRAFANA_URL into
+# GH-env-secrets. This phase derives BOTH paths from that single root:
+#   1. Cloud-side bootstrap minter SA + glsa_ token (transient, runner-only)
+#   2. Stack-side Viewer child SA + glsa_ read token (validator scorecard,
+#      Loki+Prom+Postgres queries via $GRAFANA_URL/api/...)
+#   3. Cloud access-policy + glc_ push token (Alloy → Loki/Prom remote write)
+#
+# Output → cogni/${DEPLOY_ENV}/_shared (Invariant 1 cross-service path,
+# variable names match setup-secrets.ts entries):
+#   GRAFANA_SERVICE_ACCOUNT_TOKEN  glsa_* child read
+#   GRAFANA_URL                    stack URL
+#   LOKI_WRITE_URL                 hosted-Loki push URL
+#   LOKI_USERNAME                  numeric Loki user
+#   LOKI_PASSWORD                  glc_* push token (= PROMETHEUS_PASSWORD)
+#   PROMETHEUS_REMOTE_WRITE_URL    hosted-Mimir push URL
+#   PROMETHEUS_USERNAME            numeric Prom user
+#   PROMETHEUS_PASSWORD            glc_* push token (= LOKI_PASSWORD)
+#
+# Artifact: .local/${DEPLOY_ENV}-grafana-sa-token.json (8 fields, chmod 600,
+# encrypted by the "Encrypt init artifacts" step in provision-env.yml).
+#
+# The glc_* admin root NEVER lands in OpenBao and NEVER reaches the VM —
+# only the two derived tokens (glsa_ read + glc_ push) are seeded.
+#
+# Graceful skip: if GH_GRAFANA_CLOUD_ADMIN_TOKEN/GRAFANA_URL are unset, the
+# mint script logs + exit 0 with no output. Bootstrap continues; scorecard
+# row 5 stays 🟡. Observability is optional, never blocks bootstrap.
+log_step "Phase 5e: Grafana Cloud auto-mint (optional)"
+
+if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
+  log_warn "Skipping Phase 5e — no OpenBao root token; cannot seed cogni/${DEPLOY_ENV}/_shared"
+elif [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN:-}" || -z "${GRAFANA_URL:-}" ]]; then
+  log_info "Phase 5e skipped — GRAFANA_CLOUD_ADMIN_TOKEN/GRAFANA_URL unset (scorecard row 5 stays 🟡)"
+else
+  ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
+
+  # Mint runs on the runner — Cloud admin root never travels to the VM.
+  MINT_OUT=$(REPO_ROOT="$REPO_ROOT" DEPLOY_ENV="$DEPLOY_ENV" FORK_SLUG="$FORK_SLUG" \
+              GH_GRAFANA_CLOUD_ADMIN_TOKEN="$GRAFANA_CLOUD_ADMIN_TOKEN" \
+              GRAFANA_URL="$GRAFANA_URL" \
+              bash "$REPO_ROOT/scripts/setup/provision-grafana-cloud-mint.sh") \
+    || { log_error "Grafana Cloud mint failed — continuing bootstrap; re-run after fixing creds"; MINT_OUT=""; }
+
+  if [[ -n "$MINT_OUT" ]]; then
+    # Parse the 8 KEY=VALUE lines emitted by the mint script.
+    declare -A MINTED=()
+    while IFS='=' read -r k v; do
+      [[ -z "$k" ]] && continue
+      MINTED[$k]="$v"
+    done <<<"$MINT_OUT"
+
+    SEED_OK=true
+    for k in GRAFANA_SERVICE_ACCOUNT_TOKEN GRAFANA_URL \
+             LOKI_WRITE_URL LOKI_USERNAME LOKI_PASSWORD \
+             PROMETHEUS_REMOTE_WRITE_URL PROMETHEUS_USERNAME PROMETHEUS_PASSWORD; do
+      if [[ -z "${MINTED[$k]:-}" ]]; then
+        log_warn "Phase 5e: missing $k in mint output — skipping seed"
+        SEED_OK=false
+        break
+      fi
+    done
+
+    if [[ "$SEED_OK" == "true" ]]; then
+      log_info "Seeding 8 derived keys to cogni/${DEPLOY_ENV}/_shared"
+      for k in GRAFANA_SERVICE_ACCOUNT_TOKEN GRAFANA_URL \
+               LOKI_WRITE_URL LOKI_USERNAME LOKI_PASSWORD \
+               PROMETHEUS_REMOTE_WRITE_URL PROMETHEUS_USERNAME PROMETHEUS_PASSWORD; do
+        seed_kv _shared "$k" "${MINTED[$k]}"
+      done
+      # Export under the names deploy-infra.sh + provision-grafana-postgres-
+      # datasources.sh expect (deploy-infra writes runtime/.env's
+      # LOKI_*/PROMETHEUS_* from these GRAFANA_CLOUD_* runner-env names; the
+      # datasource script reads GRAFANA_URL + GRAFANA_SERVICE_ACCOUNT_TOKEN
+      # directly). MINT_OUT names match the *VM .env* convention; the runner
+      # env contract is one indirection away — see deploy-infra.sh lines
+      # 664-678.
+      export GRAFANA_SERVICE_ACCOUNT_TOKEN="${MINTED[GRAFANA_SERVICE_ACCOUNT_TOKEN]}"
+      export GRAFANA_URL="${MINTED[GRAFANA_URL]}"
+      export GRAFANA_CLOUD_LOKI_URL="${MINTED[LOKI_WRITE_URL]}"
+      export GRAFANA_CLOUD_LOKI_USER="${MINTED[LOKI_USERNAME]}"
+      export GRAFANA_CLOUD_LOKI_API_KEY="${MINTED[LOKI_PASSWORD]}"
+      export PROMETHEUS_REMOTE_WRITE_URL="${MINTED[PROMETHEUS_REMOTE_WRITE_URL]}"
+      export PROMETHEUS_USERNAME="${MINTED[PROMETHEUS_USERNAME]}"
+      export PROMETHEUS_PASSWORD="${MINTED[PROMETHEUS_PASSWORD]}"
+      log_info "Grafana auto-mint complete for ${DEPLOY_ENV}"
+    else
+      log_info "Phase 5e: mint script produced incomplete output (graceful skip)"
+    fi
+  fi
+fi
+
+# ══════════════════════════════════════════════════════════════
+# Phase 5f: Bring up full Compose runtime via deploy-infra.sh
+# ══════════════════════════════════════════════════════════════
+# Reuse the canonical CI primitive that candidate-flight-infra.yml + promote-
+# and-deploy.yml call. It rsyncs infra/compose/** to the VM, writes the .env,
+# brings the full runtime stack up (postgres, temporal, redis, litellm,
+# *alloy*, *alloy-k8s-events*, autoheal, repo-init, git-sync), runs
+# db-provision + ensure-temporal-namespace, and is idempotent on re-runs.
+#
+# deploy-infra.sh expects ~/.ssh/deploy_key + known_hosts populated. The
+# bootstrap already has .local/${DEPLOY_ENV}-vm-key; we copy it to the CI
+# location and ssh-keyscan the VM IP so the script's StrictHostKeyChecking=yes
+# clears.
+#
+# All required deploy-infra env vars are exported by Phase 2 (`set -a; source
+# $ENV_FILE`); Phase 5e exports the GRAFANA_CLOUD_LOKI_*/PROMETHEUS_*
+# observability vars. VM_HOST is overridden with the freshly-provisioned IP
+# because .env.${DEPLOY_ENV}'s value may be a DNS name that doesn't yet
+# resolve. REF is the runner's checkout SHA so the rsync source is the
+# tree currently being provisioned (not main).
+log_step "Phase 5f: Bring up full Compose runtime (deploy-infra.sh)"
+
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+cp "$SSH_KEY" ~/.ssh/deploy_key
+chmod 600 ~/.ssh/deploy_key
+KEYSCAN_OUT=$(ssh-keyscan -T 10 -H "$VM_IP" 2>/dev/null || true)
+if [[ -n "$KEYSCAN_OUT" ]]; then
+  printf '%s\n' "$KEYSCAN_OUT" >>~/.ssh/known_hosts
+else
+  log_warn "ssh-keyscan returned no host keys for $VM_IP — deploy-infra.sh's StrictHostKeyChecking=yes will likely fail next."
+fi
+
+REF_FOR_INFRA="${GITHUB_SHA:-$(git -C "$REPO_ROOT" rev-parse HEAD)}"
+log_info "Invoking deploy-infra.sh --ref ${REF_FOR_INFRA} (VM_HOST=${VM_IP})"
+
+# Force the CI-shaped env for this one invocation; do not pollute the parent
+# scope with VM_HOST/SSH_KEY_PATH/DEPLOY_ENVIRONMENT overrides. LITELLM_IMAGE
+# pins to the locally-built tag (Phase 5 built cogni-litellm:latest on the VM
+# already), preventing deploy-infra's GHCR default from triggering a pull
+# the fork has no access to.
+VM_HOST="$VM_IP" \
+SSH_KEY_PATH="$HOME/.ssh/deploy_key" \
+DEPLOY_ENVIRONMENT="$DEPLOY_ENV" \
+APP_ENV="$APP_ENV" \
+COGNI_REPO_URL="$COGNI_REPO_URL" \
+COGNI_REPO_REF="$COGNI_REPO_REF" \
+DATABASE_URL="$DATABASE_URL" \
+DATABASE_SERVICE_URL="$DATABASE_SERVICE_URL" \
+LITELLM_IMAGE="cogni-litellm:latest" \
+bash "$REPO_ROOT/scripts/ci/deploy-infra.sh" --ref "$REF_FOR_INFRA"
+
+log_info "Phase 5f: full runtime stack up"
+
+# ══════════════════════════════════════════════════════════════
+# Phase 5g: Register Postgres datasource at Grafana (optional)
+# ══════════════════════════════════════════════════════════════
+# Reuses scripts/ci/provision-grafana-postgres-datasources.sh — the same
+# script candidate-flight-infra.yml + promote-and-deploy.yml call. Skips
+# gracefully when Grafana creds OR GRAFANA_PDC_NETWORK_UUID are absent.
+#
+# Fresh-fork reality: GRAFANA_PDC_NETWORK_UUID is the *internal* Grafana
+# network UUID, which only exists once the operator has manually bound a
+# datasource to PDC at least once (see comment in the script + the readonly
+# runbook). For a clean fork without PDC, this phase is a no-op; the
+# datasource gets registered the first time candidate-flight runs after the
+# operator wires GRAFANA_PDC_NETWORK_UUID into GH env secrets.
+log_step "Phase 5g: Register Postgres datasource at Grafana (optional)"
+
+if [[ -z "${GRAFANA_URL:-}" || -z "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+  log_info "Phase 5g skipped — Grafana creds absent (Phase 5e did not mint or was disabled)"
+elif [[ -z "${GRAFANA_PDC_NETWORK_UUID:-}" ]]; then
+  log_info "Phase 5g skipped — GRAFANA_PDC_NETWORK_UUID unset"
+  log_info "  This is expected for a fresh fork. After bootstrap, bind one Postgres"
+  log_info "  datasource via the Grafana UI (PDC network), copy its"
+  log_info "  jsonData.secureSocksProxyUsername into GH env secret"
+  log_info "  GRAFANA_PDC_NETWORK_UUID, then re-run candidate-flight-infra.yml."
+else
+  log_info "Invoking provision-grafana-postgres-datasources.sh"
+  if ! DEPLOY_ENVIRONMENT="$DEPLOY_ENV" \
+       POSTGRES_ROOT_PASSWORD="$POSTGRES_ROOT_PASSWORD" \
+       GRAFANA_URL="$GRAFANA_URL" \
+       GRAFANA_SERVICE_ACCOUNT_TOKEN="$GRAFANA_SERVICE_ACCOUNT_TOKEN" \
+       GRAFANA_PDC_NETWORK_UUID="$GRAFANA_PDC_NETWORK_UUID" \
+       COGNI_NODE_DBS="$COGNI_NODE_DBS" \
+       APP_DB_READONLY_USER="${APP_DB_READONLY_USER:-app_readonly}" \
+       APP_DB_READONLY_PASSWORD="${APP_DB_READONLY_PASSWORD:-}" \
+       bash "$REPO_ROOT/scripts/ci/provision-grafana-postgres-datasources.sh"; then
+    log_warn "Phase 5g: datasource registration failed — continuing bootstrap"
+  else
+    log_info "Phase 5g: Postgres datasources registered at $GRAFANA_URL"
+  fi
 fi
 
 # ══════════════════════════════════════════════════════════════

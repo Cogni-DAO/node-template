@@ -171,6 +171,26 @@ The dns-ops skill's default template only covers DNS:Edit; add the Zone Settings
 
 These 7 cover the MVP path (substrate boot + agent register + chat + work-items). Feature-gated externals — Posthog telemetry, OAuth providers (Discord/Google/GitHub), on-chain RPC, Tavily web search, etc. — go through Step 6.6 (writer-role → OpenBao path). Paste only what your fork actually uses; the app schema treats all of them as optional.
 
+**Optional — observability auto-mint (3 keys, ungates scorecard row 5):**
+
+If you have a Grafana Cloud stack, paste these 3 GH-env-secrets. ONE Cloud admin token derives BOTH the read path (Viewer child SA + `glsa_*` token used by the validator scorecard + laptop queries) AND the write path (Loki/Prom access-policy + `glc_*` push token used by Alloy from cold-start). Phase 5e calls the Cloud API + the stack instance API to mint all 8 derived fields, seeds them to `cogni/<env>/_shared`, and bundles a one-shot snapshot into the encrypted init-artifact. Skip = row 5 stays 🟡 with `no-grafana-data-available`; bootstrap still completes 🟢.
+
+> **Why the org slug is its own secret (row 8)**: Cloud access-policy tokens are _scoped to one org_. A token with the recommended 4 scopes can read `GET /api/orgs/<your-org-slug>` and its sub-paths, but **cannot list all orgs at `/api/orgs`** — that requires `orgs:read`, which is intentionally not in the recommended scope set. Phase 5e's preflight + lookup use the org-specific endpoint, so the operator pastes the slug rather than the script trying to discover it.
+
+| #   | Secret                         | Where to get it                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              | Notes                                                                                                                                                                                                                                                                                         |
+| --- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 8   | `GH_GRAFANA_ORG_SLUG`          | Your Grafana Cloud org slug — the `<slug>` segment in `https://grafana.com/orgs/<slug>`. Typically your account name (e.g., `derekg1729`). Visit <https://grafana.com/orgs> while signed in and copy the slug from the URL of your org's page.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Required when the admin token is set. Verified by Phase 5e preflight as `GET /api/orgs/<slug>` → 200.                                                                                                                                                                                         |
+| 9   | `GH_GRAFANA_URL`               | Your Grafana stack URL — Grafana Cloud: `https://<stack>.grafana.net` (find it in <https://grafana.com/orgs>); self-hosted: whatever URL the stack lives at                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | No trailing slash. Phase 5e uses this to disambiguate stacks when the org has more than one.                                                                                                                                                                                                  |
+| 10  | `GH_GRAFANA_CLOUD_ADMIN_TOKEN` | Open `https://grafana.com/orgs/<your-org-slug>/access-policies` (sign up at <https://grafana.com/auth/sign-up/create-user> first if you don't have a Grafana Cloud account). **The default scope checkboxes are data-plane (metrics:write / logs:write / traces:write / etc.) — ignore them; we need ADMIN scopes.** Click **Create access policy** → enter display name `cogni-bootstrap-admin` → choose a Realm (org-wide "all stacks" is fine for v1) → scroll to the **Add scope** dropdown near the bottom → add these four by name (one at a time): `stacks:read`, `stack-service-accounts:write`, `accesspolicies:read`, `accesspolicies:write` → click **Create** → on the new policy's detail page click **Add token** → copy the `glc_*` value (shown once).<br><br>**Do NOT add `orgs:read`** — the script is org-scoped on purpose. Adding `orgs:read` works but grants a broader surface than needed; the 4 scopes above are the minimum-priv set for Phase 5e. | MUST start with `glc_*`. Stack SA tokens (`glsa_*`) and bearer tokens (`glb_*`) are rejected by the workflow preflight + Phase 5e mint script with a clear error before any VM spend. ONE root → derives all 8 observability keys (Viewer child SA + `glsa_*` read + `glc_*` Loki/Prom push). |
+
+```
+gh secret set GH_GRAFANA_ORG_SLUG          --repo "$REPO" --env "$ENV"
+gh secret set GH_GRAFANA_URL               --repo "$REPO" --env "$ENV"
+gh secret set GH_GRAFANA_CLOUD_ADMIN_TOKEN --repo "$REPO" --env "$ENV"
+```
+
+**Trust boundary**: the `glc_*` Cloud admin root lives only in GH-env-secrets + the workflow runner env for the ~30s of Phase 5e. It is never written to OpenBao, never propagated to pods, never reaches the VM. Phase 5e derives two scoped tokens from it — the Viewer child SA's `glsa_*` read token (`<fork-slug>-<env>-validator`) AND a `glc_*` push token bound to the `cogni-<fork-slug>-<env>-push` access-policy (4 scopes: `logs:write` + `metrics:write` + `logs:read` + `metrics:read`). Both derived tokens land at `cogni/<env>/_shared` (Invariant 1) and are the only credentials pods + the validator ever see.
+
 ##### 6.3 · Generate the init-artifact passphrase
 
 Operator-owned. Never stored in GH or in this repo.
@@ -206,6 +226,13 @@ done
 
 Move `.local/<env>-openbao-init.json` + `<env>-vm-key` + `<env>-kubeconfig.yaml` to your password manager. THEN delete the artifact from the run page (retention is 1 day — safety net, not the contract).
 
+If you set `GH_GRAFANA_CLOUD_ADMIN_TOKEN`, a fourth file `<env>-grafana-sa-token.json` will be present — an 11-field one-shot bootstrap snapshot of everything Phase 5e derived from your Cloud admin root:
+
+- 6 read-path fields: `url`, `token` (glsa\_ Viewer child read), `sa_id`, `sa_name` (`<fork-slug>-<env>-validator`), `token_name`, `minted_at`
+- 5 write-path fields: `loki_write_url`, `loki_username`, `prometheus_remote_write_url`, `prometheus_username`, `push_token` (glc\_ Loki/Prom push, single 4-scope policy)
+
+Move it to your password manager. Post-rotation laptop access uses `bao kv get -mount=cogni <env>/_shared`, which returns the same 8 derived keys: `GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GRAFANA_URL`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`, `PROMETHEUS_REMOTE_WRITE_URL`, `PROMETHEUS_USERNAME`, `PROMETHEUS_PASSWORD` (the `LOKI_PASSWORD` and `PROMETHEUS_PASSWORD` values are the same glc\_ push token — one access-policy holds both write scopes).
+
 **Invariant 13** (`secrets-management.md`): the root token in `<env>-openbao-init.json` is for unseal-key recovery on pod restart only. Day-2 writes use the writer-role JWT (Step 6.6), not the root token.
 
 Multi-operator forks (Shamir 3-of-5) override `OPENBAO_KEY_SHARES=5` + `OPENBAO_KEY_THRESHOLD=3` at workflow trigger time. v1 default is 1-of-1.
@@ -224,11 +251,41 @@ export BAO_TOKEN=$(bao write -field=token auth/kubernetes/login \
   jwt=$(kubectl create token openbao-operator -n default))
 
 pnpm secrets:set <env> node-template OPENROUTER_API_KEY            # for LLM router
-pnpm secrets:set <env> node-template GRAFANA_CLOUD_LOKI_API_KEY    # optional
-pnpm secrets:set <env> node-template PROMETHEUS_REMOTE_WRITE_URL   # optional
 ```
 
+If you set `GH_GRAFANA_CLOUD_ADMIN_TOKEN` at Step 6.2, all 8 observability creds (`GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GRAFANA_URL`, `LOKI_*` ×3, `PROMETHEUS_*` ×3) are auto-minted into `cogni/<env>/_shared` by Phase 5e — no `secrets:set` needed. Both the read path (validator scorecard) and the write path (Alloy push) flow on cold-start. See [`docs/design/observability-creds-shared.md`](../design/observability-creds-shared.md).
+
 Without a real `OPENROUTER_API_KEY`, LLM router calls fail at runtime. The workflow scorecard prints the full pass-through list; `ls infra/catalog/*.yaml` is the canonical inventory. See [`docs/guides/secrets-add-new.md`](../guides/secrets-add-new.md) for the full playbook.
+
+##### 6.7 · Post-bootstrap Grafana / Loki access (for the next agent)
+
+After Step 6.5 decrypted the init-artifact bundle, the auto-minted Grafana credentials live at:
+
+```
+.local/<env>-grafana-sa-token.json
+```
+
+This is the canonical creds-snapshot for laptop-side and CI ad-hoc queries. **Future agents do not need to mint, copy, or re-source anything** — the helper and skills below auto-source it. With the Cloud admin token set at 6.2, Alloy is shipping logs + metrics from cold-start (deploy-infra wires its push creds from the same `cogni/<env>/_shared` Phase 5e seeds), so reads return data the moment the cluster comes up.
+
+| Surface                                      | What it is                      | How it gets the token                                                                                          |
+| -------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `scripts/loki-query.sh`                      | Shell helper, no MCP dependency | Auto-sources `.local/<env>-grafana-sa-token.json` if `GRAFANA_URL` / `GRAFANA_SERVICE_ACCOUNT_TOKEN` are unset |
+| `.claude/commands/logs.md`                   | `/logs` slash command           | Calls `scripts/loki-query.sh` when the Grafana MCP is unavailable                                              |
+| `.claude/skills/validate-candidate/SKILL.md` | `/validate-candidate` scorecard | Calls `scripts/loki-query.sh` for the observability column when MCP is down                                    |
+
+Verify your fork's auto-source works (no env vars needed):
+
+```
+unset GRAFANA_URL GRAFANA_SERVICE_ACCOUNT_TOKEN
+scripts/loki-query.sh '{namespace="cogni-<env>"}' 10 5 | jq '.data.result | length'
+```
+
+Should print an integer > 0 within ~30s of bootstrap completing. **If it prints 0**, one of two cases:
+
+1. The VM came up seconds ago — Alloy hasn't shipped its first batch yet. Wait 30s + re-run; logs flow once Alloy's first scrape interval elapses.
+2. You skipped `GH_GRAFANA_CLOUD_ADMIN_TOKEN` at 6.2 — Phase 5e was a no-op, so Alloy has no push creds. Re-run `provision-env.yml` after pasting the secret; Phase 5e is idempotent.
+
+Post-rotation (tokens rotate on every re-run of `provision-env.yml`): the artifact stays the bootstrap snapshot; the canonical post-rotation source is `bao kv get -mount=cogni <env>/_shared`. For most uses, re-decrypting the latest run's artifact is simpler.
 
 #### 7 · Drive to green
 
@@ -244,22 +301,33 @@ Don't trust `/readyz=200` alone — it only proves the pod is alive. Exercise th
 Verdict cells: 🟢 pass · 🟡 partial / unverified · 🔴 fail · n/a not applicable. Each row records the HTTP status (or "no-grafana-data-available" for the obs cell when Loki creds aren't wired) and a one-line evidence excerpt.
 
 ```
-| # | Surface                              | Probe                                                       | Status | Obs (Loki)              | Verdict |
-| - | ------------------------------------ | ----------------------------------------------------------- | ------ | ----------------------- | ------- |
-| 1 | Public DNS /readyz                   | GET https://<DOMAIN>/readyz                                 | <code> | <log-line-or-no-data>   |   🟢    |
-| 2 | Agent registration                   | POST /api/v1/agent/register {"name":"quickstart-bot"}       | <code> | <log-line-or-no-data>   |   🟢    |
-| 3 | Free-graph hello world               | POST /api/v1/chat/completions graph_name=poet               | <code> | graph-run started/done  |   🟢    |
-| 4 | Work item create                     | POST /api/v1/work/items {type:"story", title:"...", ...}    | <code> | work-item-write line    |   🟢    |
+| # | Surface                                | Probe                                                       | Status | Obs (Loki)               | Verdict |
+| - | -------------------------------------- | ----------------------------------------------------------- | ------ | ------------------------ | ------- |
+| 1 | Public DNS /readyz                     | GET https://<DOMAIN>/readyz                                 | <code> | <log-line-or-no-data>    |   🟢    |
+| 2 | Agent registration                     | POST /api/v1/agent/register {"name":"quickstart-bot"}       | <code> | <log-line-or-no-data>    |   🟢    |
+| 3 | Free-graph hello world                 | POST /api/v1/chat/completions graph_name=poet               | <code> | graph-run started/done   |   🟢    |
+| 4 | Work item create                       | POST /api/v1/work/items {type:"story", title:"...", ...}    | <code> | work-item-write line     |   🟢    |
+| 5 | Grafana instance API + self-trace      | GET $GRAFANA_URL/api/datasources                            | <code> | self-trace at marker tag |   🟢    |
 ```
 
 Row 4 covers what node-template actually serves today: the work-items API against the operator's Doltgres. Knowledge primitives (`entryType=html|text` writes, knowledge-data-plane reads) live in the `cogni` operator-app + adopting nodes' `doltgres-schema` packages — node-template has none today, so a knowledge probe would be probing a surface that doesn't exist. Valid work-item types: `task | bug | story | spike | subtask` (per `work/_templates/item.md`); `inbox` is not valid.
 
+Row 5 gating contract (per `docs/design/observability-creds-shared.md`):
+
+- Credentials live at `cogni/<env>/_shared` (8 keys auto-minted by Phase 5e from the Cloud admin token; or sourced from the encrypted artifact bundle `.local/<env>-grafana-sa-token.json` for laptop-side checks).
+- Probe: `curl -sS -H "Authorization: Bearer $GRAFANA_SERVICE_ACCOUNT_TOKEN" $GRAFANA_URL/api/datasources`
+- Per-datasource queries (Loki, Prometheus, Postgres) flow through the proxy: `$GRAFANA_URL/api/datasources/proxy/uid/<ds-uid>/loki/api/v1/labels` (and analogues for the other datasources).
+- **🟢** HTTP 200 on `/api/datasources` AND the payload is non-empty AND the validator can find its own request in a Loki `/loki/api/v1/query_range` proxy call tied to the exercise window. Default on first cold-start with Cloud admin token set: Alloy is shipping + datasources are registered.
+- **🟡** with `grafana-auth-ok-no-datasources` if HTTP 200 but the payload is `[]` — `scripts/ci/provision-grafana-postgres-datasources.sh` skipped at deploy-infra (likely missing PDC credentials or other optional inputs). Self-resolves on operator opt-in; auth is fully wired.
+- **🟡** with `no-grafana-data-available` if `GH_GRAFANA_CLOUD_ADMIN_TOKEN`/`GH_GRAFANA_URL` were skipped at Step 6.2 (Phase 5e is a no-op).
+- **🔴** on HTTP 401/403 — the child token was revoked or the SA was deleted in Grafana. Re-run provision; Phase 5e is idempotent (find-or-create by name) and will mint fresh tokens.
+
 vNext (filed against `proj.agentic-fork-bootstrap`, not gating today's bootstrap):
 
 ```
-| 5 | Grafana/Loki query auth              | GET <GRAFANA_URL>/api/datasources                            | <code> | self-trace at marker   |  vNext  |
-| 6 | Knowledge entry write (cogni-side)   | once node-template adopts a doltgres-schema package          | <code> | dolt_log entry          |  vNext  |
-| 7 | Operator GH App integration          | POST /api/v1/vcs/flight {prNumber:<n>}                       | <code> | flight dispatched      |  vNext  |
+| 6 | Grafana instance API query           | GET <GRAFANA_URL>/api/datasources                            | <code> | self-trace at marker   |  vNext  |
+| 7 | Knowledge entry write (cogni-side)   | once node-template adopts a doltgres-schema package          | <code> | dolt_log entry          |  vNext  |
+| 8 | Operator GH App integration          | POST /api/v1/vcs/flight {prNumber:<n>}                       | <code> | flight dispatched      |  vNext  |
 ```
 
 A 🟢 row requires (a) the HTTP status matches the contract AND (b) a feature-specific Loki line tied to the same exercise window — generic `request received` traffic is 🟡 at best. No-Loki environments are 🟡 with `no-grafana-data-available`, not 🟢.
