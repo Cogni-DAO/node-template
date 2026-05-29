@@ -161,6 +161,21 @@ The B-tier rows exist because Compose-infra containers have no Kubernetes Servic
 
 Out-of-scope here; tracked in a separate spec + task to be filed.
 
+## `generate` kinds — when each one fires
+
+| `generate.kind`         | When it runs                                    | Reads from              | Example                                                                |
+| ----------------------- | ----------------------------------------------- | ----------------------- | ---------------------------------------------------------------------- |
+| `base64` / `hex`        | At setup-secrets-call time (first encounter)    | `openssl rand`          | `AUTH_SECRET`, `GH_WEBHOOK_SECRET`                                     |
+| `sk-cogni`              | Same                                            | `openssl rand` + prefix | `LITELLM_MASTER_KEY`                                                   |
+| `static`                | Same — returns a fixed literal                  | catalog `value:`        | `APP_DB_USER=app_user`                                                 |
+| `derived`               | At catalog load time — function of repo state   | `nodes/*/` filesystem   | `COGNI_NODE_DBS`, `COGNI_NODE_ENDPOINTS`                               |
+| `derive-env`            | At generator-call time — `${VAR}` interpolation | `process.env`           | `APP_BASE_URL = https://${DOMAIN}`, `NEXTAUTH_URL = https://${DOMAIN}` |
+| `special-cased-by-main` | Setup-secrets main loop owns the call site      | bespoke                 | `SSH_DEPLOY_KEY` (env-bound keypair generation)                        |
+
+`derive-env` is the right choice when a value is a **pure function of another env var** that's already set. Use cases: a URL built from `DOMAIN`, a connection string built from a host + creds (note: DSNs today are constructed by `buildDSNs()` in setup-secrets.ts, not by `derive-env`; converging is a follow-up). It is NOT for secrets that need randomness — use `base64` / `hex` for those.
+
+The generator throws loudly if any `${VAR}` in the template is unset at call time, so Phase 5c's seed loop fails fast if it forgets to source `.env.${DEPLOY_ENV}` first.
+
 ## Open follow-ups
 
 - `setup-secrets.ts` hardcodes `REPO = "Cogni-DAO/cogni"` regardless of which fork hosts the source tree. Fork-aware REPO resolution is a separate task; today this script is org-admin tooling that targets the cogni-template GH org for secret writes.

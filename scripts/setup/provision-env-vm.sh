@@ -1325,6 +1325,14 @@ if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
 else
   ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
 
+  # APP_BASE_URL + NEXTAUTH_URL are derived from DOMAIN (catalog tier A1,
+  # generate.kind: derive-env). Compute here once for the seed loop — the
+  # Compose .env write at Phase 5 already emits APP_BASE_URL the same way.
+  # If either of these drifts from DOMAIN, secrets-classification.md
+  # `derive-env` generator semantics are violated — keep them aligned.
+  export APP_BASE_URL="https://${DOMAIN}"
+  export NEXTAUTH_URL="https://${DOMAIN}"
+
   log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
   for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
            OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
@@ -1332,7 +1340,8 @@ else
            CONNECTIONS_ENCRYPTION_KEY POLY_WALLET_AEAD_KEY_HEX \
            POLY_WALLET_AEAD_KEY_ID DATABASE_URL DATABASE_SERVICE_URL \
            POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY \
-           EVM_RPC_URL POLYGON_RPC_URL; do
+           EVM_RPC_URL POLYGON_RPC_URL \
+           APP_BASE_URL NEXTAUTH_URL; do
     seed_kv node-template "$k" "${!k:-}"
   done
   log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."

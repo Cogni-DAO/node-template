@@ -89,6 +89,16 @@ const GenerateSchema = z.discriminatedUnion("kind", [
     kind: z.literal("derived"),
     source: z.enum(["node-dbs", "node-endpoints"]),
   }),
+  // Derived at call-time from a process.env interpolation template — e.g.,
+  // `https://${DOMAIN}` resolves to `https://test.opencompany.cc` once the
+  // operator's DOMAIN reaches the provision shell. Used for values that are
+  // a pure function of another (already-set) env var; not for secrets that
+  // need randomness. Phase 5c's seed loop reads the generator at the same
+  // shell scope that just sourced `.env.${DEPLOY_ENV}`, so DOMAIN is set.
+  z.object({
+    kind: z.literal("derive-env"),
+    template: z.string(),
+  }),
 ]);
 
 const TransformSchema = z.discriminatedUnion("kind", [
@@ -319,6 +329,17 @@ function generatorFor(g: z.infer<typeof GenerateSchema>): () => string {
     case "derived":
       if (g.source === "node-dbs") return deriveCogniNodeDbs;
       return deriveCogniNodeEndpoints;
+    case "derive-env":
+      return () =>
+        g.template.replace(/\$\{([A-Z_][A-Z0-9_]*)\}/g, (_, name) => {
+          const v = process.env[name];
+          if (v === undefined || v === "") {
+            throw new Error(
+              `derive-env: template "${g.template}" references env var ${name} which is not set. Source .env.<env> before invoking the generator.`
+            );
+          }
+          return v;
+        });
   }
 }
 

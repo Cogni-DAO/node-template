@@ -56,7 +56,13 @@ export const serverSchema = z.object({
 
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
-  APP_BASE_URL: z.string().url().optional(),
+  // APP_BASE_URL + NEXTAUTH_URL are derived from DOMAIN at provision time
+  // (see nodes/node-template/.cogni/secrets-catalog.yaml — generate.kind:
+  // derive-env). Required so cold-start is loud per secrets-management.md
+  // Invariant 12 TRANSITION_SAFE — silent fallback to localhost:3000 was
+  // the SIWE-CSRF-localhost incident vector.
+  APP_BASE_URL: z.string().url(),
+  NEXTAUTH_URL: z.string().url(),
   DOMAIN: z.string().optional(),
 
   // Deployment environment (for observability labels and analytics filtering)
