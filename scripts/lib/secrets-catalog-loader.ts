@@ -165,7 +165,7 @@ export interface LoadResult {
 export function loadSecretsCatalog(opts: LoadOptions): LoadResult {
   const nodesDir = opts.nodesDir ?? "nodes";
   const operatorCatalogPath =
-    opts.operatorCatalogPath ?? "infra/catalog/secrets-catalog.yaml";
+    opts.operatorCatalogPath ?? "infra/secrets-catalog.yaml";
 
   const allEntries: { entry: CatalogEntry; source: string }[] = [];
 

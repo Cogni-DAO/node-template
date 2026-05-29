@@ -34,7 +34,7 @@ import { loadSecretsCatalog, type Secret } from "./lib/secrets-catalog-loader";
 // ── Catalog loader ──────────────────────────────────────────────────────────
 //
 // Per-secret data lives in YAML (node-domain or operator-domain). The loader
-// walks `nodes/*/.cogni/secrets-catalog.yaml` + `infra/catalog/secrets-catalog.yaml`,
+// walks `nodes/*/.cogni/secrets-catalog.yaml` + `infra/secrets-catalog.yaml`,
 // validates via Zod, asserts uniqueness, and emits the Secret[] + routing
 // shapes the rest of this file consumes. See:
 //   - docs/spec/secrets-classification.md (tier definitions + rules)

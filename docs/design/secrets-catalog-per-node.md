@@ -120,7 +120,7 @@ The `service:` field is the OpenBao path component (per `secrets-classification.
 
 `generate:` is a declarative tag interpreted by the loader (`{ kind: hex, bytes: 32 }` → `openssl rand -hex 32`). Avoids embedding JS lambdas in YAML. Supported kinds: `hex`, `base64`, `sk-cogni`, `static` (with `value:`).
 
-### `infra/catalog/secrets-catalog.yaml` (operator-domain)
+### `infra/secrets-catalog.yaml` (operator-domain)
 
 Same schema, but each entry declares its own `service:` field. Holds:
 
