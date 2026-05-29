@@ -173,19 +173,19 @@ These 7 cover the MVP path (substrate boot + agent register + chat + work-items)
 
 **Optional — observability auto-mint (2 keys, ungates scorecard row 5):**
 
-If you have a Grafana stack, paste these 2 GH-env-secrets. Phase 5e of provisioning calls the Grafana instance HTTP API with your parent SA token, mints a per-env Viewer-role child SA (`<fork-slug>-<env>-validator`) + a fresh read-only token, seeds `GRAFANA_SERVICE_ACCOUNT_TOKEN` + `GRAFANA_URL` into `cogni/<env>/_shared`, and bundles a one-shot snapshot into the encrypted init-artifact for your laptop. Skip = row 5 stays 🟡 with `no-grafana-data-available`; bootstrap still completes 🟢.
+If you have a Grafana Cloud stack, paste these 2 GH-env-secrets. ONE Cloud admin token derives BOTH the read path (Viewer child SA + `glsa_*` token used by the validator scorecard + laptop queries) AND the write path (Loki/Prom access-policy + `glc_*` push token used by Alloy from cold-start). Phase 5e calls the Cloud API + the stack instance API to mint all 8 derived fields, seeds them to `cogni/<env>/_shared`, and bundles a one-shot snapshot into the encrypted init-artifact. Skip = row 5 stays 🟡 with `no-grafana-data-available`; bootstrap still completes 🟢.
 
-| #   | Secret                       | Where to get it                                                                                                                                                                                                                                                                                                                                            | Notes                                                                                                                                                                                                                             |
-| --- | ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 8   | `GH_GRAFANA_URL`             | Your Grafana stack URL — Grafana Cloud: `https://<stack>.grafana.net` (find it in <https://grafana.com/orgs>); self-hosted: whatever URL the stack lives at                                                                                                                                                                                                | No trailing slash. Phase 5e POSTs to `$URL/api/serviceaccounts`.                                                                                                                                                                  |
-| 9   | `GH_GRAFANA_PARENT_SA_TOKEN` | In your stack UI: **Administration → Users and access → Service accounts → Add service account** (name: `cogni-bootstrap-minter`, role: **Admin**). Open the new SA → **Add service account token** (no expiry; rotate later via the same UI). Copy the `glsa_*` value when shown — it's one-time-visible. Direct link: `$GRAFANA_URL/org/serviceaccounts` | **MUST be a `glsa_*` stack SA token, NOT a `glc_*` Cloud access-policy token.** The instance HTTP API (`/api/serviceaccounts`) doesn't authorize `glc_*`. Phase 5e preflight rejects `glc_*` with a clear error before any spend. |
+| #   | Secret                         | Where to get it                                                                                                                                                                                                                                                                                                                                                                           | Notes                                                                                                                                                                                                                                                                                   |
+| --- | ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 8   | `GH_GRAFANA_URL`               | Your Grafana stack URL — Grafana Cloud: `https://<stack>.grafana.net` (find it in <https://grafana.com/orgs>); self-hosted: whatever URL the stack lives at                                                                                                                                                                                                                               | No trailing slash. Phase 5e uses this to disambiguate stacks when the org has more than one.                                                                                                                                                                                            |
+| 9   | `GH_GRAFANA_CLOUD_ADMIN_TOKEN` | <https://grafana.com/orgs/%3Cyour-org%3E/access-policies> → **Create access policy** → name: `cogni-bootstrap-admin` → Realm: your org (or "All orgs") → **Scopes (tick ALL FOUR)**: ☑ `stacks:read` ☑ `stack-service-accounts:write` ☑ `accesspolicies:read` ☑ `accesspolicies:write` → save → click **Add token** on the new policy → copy the `glc_*` value (shown once, never again). | MUST start with `glc_*`. Stack SA tokens (`glsa_*`) and bearer tokens (`glb_*`) are rejected by the workflow preflight + Phase 5e mint script with a clear error before any VM spend. ONE root → derives all 8 observability keys (Viewer child SA + `glsa_*` read + `glc_*` Loki/Prom push). |
 
 ```
-gh secret set GH_GRAFANA_URL              --repo "$REPO" --env "$ENV"
-gh secret set GH_GRAFANA_PARENT_SA_TOKEN  --repo "$REPO" --env "$ENV"
+gh secret set GH_GRAFANA_URL               --repo "$REPO" --env "$ENV"
+gh secret set GH_GRAFANA_CLOUD_ADMIN_TOKEN --repo "$REPO" --env "$ENV"
 ```
 
-**Trust boundary**: the parent SA token lives only in GH-env-secrets + the workflow runner env for the ~30s of Phase 5e. It is never written to OpenBao, never propagated to pods, never reaches the VM. Only the **child** token (Viewer role, read-only, scoped to `<fork-slug>-<env>-validator`) lands in `_shared` for pod + validator consumption.
+**Trust boundary**: the `glc_*` Cloud admin root lives only in GH-env-secrets + the workflow runner env for the ~30s of Phase 5e. It is never written to OpenBao, never propagated to pods, never reaches the VM. Phase 5e derives two scoped tokens from it — the Viewer child SA's `glsa_*` read token (`<fork-slug>-<env>-validator`) AND a `glc_*` push token bound to the `cogni-<fork-slug>-<env>-push` access-policy (4 scopes: `logs:write` + `metrics:write` + `logs:read` + `metrics:read`). Both derived tokens land at `cogni/<env>/_shared` (Invariant 1) and are the only credentials pods + the validator ever see.
 
 ##### 6.3 · Generate the init-artifact passphrase
 
@@ -222,7 +222,12 @@ done
 
 Move `.local/<env>-openbao-init.json` + `<env>-vm-key` + `<env>-kubeconfig.yaml` to your password manager. THEN delete the artifact from the run page (retention is 1 day — safety net, not the contract).
 
-If you set `GH_GRAFANA_PARENT_SA_TOKEN`, a fourth file `<env>-grafana-sa-token.json` will be present — the auto-minted child SA token. Move it to your password manager too; this is a **one-shot bootstrap snapshot**, post-rotation laptop access uses `bao kv get -mount=cogni <env>/_shared`.
+If you set `GH_GRAFANA_CLOUD_ADMIN_TOKEN`, a fourth file `<env>-grafana-sa-token.json` will be present — an 11-field one-shot bootstrap snapshot of everything Phase 5e derived from your Cloud admin root:
+
+- 6 read-path fields: `url`, `token` (glsa\_ Viewer child read), `sa_id`, `sa_name` (`<fork-slug>-<env>-validator`), `token_name`, `minted_at`
+- 5 write-path fields: `loki_write_url`, `loki_username`, `prometheus_remote_write_url`, `prometheus_username`, `push_token` (glc\_ Loki/Prom push, single 4-scope policy)
+
+Move it to your password manager. Post-rotation laptop access uses `bao kv get -mount=cogni <env>/_shared`, which returns the same 8 derived keys: `GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GRAFANA_URL`, `LOKI_WRITE_URL`, `LOKI_USERNAME`, `LOKI_PASSWORD`, `PROMETHEUS_REMOTE_WRITE_URL`, `PROMETHEUS_USERNAME`, `PROMETHEUS_PASSWORD` (the `LOKI_PASSWORD` and `PROMETHEUS_PASSWORD` values are the same glc\_ push token — one access-policy holds both write scopes).
 
 **Invariant 13** (`secrets-management.md`): the root token in `<env>-openbao-init.json` is for unseal-key recovery on pod restart only. Day-2 writes use the writer-role JWT (Step 6.6), not the root token.
 
@@ -244,19 +249,19 @@ export BAO_TOKEN=$(bao write -field=token auth/kubernetes/login \
 pnpm secrets:set <env> node-template OPENROUTER_API_KEY            # for LLM router
 ```
 
-If you set `GH_GRAFANA_PARENT_SA_TOKEN` at Step 6.2, observability creds (`GRAFANA_SERVICE_ACCOUNT_TOKEN` + `GRAFANA_URL`) are auto-minted into `cogni/<env>/_shared` by Phase 5e — no `secrets:set` needed. See [`docs/design/observability-creds-shared.md`](../design/observability-creds-shared.md).
+If you set `GH_GRAFANA_CLOUD_ADMIN_TOKEN` at Step 6.2, all 8 observability creds (`GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GRAFANA_URL`, `LOKI_*` ×3, `PROMETHEUS_*` ×3) are auto-minted into `cogni/<env>/_shared` by Phase 5e — no `secrets:set` needed. Both the read path (validator scorecard) and the write path (Alloy push) flow on cold-start. See [`docs/design/observability-creds-shared.md`](../design/observability-creds-shared.md).
 
 Without a real `OPENROUTER_API_KEY`, LLM router calls fail at runtime. The workflow scorecard prints the full pass-through list; `ls infra/catalog/*.yaml` is the canonical inventory. See [`docs/guides/secrets-add-new.md`](../guides/secrets-add-new.md) for the full playbook.
 
 ##### 6.7 · Post-bootstrap Grafana / Loki access (for the next agent)
 
-After Step 6.5 decrypted the init-artifact bundle, the auto-minted Grafana child SA token lives at:
+After Step 6.5 decrypted the init-artifact bundle, the auto-minted Grafana credentials live at:
 
 ```
 .local/<env>-grafana-sa-token.json
 ```
 
-This is the canonical read-token home for laptop-side and CI ad-hoc queries. **Future agents do not need to mint, copy, or re-source anything** — the helper and skills below auto-source it.
+This is the canonical creds-snapshot for laptop-side and CI ad-hoc queries. **Future agents do not need to mint, copy, or re-source anything** — the helper and skills below auto-source it. With the Cloud admin token set at 6.2, Alloy is shipping logs + metrics from cold-start (deploy-infra wires its push creds from the same `cogni/<env>/_shared` Phase 5e seeds), so reads return data the moment the cluster comes up.
 
 | Surface                                      | What it is                      | How it gets the token                                                                                          |
 | -------------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------- |
@@ -271,9 +276,12 @@ unset GRAFANA_URL GRAFANA_SERVICE_ACCOUNT_TOKEN
 scripts/loki-query.sh '{namespace="cogni-<env>"}' 10 5 | jq '.data.result | length'
 ```
 
-Should print an integer > 0 once Alloy push is wired. **If it prints 0**: read access works but nothing is shipping — Alloy push is a separate Walk-tier item (`proj.agentic-fork-bootstrap.md`). Mint succeeded; logs aren't flowing yet.
+Should print an integer > 0 within ~30s of bootstrap completing. **If it prints 0**, one of two cases:
 
-Post-rotation (token rotates on every re-run of `provision-env.yml`): the artifact stays the bootstrap snapshot; the canonical post-rotation source is `bao kv get -mount=cogni <env>/_shared`. For most uses, re-decrypting the latest run's artifact is simpler.
+1. The VM came up seconds ago — Alloy hasn't shipped its first batch yet. Wait 30s + re-run; logs flow once Alloy's first scrape interval elapses.
+2. You skipped `GH_GRAFANA_CLOUD_ADMIN_TOKEN` at 6.2 — Phase 5e was a no-op, so Alloy has no push creds. Re-run `provision-env.yml` after pasting the secret; Phase 5e is idempotent.
+
+Post-rotation (tokens rotate on every re-run of `provision-env.yml`): the artifact stays the bootstrap snapshot; the canonical post-rotation source is `bao kv get -mount=cogni <env>/_shared`. For most uses, re-decrypting the latest run's artifact is simpler.
 
 #### 7 · Drive to green
 
@@ -302,13 +310,13 @@ Row 4 covers what node-template actually serves today: the work-items API agains
 
 Row 5 gating contract (per `docs/design/observability-creds-shared.md`):
 
-- Credentials live at `cogni/<env>/_shared` (auto-minted by Phase 5e from the parent SA token; or sourced from the encrypted artifact bundle `.local/<env>-grafana-sa-token.json` for laptop-side checks).
+- Credentials live at `cogni/<env>/_shared` (8 keys auto-minted by Phase 5e from the Cloud admin token; or sourced from the encrypted artifact bundle `.local/<env>-grafana-sa-token.json` for laptop-side checks).
 - Probe: `curl -sS -H "Authorization: Bearer $GRAFANA_SERVICE_ACCOUNT_TOKEN" $GRAFANA_URL/api/datasources`
 - Per-datasource queries (Loki, Prometheus, Postgres) flow through the proxy: `$GRAFANA_URL/api/datasources/proxy/uid/<ds-uid>/loki/api/v1/labels` (and analogues for the other datasources).
-- **🟢** HTTP 200 on `/api/datasources` AND the validator can find its own request in a Loki `/loki/api/v1/query_range` proxy call.
-- **🟡** with `no-grafana-data-available` if `GH_GRAFANA_PARENT_SA_TOKEN`/`GH_GRAFANA_URL` were skipped at Step 6.2 (Phase 5e is a no-op).
-- **🟡** with `grafana-auth-ok-no-datasources` if HTTP 200 but the payload is `[]` — auth is wired, the stack just has no datasources yet (resolves once `scripts/ci/provision-grafana-postgres-datasources.sh` runs).
-- **🔴** on HTTP 401/403 — the child token was revoked or the SA was deleted in Grafana. Re-run provision; Phase 5e is idempotent (find-or-create by name) and will mint a fresh token.
+- **🟢** HTTP 200 on `/api/datasources` AND the payload is non-empty AND the validator can find its own request in a Loki `/loki/api/v1/query_range` proxy call tied to the exercise window. Default on first cold-start with Cloud admin token set: Alloy is shipping + datasources are registered.
+- **🟡** with `grafana-auth-ok-no-datasources` if HTTP 200 but the payload is `[]` — `scripts/ci/provision-grafana-postgres-datasources.sh` skipped at deploy-infra (likely missing PDC credentials or other optional inputs). Self-resolves on operator opt-in; auth is fully wired.
+- **🟡** with `no-grafana-data-available` if `GH_GRAFANA_CLOUD_ADMIN_TOKEN`/`GH_GRAFANA_URL` were skipped at Step 6.2 (Phase 5e is a no-op).
+- **🔴** on HTTP 401/403 — the child token was revoked or the SA was deleted in Grafana. Re-run provision; Phase 5e is idempotent (find-or-create by name) and will mint fresh tokens.
 
 vNext (filed against `proj.agentic-fork-bootstrap`, not gating today's bootstrap):
 
