@@ -77,7 +77,14 @@ const GenerateSchema = z.discriminatedUnion("kind", [
     randHexBytes: z.number().int().positive(),
   }),
   z.object({ kind: z.literal("static"), value: z.string() }),
-  z.object({ kind: z.literal("ssh-key") }), // env-bound; special-cased in setup-secrets main
+  // env-bound generators handled by setup-secrets.ts main loop, not the loader.
+  // Catalog entry MUST set name to a value the main loop special-cases
+  // (today: SSH_DEPLOY_KEY). Anyone copying as a template gets a clear
+  // error when their non-special-cased name reaches the throw stub below.
+  z.object({
+    kind: z.literal("special-cased-by-main"),
+    specialName: z.string(),
+  }),
   z.object({
     kind: z.literal("derived"),
     source: z.enum(["node-dbs", "node-endpoints"]),
@@ -268,11 +275,15 @@ function generatorFor(g: z.infer<typeof GenerateSchema>): () => string {
       return () => `sk-cogni-${randHex(g.randHexBytes)}`;
     case "static":
       return () => g.value;
-    case "ssh-key":
-      // SSH_DEPLOY_KEY is special-cased in setup-secrets.ts main loop;
-      // this stub keeps the type satisfied but is never invoked.
+    case "special-cased-by-main":
+      // Generator handled by setup-secrets.ts main loop, not by this loader.
+      // The thrower fires loudly if the main loop forgets to special-case
+      // a new entry that declares this kind — caught at runtime on the
+      // first non-special-cased invocation, not silently no-op.
       return () => {
-        throw new Error("ssh-key generation must be invoked via main loop");
+        throw new Error(
+          `setup-secrets: ${g.specialName} declares generate.kind=special-cased-by-main but the main loop did not invoke its dedicated path. Add a case in setup-secrets.ts main() for this name, or pick a real generator kind.`
+        );
       };
     case "derived":
       if (g.source === "node-dbs") return deriveCogniNodeDbs;

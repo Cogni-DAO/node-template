@@ -200,12 +200,16 @@ function applyTransform(secret: Secret, value: string): string {
 
 /**
  * Categorize a secret as belonging to a specific node (--node <name> filter).
- * Routing-driven: a secret belongs to <node> iff its OpenBao service path
- * matches the node name. Replaces the legacy hardcoded `isPolySecret` so
- * adding poly-domain secrets no longer requires editing this file.
+ * Routing-driven: a secret belongs to <node> iff its OpenBao service matches
+ * the node name OR it's a cross-cutting `_shared` entry the node also needs
+ * to provision. Replaces the legacy hardcoded `isPolySecret`.
+ *
+ * Excludes `_system` (derived from repo state, provisioned irrespective of
+ * --node) and operator-domain B/D/E entries (no service in OpenBao).
  */
 function isNodeSecret(secret: Secret, nodeName: string): boolean {
-  return SECRET_ROUTING[secret.name]?.service === nodeName;
+  const r = SECRET_ROUTING[secret.name];
+  return r?.service === nodeName || r?.service === "_shared";
 }
 
 // ── Database DSN helpers ─────────────────────────────────────────────────────
