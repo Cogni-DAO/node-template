@@ -970,32 +970,12 @@ done
 log_info "Starting edge stack (Caddy)..."
 ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-edge --env-file /opt/cogni-template-edge/.env -f /opt/cogni-template-edge/docker-compose.yml up -d'
 
-log_info "Starting infra services (postgres, temporal, litellm, redis)..."
-ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml up -d --no-build postgres temporal-postgres temporal redis litellm autoheal'
-
-# Wait for postgres
-log_info "Waiting for postgres to become healthy..."
-for i in $(seq 1 30); do
-  if ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml ps postgres --format "{{.Health}}"' 2>/dev/null | grep -q "healthy"; then
-    log_info "Postgres is healthy"
-    break
-  fi
-  if [[ $i -eq 30 ]]; then
-    log_error "Postgres did not become healthy after 60s"
-    ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml logs postgres --tail 30'
-    exit 1
-  fi
-  sleep 2
-done
-
-# DB provisioning
-log_info "Running database provisioning..."
-ssh $SSH_OPTS root@"$VM_IP" 'docker compose --project-name cogni-runtime --env-file /opt/cogni-template-runtime/.env -f /opt/cogni-template-runtime/docker-compose.yml run --rm db-provision'
-
-# Temporal namespace bootstrap (idempotent — same script used by deploy-infra.sh)
-log_info "Ensuring Temporal namespace exists..."
-scp $SSH_OPTS "$REPO_ROOT/scripts/ci/ensure-temporal-namespace.sh" root@"$VM_IP":/tmp/ensure-temporal-namespace.sh
-ssh $SSH_OPTS root@"$VM_IP" "TEMPORAL_NAMESPACE=cogni-${DEPLOY_ENV} TEMPORAL_CONTAINER=cogni-runtime-temporal-1 TEMPORAL_TIMEOUT=60 bash /tmp/ensure-temporal-namespace.sh"
+# Runtime stack (postgres, temporal, redis, litellm, alloy, alloy-k8s-events,
+# autoheal, repo-init, git-sync) + db-provision + temporal-namespace bootstrap
+# are deferred to Phase 5f (below), which reuses scripts/ci/deploy-infra.sh — the
+# canonical primitive used by candidate-flight-infra.yml + promote-and-deploy.yml.
+# Phase 5e mints Grafana Cloud read/write tokens that Alloy needs; deploy-infra
+# can therefore only run AFTER 5b/5c/5e have populated the runner env.
 
 # ══════════════════════════════════════════════════════════════
 # Phase 5b: Install OpenBao + ESO + auto-init + auto-unseal + auth bind
@@ -1434,10 +1414,113 @@ else
                PROMETHEUS_REMOTE_WRITE_URL PROMETHEUS_USERNAME PROMETHEUS_PASSWORD; do
         seed_kv _shared "$k" "${MINTED[$k]}"
       done
+      # Export under the names deploy-infra.sh + provision-grafana-postgres-
+      # datasources.sh expect (deploy-infra writes runtime/.env's
+      # LOKI_*/PROMETHEUS_* from these GRAFANA_CLOUD_* runner-env names; the
+      # datasource script reads GRAFANA_URL + GRAFANA_SERVICE_ACCOUNT_TOKEN
+      # directly). MINT_OUT names match the *VM .env* convention; the runner
+      # env contract is one indirection away — see deploy-infra.sh lines
+      # 664-678.
+      export GRAFANA_SERVICE_ACCOUNT_TOKEN="${MINTED[GRAFANA_SERVICE_ACCOUNT_TOKEN]}"
+      export GRAFANA_URL="${MINTED[GRAFANA_URL]}"
+      export GRAFANA_CLOUD_LOKI_URL="${MINTED[LOKI_WRITE_URL]}"
+      export GRAFANA_CLOUD_LOKI_USER="${MINTED[LOKI_USERNAME]}"
+      export GRAFANA_CLOUD_LOKI_API_KEY="${MINTED[LOKI_PASSWORD]}"
+      export PROMETHEUS_REMOTE_WRITE_URL="${MINTED[PROMETHEUS_REMOTE_WRITE_URL]}"
+      export PROMETHEUS_USERNAME="${MINTED[PROMETHEUS_USERNAME]}"
+      export PROMETHEUS_PASSWORD="${MINTED[PROMETHEUS_PASSWORD]}"
       log_info "Grafana auto-mint complete for ${DEPLOY_ENV}"
     else
       log_info "Phase 5e: mint script produced incomplete output (graceful skip)"
     fi
+  fi
+fi
+
+# ══════════════════════════════════════════════════════════════
+# Phase 5f: Bring up full Compose runtime via deploy-infra.sh
+# ══════════════════════════════════════════════════════════════
+# Reuse the canonical CI primitive that candidate-flight-infra.yml + promote-
+# and-deploy.yml call. It rsyncs infra/compose/** to the VM, writes the .env,
+# brings the full runtime stack up (postgres, temporal, redis, litellm,
+# *alloy*, *alloy-k8s-events*, autoheal, repo-init, git-sync), runs
+# db-provision + ensure-temporal-namespace, and is idempotent on re-runs.
+#
+# deploy-infra.sh expects ~/.ssh/deploy_key + known_hosts populated. The
+# bootstrap already has .local/${DEPLOY_ENV}-vm-key; we copy it to the CI
+# location and ssh-keyscan the VM IP so the script's StrictHostKeyChecking=yes
+# clears.
+#
+# All required deploy-infra env vars are exported by Phase 2 (`set -a; source
+# $ENV_FILE`); Phase 5e exports the GRAFANA_CLOUD_LOKI_*/PROMETHEUS_*
+# observability vars. VM_HOST is overridden with the freshly-provisioned IP
+# because .env.${DEPLOY_ENV}'s value may be a DNS name that doesn't yet
+# resolve. REF is the runner's checkout SHA so the rsync source is the
+# tree currently being provisioned (not main).
+log_step "Phase 5f: Bring up full Compose runtime (deploy-infra.sh)"
+
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+cp "$SSH_KEY" ~/.ssh/deploy_key
+chmod 600 ~/.ssh/deploy_key
+ssh-keyscan -T 10 -H "$VM_IP" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+REF_FOR_INFRA="${GITHUB_SHA:-$(git -C "$REPO_ROOT" rev-parse HEAD)}"
+log_info "Invoking deploy-infra.sh --ref ${REF_FOR_INFRA} (VM_HOST=${VM_IP})"
+
+# Force the CI-shaped env for this one invocation; do not pollute the parent
+# scope with VM_HOST/SSH_KEY_PATH/DEPLOY_ENVIRONMENT overrides. LITELLM_IMAGE
+# pins to the locally-built tag (Phase 5 built cogni-litellm:latest on the VM
+# already), preventing deploy-infra's GHCR default from triggering a pull
+# the fork has no access to.
+VM_HOST="$VM_IP" \
+SSH_KEY_PATH="$HOME/.ssh/deploy_key" \
+DEPLOY_ENVIRONMENT="$DEPLOY_ENV" \
+APP_ENV="$APP_ENV" \
+COGNI_REPO_URL="$COGNI_REPO_URL" \
+COGNI_REPO_REF="$COGNI_REPO_REF" \
+DATABASE_URL="$DATABASE_URL" \
+DATABASE_SERVICE_URL="$DATABASE_SERVICE_URL" \
+LITELLM_IMAGE="cogni-litellm:latest" \
+bash "$REPO_ROOT/scripts/ci/deploy-infra.sh" --ref "$REF_FOR_INFRA"
+
+log_info "Phase 5f: full runtime stack up"
+
+# ══════════════════════════════════════════════════════════════
+# Phase 5g: Register Postgres datasource at Grafana (optional)
+# ══════════════════════════════════════════════════════════════
+# Reuses scripts/ci/provision-grafana-postgres-datasources.sh — the same
+# script candidate-flight-infra.yml + promote-and-deploy.yml call. Skips
+# gracefully when Grafana creds OR GRAFANA_PDC_NETWORK_UUID are absent.
+#
+# Fresh-fork reality: GRAFANA_PDC_NETWORK_UUID is the *internal* Grafana
+# network UUID, which only exists once the operator has manually bound a
+# datasource to PDC at least once (see comment in the script + the readonly
+# runbook). For a clean fork without PDC, this phase is a no-op; the
+# datasource gets registered the first time candidate-flight runs after the
+# operator wires GRAFANA_PDC_NETWORK_UUID into GH env secrets.
+log_step "Phase 5g: Register Postgres datasource at Grafana (optional)"
+
+if [[ -z "${GRAFANA_URL:-}" || -z "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
+  log_info "Phase 5g skipped — Grafana creds absent (Phase 5e did not mint or was disabled)"
+elif [[ -z "${GRAFANA_PDC_NETWORK_UUID:-}" ]]; then
+  log_info "Phase 5g skipped — GRAFANA_PDC_NETWORK_UUID unset"
+  log_info "  This is expected for a fresh fork. After bootstrap, bind one Postgres"
+  log_info "  datasource via the Grafana UI (PDC network), copy its"
+  log_info "  jsonData.secureSocksProxyUsername into GH env secret"
+  log_info "  GRAFANA_PDC_NETWORK_UUID, then re-run candidate-flight-infra.yml."
+else
+  log_info "Invoking provision-grafana-postgres-datasources.sh"
+  if ! DEPLOY_ENVIRONMENT="$DEPLOY_ENV" \
+       POSTGRES_ROOT_PASSWORD="$POSTGRES_ROOT_PASSWORD" \
+       GRAFANA_URL="$GRAFANA_URL" \
+       GRAFANA_SERVICE_ACCOUNT_TOKEN="$GRAFANA_SERVICE_ACCOUNT_TOKEN" \
+       GRAFANA_PDC_NETWORK_UUID="$GRAFANA_PDC_NETWORK_UUID" \
+       COGNI_NODE_DBS="$COGNI_NODE_DBS" \
+       APP_DB_READONLY_USER="${APP_DB_READONLY_USER:-app_readonly}" \
+       APP_DB_READONLY_PASSWORD="${APP_DB_READONLY_PASSWORD:-}" \
+       bash "$REPO_ROOT/scripts/ci/provision-grafana-postgres-datasources.sh"; then
+    log_warn "Phase 5g: datasource registration failed — continuing bootstrap"
+  else
+    log_info "Phase 5g: Postgres datasources registered at $GRAFANA_URL"
   fi
 fi
 
