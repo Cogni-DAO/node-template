@@ -84,8 +84,9 @@ sequenceDiagram
   Note over GHA: Preflight: prefix check (glc_*) + grafana.com/api/orgs probe (HTTP 200 / 401 / 403)
   Note over GHA: Phase 5e (runner-side curl, ~30s)
   alt admin token + url present
-    GHA->>Cloud: GET /api/orgs → org slug
+    GHA->>GHA: derive org slug from GRAFANA_URL host (https://<slug>.grafana.net → <slug>); optional GH_GRAFANA_ORG_SLUG override
     GHA->>Cloud: GET /api/orgs/<slug>/instances → stack slug + regionSlug + hlInstanceUrl + hmInstancePromUrl + numeric users
+    Note over Cloud: NOTE — /api/orgs (list) deliberately NOT called.<br/>That endpoint requires `orgs:read`, which is NOT in the<br/>recommended 4-scope set. Org-scoped /api/orgs/<slug>/* works<br/>with the documented scopes alone.
     GHA->>Cloud: GET/POST /api/instances/<slug>/api/serviceaccounts<br/>(find-or-create cogni-<fork-slug>-<env>-bootstrap-minter, Editor)
     GHA->>Cloud: POST /api/instances/<slug>/api/serviceaccounts/<id>/tokens → glsa_*
     Note over Cloud,Stack: transient Cloud-minted stack SA token, only used to auth Step 3 next
@@ -103,7 +104,7 @@ sequenceDiagram
 
 Five-step mint flow (sequence above, in plain prose for grep-ability):
 
-1. **Cloud lookup** — `GET grafana.com/api/orgs` → org slug. `GET grafana.com/api/orgs/<slug>/instances` → stack metadata (slug, regionSlug, push endpoints, numeric users). The instance whose `url` matches `$GRAFANA_URL` is selected (with first-stack fallback for single-stack orgs).
+1. **Cloud lookup** — org slug is derived locally from `GRAFANA_URL` host (`https://<slug>.grafana.net` → `<slug>`); `GH_GRAFANA_ORG_SLUG` is an optional override for multi-stack orgs or custom domains. Then `GET grafana.com/api/orgs/<slug>/instances` → stack metadata (slug, regionSlug, push endpoints, numeric users). The instance whose `url` matches `$GRAFANA_URL` is selected (with first-stack fallback for single-stack orgs). **Note**: the script deliberately does NOT call `GET /api/orgs` (the list endpoint) — that requires `orgs:read` which is intentionally NOT in the recommended 4-scope set. The org-scoped path works with `stacks:read` alone.
 2. **Cloud-side bootstrap minter SA** — `GET/POST grafana.com/api/instances/<slug>/api/serviceaccounts` to find-or-create `cogni-<fork-slug>-<env>-bootstrap-minter` (Editor role on the stack), then `POST .../tokens` to mint a transient `glsa_*`. This token authorizes Step 3 (the Cloud admin root cannot directly call stack `/api/serviceaccounts` because the stack instance API only takes `glsa_*`).
 3. **Stack-side Viewer child SA** — `GET/POST $GRAFANA_URL/api/serviceaccounts` to find-or-create `<fork-slug>-<env>-validator` (Viewer role), then `POST .../tokens` to mint the `glsa_*` read token (CHILD_READ_TOKEN → `GRAFANA_SERVICE_ACCOUNT_TOKEN`).
 4. **Cloud access-policy for push** — `GET/POST grafana.com/api/v1/accesspolicies?region=<slug>` to find-or-create `cogni-<fork-slug>-<env>-push` with `realms: [{type:"stack", identifier:<stack-slug>}]` and `scopes: ["logs:write","metrics:write","logs:read","metrics:read"]`.
