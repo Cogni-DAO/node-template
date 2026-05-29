@@ -276,7 +276,10 @@ DEPLOY_ENVIRONMENT="${DEPLOY_ENV}"
 
 # Per-node databases derive from NODE_TARGETS (B2). Hyphens → underscores
 # for postgres-name legality: node-template → cogni_node_template.
-COGNI_NODE_DBS=$(IFS=','; printf '%s' "${NODE_TARGETS[*]/#/cogni_}" | sed 's/-/_/g')
+# Exported because Phase 5f invokes deploy-infra.sh via an explicit env
+# prefix that forwards only a fixed subset; db-provision container reads
+# COGNI_NODE_DBS from the VM's runtime/.env and aborts if empty.
+export COGNI_NODE_DBS=$(IFS=','; printf '%s' "${NODE_TARGETS[*]/#/cogni_}" | sed 's/-/_/g')
 LITELLM_DB_NAME="litellm"
 # Primary node DB (first NODE_TARGETS entry) — used for DATABASE_URL defaults
 # before per-node secrets are written in Phase 6. Each node gets its own DB
