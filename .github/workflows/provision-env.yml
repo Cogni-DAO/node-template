@@ -127,6 +127,68 @@ jobs:
           ref: ${{ github.ref }}
           fetch-depth: 0
 
+      - name: Pre-flight — Grafana parent SA token (optional)
+        env:
+          GRAFANA_PARENT_SA_TOKEN: ${{ secrets.GH_GRAFANA_PARENT_SA_TOKEN }}
+          GRAFANA_URL: ${{ secrets.GH_GRAFANA_URL }}
+        run: |
+          set -euo pipefail
+          # Fail BEFORE Cherry VM spend if the operator pasted the wrong token
+          # type (glc_* vs glsa_*) or a token Grafana rejects. Mirrors the
+          # Cloudflare scope preflight at bootstrap.sh:149-176.
+          # Optional path: both unset → log + continue (Phase 5e graceful skip).
+          if [[ -z "${GRAFANA_PARENT_SA_TOKEN}" && -z "${GRAFANA_URL}" ]]; then
+            echo "::notice::Grafana auto-mint disabled — GH_GRAFANA_PARENT_SA_TOKEN/GH_GRAFANA_URL unset. Scorecard row 5 will stay 🟡."
+            exit 0
+          fi
+          if [[ -z "${GRAFANA_PARENT_SA_TOKEN}" || -z "${GRAFANA_URL}" ]]; then
+            echo "::error::Set BOTH GH_GRAFANA_PARENT_SA_TOKEN and GH_GRAFANA_URL, or neither. See Step 6.2 of docs/runbooks/fork-quickstart.md."
+            exit 2
+          fi
+          case "$GRAFANA_PARENT_SA_TOKEN" in
+            glc_*)
+              echo "::error::GH_GRAFANA_PARENT_SA_TOKEN is a glc_* Grafana Cloud access-policy token."
+              echo "::error::Phase 5e calls the Grafana instance HTTP API which requires a glsa_* stack service-account token."
+              echo "::error::Mint at \$GRAFANA_URL/org/serviceaccounts (Admin role) and re-set the GH-env-secret. See Step 6.2 row 9 of docs/runbooks/fork-quickstart.md."
+              exit 2
+              ;;
+            glsa_*) : ;;
+            *)
+              echo "::error::GH_GRAFANA_PARENT_SA_TOKEN does not start with glsa_ — refusing."
+              exit 2
+              ;;
+          esac
+          URL="${GRAFANA_URL%/}"
+          CODE=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer $GRAFANA_PARENT_SA_TOKEN" \
+            "$URL/api/serviceaccounts/search?query=preflight" || echo "000")
+          case "$CODE" in
+            200) echo "Grafana preflight ok — $URL responded 200 to /api/serviceaccounts/search" ;;
+            401)
+              echo "::error::Grafana rejected the parent SA token (HTTP 401 from $URL/api/serviceaccounts/search)."
+              echo "::error::The token was revoked or the SA was deleted. Re-mint at $URL/org/serviceaccounts (Admin role) and re-set GH_GRAFANA_PARENT_SA_TOKEN."
+              exit 2
+              ;;
+            403)
+              echo "::error::Parent SA token lacks serviceaccounts:read scope (HTTP 403 from $URL/api/serviceaccounts/search)."
+              echo "::error::Recreate the SA at $URL/org/serviceaccounts with role=Admin (not Viewer or Editor). Then re-mint the token + re-set GH_GRAFANA_PARENT_SA_TOKEN."
+              exit 2
+              ;;
+            404)
+              echo "::error::Grafana stack at $URL returned 404 for /api/serviceaccounts/search."
+              echo "::error::Check GH_GRAFANA_URL is the bare stack URL (e.g. https://<stack>.grafana.net), no trailing slash, no /api path."
+              exit 2
+              ;;
+            000)
+              echo "::error::Could not reach $URL — DNS / network / typo. Verify GH_GRAFANA_URL points at a reachable Grafana stack."
+              exit 2
+              ;;
+            *)
+              echo "::error::Grafana preflight got HTTP $CODE from $URL/api/serviceaccounts/search. Bootstrap aborted before VM spend."
+              exit 2
+              ;;
+          esac
+
       - name: Pre-flight — infra/fork.yaml::domain.root populated
         # fork.yaml::domain.root is the operator's Cloudflare-zone declaration.
         # bootstrap.sh's auto-populate-from-API path requires a local git

@@ -63,26 +63,39 @@ GRAFANA_URL="${GRAFANA_URL%/}"
 
 mkdir -p "$REPO_ROOT/.local"
 
-api_get() {
-  curl -sS -w "\n%{http_code}" \
-    -H "Authorization: Bearer $GRAFANA_PARENT_SA_TOKEN" \
-    "$GRAFANA_URL$1"
+# NB: bash runs each pipe stage in a subshell, so `api_get ... | split_body_code`
+# would set CODE/BODY in the subshell and never reach the parent — `set -u`
+# then trips on the next "$CODE" read. We use command substitution into a
+# single var and split with parameter expansion to keep state in this shell.
+api_call() {
+  # api_call <method> <path> [<json-body>]
+  # Echoes the response body + a trailing line with the HTTP status. Caller
+  # splits via the SPLIT_RESP helper below.
+  local method="$1" path="$2" body="${3:-}"
+  if [[ "$method" == "GET" ]]; then
+    curl -sS -w "\n%{http_code}" \
+      -H "Authorization: Bearer $GRAFANA_PARENT_SA_TOKEN" \
+      "$GRAFANA_URL$path"
+  else
+    curl -sS -w "\n%{http_code}" -X "$method" \
+      -H "Authorization: Bearer $GRAFANA_PARENT_SA_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d "$body" "$GRAFANA_URL$path"
+  fi
 }
-api_post() {
-  curl -sS -w "\n%{http_code}" -X POST \
-    -H "Authorization: Bearer $GRAFANA_PARENT_SA_TOKEN" \
-    -H "Content-Type: application/json" \
-    -d "$2" "$GRAFANA_URL$1"
-}
-split_body_code() {
-  local resp; resp=$(cat)
+
+# SPLIT_RESP <resp-var> — reads $resp-var and sets CODE + BODY in caller scope.
+# Avoids the function-piped-via-stdin pattern that hides state in a subshell.
+SPLIT_RESP() {
+  local resp="$1"
   CODE="${resp##*$'\n'}"
   BODY="${resp%$'\n'*}"
 }
 
 # ── 1. Find existing SA by name (idempotency) ─────────────────────────
 log_info "looking up SA name=$SA_NAME at $GRAFANA_URL"
-api_get "/api/serviceaccounts/search?query=$SA_NAME" | split_body_code
+RESP=$(api_call GET "/api/serviceaccounts/search?query=$SA_NAME")
+SPLIT_RESP "$RESP"
 if [[ "$CODE" != "200" ]]; then
   log_error "SA search HTTP $CODE — body: $BODY"
   exit 1
@@ -93,9 +106,9 @@ SA_ID=$(echo "$BODY" | jq -r --arg n "$SA_NAME" '.serviceAccounts[]? | select(.n
 
 if [[ -z "$SA_ID" || "$SA_ID" == "null" ]]; then
   log_info "creating SA name=$SA_NAME role=Viewer"
-  api_post "/api/serviceaccounts" \
-    "$(jq -n --arg n "$SA_NAME" '{name:$n, role:"Viewer", isDisabled:false}')" \
-    | split_body_code
+  RESP=$(api_call POST "/api/serviceaccounts" \
+    "$(jq -n --arg n "$SA_NAME" '{name:$n, role:"Viewer", isDisabled:false}')")
+  SPLIT_RESP "$RESP"
   case "$CODE" in
     200|201)
       SA_ID=$(echo "$BODY" | jq -r '.id')
@@ -103,7 +116,8 @@ if [[ -z "$SA_ID" || "$SA_ID" == "null" ]]; then
     409)
       # Race with a concurrent run — re-search and take the existing one.
       log_warn "409 on create — re-searching"
-      api_get "/api/serviceaccounts/search?query=$SA_NAME" | split_body_code
+      RESP=$(api_call GET "/api/serviceaccounts/search?query=$SA_NAME")
+      SPLIT_RESP "$RESP"
       [[ "$CODE" == "200" ]] || { log_error "re-search HTTP $CODE"; exit 1; }
       SA_ID=$(echo "$BODY" | jq -r --arg n "$SA_NAME" '.serviceAccounts[]? | select(.name == $n) | .id' | head -1)
       ;;
@@ -122,8 +136,9 @@ RAND4=$(LC_ALL=C tr -dc 'a-z0-9' </dev/urandom | head -c 4 || echo "xxxx")
 TOKEN_NAME="${DEPLOY_ENV}-bootstrap-${TS}-${RAND4}"
 
 log_info "minting token name=$TOKEN_NAME"
-api_post "/api/serviceaccounts/$SA_ID/tokens" \
-  "$(jq -n --arg n "$TOKEN_NAME" '{name:$n}')" | split_body_code
+RESP=$(api_call POST "/api/serviceaccounts/$SA_ID/tokens" \
+  "$(jq -n --arg n "$TOKEN_NAME" '{name:$n}')")
+SPLIT_RESP "$RESP"
 if [[ "$CODE" != "200" && "$CODE" != "201" ]]; then
   log_error "mint token HTTP $CODE: $BODY"
   exit 1
