@@ -1363,53 +1363,80 @@ else
 fi
 
 # ══════════════════════════════════════════════════════════════
-# Phase 5e: Grafana child-SA auto-mint (work/handoffs/handoff-grafana-auto-mint.md)
+# Phase 5e: Grafana Cloud auto-mint (read + write) — one-root-token derivation
 # ══════════════════════════════════════════════════════════════
-# Operator pastes ONE glsa_* stack-admin SA token + GRAFANA_URL into GH-env-
-# secrets. This phase calls the Grafana instance HTTP API (not the Cloud
-# access-policy API) to mint a per-env Viewer-role child SA + token. The
-# minted child token authorizes:
-#   - GET /api/datasources                 (validator scorecard row 5)
-#   - GET /api/datasources/proxy/uid/.../  (Loki + Prom + Postgres queries)
-#   - GET /api/ds/query                    (panel-style queries)
+# Operator pastes ONE Grafana Cloud admin token (glc_*) + GRAFANA_URL into
+# GH-env-secrets. This phase derives BOTH paths from that single root:
+#   1. Cloud-side bootstrap minter SA + glsa_ token (transient, runner-only)
+#   2. Stack-side Viewer child SA + glsa_ read token (validator scorecard,
+#      Loki+Prom+Postgres queries via $GRAFANA_URL/api/...)
+#   3. Cloud access-policy + glc_ push token (Alloy → Loki/Prom remote write)
 #
-# Output:
-#   1. cogni/${DEPLOY_ENV}/_shared/{GRAFANA_SERVICE_ACCOUNT_TOKEN, GRAFANA_URL}
-#      (spec Invariant 1 cross-service path; matches existing setup-secrets.ts
-#      env-var names consumed by scripts/loki-query.sh + grafana-postgres-*.sh)
-#   2. .local/${DEPLOY_ENV}-grafana-sa-token.json
-#      (one-shot bootstrap snapshot for the operator's laptop; encrypted by the
-#      "Encrypt init artifacts" step in provision-env.yml)
+# Output → cogni/${DEPLOY_ENV}/_shared (Invariant 1 cross-service path,
+# variable names match setup-secrets.ts entries):
+#   GRAFANA_SERVICE_ACCOUNT_TOKEN  glsa_* child read
+#   GRAFANA_URL                    stack URL
+#   LOKI_WRITE_URL                 hosted-Loki push URL
+#   LOKI_USERNAME                  numeric Loki user
+#   LOKI_PASSWORD                  glc_* push token (= PROMETHEUS_PASSWORD)
+#   PROMETHEUS_REMOTE_WRITE_URL    hosted-Mimir push URL
+#   PROMETHEUS_USERNAME            numeric Prom user
+#   PROMETHEUS_PASSWORD            glc_* push token (= LOKI_PASSWORD)
 #
-# Graceful skip: if GRAFANA_PARENT_SA_TOKEN/GRAFANA_URL are unset, the mint
-# script logs + exit 0 with no output. Bootstrap continues; scorecard row 5
-# stays 🟡. Observability is optional, never blocks bootstrap.
-log_step "Phase 5e: Grafana child-SA auto-mint (optional)"
+# Artifact: .local/${DEPLOY_ENV}-grafana-sa-token.json (8 fields, chmod 600,
+# encrypted by the "Encrypt init artifacts" step in provision-env.yml).
+#
+# The glc_* admin root NEVER lands in OpenBao and NEVER reaches the VM —
+# only the two derived tokens (glsa_ read + glc_ push) are seeded.
+#
+# Graceful skip: if GH_GRAFANA_CLOUD_ADMIN_TOKEN/GRAFANA_URL are unset, the
+# mint script logs + exit 0 with no output. Bootstrap continues; scorecard
+# row 5 stays 🟡. Observability is optional, never blocks bootstrap.
+log_step "Phase 5e: Grafana Cloud auto-mint (optional)"
 
 if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
   log_warn "Skipping Phase 5e — no OpenBao root token; cannot seed cogni/${DEPLOY_ENV}/_shared"
-elif [[ -z "${GRAFANA_PARENT_SA_TOKEN:-}" || -z "${GRAFANA_URL:-}" ]]; then
-  log_info "Phase 5e skipped — GRAFANA_PARENT_SA_TOKEN/GRAFANA_URL unset (scorecard row 5 stays 🟡)"
+elif [[ -z "${GRAFANA_CLOUD_ADMIN_TOKEN:-}" || -z "${GRAFANA_URL:-}" ]]; then
+  log_info "Phase 5e skipped — GRAFANA_CLOUD_ADMIN_TOKEN/GRAFANA_URL unset (scorecard row 5 stays 🟡)"
 else
   ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
 
-  # Mint runs on the runner — parent token never travels to the VM.
+  # Mint runs on the runner — Cloud admin root never travels to the VM.
   MINT_OUT=$(REPO_ROOT="$REPO_ROOT" DEPLOY_ENV="$DEPLOY_ENV" FORK_SLUG="$FORK_SLUG" \
-              GRAFANA_PARENT_SA_TOKEN="$GRAFANA_PARENT_SA_TOKEN" \
+              GH_GRAFANA_CLOUD_ADMIN_TOKEN="$GRAFANA_CLOUD_ADMIN_TOKEN" \
               GRAFANA_URL="$GRAFANA_URL" \
-              bash "$REPO_ROOT/scripts/setup/provision-grafana-child-sa.sh") \
-    || { log_error "Grafana child-SA mint failed — continuing bootstrap; re-run after fixing creds"; MINT_OUT=""; }
+              bash "$REPO_ROOT/scripts/setup/provision-grafana-cloud-mint.sh") \
+    || { log_error "Grafana Cloud mint failed — continuing bootstrap; re-run after fixing creds"; MINT_OUT=""; }
 
   if [[ -n "$MINT_OUT" ]]; then
-    CHILD_TOKEN=$(printf '%s\n' "$MINT_OUT" | sed -n 's/^GRAFANA_SERVICE_ACCOUNT_TOKEN=//p')
-    CHILD_URL=$(printf '%s\n' "$MINT_OUT" | sed -n 's/^GRAFANA_URL=//p')
-    if [[ -n "$CHILD_TOKEN" && -n "$CHILD_URL" ]]; then
-      log_info "Seeding cogni/${DEPLOY_ENV}/_shared/GRAFANA_SERVICE_ACCOUNT_TOKEN + GRAFANA_URL"
-      seed_kv _shared GRAFANA_SERVICE_ACCOUNT_TOKEN "$CHILD_TOKEN"
-      seed_kv _shared GRAFANA_URL "$CHILD_URL"
+    # Parse the 8 KEY=VALUE lines emitted by the mint script.
+    declare -A MINTED=()
+    while IFS='=' read -r k v; do
+      [[ -z "$k" ]] && continue
+      MINTED[$k]="$v"
+    done <<<"$MINT_OUT"
+
+    SEED_OK=true
+    for k in GRAFANA_SERVICE_ACCOUNT_TOKEN GRAFANA_URL \
+             LOKI_WRITE_URL LOKI_USERNAME LOKI_PASSWORD \
+             PROMETHEUS_REMOTE_WRITE_URL PROMETHEUS_USERNAME PROMETHEUS_PASSWORD; do
+      if [[ -z "${MINTED[$k]:-}" ]]; then
+        log_warn "Phase 5e: missing $k in mint output — skipping seed"
+        SEED_OK=false
+        break
+      fi
+    done
+
+    if [[ "$SEED_OK" == "true" ]]; then
+      log_info "Seeding 8 derived keys to cogni/${DEPLOY_ENV}/_shared"
+      for k in GRAFANA_SERVICE_ACCOUNT_TOKEN GRAFANA_URL \
+               LOKI_WRITE_URL LOKI_USERNAME LOKI_PASSWORD \
+               PROMETHEUS_REMOTE_WRITE_URL PROMETHEUS_USERNAME PROMETHEUS_PASSWORD; do
+        seed_kv _shared "$k" "${MINTED[$k]}"
+      done
       log_info "Grafana auto-mint complete for ${DEPLOY_ENV}"
     else
-      log_info "Phase 5e: mint script produced no derived keys (graceful skip)"
+      log_info "Phase 5e: mint script produced incomplete output (graceful skip)"
     fi
   fi
 fi
