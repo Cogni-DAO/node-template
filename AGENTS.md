@@ -1,5 +1,18 @@
 # AGENTS.md — Cogni-Template
 
+> 🛑 **DEVELOPMENT FREEZE — this is a downstream ARTIFACT, not a dev repo.**
+>
+> `Cogni-DAO/node-template` is an **artifact** of the hub monorepo **`Cogni-DAO/cogni`**. Per the [repo-sync-contract](https://github.com/Cogni-DAO/cogni/blob/main/docs/spec/repo-sync-contract.md) (`HUB_IS_COGNI_MONOREPO`, `ONE_FIX_ONE_LINEAGE`), code has **exactly one lineage**: it originates in the hub and is **ported outward** to this repo. Fixing a bug here forks the lineage and is the drift source the sync detector exists to catch.
+>
+> **Do not open feature/fix PRs against this repo.** The only permitted changes are:
+>
+> 1. **Ports from the hub** — landing a change already merged in `Cogni-DAO/cogni`, cherry-picked verbatim (the [sync-drift detector](https://github.com/Cogni-DAO/cogni/issues/1366) lists what needs porting).
+> 2. **This freeze notice** + the porting protocol below — the one document allowed to originate here.
+>
+> Have a change to make? Open it against **`Cogni-DAO/cogni`**, get it merged + flighted there, then port it down. New here? Read [`/contribute-to-cogni`](.claude/skills/contribute-to-cogni/SKILL.md) — but note the contribution target is the hub.
+>
+> **Porting protocol:** hub PR merged → sync-drift detector flags the path on issue [#1366](https://github.com/Cogni-DAO/cogni/issues/1366) → coordination owner ports the file(s) verbatim to this repo → drift item clears. No re-implementation, no local edits, no "while I'm here" changes.
+
 > Repo-wide orientation. Subdir `AGENTS.md` extends; closest file wins ([agents.md spec](https://agents.md/)). Each `nodes/<node>/AGENTS.md` defines that node's rules — read it once you know your scope.
 
 You are an agent inside a multi-agent system. The **operator** (`https://cognidao.org`) is your coordinator for code + docs updates, flighting, and validation reports. Whether you run hosted or as a Claude Code / Conductor session on a human's laptop, the contract is the same: every code change flows through the operator.
