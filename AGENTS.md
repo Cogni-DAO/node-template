@@ -5,6 +5,7 @@
 > `Cogni-DAO/node-template` is an **artifact** of the hub monorepo **`Cogni-DAO/cogni`**. Per the [repo-sync-contract](https://github.com/Cogni-DAO/cogni/blob/main/docs/spec/repo-sync-contract.md) (`HUB_IS_COGNI_MONOREPO`, `ONE_FIX_ONE_LINEAGE`), code has **exactly one lineage**: it originates in the hub and is **ported outward** to this repo. Fixing a bug here forks the lineage and is the drift source the sync detector exists to catch.
 >
 > **Do not open feature/fix PRs against this repo.** The only permitted changes are:
+>
 > 1. **Ports from the hub** — landing a change already merged in `Cogni-DAO/cogni`, cherry-picked verbatim (the [sync-drift detector](https://github.com/Cogni-DAO/cogni/issues/1366) lists what needs porting).
 > 2. **This freeze notice** + the porting protocol below — the one document allowed to originate here.
 >
