@@ -338,7 +338,7 @@ jobs:
             exit 1
           fi
           restored=0
-          for base in ${DEPLOY_ENV}-vm-key ${DEPLOY_ENV}-vm-age-key; do
+          for base in ${DEPLOY_ENV}-vm-key ${DEPLOY_ENV}-vm-age-key ${DEPLOY_ENV}-openbao-init.json; do
             enc="${download_dir}/${base}.enc"
             [[ -r "$enc" ]] || { echo "::notice::no ${base}.enc in prior artifact (pre-fix run?)"; continue; }
             # stderr left attached so disk-full / corrupted-ciphertext failures
