@@ -309,6 +309,54 @@ jobs:
           done
           echo ".env.bootstrap written (${DEPLOY_ENV}, 6 keys populated)"
 
+      - name: Restore prior init-artifact keys (re-run path)
+        # Pre-condition for Phase 2's reuse-check + the tofu import in
+        # provision-env-vm.sh — restoring the prior keys keeps both no-diff.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENCRYPTION_PASSPHRASE: ${{ inputs.encryption_passphrase }}
+        run: |
+          set -euo pipefail
+          umask 077
+          mkdir -p .local
+          artifact_name="${DEPLOY_ENV}-init-artifacts"
+          artifact_json=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=1" \
+            -q '.artifacts[0] | select(.expired == false) // empty') || {
+            echo "::error::gh api failed listing artifacts (network, auth, or missing actions:read)"
+            exit 1
+          }
+          if [[ -z "$artifact_json" ]]; then
+            echo "::notice::no usable prior ${artifact_name} (missing or expired) — fresh-key path"
+            exit 0
+          fi
+          run_id=$(jq -r '.workflow_run.id' <<<"$artifact_json")
+          download_dir=$(mktemp -d)
+          if ! gh run download "$run_id" --repo "${GITHUB_REPOSITORY}" \
+              --name "$artifact_name" --dir "$download_dir"; then
+            echo "::error::gh run download failed for run ${run_id} (artifact ${artifact_name})"
+            exit 1
+          fi
+          restored=0
+          for base in ${DEPLOY_ENV}-vm-key ${DEPLOY_ENV}-vm-age-key ${DEPLOY_ENV}-openbao-init.json; do
+            enc="${download_dir}/${base}.enc"
+            [[ -r "$enc" ]] || { echo "::notice::no ${base}.enc in prior artifact (pre-fix run?)"; continue; }
+            # stderr left attached so disk-full / corrupted-ciphertext failures
+            # surface as themselves rather than masquerading as a passphrase mismatch.
+            if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+                -in "$enc" -out ".local/${base}" \
+                -pass env:ENCRYPTION_PASSPHRASE; then
+              echo "::error::decrypt failed for ${base} — most commonly an encryption_passphrase mismatch with the prior run."
+              echo "::error::Re-run with the original passphrase, OR destroy the existing Cherry SSH key + VM for env '${DEPLOY_ENV}' in the portal and re-run with a new passphrase."
+              exit 2
+            fi
+            chmod 600 ".local/${base}"
+            restored=$((restored + 1))
+            echo "restored .local/${base}"
+          done
+          rm -rf "$download_dir"
+          echo "restored ${restored} prior key(s) from run ${run_id}; Phase 2 will reuse them"
+
       - name: Configure git identity (for any internal commits)
         # bootstrap.sh's downstream phases (e.g. seed deploy/* branches in
         # the fork) make commits via gh api. Some git subcommands need a
@@ -345,6 +393,7 @@ jobs:
           encrypted_count=0
           for src in .local/${DEPLOY_ENV}-openbao-init.json \
                      .local/${DEPLOY_ENV}-vm-key \
+                     .local/${DEPLOY_ENV}-vm-age-key \
                      .local/${DEPLOY_ENV}-kubeconfig.yaml \
                      .local/${DEPLOY_ENV}-grafana-sa-token.json; do
             [[ -r "$src" ]] || { echo "::warning::missing source: $src (provision may not have produced it)"; continue; }
@@ -462,6 +511,7 @@ jobs:
           # Plaintext (should already be shredded by encrypt step)
           for f in .local/${DEPLOY_ENV}-openbao-init.json \
                    .local/${DEPLOY_ENV}-vm-key \
+                   .local/${DEPLOY_ENV}-vm-age-key \
                    .local/${DEPLOY_ENV}-kubeconfig.yaml \
                    .env.bootstrap .env.${DEPLOY_ENV} .env.operator; do
             [[ -e "$f" ]] && shred -uz "$f" 2>/dev/null

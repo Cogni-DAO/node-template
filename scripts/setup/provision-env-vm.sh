@@ -231,18 +231,19 @@ set +a
 log_info "Loaded secrets from $ENV_FILE"
 
 # SSH keypair — per-VM, uploaded to Cherry, saved to .local/.
-# IMPORTANT (re-run gap): `.local/` is laptop-side state. On the GHA runner
-# (the canonical bootstrap surface per Step 6 doctrine) it never persists
-# across runs, so the else-branch ALWAYS fires on re-runs. Phase 3's
-# `tofu apply` then tries to upload a fresh public key to the operator's
-# Cherry account under the same resource name → conflict if the prior
-# VM/key from a previous run still exists. Fresh-fork bootstrap works;
-# re-runs against the same Cherry account collide. Tracked as the
-# "Cherry SSH key re-run conflict" Walk-tier row in
-# proj.agentic-fork-bootstrap.md. Workaround until fixed: destroy the
-# prior VM + Cherry SSH key in the portal before re-running.
+# On the GHA runner the "Restore prior init-artifact keys" step in
+# .github/workflows/provision-env.yml decrypts the prior run's vm-key
+# into .local/ BEFORE this script runs, so re-runs reuse the same public
+# key and tofu's Cherry SSH resource stays idempotent. Fresh-fork +
+# fresh-env runs (no prior artifact / expired retention) fall through
+# to the else-branch and generate a new keypair.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" ]]; then
-  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key (laptop-side path)"
+  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key"
+  # Rehydrate .pub from the private key — tofu's `file(var.public_key_path)`
+  # reads it during plan, and the encrypted init-artifact only carries
+  # the private half.
+  ssh-keygen -y -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" \
+    > "$PROVISION_DIR/keys/cogni_${DEPLOY_ENV}_deploy.pub"
 else
   TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SSH keypair (GHA runner — no laptop .local/ state)"
@@ -252,10 +253,10 @@ else
   chmod 600 "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
 fi
 
-# SOPS age keypair — per-VM. Same re-run gap as the SSH key above.
+# SOPS age keypair — per-VM. Same restore-on-rerun path as the SSH key above.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key" ]]; then
   AGE_PRIVATE_KEY=$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key")
-  log_info "Reusing existing SOPS age key (laptop-side path)"
+  log_info "Reusing existing SOPS age key"
 else
   AGE_TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SOPS age keypair..."
@@ -380,6 +381,38 @@ tofu init -input=false
 
 log_info "Selecting workspace: $WORKSPACE"
 tofu workspace new "$WORKSPACE" 2>/dev/null || tofu workspace select "$WORKSPACE"
+
+# Re-run idempotency: adopt existing Cherry resources into tofu state.
+# tfstate is ephemeral on the GHA runner (TODO: remote backend in
+# main.tf:11), so without import tofu calls POST /v1/ssh-keys with the
+# same label every time → Cherry returns `"key with this label already
+# exists." (error code: 400)` (seen on i-am-coco fork run 26628927120).
+# Importing both ssh_key + server keeps `ssh_key_ids` correlated; importing
+# only one risks tofu wanting to replace the un-imported resource.
+SSH_KEY_LABEL="${VM_NAME_PREFIX}-${DEPLOY_ENV}-deploy"
+SERVER_HOSTNAME="${DEPLOY_ENV}-${VM_NAME_PREFIX}"
+CHERRY_API="https://api.cherryservers.com/v1"
+
+log_info "Probing Cherry for existing resources to adopt..."
+# curl -f propagates HTTP errors through `set -e`. Without it, a 401/5xx
+# returns a non-JSON body → jq empty → script proceeds as if no resource
+# exists → tofu apply hits the original "label already exists" 400.
+adopt() {  # adopt <tofu-address> <id-or-empty> <human-label>
+  local addr="$1" id="$2" lbl="$3"
+  [[ -z "$id" ]] && return 0
+  log_info "Adopting Cherry $lbl (id=$id) into tofu state"
+  tofu import -var-file="terraform.${WORKSPACE}.tfvars" "$addr" "$id"
+}
+EXISTING_KEY_ID=$(curl -fsS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
+  "${CHERRY_API}/ssh-keys" \
+  | jq -r --arg lbl "$SSH_KEY_LABEL" '.[]? | select(.label == $lbl) | .id' \
+  | head -1)
+EXISTING_SERVER_ID=$(curl -fsS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
+  "${CHERRY_API}/projects/${CHERRY_PROJECT_ID}/servers" \
+  | jq -r --arg h "$SERVER_HOSTNAME" '.[]? | select(.hostname == $h) | .id' \
+  | head -1)
+adopt cherryservers_ssh_key.key    "$EXISTING_KEY_ID"    "ssh_key '$SSH_KEY_LABEL'"
+adopt cherryservers_server.server  "$EXISTING_SERVER_ID" "server '$SERVER_HOSTNAME'"
 
 log_info "Planning..."
 tofu plan -var-file="terraform.${WORKSPACE}.tfvars" -out=tfplan
@@ -1176,6 +1209,10 @@ else
       log_error "Recover the unseal key(s) and root token from your password manager (or another operator on a multi-operator fork) and place them in this file before re-running."
       exit 1
     fi
+    # Re-derive the root-token sidecar that 5b.3/5b.4/5c gate on. The init
+    # branch above writes it; the rerun branch was missing this step.
+    jq -r '.root_token' <"$OPENBAO_INIT_LOCAL" >"$OPENBAO_ROOT_TOKEN_LOCAL"
+    chmod 600 "$OPENBAO_ROOT_TOKEN_LOCAL"
   fi
 
   if [[ "$sealed" == "true" ]]; then
