@@ -24,6 +24,12 @@
 #   NODE_TEMPLATE_KEYS, SCHEDULER_WORKER_KEYS
 
 # ── Per-service key arrays — single source for both reconcile + seed ──────────
+# Note: operator-passthrough keys (OPENROUTER_API_KEY, POSTHOG_*, EVM_RPC_URL,
+# POLYGON_RPC_URL, OPENCLAW_GITHUB_RW_TOKEN) ARE reconciled from OpenBao on
+# re-runs. This matches the SSoT contract: day-2 rotations use
+# `pnpm secrets:set` (which writes OpenBao directly); `gh secret set` +
+# re-dispatch is bootstrap-only and will NOT propagate a value change for
+# these keys past first provision.
 declare -ga NODE_TEMPLATE_KEYS=(
   AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN
   OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN
