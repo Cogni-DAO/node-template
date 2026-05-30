@@ -97,7 +97,7 @@ const GenerateSchema = z.discriminatedUnion("kind", [
   // shell scope that just sourced `.env.${DEPLOY_ENV}`, so DOMAIN is set.
   z.object({
     kind: z.literal("derive-env"),
-    template: z.string(),
+    template: z.string().min(1),
   }),
 ]);
 
@@ -331,7 +331,17 @@ function generatorFor(g: z.infer<typeof GenerateSchema>): () => string {
       return deriveCogniNodeEndpoints;
     case "derive-env":
       return () =>
-        g.template.replace(/\$\{([A-Z_][A-Z0-9_]*)\}/g, (_, name) => {
+        // Match any `${...}` substitution token so typos surface loud (a
+        // lowercase `${domain}` would otherwise pass through into the URL
+        // literally — Node's URL parser would percent-encode the braces and
+        // accept the malformed host, recreating the same silent-CSRF class
+        // of bug this generator exists to prevent).
+        g.template.replace(/\$\{([^}]+)\}/g, (_, name) => {
+          if (!/^[A-Z_][A-Z0-9_]*$/.test(name)) {
+            throw new Error(
+              `derive-env: template "${g.template}" contains \${${name}} which is not a valid env var name (must match [A-Z_][A-Z0-9_]*).`
+            );
+          }
           const v = process.env[name];
           if (v === undefined || v === "") {
             throw new Error(
