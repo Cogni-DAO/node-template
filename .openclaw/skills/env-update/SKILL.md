@@ -1,66 +1,102 @@
 ---
-description: "Guide for propagating environment variables across the stack"
+description: "Guide for adding or changing environment variables and secrets"
 user-invocable: true
 ---
 
-You've just added a new environment variable. To ensure it propagates correctly across local development, testing, CI/CD, and production, you must update multiple files.
+You are adding or changing an environment value. First classify it, because the
+modern OpenBao/ESO substrate means most secrets do **not** require pod-spec,
+compose, workflow, or deployment-script edits.
 
-Use this checklist to verify you haven't missed anything.
+## 1. Classify the Value
 
-## 1. Validation & Types (The Source of Truth)
+Choose exactly one:
 
-- [ ] **`src/shared/env/server.ts`** (or `client.ts`): Add the variable to the Zod schema. This ensures type safety and runtime validation.
+- **Runtime secret**: API keys, tokens, passwords, signing secrets, private URLs
+  or anything that should not be committed. Default here.
+- **Runtime config**: Non-secret values the deployed app/service reads, such as
+  feature flags, public origins, service names, or numeric limits.
+- **Build/test-only config**: Values only needed by local tests, CI test fixtures,
+  or compile-time tooling.
+- **Infrastructure/bootstrap secret**: Cherry, Cloudflare, GitHub admin tokens,
+  OpenBao root/unseal material, Grafana Cloud admin roots. These are not normal
+  app secrets and must follow the relevant runbook.
 
-## 2. Local Development & Documentation
+## 2. Runtime Secrets
 
-- [ ] **`.env.local`**: Add the variable with a real value for this local environment.
-- [ ] **`.env.test`**: Add the variable (often with a mock value) for this test environment.
-- [ ] **`.env.(local|test).example`**: Add the variable with a placeholder or default value. This is the public documentation for required env vars.
+Use the canonical guide, do not duplicate it here:
 
-## 3. Docker Compose (Runtime Stack)
+- `docs/guides/secrets-add-new.md`
 
-If the variable is needed by the main application container:
+Expected shape:
 
-- [ ] **`infra/compose/runtime/docker-compose.dev.yml`**: Add it to the `environment` section of the `app` service.
-- [ ] **`infra/compose/runtime/docker-compose.yml`**: Add it to the `environment` section of the `app` service.
+1. Add code support only if the application will read the value:
+   - server-side typed env: `nodes/<node>/app/src/shared/env/server-env.ts`
+   - client-side typed env: the local client env schema
+   - keep optional secrets optional unless the service must fail fast without it
+2. Add or update the per-node secret catalog entry:
+   - `nodes/<node>/.cogni/secrets-catalog.yaml`
+3. Write the secret value through OpenBao:
+   - get a short-lived Kubernetes-auth OpenBao token for `<env>-writer`
+   - run `pnpm secrets:set <env> <service> <KEY>`
+4. Let External Secrets Operator sync the service Secret, or force one sync for
+   validation:
+   - `kubectl annotate externalsecret <service>-env-secrets force-sync=$(date +%s) --overwrite -n <namespace>`
+5. Ensure the consuming pod restarts if the runtime reads env vars via `envFrom`.
+   ESO updates the Kubernetes Secret; existing process env does not change inside
+   an already-running container.
 
-If the variable is needed by other services:
+Do **not** add a per-secret `valueFrom`, hand-edit a Kubernetes Secret YAML, or
+edit an ExternalSecret just to add another key. The normal service ExternalSecret
+extracts the whole OpenBao service path.
 
-- [ ] **`infra/compose/runtime/docker-compose.yml`**: For Caddy/Edge variables (rare).
+## 3. Runtime Config
 
-## 4. CI Pipeline (Tests)
+For non-secret deployed config, follow the local deployment substrate rather than
+assuming the old compose/deploy.sh path. Check the repo you are in.
 
-- [ ] **`.github/workflows/ci.yaml`**: Add the variable (with a test-safe value) to **every** `env:` block that already contains similar tokens (e.g. `SCHEDULER_API_TOKEN`). There are typically 4 blocks: `static`, `component`, `contract`, and `stack` jobs. Missing a single block will cause that CI job to fail on `serverEnv()` validation.
+Typical places to inspect:
 
-## 5. Deployment Pipeline (Production/Preview)
+- typed env schema used by the service
+- service configmap/kustomize overlay if the value is deployed through k8s
+- GitHub repo/environment variables if the value is provided by workflow input
+- local/test env fixtures if tests call `serverEnv()`
 
-To get the variable from GitHub Secrets into the VM:
+Keep config additions narrow. Do not edit every workflow or compose file unless
+the value is actually consumed in that path.
 
-### A. GitHub Workflows
+## 4. Build/Test-Only Config
 
-- [ ] **`.github/workflows/deploy-production.yml`**: Map the secret/var to the `env` block of the `deploy` job.
-- [ ] **`.github/workflows/staging-preview.yml`**: Map the secret/var to the `env` block of the `deploy` job.
+Update only the test/build surfaces that need the value:
 
-### B. Deployment Script (`deploy.sh`)
+- shared env fixtures such as `tests/_fixtures/env/*`
+- test workflow `env:` blocks if CI actually evaluates the schema there
+- `.env.example` or local docs when humans need to provide it
 
-- [ ] **`scripts/ci/deploy.sh`**:
-  1.  Add it to `REQUIRED_SECRETS` (if it's a secret) or `REQUIRED_ENV_VARS` (if it's a config).
-  2.  Add it to the `cat > /opt/cogni-template-runtime/.env << ENV_EOF` block (Step 1).
-  3.  Add it to the `ssh ... bash /tmp/deploy-remote.sh` command (at the bottom of the file) to pass it to the remote script.
+Prefer a safe fake value in tests.
 
-## 6. Setup Documentation
+## 5. Infrastructure/Bootstrap Secrets
 
-- [ ] **`scripts/setup/SETUP_DESIGN.md`**: Add the variable to the relevant secrets list so future fresh-clone setups know to provision it (e.g. under `production` or `staging` GitHub secrets).
+Stop and use the owning runbook. These values bootstrap the substrate itself and
+are not written with `pnpm secrets:set`.
 
-## 7. Special Cases: Isolated Services
+Examples:
 
-If the variable is for a standalone service running in its own Docker Compose project:
+- `CHERRY_AUTH_TOKEN`
+- `CLOUDFLARE_API_TOKEN`
+- `GITHUB_ADMIN_PAT`
+- OpenBao root/unseal artifacts
+- Grafana Cloud admin/root tokens
 
-- [ ] **Docker Compose**: Update the service's compose file.
-- [ ] **`deploy.sh` (Step 1)**: Add the variable to the _specific_ `.env` file generation block for that service.
-- [ ] **`deploy.sh` (Compose Command)**: **CRITICAL**: Ensure the `docker compose` command for that service explicitly uses `--env-file /path/to/service/.env`.
-  - _Reason_: Isolated services often run from a shared script context and won't automatically find their `.env` file unless explicitly told.
+Relevant docs are usually under `docs/runbooks/` or `docs/guides/secrets-rotate.md`.
 
-## See Also
+## Quick Sanity Check
 
-- [scripts/setup/SETUP_DESIGN.md](file:///Users/derek/dev/cogni-template/scripts/setup/SETUP_DESIGN.md): Guidance on scripting setup, automated + manual env steps required.
+For a normal new app secret, the PR should usually contain only:
+
+- code that consumes the variable
+- typed env/schema updates
+- the per-node catalog entry
+- tests/docs for that behavior
+
+The secret value itself is not in the PR; it is written to OpenBao with
+`pnpm secrets:set`.
