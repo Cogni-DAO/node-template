@@ -12,7 +12,9 @@ set -euo pipefail
 
 FRAGMENTS_DIR=${FRAGMENTS_DIR:-${RUNNER_TEMP:-/tmp}/build-fragments}
 OUTPUT_FILE=${OUTPUT_FILE:-${RUNNER_TEMP:-/tmp}/build-images.json}
-IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-node-template}
+# No upstream literal fallback (fork-portable, fail closed). Set via the
+# required FORK_IMAGE_NAME repo variable behind the pr-build guard step.
+IMAGE_NAME="${IMAGE_NAME:?IMAGE_NAME unset — set FORK_IMAGE_NAME (no upstream fallback)}"
 IMAGE_TAG=${IMAGE_TAG:-}
 PLATFORM=${PLATFORM:-linux/amd64}
 

@@ -156,7 +156,7 @@ REPO=$(git remote get-url origin | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1
 gh variable set FORK_DOMAIN_ROOT --repo "$REPO" --body "<your-cloudflare-zone-name>"
 ```
 
-`FORK_IMAGE_NAME` is **derived and set automatically by bootstrap** (`ghcr.io/<owner-lowercased>/cogni-node-template`). GHCR package-write is owner-scoped, so the fork must push to its own namespace — but the value is fully computable from the repo owner, so you don't type it. CI build workflows read `${{ vars.FORK_IMAGE_NAME || upstream-default }}`. Override only if you publish images under a non-default name: `gh variable set FORK_IMAGE_NAME --repo "$REPO" --body ghcr.io/<owner>/<custom>` (or export `FORK_IMAGE_OWNER` before bootstrap).
+`FORK_IMAGE_NAME` is **derived and set automatically by bootstrap** (`ghcr.io/<owner-lowercased>/cogni-node-template`). GHCR package-write is owner-scoped, so the fork must push to its own namespace — but the value is fully computable from the repo owner, so you don't type it. CI build workflows read `${{ vars.FORK_IMAGE_NAME }}` and **fail closed** (no silent upstream fallback): if a PR build runs _before_ you provision, it errors with the exact `gh variable set FORK_IMAGE_NAME …` command — run it then, or just let bootstrap set it. Override only if you publish under a non-default name: `gh variable set FORK_IMAGE_NAME --repo "$REPO" --body ghcr.io/<owner>/<custom>` (or export `FORK_IMAGE_OWNER` before bootstrap).
 
 ##### 6.2 · Create the target GH environment + set 7 minting tokens
 

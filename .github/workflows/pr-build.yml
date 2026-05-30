@@ -32,11 +32,13 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # Fork-portable per #57 pattern. Forks set their own GHCR namespace via
-  # `gh variable set FORK_IMAGE_NAME --body ghcr.io/<owner>/<repo>` so
-  # PR Build pushes to ghcr.io/<owner>/... where the fork's GITHUB_TOKEN
-  # actually has write permission. Unset = upstream default.
-  IMAGE_NAME: ${{ vars.FORK_IMAGE_NAME || 'ghcr.io/cogni-dao/cogni-node-template' }}
+  # Fork-portable per #57 pattern. The GHCR namespace MUST follow the repo
+  # owner — GHCR package-write is owner-scoped, so a fork can only push under
+  # its own owner. FORK_IMAGE_NAME is a required repo variable (bootstrap.sh
+  # auto-derives + sets it; upstream sets it once). NO `|| upstream-default`:
+  # a silent fallback would push a fork's images to (or reference) upstream's
+  # namespace and fail confusingly. Empty → the guard step below fails closed.
+  IMAGE_NAME: ${{ vars.FORK_IMAGE_NAME }}
 
 jobs:
   # task.0391: single source of truth for event-derived metadata.
@@ -57,6 +59,16 @@ jobs:
       head_ref_name: ${{ steps.r.outputs.head_ref_name }}
       image_tag: ${{ steps.r.outputs.image_tag }}
     steps:
+      - name: Require FORK_IMAGE_NAME (fail closed)
+        run: |
+          if [ -z "${IMAGE_NAME}" ]; then
+            echo "::error::FORK_IMAGE_NAME repo variable is not set — refusing to fall back to the upstream GHCR namespace."
+            echo "::error::bootstrap.sh sets it automatically during provisioning; to set it by hand:"
+            echo "::error::  gh variable set FORK_IMAGE_NAME --repo <owner>/<repo> --body ghcr.io/<owner-lc>/cogni-node-template"
+            exit 1
+          fi
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+
       - id: r
         env:
           GH_TOKEN: ${{ github.token }}
