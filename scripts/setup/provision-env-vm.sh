@@ -936,9 +936,13 @@ DOMAIN=${DOMAIN}
 NODE_UPSTREAM=host.docker.internal:${NODE_PORT_FROM_CATALOG}
 ENVEOF"
 
-# All required vars must be in .env — Docker Compose validates ALL services at parse time,
-# even when only starting specific ones. Services we won't start get placeholder values.
-ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-runtime/.env << 'ENVEOF'
+# runtime/.env is written AFTER Phase 5c's OpenBao-SSoT reconcile (bug.5081)
+# so re-runs don't ship Phase-2's freshly-regenerated random values that would
+# mismatch the persisted postgres/temporal/etc state on the existing VM.
+# Function defined here; call at end of Phase 5c. No consumer between here and
+# Phase 5f — runtime services aren't started until deploy-infra.sh.
+write_runtime_env_on_vm() {
+  ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-runtime/.env << 'ENVEOF'
 # Infra services (actually used)
 APP_ENV=${APP_ENV}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
@@ -983,6 +987,7 @@ COGNI_REPO_URL=${COGNI_REPO_URL}
 COGNI_REPO_REF=${COGNI_REPO_REF}
 LITELLM_IMAGE=cogni-litellm:latest
 ENVEOF"
+}
 
 # Start services
 log_info "Creating cogni-edge network..."
@@ -1354,40 +1359,34 @@ seed_kv() {
 # entered post-bootstrap via `pnpm secrets:set` — fork-quickstart Step 6.7.
 # Pods will start with empty values for those keys and fail loudly at runtime
 # (Invariant 12 TRANSITION_SAFE).
-log_step "Phase 5c: Seed OpenBao paths from .env.${DEPLOY_ENV}"
+log_step "Phase 5c: Reconcile .env.${DEPLOY_ENV} with OpenBao + VM truth, then seed"
 
 if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
   log_warn "Skipping seed — no root token (Phase 5b.2 did not produce one)."
   log_warn "Substrate is up but empty; pods will CrashLoop until secrets are entered manually."
 else
   ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
-
-  # Derive APP_BASE_URL + NEXTAUTH_URL from DOMAIN (catalog kind: derive-env).
-  # TODO(proj.agentic-fork-bootstrap Walk-row 4): replace this parallel render
-  # with one call into the catalog generator once Phase 5c moves to ESO
-  # PushSecret / a yq-loop over the catalog.
   : "${DOMAIN:?DOMAIN must be set before Phase 5c — required for derive-env keys}"
   export APP_BASE_URL="https://${DOMAIN}"
   export NEXTAUTH_URL="https://${DOMAIN}"
 
-  log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
-  for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
-           OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
-           INTERNAL_OPS_TOKEN METRICS_TOKEN GH_WEBHOOK_SECRET \
-           CONNECTIONS_ENCRYPTION_KEY POLY_WALLET_AEAD_KEY_HEX \
-           POLY_WALLET_AEAD_KEY_ID DATABASE_URL DATABASE_SERVICE_URL \
-           POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY \
-           EVM_RPC_URL POLYGON_RPC_URL \
-           APP_BASE_URL NEXTAUTH_URL; do
-    seed_kv node-template "$k" "${!k:-}"
-  done
+  # Re-run idempotency (bug.5081): pull existing values from OpenBao + VM
+  # so Phase 2's regenerated randoms don't overwrite live state. Lib also
+  # exports NODE_TEMPLATE_KEYS + SCHEDULER_WORKER_KEYS for the seed loop.
+  # shellcheck source=lib/reconcile-secrets.sh
+  source "$REPO_ROOT/scripts/setup/lib/reconcile-secrets.sh"
+  reconcile_secrets_on_rerun
+
+  log_info "Seeding cogni/${DEPLOY_ENV}/node-template/*..."
+  for k in "${NODE_TEMPLATE_KEYS[@]}"; do seed_kv node-template "$k" "${!k:-}"; done
   log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."
-  for k in DATABASE_SERVICE_URL SCHEDULER_API_TOKEN GH_REVIEW_APP_ID \
-           GH_REVIEW_APP_PRIVATE_KEY_BASE64 GH_WEBHOOK_SECRET \
-           INTERNAL_OPS_TOKEN; do
-    seed_kv scheduler-worker "$k" "${!k:-}"
-  done
+  for k in "${SCHEDULER_WORKER_KEYS[@]}"; do seed_kv scheduler-worker "$k" "${!k:-}"; done
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
+
+  # Write runtime/.env LAST so the VM gets reconciled values, not Phase-2
+  # regenerations (see write_runtime_env_on_vm definition comment).
+  log_info "Writing /opt/cogni-template-runtime/.env on VM with reconciled values..."
+  write_runtime_env_on_vm
 fi
 
 # ══════════════════════════════════════════════════════════════
