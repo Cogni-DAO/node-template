@@ -310,19 +310,8 @@ jobs:
           echo ".env.bootstrap written (${DEPLOY_ENV}, 6 keys populated)"
 
       - name: Restore prior init-artifact keys (re-run path)
-        # The Cherry SSH key resource is named `${vm_name_prefix}-${env}-deploy`
-        # — stable per env. On a re-run against an env whose VM already exists,
-        # tofu would try to create a second key under the same name → Cherry
-        # API 422. The reuse-check in `provision-env-vm.sh` (Phase 2) is what
-        # SHOULD adopt the prior key, but on the ephemeral GHA runner `.local/`
-        # is empty at workflow start, so the else-branch always fires and we
-        # regenerate. Restoring the prior keys here closes that gap.
-        #
-        # Fresh-fork path: no prior artifact → log + continue (Phase 2 falls
-        # through to fresh-key generation, current behavior).
-        # Passphrase mismatch: fail loud — fresh keys would just reproduce the
-        # Cherry conflict, so re-running with the wrong passphrase is unrecoverable
-        # without manual portal cleanup.
+        # Pre-condition for Phase 2's reuse-check + the tofu import in
+        # provision-env-vm.sh — restoring the prior keys keeps both no-diff.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ENCRYPTION_PASSPHRASE: ${{ inputs.encryption_passphrase }}
@@ -333,19 +322,12 @@ jobs:
           artifact_name="${DEPLOY_ENV}-init-artifacts"
           artifact_json=$(gh api \
             "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=1" \
-            -q '.artifacts[0] // empty') || {
+            -q '.artifacts[0] | select(.expired == false) // empty') || {
             echo "::error::gh api failed listing artifacts (network, auth, or missing actions:read)"
             exit 1
           }
           if [[ -z "$artifact_json" ]]; then
-            echo "::notice::no prior ${artifact_name} artifact — fresh-fork path (Phase 2 will generate new keys)"
-            exit 0
-          fi
-          expired=$(jq -r '.expired' <<<"$artifact_json")
-          if [[ "$expired" == "true" ]]; then
-            echo "::warning::prior ${artifact_name} artifact has expired (retention 1d) — continuing on fresh-key path."
-            echo "::warning::If the env's VM still exists, tofu apply will collide on the Cherry SSH key."
-            echo "::warning::Remedy: destroy the existing VM + ssh key in the Cherry portal before re-running, OR re-run within the 1d retention window."
+            echo "::notice::no usable prior ${artifact_name} (missing or expired) — fresh-key path"
             exit 0
           fi
           run_id=$(jq -r '.workflow_run.id' <<<"$artifact_json")

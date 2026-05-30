@@ -389,30 +389,25 @@ SERVER_HOSTNAME="${DEPLOY_ENV}-${VM_NAME_PREFIX}"
 CHERRY_API="https://api.cherryservers.com/v1"
 
 log_info "Probing Cherry for existing resources to adopt..."
-EXISTING_KEY_ID=$(curl -sS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
+# curl -f propagates HTTP errors through `set -e`. Without it, a 401/5xx
+# returns a non-JSON body → jq empty → script proceeds as if no resource
+# exists → tofu apply hits the original "label already exists" 400.
+adopt() {  # adopt <tofu-address> <id-or-empty> <human-label>
+  local addr="$1" id="$2" lbl="$3"
+  [[ -z "$id" ]] && return 0
+  log_info "Adopting Cherry $lbl (id=$id) into tofu state"
+  tofu import -var-file="terraform.${WORKSPACE}.tfvars" "$addr" "$id"
+}
+EXISTING_KEY_ID=$(curl -fsS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
   "${CHERRY_API}/ssh-keys" \
   | jq -r --arg lbl "$SSH_KEY_LABEL" '.[]? | select(.label == $lbl) | .id' \
   | head -1)
-EXISTING_SERVER_ID=$(curl -sS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
+EXISTING_SERVER_ID=$(curl -fsS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
   "${CHERRY_API}/projects/${CHERRY_PROJECT_ID}/servers" \
   | jq -r --arg h "$SERVER_HOSTNAME" '.[]? | select(.hostname == $h) | .id' \
   | head -1)
-
-if [[ -n "$EXISTING_KEY_ID" ]]; then
-  log_info "Adopting Cherry ssh_key '$SSH_KEY_LABEL' (id=$EXISTING_KEY_ID) into tofu state"
-  tofu import -var-file="terraform.${WORKSPACE}.tfvars" \
-    cherryservers_ssh_key.key "$EXISTING_KEY_ID"
-fi
-if [[ -n "$EXISTING_SERVER_ID" ]]; then
-  log_info "Adopting Cherry server '$SERVER_HOSTNAME' (id=$EXISTING_SERVER_ID) into tofu state"
-  tofu import -var-file="terraform.${WORKSPACE}.tfvars" \
-    cherryservers_server.server "$EXISTING_SERVER_ID"
-fi
-if [[ -n "$EXISTING_KEY_ID" && -z "$EXISTING_SERVER_ID" ]] || \
-   [[ -z "$EXISTING_KEY_ID" && -n "$EXISTING_SERVER_ID" ]]; then
-  log_warn "Only one of {ssh_key, server} exists for this env on Cherry — partial state."
-  log_warn "tofu plan will likely want to replace the un-paired resource. Inspect the plan below."
-fi
+adopt cherryservers_ssh_key.key    "$EXISTING_KEY_ID"    "ssh_key '$SSH_KEY_LABEL'"
+adopt cherryservers_server.server  "$EXISTING_SERVER_ID" "server '$SERVER_HOSTNAME'"
 
 log_info "Planning..."
 tofu plan -var-file="terraform.${WORKSPACE}.tfvars" -out=tfplan
