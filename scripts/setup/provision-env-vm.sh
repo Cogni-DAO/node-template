@@ -377,6 +377,43 @@ tofu init -input=false
 log_info "Selecting workspace: $WORKSPACE"
 tofu workspace new "$WORKSPACE" 2>/dev/null || tofu workspace select "$WORKSPACE"
 
+# Re-run idempotency: adopt existing Cherry resources into tofu state.
+# tfstate is ephemeral on the GHA runner (TODO: remote backend in
+# main.tf:11), so without import tofu calls POST /v1/ssh-keys with the
+# same label every time → Cherry returns `"key with this label already
+# exists." (error code: 400)` (seen on i-am-coco fork run 26628927120).
+# Importing both ssh_key + server keeps `ssh_key_ids` correlated; importing
+# only one risks tofu wanting to replace the un-imported resource.
+SSH_KEY_LABEL="${VM_NAME_PREFIX}-${DEPLOY_ENV}-deploy"
+SERVER_HOSTNAME="${DEPLOY_ENV}-${VM_NAME_PREFIX}"
+CHERRY_API="https://api.cherryservers.com/v1"
+
+log_info "Probing Cherry for existing resources to adopt..."
+EXISTING_KEY_ID=$(curl -sS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
+  "${CHERRY_API}/ssh-keys" \
+  | jq -r --arg lbl "$SSH_KEY_LABEL" '.[]? | select(.label == $lbl) | .id' \
+  | head -1)
+EXISTING_SERVER_ID=$(curl -sS -H "Authorization: Bearer ${CHERRY_AUTH_TOKEN}" \
+  "${CHERRY_API}/projects/${CHERRY_PROJECT_ID}/servers" \
+  | jq -r --arg h "$SERVER_HOSTNAME" '.[]? | select(.hostname == $h) | .id' \
+  | head -1)
+
+if [[ -n "$EXISTING_KEY_ID" ]]; then
+  log_info "Adopting Cherry ssh_key '$SSH_KEY_LABEL' (id=$EXISTING_KEY_ID) into tofu state"
+  tofu import -var-file="terraform.${WORKSPACE}.tfvars" \
+    cherryservers_ssh_key.key "$EXISTING_KEY_ID"
+fi
+if [[ -n "$EXISTING_SERVER_ID" ]]; then
+  log_info "Adopting Cherry server '$SERVER_HOSTNAME' (id=$EXISTING_SERVER_ID) into tofu state"
+  tofu import -var-file="terraform.${WORKSPACE}.tfvars" \
+    cherryservers_server.server "$EXISTING_SERVER_ID"
+fi
+if [[ -n "$EXISTING_KEY_ID" && -z "$EXISTING_SERVER_ID" ]] || \
+   [[ -z "$EXISTING_KEY_ID" && -n "$EXISTING_SERVER_ID" ]]; then
+  log_warn "Only one of {ssh_key, server} exists for this env on Cherry — partial state."
+  log_warn "tofu plan will likely want to replace the un-paired resource. Inspect the plan below."
+fi
+
 log_info "Planning..."
 tofu plan -var-file="terraform.${WORKSPACE}.tfvars" -out=tfplan
 
