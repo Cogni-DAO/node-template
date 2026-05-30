@@ -239,6 +239,11 @@ log_info "Loaded secrets from $ENV_FILE"
 # to the else-branch and generate a new keypair.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" ]]; then
   log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key"
+  # Rehydrate .pub from the private key — tofu's `file(var.public_key_path)`
+  # reads it during plan, and the encrypted init-artifact only carries
+  # the private half.
+  ssh-keygen -y -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" \
+    > "$PROVISION_DIR/keys/cogni_${DEPLOY_ENV}_deploy.pub"
 else
   TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SSH keypair (GHA runner — no laptop .local/ state)"
