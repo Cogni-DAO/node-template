@@ -46,7 +46,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-node-template
+  # Fork-portable, required, no silent fallback (see pr-build.yml env comment).
+  IMAGE_NAME: ${{ vars.FORK_IMAGE_NAME }}
 
 jobs:
   flight:
@@ -75,6 +76,16 @@ jobs:
       # misleading-red hard-fail or silent-green success.
       build_state: ${{ steps.classify.outputs.state }}
     steps:
+      - name: Require FORK_IMAGE_NAME (fail closed)
+        run: |
+          if [ -z "${IMAGE_NAME}" ]; then
+            echo "::error::FORK_IMAGE_NAME repo variable is not set — refusing to fall back to the upstream GHCR namespace."
+            echo "::error::bootstrap.sh sets it automatically during provisioning; to set it by hand:"
+            echo "::error::  gh variable set FORK_IMAGE_NAME --repo <owner>/<repo> --body ghcr.io/<owner-lc>/cogni-node-template"
+            exit 1
+          fi
+          echo "IMAGE_NAME=${IMAGE_NAME}"
+
       - name: Checkout app source
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:

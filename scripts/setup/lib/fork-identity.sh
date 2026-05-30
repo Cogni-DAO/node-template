@@ -27,6 +27,31 @@ fork_identity_slug() {
     | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//; s/-+/-/g'
 }
 
+fork_image_name() {
+  # GHCR image namespace this fork pushes to + deploys from:
+  # ghcr.io/<owner-lowercased>/cogni-node-template.
+  #
+  # GHCR package-write is owner-scoped at GitHub's layer — a fork's
+  # GITHUB_TOKEN (and any GH App installation token) can only write under its
+  # own owner — so the namespace MUST follow the repo owner. Unlike
+  # FORK_DOMAIN_ROOT (an external Cloudflare fact), this is fully derivable, so
+  # bootstrap computes + sets it rather than asking the human.
+  #
+  # The image BASENAME stays `cogni-node-template` across forks: it is the
+  # image name, not the repo name. A fork repo named `cogni-node-20260528`
+  # still publishes ghcr.io/<owner>/cogni-node-template[-<suffix>]. Lowercased
+  # because GHCR rejects uppercase reference paths.
+  local repo_root="$1" owner origin
+  if [[ -n "${FORK_IMAGE_OWNER:-}" ]]; then
+    owner="$FORK_IMAGE_OWNER"
+  else
+    origin=$(git -C "$repo_root" remote get-url origin 2>/dev/null || echo "")
+    owner=$(echo "$origin" | sed -E 's#.*github.com[:/]([^/]+)/[^/.]+(\.git)?$#\1#')
+    [[ -z "$owner" || "$owner" == "$origin" ]] && owner="cogni-dao"
+  fi
+  printf 'ghcr.io/%s/cogni-node-template' "$(echo "$owner" | tr '[:upper:]' '[:lower:]')"
+}
+
 domain_for_env() {
   local deploy_env="$1" root="$2"
   case "$deploy_env" in

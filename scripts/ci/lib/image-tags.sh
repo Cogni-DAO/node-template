@@ -11,8 +11,15 @@
 # Intentionally no `set -euo pipefail` — meant to be sourced; caller owns
 # error handling.
 
+# Fork-portable: accept IMAGE_NAME_APP or IMAGE_NAME. NO upstream literal
+# fallback — GHCR write is owner-scoped, so a silently-defaulted upstream name
+# pushes a fork's images to (or references) the wrong namespace. CI workflows
+# export IMAGE_NAME from the required `${{ vars.FORK_IMAGE_NAME }}` repo
+# variable behind a fail-closed guard (see pr-build.yml). Sourcing stays safe
+# when unset (ALL_TARGETS/catalog reads don't need it); image_name_for_target()
+# fails loud only if the name is actually consumed without being set.
 # shellcheck disable=SC2034
-IMAGE_NAME_APP=${IMAGE_NAME_APP:-ghcr.io/cogni-dao/cogni-node-template}
+IMAGE_NAME_APP="${IMAGE_NAME_APP:-${IMAGE_NAME:-}}"
 
 if ! command -v yq >/dev/null 2>&1; then
   echo "[ERROR] image-tags: yq is required (CATALOG_IS_SSOT). Install: bash scripts/bootstrap/install/install-yq.sh" >&2
@@ -37,6 +44,10 @@ done
 unset _t _s
 
 image_name_for_target() {
+  if [ -z "$IMAGE_NAME_APP" ]; then
+    echo "[ERROR] image-tags: IMAGE_NAME_APP/IMAGE_NAME unset — set FORK_IMAGE_NAME (no upstream fallback)." >&2
+    return 1
+  fi
   printf '%s' "$IMAGE_NAME_APP"
 }
 

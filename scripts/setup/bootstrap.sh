@@ -285,6 +285,24 @@ if [[ "$PERM" != "admin" ]]; then
 fi
 log "Admin role verified for ${GITHUB_ADMIN_USERNAME}"
 
+# FORK_IMAGE_NAME — derived, never hand-typed. GHCR package-write is
+# owner-scoped, so a fork must build + push to its OWN namespace; pushing to
+# upstream's ghcr.io/cogni-dao/... fails with `permission_denied`. Unlike
+# FORK_DOMAIN_ROOT (an external Cloudflare fact the human must supply), this is
+# fully computable from the repo owner — so we derive + set it here rather than
+# asking. Two consumers read it: CI build workflows via
+# `${{ vars.FORK_IMAGE_NAME || upstream-default }}`, and provision-env-vm.sh via
+# the exported env below. (bug.5083)
+FORK_IMAGE_NAME=$(fork_image_name "$REPO_ROOT")
+export FORK_IMAGE_NAME
+log "Fork image namespace: ${BOLD}${FORK_IMAGE_NAME}${NC} (derived from origin owner)"
+if gh variable set FORK_IMAGE_NAME --repo "$GH_REPO" --body "$FORK_IMAGE_NAME" >/dev/null 2>&1; then
+  log "Set GH repo variable FORK_IMAGE_NAME (CI builds push here)"
+else
+  warn "Could not set FORK_IMAGE_NAME repo variable (gh scope?); CI uses the upstream default until set:"
+  warn "  gh variable set FORK_IMAGE_NAME --repo ${GH_REPO} --body ${FORK_IMAGE_NAME}"
+fi
+
 # B1 fail-fast — confirm push access on origin BEFORE spending money on a
 # Cherry VM. Canary's auto-flight died at Phase 4c with 'fatal: 403' after
 # a VM was already billed because origin pointed at the upstream template

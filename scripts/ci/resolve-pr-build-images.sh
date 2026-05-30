@@ -35,7 +35,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./lib/image-tags.sh
 . "$SCRIPT_DIR/lib/image-tags.sh"
 
-IMAGE_NAME=${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-node-template}
+# No upstream literal fallback (fork-portable, fail closed). CI callers set
+# IMAGE_NAME from the required FORK_IMAGE_NAME repo variable behind a guard.
+IMAGE_NAME="${IMAGE_NAME:?IMAGE_NAME unset — set FORK_IMAGE_NAME (no upstream fallback)}"
 export IMAGE_NAME_APP=${IMAGE_NAME_APP:-$IMAGE_NAME}
 export IMAGE_NAME_MIGRATOR=${IMAGE_NAME_MIGRATOR:-${IMAGE_NAME_APP}-migrate}
 IMAGE_TAG=${IMAGE_TAG:-}
