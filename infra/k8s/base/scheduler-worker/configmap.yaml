@@ -21,15 +21,20 @@ data:
   TEMPORAL_TASK_QUEUE: "scheduler-tasks"
 
   # Per-node API endpoints — single-node template.
-  # Each entry maps nodeId/slug to the node's internal Service.
-  # scripts/rename-node.sh rewrites the slug; rotate the UUID in .cogni/repo-spec.yaml
-  # post-fork (placeholder below is the .cogni/repo-spec.yaml seed).
+  # Each entry maps nodeId/slug to the node's internal Service. The UUID
+  # below MUST match `.cogni/repo-spec.yaml::node_id` — the app pod bakes
+  # that file (Dockerfile L110) and submits to `scheduler-tasks-${node_id}`;
+  # the worker derives the queue to poll from these endpoint keys. A drift
+  # here = silent 120s chat hang (bug.5080).
+  # Forks: regenerate the UUID below in lockstep with .cogni/repo-spec.yaml
+  # when minting a new node identity (provision-env-vm.sh Phase 5c rejects
+  # deploys whose per-node spec still carries upstream's UUID).
   # The `operator=` entry is required: scheduler-worker resolves callbacks via
   # this key on a cold-start (bug.0446 H8b — without it the worker CrashLoops
   # on the first task lookup). The "operator" identifier is the scheduler's
   # canonical name for the node-app surface and is independent of the
   # catalog slug (which forks rename via scripts/rename-node.sh).
-  COGNI_NODE_ENDPOINTS: "operator=http://node-app:3000,node-template=http://node-app:3000,00000000-0000-4000-a000-000000000000=http://node-app:3000"
+  COGNI_NODE_ENDPOINTS: "operator=http://node-app:3000,node-template=http://node-app:3000,4ff8eac1-4eba-4ed0-931b-b1fe4f64713d=http://node-app:3000"
 
   # Observability
   LOG_LEVEL: "info"
