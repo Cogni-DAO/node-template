@@ -231,18 +231,14 @@ set +a
 log_info "Loaded secrets from $ENV_FILE"
 
 # SSH keypair — per-VM, uploaded to Cherry, saved to .local/.
-# IMPORTANT (re-run gap): `.local/` is laptop-side state. On the GHA runner
-# (the canonical bootstrap surface per Step 6 doctrine) it never persists
-# across runs, so the else-branch ALWAYS fires on re-runs. Phase 3's
-# `tofu apply` then tries to upload a fresh public key to the operator's
-# Cherry account under the same resource name → conflict if the prior
-# VM/key from a previous run still exists. Fresh-fork bootstrap works;
-# re-runs against the same Cherry account collide. Tracked as the
-# "Cherry SSH key re-run conflict" Walk-tier row in
-# proj.agentic-fork-bootstrap.md. Workaround until fixed: destroy the
-# prior VM + Cherry SSH key in the portal before re-running.
+# On the GHA runner the "Restore prior init-artifact keys" step in
+# .github/workflows/provision-env.yml decrypts the prior run's vm-key
+# into .local/ BEFORE this script runs, so re-runs reuse the same public
+# key and tofu's Cherry SSH resource stays idempotent. Fresh-fork +
+# fresh-env runs (no prior artifact / expired retention) fall through
+# to the else-branch and generate a new keypair.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key" ]]; then
-  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key (laptop-side path)"
+  log_info "Reusing existing SSH key from .local/${DEPLOY_ENV}-vm-key"
 else
   TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SSH keypair (GHA runner — no laptop .local/ state)"
@@ -252,10 +248,10 @@ else
   chmod 600 "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-key"
 fi
 
-# SOPS age keypair — per-VM. Same re-run gap as the SSH key above.
+# SOPS age keypair — per-VM. Same restore-on-rerun path as the SSH key above.
 if [[ -f "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key" ]]; then
   AGE_PRIVATE_KEY=$(cat "$REPO_ROOT/.local/${DEPLOY_ENV}-vm-age-key")
-  log_info "Reusing existing SOPS age key (laptop-side path)"
+  log_info "Reusing existing SOPS age key"
 else
   AGE_TMPDIR=$(mktemp -d)
   log_info "Generating ephemeral SOPS age keypair..."

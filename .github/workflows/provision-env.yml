@@ -309,6 +309,68 @@ jobs:
           done
           echo ".env.bootstrap written (${DEPLOY_ENV}, 6 keys populated)"
 
+      - name: Restore prior init-artifact keys (re-run path)
+        # The Cherry SSH key resource is named `${vm_name_prefix}-${env}-deploy`
+        # — stable per env. On a re-run against an env whose VM already exists,
+        # tofu would try to create a second key under the same name → Cherry
+        # API 422. The reuse-check in `provision-env-vm.sh` (Phase 2) is what
+        # SHOULD adopt the prior key, but on the ephemeral GHA runner `.local/`
+        # is empty at workflow start, so the else-branch always fires and we
+        # regenerate. Restoring the prior keys here closes that gap.
+        #
+        # Fresh-fork path: no prior artifact → log + continue (Phase 2 falls
+        # through to fresh-key generation, current behavior).
+        # Passphrase mismatch: fail loud — fresh keys would just reproduce the
+        # Cherry conflict, so re-running with the wrong passphrase is unrecoverable
+        # without manual portal cleanup.
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ENCRYPTION_PASSPHRASE: ${{ inputs.encryption_passphrase }}
+        run: |
+          set -uo pipefail
+          umask 077
+          mkdir -p .local
+          artifact_name="${DEPLOY_ENV}-init-artifacts"
+          artifact_json=$(gh api \
+            "repos/${GITHUB_REPOSITORY}/actions/artifacts?name=${artifact_name}&per_page=1" \
+            -q '.artifacts[0] // empty')
+          if [[ -z "$artifact_json" ]]; then
+            echo "::notice::no prior ${artifact_name} artifact — fresh-fork path (Phase 2 will generate new keys)"
+            exit 0
+          fi
+          expired=$(jq -r '.expired' <<<"$artifact_json")
+          if [[ "$expired" == "true" ]]; then
+            echo "::warning::prior ${artifact_name} artifact has expired (retention 1d) — continuing on fresh-key path."
+            echo "::warning::If the env's VM still exists, tofu apply will collide on the Cherry SSH key."
+            echo "::warning::Remedy: destroy the existing VM + ssh key in the Cherry portal before re-running, OR re-run within the 1d retention window."
+            exit 0
+          fi
+          run_id=$(jq -r '.workflow_run.id' <<<"$artifact_json")
+          download_dir=$(mktemp -d)
+          if ! gh run download "$run_id" --repo "${GITHUB_REPOSITORY}" \
+              --name "$artifact_name" --dir "$download_dir"; then
+            echo "::error::gh run download failed for run ${run_id} (artifact ${artifact_name})"
+            exit 1
+          fi
+          set -e
+          restored=0
+          for base in ${DEPLOY_ENV}-vm-key ${DEPLOY_ENV}-vm-age-key; do
+            enc="${download_dir}/${base}.enc"
+            [[ -r "$enc" ]] || { echo "::notice::no ${base}.enc in prior artifact (pre-fix run?)"; continue; }
+            if ! openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 \
+                -in "$enc" -out ".local/${base}" \
+                -pass env:ENCRYPTION_PASSPHRASE 2>/dev/null; then
+              echo "::error::decrypt failed for ${base} — encryption_passphrase does not match the prior run."
+              echo "::error::Re-run with the original passphrase, OR destroy the Cherry SSH key '${DEPLOY_ENV}-deploy' + VM in the Cherry portal and re-run with a new passphrase."
+              exit 2
+            fi
+            chmod 600 ".local/${base}"
+            restored=$((restored + 1))
+            echo "restored .local/${base}"
+          done
+          rm -rf "$download_dir"
+          echo "restored ${restored} prior key(s) from run ${run_id}; Phase 2 will reuse them"
+
       - name: Configure git identity (for any internal commits)
         # bootstrap.sh's downstream phases (e.g. seed deploy/* branches in
         # the fork) make commits via gh api. Some git subcommands need a
@@ -345,6 +407,7 @@ jobs:
           encrypted_count=0
           for src in .local/${DEPLOY_ENV}-openbao-init.json \
                      .local/${DEPLOY_ENV}-vm-key \
+                     .local/${DEPLOY_ENV}-vm-age-key \
                      .local/${DEPLOY_ENV}-kubeconfig.yaml \
                      .local/${DEPLOY_ENV}-grafana-sa-token.json; do
             [[ -r "$src" ]] || { echo "::warning::missing source: $src (provision may not have produced it)"; continue; }
@@ -462,6 +525,7 @@ jobs:
           # Plaintext (should already be shredded by encrypt step)
           for f in .local/${DEPLOY_ENV}-openbao-init.json \
                    .local/${DEPLOY_ENV}-vm-key \
+                   .local/${DEPLOY_ENV}-vm-age-key \
                    .local/${DEPLOY_ENV}-kubeconfig.yaml \
                    .env.bootstrap .env.${DEPLOY_ENV} .env.operator; do
             [[ -e "$f" ]] && shred -uz "$f" 2>/dev/null
