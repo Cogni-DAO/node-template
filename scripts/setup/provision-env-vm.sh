@@ -936,9 +936,13 @@ DOMAIN=${DOMAIN}
 NODE_UPSTREAM=host.docker.internal:${NODE_PORT_FROM_CATALOG}
 ENVEOF"
 
-# All required vars must be in .env — Docker Compose validates ALL services at parse time,
-# even when only starting specific ones. Services we won't start get placeholder values.
-ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-runtime/.env << 'ENVEOF'
+# runtime/.env is written AFTER Phase 5c's OpenBao-SSoT reconcile (bug.5081)
+# so re-runs don't ship Phase-2's freshly-regenerated random values that would
+# mismatch the persisted postgres/temporal/etc state on the existing VM.
+# Function defined here; call at end of Phase 5c. No consumer between here and
+# Phase 5f — runtime services aren't started until deploy-infra.sh.
+write_runtime_env_on_vm() {
+  ssh $SSH_OPTS root@"$VM_IP" "cat > /opt/cogni-template-runtime/.env << 'ENVEOF'
 # Infra services (actually used)
 APP_ENV=${APP_ENV}
 DEPLOY_ENVIRONMENT=${DEPLOY_ENVIRONMENT}
@@ -983,6 +987,7 @@ COGNI_REPO_URL=${COGNI_REPO_URL}
 COGNI_REPO_REF=${COGNI_REPO_REF}
 LITELLM_IMAGE=cogni-litellm:latest
 ENVEOF"
+}
 
 # Start services
 log_info "Creating cogni-edge network..."
@@ -1336,6 +1341,17 @@ seed_kv() {
     >/dev/null
 }
 
+# Inverse of seed_kv — reads one field at cogni/<env>/<svc>/<k>. Stdout is the
+# value (empty if path or field missing). Used by Phase 5c's SSoT reconcile
+# (bug.5081): on re-run, OpenBao holds the canonical value postgres/temporal/
+# etc were configured with; Phase 2's regeneration must NOT overwrite it.
+bao_get_field() {
+  local svc="$1" k="$2"
+  ssh $SSH_OPTS root@"$VM_IP" \
+    "kubectl exec -n openbao openbao-0 -- env BAO_TOKEN='${ROOT_TOKEN}' BAO_ADDR=http://127.0.0.1:8200 bao kv get -format=json 'cogni/${DEPLOY_ENV}/${svc}'" \
+    2>/dev/null | jq -r --arg k "$k" '.data.data[$k] // empty' 2>/dev/null || true
+}
+
 # ══════════════════════════════════════════════════════════════
 # Phase 5c: Seed OpenBao with auto-generated app secrets (task.0284)
 # ══════════════════════════════════════════════════════════════
@@ -1354,7 +1370,7 @@ seed_kv() {
 # entered post-bootstrap via `pnpm secrets:set` — fork-quickstart Step 6.7.
 # Pods will start with empty values for those keys and fail loudly at runtime
 # (Invariant 12 TRANSITION_SAFE).
-log_step "Phase 5c: Seed OpenBao paths from .env.${DEPLOY_ENV}"
+log_step "Phase 5c: Reconcile .env.${DEPLOY_ENV} with OpenBao SSoT, then seed missing keys"
 
 if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
   log_warn "Skipping seed — no root token (Phase 5b.2 did not produce one)."
@@ -1370,24 +1386,118 @@ else
   export APP_BASE_URL="https://${DOMAIN}"
   export NEXTAUTH_URL="https://${DOMAIN}"
 
-  log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
-  for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
-           OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
-           INTERNAL_OPS_TOKEN METRICS_TOKEN GH_WEBHOOK_SECRET \
-           CONNECTIONS_ENCRYPTION_KEY POLY_WALLET_AEAD_KEY_HEX \
-           POLY_WALLET_AEAD_KEY_ID DATABASE_URL DATABASE_SERVICE_URL \
-           POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY \
-           EVM_RPC_URL POLYGON_RPC_URL \
-           APP_BASE_URL NEXTAUTH_URL; do
+  # Per-service key arrays — single source of truth for both the SSoT
+  # reconcile loop AND the seed loop below. Drift between the two would
+  # silently corrupt state on re-run, so they iterate the same arrays.
+  NODE_TEMPLATE_KEYS=(
+    AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN
+    OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN
+    INTERNAL_OPS_TOKEN METRICS_TOKEN GH_WEBHOOK_SECRET
+    CONNECTIONS_ENCRYPTION_KEY POLY_WALLET_AEAD_KEY_HEX
+    POLY_WALLET_AEAD_KEY_ID DATABASE_URL DATABASE_SERVICE_URL
+    POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY
+    EVM_RPC_URL POLYGON_RPC_URL
+    APP_BASE_URL NEXTAUTH_URL
+  )
+  SCHEDULER_WORKER_KEYS=(
+    DATABASE_SERVICE_URL SCHEDULER_API_TOKEN GH_REVIEW_APP_ID
+    GH_REVIEW_APP_PRIVATE_KEY_BASE64 GH_WEBHOOK_SECRET
+    INTERNAL_OPS_TOKEN
+  )
+
+  # ── OpenBao SSoT reconcile (bug.5081) ──────────────────────────────────────
+  # Phase 2 (bootstrap.sh) regenerates random values into .env.<env> on every
+  # GHA-runner dispatch (file doesn't survive the ephemeral FS). On the FIRST
+  # provision, those fresh values get baked into postgres/temporal/openbao
+  # data dirs at cloud-init / first compose-up. On RE-RUNS, .env.<env>'s
+  # newly-regenerated values diverge from what's persisted on the VM — and
+  # without this reconcile, Phase 5c would happily overwrite OpenBao with
+  # the new values, then Phase 5f db-provision would fail with "password
+  # authentication failed for user postgres" (coco PR #62 run 26672946344).
+  #
+  # Fix: BEFORE seeding, read each key from OpenBao. If present, that's the
+  # truth — replace Phase 2's regenerated value in the shell + .env.<env>
+  # file. Fresh provisions find nothing (path missing) and fall through to
+  # the seed loop below, which writes Phase 2's values.
+  reconcile_from_openbao() {
+    local svc="$1"; shift
+    local env_file="$REPO_ROOT/.env.${DEPLOY_ENV}"
+    local k v reconciled=0
+    for k in "$@"; do
+      v=$(bao_get_field "$svc" "$k")
+      [[ -z "$v" ]] && continue
+      [[ "$v" == "${!k:-}" ]] && continue
+      export "${k}=${v}"
+      if [[ -f "$env_file" ]] && grep -qE "^${k}=" "$env_file"; then
+        # Use a delimiter unlikely to appear in secret values (| works for
+        # hex/base64; if a value ever contains |, switch to sed's `c` cmd).
+        sed -i.bak "s|^${k}=.*$|${k}=${v}|" "$env_file"
+        rm -f "${env_file}.bak"
+      fi
+      reconciled=$((reconciled + 1))
+    done
+    [[ $reconciled -gt 0 ]] && log_info "  reconciled ${reconciled} ${svc}/ key(s) from OpenBao SSoT"
+  }
+  log_info "Reconciling .env.${DEPLOY_ENV} with OpenBao (cogni/${DEPLOY_ENV}/*) — fresh provisions are no-ops here..."
+  reconcile_from_openbao node-template     "${NODE_TEMPLATE_KEYS[@]}"
+  reconcile_from_openbao scheduler-worker  "${SCHEDULER_WORKER_KEYS[@]}"
+
+  # ── Compose-tier reconcile (bug.5081 / postgres auth failure) ──────────────
+  # POSTGRES_ROOT_PASSWORD + per-DB passwords are NOT in OpenBao (Compose-only
+  # secrets — postgres bootstraps its data dir from runtime/.env on the VM,
+  # not from a k8s Secret). On re-runs they must come from the VM's existing
+  # /opt/cogni-template-runtime/.env, not Phase 2's regenerated randoms, or
+  # postgres auth fails ("password authentication failed for user postgres").
+  COMPOSE_ONLY_KEYS=(
+    POSTGRES_ROOT_PASSWORD
+    APP_DB_PASSWORD APP_DB_SERVICE_PASSWORD APP_DB_READONLY_PASSWORD
+    TEMPORAL_DB_PASSWORD
+  )
+  vm_env_dump=$(ssh $SSH_OPTS root@"$VM_IP" \
+    'cat /opt/cogni-template-runtime/.env 2>/dev/null' || true)
+  if [[ -n "$vm_env_dump" ]]; then
+    log_info "Reconciling Compose-only secrets from VM's existing runtime/.env..."
+    compose_reconciled=0
+    env_file="$REPO_ROOT/.env.${DEPLOY_ENV}"
+    for k in "${COMPOSE_ONLY_KEYS[@]}"; do
+      v=$(printf '%s\n' "$vm_env_dump" | sed -n "s|^${k}=\\(.*\\)$|\\1|p" | head -1)
+      [[ -z "$v" ]] && continue
+      [[ "$v" == "${!k:-}" ]] && continue
+      export "${k}=${v}"
+      if [[ -f "$env_file" ]] && grep -qE "^${k}=" "$env_file"; then
+        sed -i.bak "s|^${k}=.*$|${k}=${v}|" "$env_file"
+        rm -f "${env_file}.bak"
+      fi
+      compose_reconciled=$((compose_reconciled + 1))
+    done
+    [[ $compose_reconciled -gt 0 ]] && log_info "  reconciled ${compose_reconciled} Compose-only key(s) from VM runtime/.env"
+    # Re-derive DATABASE_URL/DATABASE_SERVICE_URL with the now-correct password
+    # so the OpenBao seed below writes consistent values (these were
+    # constructed at line 335 from APP_DB_PASSWORD — stale after reconcile).
+    DATABASE_URL="postgresql://${APP_DB_USER}:${APP_DB_PASSWORD}@${VM_IP}:5432/${PRIMARY_NODE_DB}?sslmode=disable"
+    DATABASE_SERVICE_URL="postgresql://${APP_DB_SERVICE_USER}:${APP_DB_SERVICE_PASSWORD}@${VM_IP}:5432/${PRIMARY_NODE_DB}?sslmode=disable"
+    export DATABASE_URL DATABASE_SERVICE_URL
+  else
+    log_info "No prior /opt/cogni-template-runtime/.env on VM — fresh provision path (Compose-only keys keep Phase-2 values)"
+  fi
+
+  # ── Seed OpenBao paths from (now-reconciled) shell env ─────────────────────
+  log_info "Seeding cogni/${DEPLOY_ENV}/node-template/*..."
+  for k in "${NODE_TEMPLATE_KEYS[@]}"; do
     seed_kv node-template "$k" "${!k:-}"
   done
   log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."
-  for k in DATABASE_SERVICE_URL SCHEDULER_API_TOKEN GH_REVIEW_APP_ID \
-           GH_REVIEW_APP_PRIVATE_KEY_BASE64 GH_WEBHOOK_SECRET \
-           INTERNAL_OPS_TOKEN; do
+  for k in "${SCHEDULER_WORKER_KEYS[@]}"; do
     seed_kv scheduler-worker "$k" "${!k:-}"
   done
   log_info "OpenBao paths seeded for ${DEPLOY_ENV}"
+
+  # ── Write runtime/.env on the VM with reconciled values ────────────────────
+  # Deferred from earlier in the script (see write_runtime_env_on_vm definition
+  # comment) so that on re-runs the VM gets OpenBao SSoT values, not Phase 2's
+  # regenerated ones. Phase 5f's deploy-infra.sh is the next consumer.
+  log_info "Writing /opt/cogni-template-runtime/.env on VM with reconciled values..."
+  write_runtime_env_on_vm
 fi
 
 # ══════════════════════════════════════════════════════════════
