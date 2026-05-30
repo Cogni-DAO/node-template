@@ -296,6 +296,7 @@ Bound via OpenBao role definitions to Kubernetes ServiceAccounts (per-service-pe
 
 ## Related
 
+- [`access-control-charter.md`](./access-control-charter.md) — L3 (Secrets) sits between L2 (AuthZ) and L4 (DAO/Governance) in the layered authority model; Invariant 13 NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP is also a hard L5 boundary per charter Invariant 5
 - [`proj.security-hardening`](../../work/projects/proj.security-hardening.md) — parent project; Secrets Substrate section
 - [`task.0284`](https://cognidao.org/work/items/task.0284) — Tier-1 implementation
 - [`task.5052`](https://cognidao.org/work/items/task.5052) — Phase 2 cogni migration

@@ -82,7 +82,9 @@ tags: [identity, architecture, governance]
 │    │  ─ user actors: 1:1 FK to users.id                       │     │
 │    │  ─ agent actors: parent_actor_id for hierarchy            │     │
 │    │  ─ Lives in: actors.id, charge_receipts, epoch_allocs    │     │
-│    │  ─ Bindings: actor_bindings (wallets, OAuth, ext refs)   │     │
+│    │  ─ Bindings: actor_bindings (wallets, OAuth, ext refs,   │     │
+│    │    ENS subnames for AI agents, e.g.                       │     │
+│    │    `steward.agents.cognidao.eth`)                         │     │
 │    │                                                          │     │
 │    │  Orthogonal to governance: economic attribution does      │     │
 │    │  not imply voting rights or political participation      │     │
@@ -94,9 +96,10 @@ tags: [identity, architecture, governance]
 │    │  user_id (UUID)                         cross-node       │     │
 │    │  ─ Canonical person identity                             │     │
 │    │  ─ Stable, minted at first contact                       │     │
-│    │  ─ Auth-method-agnostic (wallet, Discord, GitHub)        │     │
+│    │  ─ Auth-method-agnostic (wallet, Discord, GitHub, ENS)  │     │
 │    │  ─ Lives in: users.id, ledger attribution, payouts       │     │
 │    │  ─ Bindings: user_bindings (provider + external_id)      │     │
+│    │     providers: wallet | discord | github | ens           │     │
 │    └──────────────────────────────────────────────────────────┘     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -172,7 +175,7 @@ These are hard constraints. Violating any of them is a design error.
 | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
 | `node_id`            | Governance domain, epoch scoping, project identity, DAO ownership. It is infrastructure only.                    |
 | `scope_id`           | Deployment identity, infra routing, DB tenancy. It is governance only.                                           |
-| `user_id`            | Replaced by `wallet_address`, Discord snowflake, GitHub numeric ID, or DID. Those are bindings.                  |
+| `user_id`            | Replaced by `wallet_address`, Discord snowflake, GitHub numeric ID, ENS name, or DID. Those are bindings.        |
 | `billing_account_id` | Governance scoping, contribution attribution, deployment identity. It is payment tenancy only.                   |
 | `actor_id`           | Auth/login identity, payment tenancy, governance voting rights, wallet address. It is economic attribution only. |
 | `dao_address`        | Database primary key, tenant scoping, deployment routing. It is an on-chain attribute only.                      |

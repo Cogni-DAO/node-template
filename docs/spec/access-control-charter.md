@@ -127,6 +127,23 @@ These are the rules that span layers and would otherwise be missed by looking at
 
 5. **NO_ROOT_TOKEN_POST_BOOTSTRAP.** L3 Invariant 13 (NO_OPERATOR_ROOT_TOKEN_ON_LAPTOP) is a hard L5 boundary. After Phase 5b of `provision-env-vm.sh`, the operator plane writes secrets via short-lived writer-JWT only. Re-exporting the bootstrap root token IS the failure mode this charter exists to prevent.
 
+6. **L5_ROOT_ANCHOR.** Every layer above gates on credentials and decisions that ultimately bottom out in L5. L5 itself has a root of trust which is currently _implicit_: the human(s) holding `GITHUB_ADMIN_PAT` + `CLOUDFLARE_API_TOKEN` for the operator's zone — a single PAT plus a DNS API key. The intended endpoint is a multisig-controlled root (e.g. a Safe controlling an ENS name) whose signers can compose (a) founding humans, (b) on-chain governance vote outcomes, and (c) ERC-4337-constrained agent session keys. Trust depth runs `multisig > DNSSEC-bridged DNS > email-recovery`. Until that lands, L5_ROOT_ANCHOR is the open invariant — every other invariant in this charter implicitly trusts whoever currently holds the operator's GH + CF keys.
+
+## Project ownership map
+
+A single charter point of truth for which project owns which layer. Used to resolve DRY ambiguity when two projects touch the same surface — the project listed first OWNS the spec authority; the project listed second IMPLEMENTS or extends.
+
+| Layer                  | Spec authority owner                                                        | Adjacent / dependent projects                                                                                                                                                                  |
+| ---------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L0 Identity Primitives | `proj.decentralized-identity` (owns `user_id` binding)                      | `proj.operator-plane` (owns `actor_id`, separate primitive)                                                                                                                                    |
+| L1 AuthN               | `proj.decentralized-identity`                                               | —                                                                                                                                                                                              |
+| L2 AuthZ               | `proj.rbac-hardening` (owns `AuthorizationPort`, OpenFGA model, dual-check) | `proj.tenant-connections` (owns `ConnectionBroker` IMPLEMENTATION — the L2/L3 seam); `proj.security-hardening` (owns SOC2 control mappings ON TOP of L2)                                       |
+| L3 Secrets             | `proj.agentic-fork-bootstrap` (owns substrate + bootstrap UX)               | `proj.security-hardening` (owns short-lived-credential discipline, audit pipeline, SOC2 evidence); `proj.tenant-connections` (owns broker which is the only sanctioned L3 read path for tools) |
+| L4 Governance / DAO    | `proj.governance-agents` (owns signal pipeline + agent execution)           | `proj.web3-gov-mvp`; on-chain entity formation is research-only in `docs/research/onchain-entity-formation-otoco.md`                                                                           |
+| L5 Operator Plane      | `proj.system-tenant-governance` (owns system-tenant execution context)      | `proj.operator-plane` (PAUSED — owns multi-tenant gateway + actor model); future: Safe-multisig-on-cognidao.eth ROOT ANCHOR work (no project filed yet — see L5_ROOT_ANCHOR invariant above)   |
+
+**Cross-cutting**: `proj.agentic-fork-bootstrap` is the **fork-experience** project; it measures success by manual-command count, not by which layer it touches. PRs that improve substrate UX live there regardless of which layer's spec they enrich.
+
 ## Phased work ordering (read in conjunction with `task.5062` runbook)
 
 The dependency arrows above dictate the order in which capabilities can ship:
