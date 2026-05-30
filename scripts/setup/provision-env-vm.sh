@@ -1209,6 +1209,10 @@ else
       log_error "Recover the unseal key(s) and root token from your password manager (or another operator on a multi-operator fork) and place them in this file before re-running."
       exit 1
     fi
+    # Re-derive the root-token sidecar that 5b.3/5b.4/5c gate on. The init
+    # branch above writes it; the rerun branch was missing this step.
+    jq -r '.root_token' <"$OPENBAO_INIT_LOCAL" >"$OPENBAO_ROOT_TOKEN_LOCAL"
+    chmod 600 "$OPENBAO_ROOT_TOKEN_LOCAL"
   fi
 
   if [[ "$sealed" == "true" ]]; then
