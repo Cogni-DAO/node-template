@@ -105,6 +105,40 @@ Commit + push at the end of each working session. Empty `hardships.md` is suspic
 pnpm install
 ```
 
+#### 4.5 · Form your DAO (mints node identity + DAO contracts + repo-spec)
+
+Your fork inherited `.cogni/repo-spec.yaml` from upstream — `node_id`, `scope_id`, DAO contracts (`dao_contract` / `plugin_contract` / `signal_contract`), `operator_wallet.address`, `activity_ledger.approvers`, and `payments_in.credits_topup.receiving_address`. Deploying with these intact would route real value (USDC) and governance (Aragon proposals) through **upstream's** contracts. The provision pre-flight refuses to run until you regenerate.
+
+The **node formation wizard** at `https://cognidao.org/setup/dao` is the single sanctioned path. It deploys a fresh Aragon DAO + GovernanceERC20 token + CogniSignal contract on-chain, derives all addresses server-side from the tx receipts (never trusts the client), and returns the complete `.cogni/repo-spec.yaml` you paste back.
+
+Full step-by-step (token name, symbol, initial holder, two wallet sigs, server verification) lives in [`docs/guides/node-formation-guide.md`](../guides/node-formation-guide.md). For a node-template fork, steps 1–7 of that guide are the whole flow — **stop at step 7**. Step 8 ("Deploy Infrastructure") is monorepo-only (scaffolding NEW nodes inside cogni); this runbook is itself the equivalent for a single-node fork.
+
+**Agent: tell the human exactly this (verbatim):**
+
+```
+🛑 Your fork needs its own DAO before provisioning.
+Sign in to https://cognidao.org/setup/dao (connect your wallet on Base or Sepolia),
+fill in token name + symbol, click Create DAO, sign the two transactions.
+When the wizard finishes, paste the generated repo-spec YAML back to me.
+Full guide: docs/guides/node-formation-guide.md
+```
+
+When the human pastes the YAML, write it to `.cogni/repo-spec.yaml`, commit, push to fork main:
+
+```
+cat > .cogni/repo-spec.yaml <<'EOF'
+<wizard's YAML here>
+EOF
+
+git add .cogni/repo-spec.yaml
+git commit -m "chore(formation): set fork repo-spec from node formation wizard"
+git push origin main
+```
+
+`payments.status` stays `pending_activation` per the formation contract — that's intentional. Payment activation (operator-wallet via Privy + Split deploy) is a separate child-node-CLI flow, not part of fork-quickstart. See [node-formation.md](../spec/node-formation.md).
+
+Then proceed to Step 5. Provision-env's pre-flight will now pass.
+
 #### 5 · `FORK_DOMAIN_ROOT` — one GH repo variable, no commit
 
 Non-secret, plaintext, fork-scoped. The workflow preflight refuses to run if it's unset (no half-provisioned VMs on a missing zone). Public node URLs derive from this + the catalog. VM aliases are repo/env-scoped: `<slug>-candidate-a.vm.<FORK_DOMAIN_ROOT>`, etc. The fork slug auto-derives from the GitHub repo name (override via `FORK_SLUG` env if needed).

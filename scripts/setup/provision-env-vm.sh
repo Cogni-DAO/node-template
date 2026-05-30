@@ -305,22 +305,84 @@ COGNI_REPO_URL="https://github.com/${GH_REPO}.git"
 COGNI_REPO_REF="$BRANCH"
 
 # LiteLLM node endpoints — billing callback routing (Compose→k8s NodePorts
-# via the host gateway). B2 (residual): derive from NODE_TARGETS catalogs
-# instead of hardcoding cogni-poly's three UUIDs (which the canary inherited
-# and would have silently dropped node-template's billing events).
+# via the host gateway). Per-node `node_id` MUST match what the running pod
+# reads via getNodeId() at runtime, OR per-node Temporal task queues drift:
+#   - app submits to `scheduler-tasks-${app.nodeId}`
+#   - worker polls `scheduler-tasks-${endpoints.nodeId}`
+#   - drift = every chat request hangs 126s (handler-side timeout) then 500
+#
+# The pod reads `/app/.cogni/repo-spec.yaml::node_id` (Dockerfile L110 copies
+# top-level `.cogni/` for node-template; per-node `.cogni/` for monorepo
+# nodes). Provision MUST read the same source.
+#
+# Identity-inheritance check (cross-tenant safety): forks that inherit
+# upstream's `.cogni/repo-spec.yaml` ALSO inherit upstream's DAO contracts,
+# operator_wallet.address, activity_ledger.approvers, and payments.* — meaning
+# the fork's deployment would route governance/payments to upstream's wallets.
+# Hard-fail when we detect either (a) the placeholder UUID or (b) upstream's
+# known sentinel UUID, with a pointer to the mint script.
+#
 # Format: <key>=<billing-ingest-url>,... — both `name` and `node_id` are
 # included as keys to match the scheduler-worker ConfigMap convention
 # (services/scheduler-worker resolves either form).
+PLACEHOLDER_NODE_ID="00000000-0000-4000-a000-000000000000"
+# Upstream Cogni-DAO/node-template's committed node_id. Forks that haven't
+# minted their own inherit this. Bumped here in lockstep when upstream rotates.
+UPSTREAM_NODE_ID="4ff8eac1-4eba-4ed0-931b-b1fe4f64713d"
 COGNI_NODE_ENDPOINTS_PARTS=()
 for node in "${NODE_TARGETS[@]}"; do
-  nid=$(yq -N '.node_id // ""' "$REPO_ROOT/infra/catalog/${node}.yaml")
-  np=$(yq  -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/${node}.yaml")
+  per_node_spec="$REPO_ROOT/nodes/${node}/.cogni/repo-spec.yaml"
+  top_level_spec="$REPO_ROOT/.cogni/repo-spec.yaml"
+  # Resolution: per-node first (monorepo case), top-level fallback (single-node
+  # fork case — what the Dockerfile bakes). See PR #61.
+  nid=""
+  spec_source=""
+  if [[ -f "$per_node_spec" ]]; then
+    nid=$(yq -N '.node_id // ""' "$per_node_spec")
+    spec_source="$per_node_spec"
+  fi
+  if [[ -z "$nid" || "$nid" == "null" || "$nid" == "$PLACEHOLDER_NODE_ID" ]]; then
+    nid=$(yq -N '.node_id // ""' "$top_level_spec")
+    spec_source="$top_level_spec"
+  fi
+  if [[ -z "$nid" || "$nid" == "null" || "$nid" == "$PLACEHOLDER_NODE_ID" ]]; then
+    log_error "node_id for '${node}' is empty/placeholder."
+    log_error "  per-node spec: $per_node_spec"
+    log_error "  top-level spec: $top_level_spec"
+    log_error ""
+    log_error "Generate your fork's identity via the operator DAO setup wizard:"
+    log_error "  https://cognidao.org/setup/dao"
+    log_error "Then commit the generated .cogni/repo-spec.yaml to this fork's main + re-run."
+    log_error "(Runbook step: docs/runbooks/fork-quickstart.md §4.5)"
+    exit 2
+  fi
+  # Upstream-inheritance check: a fork running with upstream's UUID is also
+  # running with upstream's DAO/wallet/payments — cross-tenant leak, not a
+  # usable deployment. Skip if origin IS Cogni-DAO/node-template (upstream's
+  # own canary deployment is the only legitimate user of this UUID).
+  if [[ "$nid" == "$UPSTREAM_NODE_ID" ]]; then
+    origin_url=$(git -C "$REPO_ROOT" remote get-url origin 2>/dev/null || echo "")
+    if [[ "$origin_url" != *"Cogni-DAO/node-template"* ]]; then
+      log_error "node_id for '${node}' equals upstream's UUID — your fork inherited"
+      log_error "upstream's IDENTITY (DAO contracts, operator wallet, approvers, payments_in)."
+      log_error "Deploying as-is would route real value through upstream's contracts."
+      log_error "Origin: ${origin_url:-<unset>}"
+      log_error ""
+      log_error "Generate your fork's own identity via the operator DAO setup wizard:"
+      log_error "  https://cognidao.org/setup/dao"
+      log_error "Then commit the generated .cogni/repo-spec.yaml to this fork's main + re-run."
+      log_error "(Runbook step: docs/runbooks/fork-quickstart.md §4.5)"
+      exit 2
+    fi
+  fi
+  np=$(yq -N '.node_port // 30000' "$REPO_ROOT/infra/catalog/${node}.yaml")
   url="http://host.docker.internal:${np}/api/internal/billing/ingest"
   COGNI_NODE_ENDPOINTS_PARTS+=("${node}=${url}")
-  [[ -n "$nid" && "$nid" != "null" ]] && COGNI_NODE_ENDPOINTS_PARTS+=("${nid}=${url}")
+  COGNI_NODE_ENDPOINTS_PARTS+=("${nid}=${url}")
+  log_info "  node '${node}' → node_id=${nid} (from $(basename "$(dirname "$(dirname "$spec_source")")")/.cogni/)"
 done
 COGNI_NODE_ENDPOINTS=$(IFS=,; printf '%s' "${COGNI_NODE_ENDPOINTS_PARTS[*]}")
-log_info "COGNI_NODE_ENDPOINTS (derived from catalog): ${COGNI_NODE_ENDPOINTS}"
+log_info "COGNI_NODE_ENDPOINTS (derived from repo-spec): ${COGNI_NODE_ENDPOINTS}"
 
 # DATABASE_URLs (constructed from parts — same derivation as setup-secrets.ts)
 # DATABASE_URLs use VM_IP placeholder — replaced after Phase 3 when IP is known.

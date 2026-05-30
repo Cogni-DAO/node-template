@@ -15,7 +15,11 @@ bootstrap_image_tag: "pr-46-d638ff639532c6876a57af3338a8086793e2203f-node-templa
 # provision-env-vm.sh (writes COGNI_NODE_ENDPOINTS) and the per-env overlay
 # Service patch. Keep these two consumers in sync.
 node_port: 30000
-node_id: "00000000-0000-4000-a000-000000000000"
+# node_id intentionally NOT in this file. The Dockerfile bakes
+# `/app/.cogni/repo-spec.yaml::node_id` into the image; provision-env-vm.sh
+# reads from the SAME source so worker queues align with app submissions
+# (see PR #60: placeholder UUID here was silently shadowing the real one,
+# breaking per-node Temporal task-queue routing — chat hung 126s + 500'd).
 dockerfile: nodes/node-template/app/Dockerfile
 image_tag_suffix: "-node-template"
 migrator_tag_suffix: "-node-template-migrate"
