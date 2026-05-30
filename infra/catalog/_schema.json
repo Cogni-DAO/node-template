@@ -17,15 +17,6 @@
     "preview_branch",
     "production_branch"
   ],
-  "allOf": [
-    {
-      "if": {
-        "properties": { "type": { "const": "node" } },
-        "required": ["type"]
-      },
-      "then": { "required": ["node_id"] }
-    }
-  ],
   "properties": {
     "name": {
       "type": "string",
@@ -56,7 +47,7 @@
     "node_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
-      "description": "UUID v4 — bound at provision time, persisted in repo-spec lookups."
+      "description": "DEPRECATED — no longer carried in catalog. Source of truth is `.cogni/repo-spec.yaml::node_id` (read by provision-env-vm.sh Phase 5c and baked into the app image via Dockerfile). Schema retains the field shape so older snapshots still validate, but it is no longer required. See PR #60 — placeholder catalog UUIDs were silently shadowing the real one and breaking per-node Temporal task-queue routing."
     },
     "dockerfile": {
       "type": "string",
