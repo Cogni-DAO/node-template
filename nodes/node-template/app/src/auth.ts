@@ -39,6 +39,7 @@ import {
   userProfiles,
   users,
 } from "@/shared/db/schema";
+import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
 export const authSecret =
@@ -133,9 +134,7 @@ export const authOptions: NextAuthOptions = {
           }
 
           const siwe = new SiweMessage(credentials.message as string);
-          const nextAuthUrl = new URL(
-            process.env.NEXTAUTH_URL ?? "http://localhost:3000"
-          );
+          const nextAuthUrl = new URL(serverEnv().NEXTAUTH_URL);
 
           // Convert Headers to plain object for getCsrfToken
           const headers: Record<string, string> = {};

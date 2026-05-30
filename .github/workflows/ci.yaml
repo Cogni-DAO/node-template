@@ -43,6 +43,10 @@ jobs:
       DISCORD_BOT_TOKEN: test-discord-bot-token-for-ci
       POSTHOG_API_KEY: phc_test_key_for_ci
       POSTHOG_HOST: http://localhost:18000
+      # Required by serverEnv() — would otherwise fall back silently and
+      # break the SIWE CSRF path at runtime (the incident this PR fixes).
+      APP_BASE_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -90,6 +94,10 @@ jobs:
       DISCORD_BOT_TOKEN: test-discord-bot-token-for-ci
       POSTHOG_API_KEY: phc_test_key_for_ci
       POSTHOG_HOST: http://localhost:18000
+      # Required by serverEnv() — would otherwise fall back silently and
+      # break the SIWE CSRF path at runtime (the incident this PR fixes).
+      APP_BASE_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
@@ -194,6 +202,10 @@ jobs:
       DISCORD_BOT_TOKEN: test-discord-bot-token-for-ci
       POSTHOG_API_KEY: phc_test_key_for_ci
       POSTHOG_HOST: http://localhost:18000
+      # Required by serverEnv() — would otherwise fall back silently and
+      # break the SIWE CSRF path at runtime (the incident this PR fixes).
+      APP_BASE_URL: http://localhost:3000
+      NEXTAUTH_URL: http://localhost:3000
 
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4

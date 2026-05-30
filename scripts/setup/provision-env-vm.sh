@@ -1325,6 +1325,14 @@ if [[ ! -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
 else
   ROOT_TOKEN=$(cat "$OPENBAO_ROOT_TOKEN_LOCAL")
 
+  # Derive APP_BASE_URL + NEXTAUTH_URL from DOMAIN (catalog kind: derive-env).
+  # TODO(proj.agentic-fork-bootstrap Walk-row 4): replace this parallel render
+  # with one call into the catalog generator once Phase 5c moves to ESO
+  # PushSecret / a yq-loop over the catalog.
+  : "${DOMAIN:?DOMAIN must be set before Phase 5c — required for derive-env keys}"
+  export APP_BASE_URL="https://${DOMAIN}"
+  export NEXTAUTH_URL="https://${DOMAIN}"
+
   log_info "Seeding cogni/${DEPLOY_ENV}/node-template/* from .env.${DEPLOY_ENV}..."
   for k in AUTH_SECRET LITELLM_MASTER_KEY OPENCLAW_GATEWAY_TOKEN \
            OPENCLAW_GITHUB_RW_TOKEN SCHEDULER_API_TOKEN BILLING_INGEST_TOKEN \
@@ -1332,7 +1340,8 @@ else
            CONNECTIONS_ENCRYPTION_KEY POLY_WALLET_AEAD_KEY_HEX \
            POLY_WALLET_AEAD_KEY_ID DATABASE_URL DATABASE_SERVICE_URL \
            POSTHOG_API_KEY POSTHOG_HOST OPENROUTER_API_KEY \
-           EVM_RPC_URL POLYGON_RPC_URL; do
+           EVM_RPC_URL POLYGON_RPC_URL \
+           APP_BASE_URL NEXTAUTH_URL; do
     seed_kv node-template "$k" "${!k:-}"
   done
   log_info "Seeding cogni/${DEPLOY_ENV}/scheduler-worker/*..."
@@ -1556,25 +1565,57 @@ fi
 # missing envFrom values — loud-by-design (Spec Invariant 12).
 log_step "Phase 6: Apply ExternalSecret manifests"
 
-# Create namespace (Argo CD creates it on first sync, but ExternalSecret needs it now)
-ssh $SSH_OPTS root@"$VM_IP" "kubectl create namespace ${K8S_NAMESPACE} 2>/dev/null || true"
+# Apply each leaf ExternalSecret kustomization directly using LOCAL kubectl —
+# no SSH-for-kubectl, no rsync of partial repo subtree. Kustomize runs here
+# with full repo context, so any references (relative paths, components,
+# generators) resolve against the operator's checkout. This is the
+# canonical pattern called out in .claude/skills/cicd-secrets-expert
+# anti-patterns ("ssh root@vm kubectl ... — use local kubectl").
+#
+# Leaves are enumerated from the two SSOT trees per secrets-classification.md:
+#   - infra/k8s/secrets/external-secrets/<env>/<svc>/    (operator-domain)
+#   - nodes/<node>/k8s/external-secrets/<env>/           (node-domain, A2)
+# An aggregator kustomization is deliberately absent — every prior incarnation
+# leaked a relative-up ref (../../../../../nodes/...) which broke remote
+# apply paths. Self-contained leaves compose without that smell.
+#
+# ClusterSecretStore is applied earlier at Phase 5b.5 (cluster-scoped,
+# env-independent — does not belong in this loop).
 
-# rsync the env-scoped ExternalSecret tree to the VM and apply via kustomize.
-# We rsync (rather than `kubectl apply -k` over a remote URL) so the version
-# applied matches the operator's local checkout — same authority-of-truth as
-# Phase 7's APPSET_LOCAL → APPSET_RENDERED pattern below.
-ES_DIR_LOCAL="$REPO_ROOT/infra/k8s/secrets/external-secrets/${DEPLOY_ENV}"
-if [[ -d "$ES_DIR_LOCAL" ]]; then
-  rsync -e "ssh $SSH_OPTS" -az --delete \
-    "$ES_DIR_LOCAL/" root@"$VM_IP":/opt/cogni-template-external-secrets/
-  ssh $SSH_OPTS root@"$VM_IP" "kubectl -n ${K8S_NAMESPACE} apply -k /opt/cogni-template-external-secrets/"
-  log_info "Applied ExternalSecret manifests from ${DEPLOY_ENV}"
-else
-  log_warn "No ExternalSecret manifests for ${DEPLOY_ENV} — expected at $ES_DIR_LOCAL"
+# Create namespace (Argo CD creates it on first sync, but ExternalSecret needs it now)
+KUBECONFIG="$KUBECONFIG_LOCAL" kubectl create namespace "$K8S_NAMESPACE" \
+  --dry-run=client -o yaml | \
+  KUBECONFIG="$KUBECONFIG_LOCAL" kubectl apply -f -
+
+ES_APPLIED=0
+
+# Operator-domain leaves: infra/k8s/secrets/external-secrets/<env>/<svc>/
+for svc_dir in "$REPO_ROOT"/infra/k8s/secrets/external-secrets/"${DEPLOY_ENV}"/*/; do
+  [[ -d "$svc_dir" && -f "$svc_dir/kustomization.yaml" ]] || continue
+  svc=$(basename "${svc_dir%/}")
+  KUBECONFIG="$KUBECONFIG_LOCAL" kubectl -n "$K8S_NAMESPACE" apply -k "$svc_dir"
+  log_info "  applied operator-domain ExternalSecret: $svc"
+  ES_APPLIED=$((ES_APPLIED + 1))
+done
+
+# Node-domain leaves: nodes/<node>/k8s/external-secrets/<env>/
+for node_es_dir in "$REPO_ROOT"/nodes/*/k8s/external-secrets/"${DEPLOY_ENV}"/; do
+  [[ -d "$node_es_dir" && -f "$node_es_dir/kustomization.yaml" ]] || continue
+  rel="${node_es_dir#"$REPO_ROOT"/nodes/}"
+  node_name="${rel%%/*}"
+  KUBECONFIG="$KUBECONFIG_LOCAL" kubectl -n "$K8S_NAMESPACE" apply -k "$node_es_dir"
+  log_info "  applied node-domain ExternalSecret: $node_name"
+  ES_APPLIED=$((ES_APPLIED + 1))
+done
+
+if [[ $ES_APPLIED -eq 0 ]]; then
+  log_warn "No ExternalSecret manifests applied for ${DEPLOY_ENV}."
   log_warn "Pods consuming envFrom: secretRef will CrashLoop until the operator"
-  log_warn "(a) adds ExternalSecret manifests for this env to infra/k8s/secrets/"
-  log_warn "    external-secrets/${DEPLOY_ENV}/, OR"
-  log_warn "(b) follows docs/runbooks/fork-quickstart.md Step 6.7 to seed the substrate via pnpm secrets:set."
+  log_warn "adds an ExternalSecret kustomization under either"
+  log_warn "  infra/k8s/secrets/external-secrets/${DEPLOY_ENV}/<svc>/, or"
+  log_warn "  nodes/<node>/k8s/external-secrets/${DEPLOY_ENV}/"
+else
+  log_info "Applied ${ES_APPLIED} ExternalSecret manifest(s) for ${DEPLOY_ENV}"
 fi
 
 # ══════════════════════════════════════════════════════════════

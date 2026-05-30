@@ -233,9 +233,13 @@ Move it to your password manager. Post-rotation laptop access uses `bao kv get -
 
 Multi-operator forks (Shamir 3-of-5) override `OPENBAO_KEY_SHARES=5` + `OPENBAO_KEY_THRESHOLD=3` at workflow trigger time. v1 default is 1-of-1.
 
-##### 6.6 · App secrets via writer-role
+##### 6.6 · App secrets via writer-role (only for opt-in features)
 
-Prereq: kubeconfig from 6.5; short-lived bao token via the writer role. NEVER re-export the root token.
+The minimal fork is fully seeded by 6.2 + Phase 5c: all `required: true` catalog entries (auto-generated randoms, derive-env URLs from `DOMAIN`, and the 7 minting tokens — including `OPENROUTER_API_KEY` for the LLM router) reach OpenBao without any post-bootstrap commands. If you set `GH_GRAFANA_CLOUD_ADMIN_TOKEN` at 6.2, the 8 observability creds at `cogni/<env>/_shared` are also auto-minted by Phase 5e (see [`docs/design/observability-creds-shared.md`](../design/observability-creds-shared.md)).
+
+**Step 6.6 is empty for a vanilla fork — skip to 6.7.**
+
+Run the writer-role recipe only when your fork enables opt-in features whose secrets are catalog `required: false` (Langfuse, OAuth providers Discord/Google/GitHub, Privy, Tavily, etc.). The shape of the recipe (port-forward + writer-role JWT exchange, never the root token per Invariant 13):
 
 ```
 export KUBECONFIG=$PWD/.local/<env>-kubeconfig.yaml
@@ -246,12 +250,13 @@ export BAO_TOKEN=$(bao write -field=token auth/kubernetes/login \
   role=<env>-writer \
   jwt=$(kubectl create token openbao-operator -n default))
 
-pnpm secrets:set <env> node-template OPENROUTER_API_KEY            # for LLM router
+# Examples — only paste keys your fork actually uses.
+# pnpm secrets:set <env> node-template LANGFUSE_PUBLIC_KEY
+# pnpm secrets:set <env> node-template LANGFUSE_SECRET_KEY
+# pnpm secrets:set <env> node-template GOOGLE_OAUTH_CLIENT_ID
 ```
 
-If you set `GH_GRAFANA_CLOUD_ADMIN_TOKEN` at Step 6.2, all 8 observability creds (`GRAFANA_SERVICE_ACCOUNT_TOKEN`, `GRAFANA_URL`, `LOKI_*` ×3, `PROMETHEUS_*` ×3) are auto-minted into `cogni/<env>/_shared` by Phase 5e — no `secrets:set` needed. Both the read path (validator scorecard) and the write path (Alloy push) flow on cold-start. See [`docs/design/observability-creds-shared.md`](../design/observability-creds-shared.md).
-
-Without a real `OPENROUTER_API_KEY`, LLM router calls fail at runtime. The workflow scorecard prints the full pass-through list; `ls infra/catalog/*.yaml` is the canonical inventory. See [`docs/guides/secrets-add-new.md`](../guides/secrets-add-new.md) for the full playbook.
+`ls infra/catalog/*.yaml` is the canonical inventory; per-key dashboard URLs + minting steps live in each `nodes/<n>/.cogni/secrets-catalog.yaml`. See [`docs/guides/secrets-add-new.md`](../guides/secrets-add-new.md) for the full playbook.
 
 ##### 6.7 · Post-bootstrap Grafana / Loki access (for the next agent)
 

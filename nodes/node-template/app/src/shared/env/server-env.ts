@@ -56,7 +56,10 @@ export const serverSchema = z.object({
 
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
-  APP_BASE_URL: z.string().url().optional(),
+  // Required per secrets-management.md Invariant 12 (TRANSITION_SAFE).
+  // Seeded by the derive-env entries in nodes/node-template/.cogni/secrets-catalog.yaml.
+  APP_BASE_URL: z.string().url(),
+  NEXTAUTH_URL: z.string().url(),
   DOMAIN: z.string().optional(),
 
   // Deployment environment (for observability labels and analytics filtering)
