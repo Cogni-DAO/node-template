@@ -1226,19 +1226,6 @@ if [[ -r "$OPENBAO_ROOT_TOKEN_LOCAL" ]]; then
   # Configure (idempotent).
   bao_exec "write auth/kubernetes/config kubernetes_host=https://kubernetes.default.svc:443" >/dev/null
 
-  # ── 5b.2a Audit device → pod stdout → k3s container log → Loki (Invariant 8) ─
-  # Streams every API request + response to the openbao-0 pod's stdout as JSON,
-  # which kubelet captures and Alloy's loki.source.kubernetes ships to Loki.
-  # No PV mount, no rotation policy — pod stdout is the right abstraction for
-  # containerized audit logging. Default field-hashing (`hmac_accessor`) keeps
-  # secret values out of the log stream. Idempotent: `audit list` first.
-  if ! bao_exec "audit list -format=json" 2>/dev/null | jq -e '."file/"' >/dev/null 2>&1; then
-    log_info "Enabling audit device → /dev/stdout (Invariant 8)..."
-    bao_exec "audit enable -path=file/ file file_path=/dev/stdout" >/dev/null
-  else
-    log_info "Audit device file/ already enabled"
-  fi
-
   # eso-reader policy + role binding (upsert). Used by the in-cluster ESO
   # controller's ServiceAccount — read-only across all envs.
   log_info "Writing eso-reader policy + role binding..."
