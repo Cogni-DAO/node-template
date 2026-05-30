@@ -32,7 +32,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-node-template
+  # Fork-portable per #57 pattern. Forks set their own GHCR namespace via
+  # `gh variable set FORK_IMAGE_NAME --body ghcr.io/<owner>/<repo>` so
+  # PR Build pushes to ghcr.io/<owner>/... where the fork's GITHUB_TOKEN
+  # actually has write permission. Unset = upstream default.
+  IMAGE_NAME: ${{ vars.FORK_IMAGE_NAME || 'ghcr.io/cogni-dao/cogni-node-template' }}
 
 jobs:
   # task.0391: single source of truth for event-derived metadata.

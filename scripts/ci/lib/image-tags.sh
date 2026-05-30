@@ -11,8 +11,12 @@
 # Intentionally no `set -euo pipefail` — meant to be sourced; caller owns
 # error handling.
 
+# Fork-portable: accept IMAGE_NAME_APP, IMAGE_NAME, or fall back to upstream
+# default. Workflows export IMAGE_NAME from `${{ vars.FORK_IMAGE_NAME || ... }}`
+# (see .github/workflows/pr-build.yml). Direct callers of image-tags.sh that
+# pre-existed the IMAGE_NAME_APP rename keep working unchanged.
 # shellcheck disable=SC2034
-IMAGE_NAME_APP=${IMAGE_NAME_APP:-ghcr.io/cogni-dao/cogni-node-template}
+IMAGE_NAME_APP=${IMAGE_NAME_APP:-${IMAGE_NAME:-ghcr.io/cogni-dao/cogni-node-template}}
 
 if ! command -v yq >/dev/null 2>&1; then
   echo "[ERROR] image-tags: yq is required (CATALOG_IS_SSOT). Install: bash scripts/bootstrap/install/install-yq.sh" >&2

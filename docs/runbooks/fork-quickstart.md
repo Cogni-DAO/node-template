@@ -3,7 +3,7 @@ id: fork-quickstart-runbook
 type: runbook
 title: Fork Quickstart — From Zero to Green Deploy
 status: draft
-summary: Hand-off prompt + autonomous agent guide that drives a node-template fork from zero to `/readyz=200`. Human role is bounded to a bot PAT, 7 GH env secrets, and one `gh variable set FORK_DOMAIN_ROOT`. Companion to docs/spec/agentic-fork-bootstrap.md.
+summary: Hand-off prompt + autonomous agent guide that drives a node-template fork from zero to `/readyz=200`. Human role is bounded to a bot PAT, 7 GH env secrets, and two `gh variable set` calls (FORK_DOMAIN_ROOT + FORK_IMAGE_NAME). Companion to docs/spec/agentic-fork-bootstrap.md.
 read_when: A new user wants their own node-template instance; an external agent is dropped in cold.
 owner: derekg1729
 created: 2026-05-17
@@ -19,7 +19,7 @@ Paste this into a fresh Claude Code (or equivalent) session, in whatever parent 
 
 > Follow `docs/runbooks/fork-quickstart.md` in github.com/Cogni-DAO/node-template end-to-end.
 
-The agent reads this file and drives. You touch the keyboard for: a bot PAT, one `gh variable set FORK_DOMAIN_ROOT`, and 6 env secrets via `gh secret set` prompts.
+The agent reads this file and drives. You touch the keyboard for: a bot PAT, two `gh variable set` calls (FORK_DOMAIN_ROOT + FORK_IMAGE_NAME), and 6 env secrets via `gh secret set` prompts.
 
 ## Agent guide
 
@@ -147,12 +147,17 @@ Non-secret, plaintext, fork-scoped. The workflow preflight refuses to run if it'
 
 Substrate + VM provisioning lives at [`.github/workflows/provision-env.yml`](../../.github/workflows/provision-env.yml). You ship one GH repo variable + 7 GH env secrets; the runner handles the 30-min `tofu apply` + `bao init` + `kubectl` session. Init artifacts come back passphrase-encrypted.
 
-##### 6.1 · Set `FORK_DOMAIN_ROOT`
+##### 6.1 · Set `FORK_DOMAIN_ROOT` + `FORK_IMAGE_NAME`
+
+Two non-secret repo variables. Run from the fork repo's working tree.
 
 ```
 REPO=$(git remote get-url origin | sed -E 's#.*github.com[:/]([^/]+/[^/.]+).*#\1#')
 gh variable set FORK_DOMAIN_ROOT --repo "$REPO" --body "<your-cloudflare-zone-name>"
+gh variable set FORK_IMAGE_NAME  --repo "$REPO" --body "ghcr.io/$(echo "$REPO" | cut -d/ -f1 | tr '[:upper:]' '[:lower:]')/cogni-node-template"
 ```
+
+`FORK_IMAGE_NAME` is what PR Build / candidate-flight / flight-preview push images to. Unset (or pointing at upstream) means the fork's `GITHUB_TOKEN` lacks write permission on the namespace and every image build fails with `permission_denied: requested installation does not exist`. The lowercase transform on the owner is required — GHCR rejects mixed-case namespaces.
 
 ##### 6.2 · Create the target GH environment + set 7 minting tokens
 

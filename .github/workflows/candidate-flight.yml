@@ -30,7 +30,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  IMAGE_NAME: ghcr.io/cogni-dao/cogni-node-template
+  # Fork-portable per #57 pattern (see .github/workflows/pr-build.yml comment).
+  IMAGE_NAME: ${{ vars.FORK_IMAGE_NAME || 'ghcr.io/cogni-dao/cogni-node-template' }}
   SLOT: candidate-a
   OVERLAY_ENV: candidate-a
 
