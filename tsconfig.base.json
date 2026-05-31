@@ -20,21 +20,23 @@
     "incremental": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["nodes/operator/app/src/*"],
-      "@/components/*": ["nodes/operator/app/src/components/*"],
-      "@/shared/*": ["nodes/operator/app/src/shared/*"],
-      "@/core": ["nodes/operator/app/src/core/public.ts"],
-      "@/ports": ["nodes/operator/app/src/ports/index.ts"],
-      "@/adapters/server": ["nodes/operator/app/src/adapters/server/index.ts"],
-      "@/shared": ["nodes/operator/app/src/shared/index.ts"],
-      "@features/*": ["nodes/operator/app/src/features/*"],
-      "@app/*": ["nodes/operator/app/src/app/*"],
-      "@adapters/*": ["nodes/operator/app/src/adapters/*"],
-      "@bootstrap/*": ["nodes/operator/app/src/bootstrap/*"],
-      "@components/*": ["nodes/operator/app/src/components/*"],
-      "@styles/*": ["nodes/operator/app/src/styles/*"],
-      "@types/*": ["nodes/operator/app/src/types/*"],
-      "@assets/*": ["nodes/operator/app/src/assets/*"],
+      "@/*": ["nodes/node-template/app/src/*"],
+      "@/components/*": ["nodes/node-template/app/src/components/*"],
+      "@/shared/*": ["nodes/node-template/app/src/shared/*"],
+      "@/core": ["nodes/node-template/app/src/core/public.ts"],
+      "@/ports": ["nodes/node-template/app/src/ports/index.ts"],
+      "@/adapters/server": [
+        "nodes/node-template/app/src/adapters/server/index.ts"
+      ],
+      "@/shared": ["nodes/node-template/app/src/shared/index.ts"],
+      "@features/*": ["nodes/node-template/app/src/features/*"],
+      "@app/*": ["nodes/node-template/app/src/app/*"],
+      "@adapters/*": ["nodes/node-template/app/src/adapters/*"],
+      "@bootstrap/*": ["nodes/node-template/app/src/bootstrap/*"],
+      "@components/*": ["nodes/node-template/app/src/components/*"],
+      "@styles/*": ["nodes/node-template/app/src/styles/*"],
+      "@types/*": ["nodes/node-template/app/src/types/*"],
+      "@assets/*": ["nodes/node-template/app/src/assets/*"],
       "@tests/*": ["tests/*"]
     }
   }
