@@ -104,28 +104,39 @@ build_target() {
   local target="$1"
   local tag="$2"
 
-  # Generic per-node build. Dockerfile path comes from the catalog entry's
-  # `dockerfile` field — keeps build-and-push agnostic of node name.
-  local dockerfile
-  dockerfile=$(yq -r ".dockerfile" "infra/catalog/${target}.yaml" 2>/dev/null || echo "")
+  # CATALOG_IS_SSOT (task.5079): derive the build from infra/catalog/<target>.yaml
+  # instead of a hardcoded per-node case. The same function now builds any catalog
+  # target, so this script is byte-identical across hub + artifacts (kills the
+  # bug.5001 CI fork). Node apps build the multi-stage `runner` target and bake
+  # BUILD_SHA; services build their default stage.
+  local catalog="${COGNI_CATALOG_ROOT:-infra/catalog}/${target}.yaml"
+  if [ ! -f "$catalog" ]; then
+    log_error "build_target: no catalog entry for '${target}' (${catalog})"
+    exit 1
+  fi
+  local dockerfile type
+  dockerfile=$(yq '.dockerfile' "$catalog")
+  type=$(yq '.type' "$catalog")
   if [ -z "$dockerfile" ] || [ "$dockerfile" = "null" ]; then
-    log_error "No dockerfile in infra/catalog/${target}.yaml"
+    log_error "build_target: ${catalog} has no .dockerfile"
     exit 1
   fi
 
-  docker buildx build \
-    --platform "$PLATFORM" \
-    --file "$dockerfile" \
-    --target runner \
-    --build-arg "BUILD_SHA=${git_sha}" \
-    --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY:-cogni-dao/node-template}" \
-    --label "org.opencontainers.image.revision=${git_sha}" \
-    --label "org.opencontainers.image.created=${build_timestamp}" \
-    --cache-from "type=gha,scope=build-${target}" \
-    --cache-to "type=gha,mode=max,scope=build-${target}" \
-    --tag "$tag" \
-    --push \
+  local args=(--platform "$PLATFORM" --file "$dockerfile")
+  if [ "$type" = "node" ]; then
+    args+=(--target runner --build-arg "BUILD_SHA=${git_sha}")
+  fi
+  args+=(
+    --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY:-cogni-dao/cogni}"
+    --label "org.opencontainers.image.revision=${git_sha}"
+    --label "org.opencontainers.image.created=${build_timestamp}"
+    --cache-from "type=gha,scope=build-${target}"
+    --cache-to "type=gha,mode=max,scope=build-${target}"
+    --tag "$tag"
+    --push
     .
+  )
+  docker buildx build "${args[@]}"
 }
 
 # Build the migrator stage if the Dockerfile defines one. Pushes to the
