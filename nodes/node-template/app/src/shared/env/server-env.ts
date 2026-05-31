@@ -56,10 +56,7 @@ export const serverSchema = z.object({
 
   // Application environment (controls adapter wiring)
   APP_ENV: z.enum(["test", "production"]),
-  // Required per secrets-management.md Invariant 12 (TRANSITION_SAFE).
-  // Seeded by the derive-env entries in nodes/node-template/.cogni/secrets-catalog.yaml.
-  APP_BASE_URL: z.string().url(),
-  NEXTAUTH_URL: z.string().url(),
+  APP_BASE_URL: z.string().url().optional(),
   DOMAIN: z.string().optional(),
 
   // Deployment environment (for observability labels and analytics filtering)
@@ -194,6 +191,19 @@ export const serverSchema = z.object({
   // Writer URL used by knowledge tools (auto-commit on write). Reader URL for read-only agents.
   DOLTGRES_URL: optionalUrl,
 
+  // DoltHub credentials — service-side push of knowledge hubs to DoltHub
+  // remote (cogni-dao/knowledge-<node>). v0 push uses DoltHub Dolt creds
+  // (keypair, see docs/runbooks/dolthub-remote-bootstrap.md). DOLTHUB_REMOTE_URL
+  // gates the push job — when unset, merges still succeed locally and never
+  // attempt a push. DOLTHUB_API_TOKEN (PAT) is for the REST/SQL HTTP API only
+  // (future librarian/x402 reads). DoltHub OAuth pair is reserved for v1
+  // per-user identity (task.5070, blocked on DoltHub app approval). Per
+  // proj.knowledge-syntropy (W0c tier) + task.5069.
+  DOLTHUB_REMOTE_URL: optionalString,
+  DOLTHUB_API_TOKEN: optionalString,
+  DOLTHUB_OAUTH_CLIENT_ID: optionalString,
+  DOLTHUB_OAUTH_CLIENT_SECRET: optionalString,
+
   // Tavily Web Search - Optional
   // Required for research graph web search capability
   TAVILY_API_KEY: optionalString,
@@ -258,16 +268,11 @@ export const serverSchema = z.object({
   // Optional — BYO-AI features disabled when not set.
   CONNECTIONS_ENCRYPTION_KEY: optionalString,
 
-  // PostHog product analytics — optional. Analytics is opt-in: when API key
-  // is absent the SDK is not initialized and the app boots without PostHog.
-  // See docs/guides/posthog-setup.md for setup.
+  // PostHog product analytics — required
+  // See docs/guides/posthog-setup.md for setup
   // PostHog Cloud free tier: 1M events/month at https://us.i.posthog.com
-  POSTHOG_API_KEY: optionalString,
-  POSTHOG_HOST: z
-    .string()
-    .url()
-    .optional()
-    .or(z.literal("").transform(() => undefined)),
+  POSTHOG_API_KEY: z.string().min(1),
+  POSTHOG_HOST: z.string().url(),
   POSTHOG_PROJECT_ID: optionalString,
 });
 

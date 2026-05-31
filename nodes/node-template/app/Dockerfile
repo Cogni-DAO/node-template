@@ -63,12 +63,6 @@ RUN --mount=type=cache,id=next-cache-node-template,target=/app/nodes/node-templa
 FROM base AS migrator
 WORKDIR /app
 
-# pnpm-installed binaries (tsx, drizzle-kit) live in node_modules/.bin which
-# is not on the alpine default PATH. Without this prepend the CMD below — and
-# any k8s init container reusing this image with `command: [tsx, ...]` — fail
-# with `exec: "tsx": executable file not found in $PATH`. bug.0446 H8 follow-up.
-ENV PATH="/app/node_modules/.bin:${PATH}"
-
 COPY --from=builder /app/package.json /app/pnpm-lock.yaml /app/pnpm-workspace.yaml ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/nodes/node-template/drizzle.config.ts ./nodes/node-template/drizzle.config.ts
@@ -100,14 +94,26 @@ COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/.next/sta
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/.next/static ./nodes/node-template/app/.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/public ./nodes/node-template/app/public
 
-# Migrations live in the `migrator` stage (built/pushed as a separate image:
-# ghcr.io/cogni-dao/cogni-node-template-migrate). The k8s Deployment's init
-# container pulls that image and runs drizzle-kit migrate against the app DB.
-# Runner stays lean — Next.js standalone trace doesn't reliably resolve
-# `drizzle-orm` via ESM for an inlined migrate.mjs (bug.0446 H8 cascade).
+# Repo-spec: DAO config (node_id, chain, governance). Per-node, NOT repo-root —
+# copying /app/.cogni would land operator's identity in this node's runtime.
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/.cogni ./.cogni
 
-# Repo-spec: DAO config (node_id, chain, governance). Updated every CI build.
-COPY --from=builder --chown=nextjs:nodejs /app/.cogni ./.cogni
+# Postgres migrator: base node-app deployment runs `node $NODE_NAME/app/migrate.mjs $NODE_NAME/app/migrations`
+# as an initContainer. The runner needs the shared wrapper + this node's migrations folder
+# colocated at the expected paths. Mirrors operator/Dockerfile (task.0370 step 1).
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/src/adapters/server/db/migrations /app/nodes/node-template/app/migrations
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate.mjs /app/nodes/node-template/app/migrate.mjs
+# Doltgres migrate runner — task.5077: applies @cogni/node-template-doltgres-schema
+# migrations against `knowledge_node_template`, then stamps a dolt_commit so DDL
+# lands in dolt_log.
+COPY --from=builder --chown=nextjs:nodejs /app/nodes/node-template/app/src/adapters/server/db/doltgres-migrations /app/nodes/node-template/app/doltgres-migrations
+# Doltgres migrator + verifier — shared scripts (parity with the Postgres
+# migrate.mjs COPY above). Verifier is sibling-imported by migrate-doltgres.mjs
+# and runs the post-migrate schema check before any tracking-row stamping,
+# closing the silent-skip gap from drizzle-orm's folderMillis-only "applied?"
+# check.
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/migrate-doltgres.mjs /app/nodes/node-template/app/migrate-doltgres.mjs
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/db/verify-doltgres-schema.mjs /app/nodes/node-template/app/verify-doltgres-schema.mjs
 
 # Codex CLI for BYO-AI ChatGPT execution.
 # Standalone output tracing can't detect spawned binaries.

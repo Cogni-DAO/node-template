@@ -30,6 +30,7 @@
     { "path": "./packages/node-streams" },
     { "path": "./packages/node-shared" },
     { "path": "./packages/knowledge-store" },
-    { "path": "./nodes/node-template/packages/knowledge" }
+    { "path": "./packages/knowledge-base" },
+    { "path": "./nodes/node-template/packages/doltgres-schema" }
   ]
 }

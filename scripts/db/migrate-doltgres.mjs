@@ -3,82 +3,23 @@
 
 /**
  * Module: `@scripts/db/migrate-doltgres`
- * Purpose: Doltgres migrator runner invoked as a Deployment initContainer. Forward-applying journal walker that reads drizzle-kit's meta/_journal.json and applies each missing migration via sql.unsafe (simple protocol — bypasses the Doltgres 0.56 extended-protocol Bind gap), records sha256 in drizzle.__drizzle_migrations, then trails dolt_commit so DDL lands in dolt_log.
- * Scope: Doltgres knowledge-plane migrations only. Does not migrate Postgres (sibling `migrate.mjs` handles that). Does not call drizzle-orm/postgres-js/migrator at runtime (Doltgres 0.56 rejects its parameterized tracking INSERT).
- * Invariants: DATABASE_URL from env; migrations folder from argv[2]; no tx wrapping; single-replica only.
- * Side-effects: IO (Doltgres connect, DDL apply, tracking-row insert, dolt_commit).
- * Notes: COPY'd into runtime image at /app/nodes/<node>/app/migrate-doltgres.mjs. Hash algo matches drizzle-orm tracking format.
- * Links: docs/spec/databases.md §2 Migration Strategy, https://docs.doltgres.com/, https://github.com/dolthub/doltgresql/issues/1990
- * @internal
+ * Purpose: Shared Doltgres migrator — Doltgres analogue of `scripts/db/migrate.mjs`. Each node's runtime image COPYs this script alongside its own `doltgres-migrations/` dir.
+ * Scope: Migrate + verify + dolt_commit. Does not seed reference data, does not provision the database.
+ * Invariants: NODE_NAME + DATABASE_URL from env; argv[2] = migrations dir; verifier throws SCHEMA_DRIFT on shape drift.
+ * Side-effects: IO (Doltgres connect, DDL, tracking-row writes, dolt_commit).
+ * Notes: Re-implements drizzle's journal walk via sql.unsafe to dodge Doltgres 0.56 extended-protocol gap on __drizzle_migrations INSERTs.
+ * Links: scripts/db/verify-doltgres-schema.mjs (load-bearing post-apply check), docs/spec/databases.md §5.2
  */
 
-//
-// WHY HAND-ROLLED INSTEAD OF drizzle-orm/postgres-js/migrator
-//
-// Doltgres is Postgres-compatible "in active development; many features
-// missing" per upstream docs. The extended-protocol Bind path on the
-// drizzle-kit tracking-row INSERT ("INSERT INTO drizzle.__drizzle_migrations
-// VALUES ($1, $2)") is a known fragile surface — DoltHub's own blog flags
-// it as "good enough for early customers, won't work in all cases":
-//   https://www.dolthub.com/blog/2024-04-01-prepared-statements-postgres/
-// Reported upstream:
-//   - https://github.com/dolthub/doltgresql/issues/1990 (closed Nov 2025
-//     via PR #1996 — "Unable to run subsequent drizzle migrations")
-//   - https://github.com/dolthub/doltgresql/issues/2016 (open — drizzle push)
-//   - https://github.com/dolthub/doltgresql/pull/2041 (prepared-statement fixes)
-// Every general-purpose migrator (dbmate, golang-migrate, Flyway,
-// node-pg-migrate) parameterizes the tracking-row INSERT the same way and
-// hits the same Doltgres gap, so switching tools buys nothing. The minimal
-// path that works today is sql.unsafe() throughout — postgres.js routes
-// parameter-less queries via simple protocol, bypassing Bind.
-//
-// REMOVAL CONDITION
-//
-// When Doltgres ships a release where `INSERT INTO drizzle.__drizzle_migrations
-// VALUES ($1, $2)` succeeds twice in a row (re: doltgresql#1990's fix
-// landing in a stable tag we run), delete this script and switch back to
-// drizzle-orm/postgres-js/migrator.migrate() — same call shape as
-// scripts/db/migrate.mjs uses for Postgres. The hash algorithm here
-// (sha256 of raw .sql text) matches drizzle-orm's tracking algorithm, so
-// rows we write are forward-compatible with the official migrator.
-//
-// DDL AUTOCOMMIT
-//
-// Dolt DDL does not commit to the working set even inside a transaction
-// (https://github.com/dolthub/dolt/issues/7485, closed via PR #8767). Two
-// consequences:
-//   1. We can apply statements one at a time without wrapping in BEGIN/COMMIT
-//      — DDL takes effect immediately regardless.
-//   2. Schema deltas don't land in dolt_log unless we explicitly call
-//      `dolt_commit('-Am', …)` after. Trailing dolt_commit handles that.
-//
-// PARTIAL FAILURE SEMANTICS
-//
-// If statement N of migration M throws, earlier statements in M are already
-// applied (DDL autocommit) but the __drizzle_migrations tracking row is
-// never inserted. The script exits non-zero — initContainer crashloops with
-// the real error. Next run will re-attempt migration M and likely hit
-// "already exists" on the earlier statements. Acceptable for v0; the
-// crashloop surfaces the real failure for human triage rather than
-// silently masking partial state.
-//
-// CONCURRENCY
-//
-// No pg_try_advisory_lock — Doltgres advisory-lock support is unverified
-// and we run replicas: 1. If we ever scale the app horizontally, this
-// needs an app-level lease table.
-//
-// biome-ignore-all lint/suspicious/noConsole: initContainer CMD; stdout is the only log surface.
-// biome-ignore-all lint/style/noProcessEnv: standalone script reads DATABASE_URL directly.
+// biome-ignore-all lint/suspicious/noConsole: standalone Node script invoked as initContainer CMD; stdout is the only log surface
+// biome-ignore-all lint/style/noProcessEnv: container entry point reads DATABASE_URL + NODE_NAME directly; no env wrapper to hide behind
 
-import { createHash } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import path from "node:path";
-
+import { readMigrationFiles } from "drizzle-orm/migrator";
 import postgres from "postgres";
 
-const NODE = process.env.MIGRATOR_LABEL?.trim() || "doltgres";
-const STATEMENT_SEP = "--> statement-breakpoint";
+import { verifyDoltgresSchema } from "./verify-doltgres-schema.mjs";
+
+const NODE = `${process.env.NODE_NAME?.trim() || "unknown"}-doltgres`;
 
 const url = process.env.DATABASE_URL?.trim();
 if (!url) {
@@ -92,112 +33,120 @@ if (!migrationsFolder) {
   process.exit(2);
 }
 
-function hashOfMigration(sqlText) {
-  return createHash("sha256").update(sqlText).digest("hex");
-}
-
 function sqlEscape(v) {
   return `'${String(v).replace(/'/g, "''")}'`;
 }
 
-function splitStatements(sqlText) {
-  return sqlText
-    .split(STATEMENT_SEP)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
+function isAlreadyExists(err) {
+  const msg = err instanceof Error ? err.message : String(err);
+  const cause = err?.cause instanceof Error ? err.cause.message : "";
+  // Narrow to DDL-collision shapes drizzle-kit emits. "X already exists" alone
+  // would swallow unrelated drift (e.g. function/type/constraint collisions
+  // that may indicate a real bug, not idempotent recovery).
+  return /\b(?:table|index|schema|relation|constraint) [^\s]+ already exists/i.test(
+    `${msg} ${cause}`
+  );
 }
 
-async function ensureTracking(sql) {
+// Idempotency for DROP statements: if a forward migration drops something
+// that's already gone (replayed after a partial apply, or applied twice),
+// Doltgres 0.56 emits "not found" / "does not exist". Doltgres also rejects
+// `DROP COLUMN IF EXISTS` (bug.5074) so we can't push idempotency into the
+// SQL. Tolerate the miss only when the failing statement is itself a DROP —
+// every other "not found" stays a hard error.
+function isHarmlessDropMiss(stmt, err) {
+  const upper = stmt.toUpperCase().replace(/\s+/g, " ").trim();
+  const isDrop =
+    /^ALTER TABLE [^ ]+ DROP COLUMN\b/.test(upper) ||
+    /^DROP (?:TABLE|INDEX|SCHEMA|CONSTRAINT)\b/.test(upper) ||
+    /^ALTER TABLE [^ ]+ DROP CONSTRAINT\b/.test(upper);
+  if (!isDrop) return false;
+  const msg = err instanceof Error ? err.message : String(err);
+  const cause = err?.cause instanceof Error ? err.cause.message : "";
+  // Doltgres 0.56+ phrases the miss several ways. Empirical: `DROP COLUMN`
+  // on an absent column emits `table "..." does not have column "..."`;
+  // `DROP INDEX` on a missing index emits `index "..." not found`; standard
+  // Postgres `does not exist` covers DROP TABLE / DROP SCHEMA.
+  return /(?:does not (?:exist|have column)|not found|no such column|unknown column)/i.test(
+    `${msg} ${cause}`
+  );
+}
+
+/**
+ * Apply pending migrations via simple-protocol sql.unsafe — the Doltgres-safe
+ * equivalent of `drizzle-orm/postgres-js/migrator`'s `migrate()`. Same journal
+ * semantics (skip when `folderMillis <= last_applied`), same SHA-256 hashing,
+ * same `drizzle.__drizzle_migrations` tracking table — only the wire protocol
+ * differs. Per-statement "already exists" tolerance gives free idempotency
+ * across re-runs after a partial-apply crash (Doltgres DDL auto-commits past
+ * any rollback, so retries can collide with already-created tables).
+ */
+async function applyPending(sql, folder) {
+  const migrations = readMigrationFiles({ migrationsFolder: folder });
+
   await sql.unsafe(`CREATE SCHEMA IF NOT EXISTS drizzle`);
   await sql.unsafe(
     `CREATE TABLE IF NOT EXISTS drizzle.__drizzle_migrations (id SERIAL PRIMARY KEY, hash text NOT NULL, created_at bigint)`
   );
-}
 
-async function isApplied(sql, hash) {
   const rows = await sql.unsafe(
-    `SELECT 1 FROM drizzle.__drizzle_migrations WHERE hash = ${sqlEscape(hash)} LIMIT 1`
+    `SELECT created_at FROM drizzle.__drizzle_migrations ORDER BY created_at DESC LIMIT 1`
   );
-  return rows.length > 0;
-}
+  const lastWhen = rows[0]?.created_at != null ? Number(rows[0].created_at) : 0;
 
-// True if the error indicates the statement's effect is already in the schema —
-// safe to skip per-statement; the schema/data is what we'd have produced.
-// Doltgres surfaces several distinct messages for "this thing is already
-// there" (all errno 1105):
-//   - "table with name X already exists"        (CREATE TABLE replay)
-//   - "Duplicate key name 'idx_…'"               (CREATE INDEX replay)
-//   - "Duplicate column name 'X'"                (ALTER ADD COLUMN replay)
-//   - "Duplicate constraint name 'X'"            (FK / CHECK replay)
-//   - "duplicate key value violates unique …"    (DML INSERT PK conflict on
-//                                                  data-only migration replay)
-// Postgres flavors ("already exists, skipping") match the first regex too.
-function isAlreadyAppliedError(err) {
-  const msg = err instanceof Error ? err.message : String(err);
-  const cause = err?.cause instanceof Error ? err.cause.message : "";
-  const combined = `${msg} ${cause}`;
-  return (
-    /already exists/i.test(combined) ||
-    /duplicate (key (name|value)|column|constraint)/i.test(combined)
-  );
-}
-
-// Apply each statement; tolerate "already exists" / "duplicate key value"
-// per-statement so the walker is idempotent against partial-prior-state DBs
-// (e.g. a fresh provision where a previous failed init left DDL applied but
-// no tracking row). After all statements settle, stamp the tracking row so
-// future runs skip via the hash check.
-async function applyMigration(sql, entry, sqlText) {
-  for (const stmt of splitStatements(sqlText)) {
-    try {
-      await sql.unsafe(stmt);
-    } catch (err) {
-      if (!isAlreadyAppliedError(err)) throw err;
-      // Statement effect already present — log and continue.
-      console.warn(
-        `⚠  ${NODE} ${entry.tag}: skip statement (already-applied): ${(err instanceof Error ? err.message : String(err)).slice(0, 160)}`
-      );
+  let applied = 0;
+  for (const migration of migrations) {
+    if (migration.folderMillis <= lastWhen) continue;
+    for (const stmt of migration.sql) {
+      const trimmed = stmt.trim();
+      if (!trimmed) continue;
+      try {
+        await sql.unsafe(trimmed);
+      } catch (err) {
+        // Idempotent recovery for CREATE collisions and DROP misses. A prior
+        // partial run committed the DDL but failed to record it; replay must
+        // not fail loud here. Anything outside these two shapes is real
+        // drift and re-thrown. Verifier is the final source of truth.
+        if (isAlreadyExists(err)) continue;
+        if (isHarmlessDropMiss(trimmed, err)) continue;
+        throw err;
+      }
     }
+    await sql.unsafe(
+      `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (${sqlEscape(migration.hash)}, ${migration.folderMillis})`
+    );
+    applied += 1;
   }
-  await sql.unsafe(
-    `INSERT INTO drizzle.__drizzle_migrations (hash, created_at) VALUES (${sqlEscape(hashOfMigration(sqlText))}, ${Number(entry.when)})`
-  );
+  return applied;
 }
 
-async function main() {
+async function withConnection(fn) {
   const sql = postgres(url, {
     max: 1,
     onnotice: (n) => console.log(n.message),
   });
-  const t0 = Date.now();
-  let applied = 0;
-  let skipped = 0;
   try {
-    await ensureTracking(sql);
-    const journalPath = path.join(migrationsFolder, "meta", "_journal.json");
-    const journal = JSON.parse(await readFile(journalPath, "utf8"));
-    for (const entry of journal.entries ?? []) {
-      const sqlPath = path.join(migrationsFolder, `${entry.tag}.sql`);
-      const sqlText = await readFile(sqlPath, "utf8");
-      if (await isApplied(sql, hashOfMigration(sqlText))) {
-        skipped += 1;
-        continue;
-      }
-      await applyMigration(sql, entry, sqlText);
-      applied += 1;
-    }
-    await sql.unsafe(
-      `SELECT dolt_commit('-Am', ${sqlEscape(`migrate(${NODE}): +${applied} new, ${skipped} already-applied`)})`
-    );
-    console.log(
-      `✅ ${NODE}: +${applied} applied, ${skipped} already-applied in ${Date.now() - t0}ms`
-    );
-  } catch (err) {
-    console.error(`FATAL(${NODE}): migrate failed:`, err);
-    process.exitCode = 1;
+    return await fn(sql);
   } finally {
     await sql.end({ timeout: 5 });
   }
 }
 
-await main();
+try {
+  const t0 = Date.now();
+  const result = await withConnection(async (sql) => {
+    const applied = await applyPending(sql, migrationsFolder);
+    const verifyResult = await verifyDoltgresSchema(sql, migrationsFolder);
+    console.log(
+      `✓ ${NODE} schema verified against snapshot ${verifyResult.latestTag} (${verifyResult.tablesChecked} table(s))`
+    );
+    await sql`SELECT dolt_commit('-Am', 'migration: drizzle-kit batch')`;
+    return applied;
+  });
+  console.log(
+    `✅ ${NODE} migrate complete: ${result} migration(s) applied + verified + dolt_commit stamped in ${Date.now() - t0}ms`
+  );
+} catch (err) {
+  console.error(`FATAL(${NODE}): migrate failed:`, err);
+  process.exitCode = 1;
+}

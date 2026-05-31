@@ -167,7 +167,7 @@
     "@cogni/knowledge-store": "workspace:^",
     "@cogni/langgraph-graphs": "workspace:*",
     "@cogni/node-core": "workspace:*",
-    "@cogni/node-template-knowledge": "workspace:*",
+    "@cogni/knowledge-base": "workspace:*",
     "@cogni/operator-wallet": "workspace:*",
     "@cogni/repo-spec": "workspace:*",
     "@cogni/scheduler-core": "workspace:*",
