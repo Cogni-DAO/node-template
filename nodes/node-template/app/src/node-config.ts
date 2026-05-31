@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Vote,
 } from "lucide-react";
+import { DiscordIcon } from "@/components";
 
 export const nodeConfig: NodeAppConfig = {
   name: "Cogni",
@@ -18,9 +19,14 @@ export const nodeConfig: NodeAppConfig = {
   ],
   externalLinks: [
     {
-      href: "https://github.com/cogni-dao/node-template",
+      href: "https://github.com/cogni-DAO/cogni-template",
       label: "GitHub",
       icon: Github,
+    },
+    {
+      href: "https://discord.gg/3b9sSyhZ4z",
+      label: "Discord",
+      icon: DiscordIcon,
     },
   ],
 };

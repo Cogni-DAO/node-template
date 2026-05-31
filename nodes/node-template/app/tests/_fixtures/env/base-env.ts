@@ -33,9 +33,7 @@ export const CORE_TEST_ENV = {
   // Per DATABASE_RLS_SPEC.md: no component-piece fallback in runtime
   DATABASE_URL: "postgresql://app_user:password@localhost:5432/test_db",
   DATABASE_SERVICE_URL: "postgresql://app_service:svc@localhost:5432/test_db",
-  // Required by serverEnv() — see secrets-catalog.yaml derive-env entries.
-  APP_BASE_URL: "http://localhost:3000",
-  NEXTAUTH_URL: "http://localhost:3000",
+  // Auth
   AUTH_SECRET: "x".repeat(32),
   // LiteLLM
   LITELLM_MASTER_KEY: "test-key",
