@@ -32,6 +32,7 @@ import { getCsrfToken } from "next-auth/react";
 import { SiweMessage } from "siwe";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { createBinding } from "@/adapters/server/identity/create-binding";
+import { isLedgerApprover } from "@/shared/config";
 import {
   identityEvents,
   linkTransactions,
@@ -39,7 +40,6 @@ import {
   userProfiles,
   users,
 } from "@/shared/db/schema";
-import { serverEnv } from "@/shared/env";
 import { makeLogger } from "@/shared/observability";
 
 export const authSecret =
@@ -134,7 +134,9 @@ export const authOptions: NextAuthOptions = {
           }
 
           const siwe = new SiweMessage(credentials.message as string);
-          const nextAuthUrl = new URL(serverEnv().NEXTAUTH_URL);
+          const nextAuthUrl = new URL(
+            process.env.NEXTAUTH_URL ?? "http://localhost:3000"
+          );
 
           // Convert Headers to plain object for getCsrfToken
           const headers: Record<string, string> = {};
@@ -545,6 +547,15 @@ export const authOptions: NextAuthOptions = {
           (token.walletAddress as string | null) ?? null;
         session.user.displayName = (token.displayName as string | null) ?? null;
         session.user.avatarColor = (token.avatarColor as string | null) ?? null;
+        // UX hint only — the `(admin)/` layout still enforces server-side.
+        // Fail-closed: any repo-spec read error → not an approver.
+        try {
+          session.user.isApprover = isLedgerApprover(
+            session.user.walletAddress
+          );
+        } catch {
+          session.user.isApprover = false;
+        }
       }
       return session;
     },
