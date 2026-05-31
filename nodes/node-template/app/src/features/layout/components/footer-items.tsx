@@ -38,7 +38,6 @@ export const FOOTER_COLUMNS: FooterColumn[] = [
     links: [
       { label: "Chat", href: "/chat" },
       { label: "Work", href: "/work" },
-      { label: "Knowledge", href: "/knowledge" },
       { label: "Activity", href: "/activity" },
       { label: "Governance", href: "/gov" },
       { label: "Credits", href: "/credits" },
