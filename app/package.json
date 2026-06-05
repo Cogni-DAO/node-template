@@ -33,6 +33,7 @@
     "@cogni/node-contracts": "workspace:*",
     "@cogni/node-shared": "workspace:*",
     "@cogni/node-streams": "workspace:*",
+    "@cogni/operator-wallet": "workspace:*",
     "@cogni/ingestion-core": "workspace:*",
     "@cogni/knowledge-store": "workspace:*",
     "@cogni/langgraph-graphs": "workspace:*",
@@ -79,7 +80,9 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "cron-parser": "^4.9.0",
     "drizzle-orm": "^0.44.7",
+    "dockerode": "^4.0.9",
     "ethers": "^5.7.2",
     "eventsource-parser": "^3.0.6",
     "fast-safe-stringify": "^2.1.1",
@@ -115,6 +118,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
+    "@types/dockerode": "^4.0.1",
     "@types/uuid": "^11.0.0"
   }
 }
