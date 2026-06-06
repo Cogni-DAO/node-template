@@ -47,6 +47,8 @@ if (!Array.isArray(steps)) {
 
 const imageMetadata = steps.find((step) => step?.name === "Prepare image metadata");
 const imageMetadataRun = String(imageMetadata?.run ?? "");
+const mainImagePublishCondition =
+  "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')";
 if (!imageMetadataRun.includes('tr \'[:upper:]\' \'[:lower:]\'')) {
   fail("Prepare image metadata must lowercase the repository owner");
 }
@@ -57,19 +59,15 @@ if (!imageMetadataRun.includes("ghcr.io/${owner_lc}/cogni-node-template")) {
 const ghcrLogin = steps.find((step) => step?.name === "Login to GHCR");
 expectEqual(
   ghcrLogin?.if,
-  "github.event_name == 'push' && github.ref == 'refs/heads/main'",
+  mainImagePublishCondition,
   "Login to GHCR condition",
 );
 expectEqual(ghcrLogin?.uses, "docker/login-action@v3", "Login to GHCR action");
 expectEqual(ghcrLogin?.with?.registry, "ghcr.io", "Login to GHCR registry");
-expectEqual(
-  ghcrLogin?.with?.username,
-  "${{ secrets.GHCR_DEPLOY_USERNAME || github.actor }}",
-  "Login to GHCR username",
-);
+expectEqual(ghcrLogin?.with?.username, "${{ github.actor }}", "Login to GHCR username");
 expectEqual(
   ghcrLogin?.with?.password,
-  "${{ secrets.GHCR_DEPLOY_TOKEN || github.token }}",
+  "${{ secrets.GITHUB_TOKEN }}",
   "Login to GHCR password",
 );
 
@@ -78,7 +76,7 @@ expectEqual(buildImage?.uses, "docker/build-push-action@v6", "Build app image ac
 expectEqual(buildImage?.with?.target, "runner", "Build app image target");
 expectEqual(
   buildImage?.with?.push,
-  "${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}",
+  "${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}",
   "Build app image push gate",
 );
 expectEqual(
@@ -88,6 +86,16 @@ expectEqual(
 );
 if (!String(buildImage?.with?.["build-args"] ?? "").includes("BUILD_SHA=${{ github.sha }}")) {
   fail("Build app image must pass BUILD_SHA=${{ github.sha }}");
+}
+
+const verifyImage = steps.find((step) => step?.name === "Verify pushed image");
+expectEqual(verifyImage?.if, mainImagePublishCondition, "Verify pushed image condition");
+if (
+  !String(verifyImage?.run ?? "").includes(
+    'docker buildx imagetools inspect "${{ steps.image.outputs.name }}:${{ env.IMAGE_TAG }}"',
+  )
+) {
+  fail("Verify pushed image must inspect the pushed image tag");
 }
 
 if (process.exitCode) {
