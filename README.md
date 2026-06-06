@@ -8,7 +8,7 @@ node-at-repo-root build surface.
 - **Node-at-root** layout (`app/`, `graphs/`, `packages/`, `.cogni/`) so it mounts cleanly at `nodes/<slug>/` when added as a submodule.
 - `.cogni/secrets-catalog.yaml` + `k8s/external-secrets/` are intentionally absent (bug.5086 Part D: a node inherits baseline secrets via the substrate; declares its own only when it has unique ones).
 - The root workspace includes the required private `@cogni/*` package closure so a generated child repo can install, typecheck, build, and push its own image without the operator monorepo.
-- `.github/workflows/ci.yaml` builds the app image and, on `main`, pushes `ghcr.io/<owner>/cogni-node-template:sha-<childSha>`.
+- `.github/workflows/ci.yaml` builds the app image, pushes PR images as `pr-<number>-<headSha>`, and pushes `main` images as `sha-<childSha>`.
 - The deploy/infra plane is intentionally absent: no candidate-flight, preview/prod promote, provision-env, Argo/AppSet, or parent infra workflows live here.
 
 ## Local checks

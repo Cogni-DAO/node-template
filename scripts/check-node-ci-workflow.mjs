@@ -23,11 +23,20 @@ function expectOwnKey(object, key, label) {
   return object[key];
 }
 
+function expectIncludes(value, fragment, label) {
+  if (!String(value ?? "").includes(fragment)) {
+    fail(`${label} must include ${JSON.stringify(fragment)}`);
+  }
+}
+
 expectEqual(workflow?.name, "Node CI", "workflow name");
 
 const triggers = expectOwnKey(workflow, "on", "workflow");
-expectOwnKey(triggers, "workflow_dispatch", "workflow triggers");
 expectOwnKey(triggers, "pull_request", "workflow triggers");
+expectOwnKey(triggers, "merge_group", "workflow triggers");
+if (Object.hasOwn(triggers ?? {}, "workflow_dispatch")) {
+  fail("workflow triggers must not use workflow_dispatch as an image-publish path");
+}
 
 const push = expectOwnKey(triggers, "push", "workflow triggers");
 const branches = Array.isArray(push?.branches) ? push.branches : [];
@@ -37,31 +46,48 @@ if (!branches.includes("main")) {
 
 expectEqual(workflow?.permissions?.contents, "read", "permissions.contents");
 expectEqual(workflow?.permissions?.packages, "write", "permissions.packages");
-expectEqual(workflow?.env?.IMAGE_TAG, "sha-${{ github.sha }}", "env.IMAGE_TAG");
 
-const steps = workflow?.jobs?.build?.steps;
+const job = workflow?.jobs?.build;
+expectIncludes(
+  job?.if,
+  "github.event.pull_request.head.repo.full_name == github.repository",
+  "jobs.build.if",
+);
+
+const steps = job?.steps;
 if (!Array.isArray(steps)) {
   fail("jobs.build.steps must be a list");
   process.exit();
 }
 
+const meta = steps.find((step) => step?.name === "Resolve build metadata");
+expectEqual(meta?.id, "meta", "Resolve build metadata id");
+const metaRun = String(meta?.run ?? "");
+expectIncludes(metaRun, "IMAGE_TAG=\"pr-${PR_NUMBER}-${PR_HEAD_SHA}\"", "pull_request image tag");
+expectIncludes(metaRun, "IMAGE_TAG=\"mq-${PR_NUMBER}-${PUSH_SHA}\"", "merge_group image tag");
+expectIncludes(metaRun, "IMAGE_TAG=\"sha-${PUSH_SHA}\"", "push main image tag");
+expectIncludes(metaRun, "BUILD_SHA=\"$PR_HEAD_SHA\"", "pull_request build SHA");
+expectIncludes(metaRun, "BUILD_SHA=\"$PUSH_SHA\"", "push/merge_group build SHA");
+
+const checkout = steps.find((step) => step?.name === "Checkout");
+expectEqual(checkout?.uses, "actions/checkout@v4", "Checkout action");
+expectEqual(
+  checkout?.with?.ref,
+  "${{ steps.meta.outputs.checkout_ref }}",
+  "Checkout ref",
+);
+
 const imageMetadata = steps.find((step) => step?.name === "Prepare image metadata");
 const imageMetadataRun = String(imageMetadata?.run ?? "");
-const mainImagePublishCondition =
-  "github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')";
-if (!imageMetadataRun.includes('tr \'[:upper:]\' \'[:lower:]\'')) {
-  fail("Prepare image metadata must lowercase the repository owner");
-}
-if (!imageMetadataRun.includes("ghcr.io/${owner_lc}/cogni-node-template")) {
-  fail("Prepare image metadata must keep the image name ghcr.io/<owner>/cogni-node-template");
-}
+expectIncludes(imageMetadataRun, 'tr \'[:upper:]\' \'[:lower:]\'', "Prepare image metadata");
+expectIncludes(
+  imageMetadataRun,
+  "ghcr.io/${owner_lc}/cogni-node-template",
+  "Prepare image metadata",
+);
 
 const ghcrLogin = steps.find((step) => step?.name === "Login to GHCR");
-expectEqual(
-  ghcrLogin?.if,
-  mainImagePublishCondition,
-  "Login to GHCR condition",
-);
+expectEqual(ghcrLogin?.if, "steps.meta.outputs.push_image == 'true'", "Login to GHCR condition");
 expectEqual(ghcrLogin?.uses, "docker/login-action@v3", "Login to GHCR action");
 expectEqual(ghcrLogin?.with?.registry, "ghcr.io", "Login to GHCR registry");
 expectEqual(ghcrLogin?.with?.username, "${{ github.actor }}", "Login to GHCR username");
@@ -76,27 +102,31 @@ expectEqual(buildImage?.uses, "docker/build-push-action@v6", "Build app image ac
 expectEqual(buildImage?.with?.target, "runner", "Build app image target");
 expectEqual(
   buildImage?.with?.push,
-  "${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch') }}",
+  "${{ steps.meta.outputs.push_image == 'true' }}",
   "Build app image push gate",
 );
 expectEqual(
   buildImage?.with?.tags,
-  "${{ steps.image.outputs.name }}:${{ env.IMAGE_TAG }}",
+  "${{ steps.image.outputs.name }}:${{ steps.meta.outputs.image_tag }}",
   "Build app image tags",
 );
-if (!String(buildImage?.with?.["build-args"] ?? "").includes("BUILD_SHA=${{ github.sha }}")) {
-  fail("Build app image must pass BUILD_SHA=${{ github.sha }}");
-}
+expectIncludes(
+  buildImage?.with?.["build-args"],
+  "BUILD_SHA=${{ steps.meta.outputs.build_sha }}",
+  "Build app image build args",
+);
 
 const verifyImage = steps.find((step) => step?.name === "Verify pushed image");
-expectEqual(verifyImage?.if, mainImagePublishCondition, "Verify pushed image condition");
-if (
-  !String(verifyImage?.run ?? "").includes(
-    'docker buildx imagetools inspect "${{ steps.image.outputs.name }}:${{ env.IMAGE_TAG }}"',
-  )
-) {
-  fail("Verify pushed image must inspect the pushed image tag");
-}
+expectEqual(
+  verifyImage?.if,
+  "steps.meta.outputs.push_image == 'true'",
+  "Verify pushed image condition",
+);
+expectIncludes(
+  verifyImage?.run,
+  'docker buildx imagetools inspect "${{ steps.image.outputs.name }}:${{ steps.meta.outputs.image_tag }}"',
+  "Verify pushed image",
+);
 
 if (process.exitCode) {
   process.exit();
