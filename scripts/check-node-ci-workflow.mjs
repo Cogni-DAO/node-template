@@ -107,7 +107,12 @@ const imageMetadataRun = String(imageMetadata?.run ?? "");
 expectIncludes(imageMetadataRun, 'tr \'[:upper:]\' \'[:lower:]\'', "Prepare image metadata");
 expectIncludes(
   imageMetadataRun,
-  "ghcr.io/${owner_lc}/cogni-node-template",
+  'repo_lc="$(printf \'%s\' "${GITHUB_REPOSITORY#*/}"',
+  "Prepare image metadata",
+);
+expectIncludes(
+  imageMetadataRun,
+  "ghcr.io/${owner_lc}/${repo_lc}",
   "Prepare image metadata",
 );
 
