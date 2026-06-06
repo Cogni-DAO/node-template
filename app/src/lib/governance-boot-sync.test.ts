@@ -73,7 +73,9 @@ describe("runGovernanceBootSync", () => {
     const logger = fakeLogger();
     await runGovernanceBootSync(ENABLED, { fetchImpl, logger, sleep: noSleep });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchImpl.mock.calls[0];
+    const call = fetchImpl.mock.calls[0];
+    if (!call) throw new Error("expected fetch call");
+    const [url, init] = call;
     expect(url).toContain("127.0.0.1:3000");
     expect(url).toContain("/api/internal/ops/governance/schedules/sync");
     expect(init.method).toBe("POST");

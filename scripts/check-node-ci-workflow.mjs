@@ -1,218 +1,151 @@
 import { readFileSync } from "node:fs";
 import { parse } from "yaml";
 
-const WORKFLOW_PATH = ".github/workflows/ci.yaml";
+const CI_WORKFLOW_PATH = ".github/workflows/ci.yaml";
+const PR_BUILD_WORKFLOW_PATH = ".github/workflows/pr-build.yml";
 const PR_LINT_WORKFLOW_PATH = ".github/workflows/pr-lint.yaml";
-const workflow = parse(readFileSync(WORKFLOW_PATH, "utf8"));
-const prLintWorkflow = parse(readFileSync(PR_LINT_WORKFLOW_PATH, "utf8"));
 
-function fail(message) {
-  console.error(`${WORKFLOW_PATH}: ${message}`);
+const ciWorkflow = readWorkflow(CI_WORKFLOW_PATH);
+const prBuildWorkflow = readWorkflow(PR_BUILD_WORKFLOW_PATH);
+const prLintWorkflow = readWorkflow(PR_LINT_WORKFLOW_PATH);
+
+function readWorkflow(path) {
+  return parse(readFileSync(path, "utf8"));
+}
+
+function fail(path, message) {
+  console.error(`${path}: ${message}`);
   process.exitCode = 1;
 }
 
-function failPrLint(message) {
-  console.error(`${PR_LINT_WORKFLOW_PATH}: ${message}`);
-  process.exitCode = 1;
-}
-
-function expectEqual(actual, expected, label) {
+function expectEqual(path, actual, expected, label) {
   if (actual !== expected) {
-    fail(`${label} must be ${JSON.stringify(expected)}; got ${JSON.stringify(actual)}`);
+    fail(path, `${label} must be ${JSON.stringify(expected)}; got ${JSON.stringify(actual)}`);
   }
 }
 
-function expectOwnKey(object, key, label) {
+function expectOwnKey(path, object, key, label) {
   if (!object || typeof object !== "object" || !Object.hasOwn(object, key)) {
-    fail(`${label} must define ${key}`);
+    fail(path, `${label} must define ${key}`);
     return undefined;
   }
   return object[key];
 }
 
-function expectIncludes(value, fragment, label) {
+function expectIncludes(path, value, fragment, label) {
   if (!String(value ?? "").includes(fragment)) {
-    fail(`${label} must include ${JSON.stringify(fragment)}`);
+    fail(path, `${label} must include ${JSON.stringify(fragment)}`);
   }
 }
 
-function expectPrLintEqual(actual, expected, label) {
-  if (actual !== expected) {
-    failPrLint(`${label} must be ${JSON.stringify(expected)}; got ${JSON.stringify(actual)}`);
+function expectStep(path, steps, name) {
+  const step = steps.find((candidate) => candidate?.name === name);
+  if (!step) fail(path, `steps must include ${JSON.stringify(name)}`);
+  return step;
+}
+
+function expectTrigger(path, workflow, trigger) {
+  const triggers = expectOwnKey(path, workflow, "on", "workflow");
+  return expectOwnKey(path, triggers, trigger, "workflow triggers");
+}
+
+function expectMainPush(path, workflow) {
+  const push = expectTrigger(path, workflow, "push");
+  const branches = Array.isArray(push?.branches) ? push.branches : [];
+  if (!branches.includes("main")) {
+    fail(path, "push trigger must include main");
   }
 }
 
-function expectPrLintOwnKey(object, key, label) {
-  if (!object || typeof object !== "object" || !Object.hasOwn(object, key)) {
-    failPrLint(`${label} must define ${key}`);
-    return undefined;
-  }
-  return object[key];
-}
-
-function expectPrLintIncludes(value, fragment, label) {
-  if (!String(value ?? "").includes(fragment)) {
-    failPrLint(`${label} must include ${JSON.stringify(fragment)}`);
+function expectNoWorkflowDispatch(path, workflow) {
+  const triggers = expectOwnKey(path, workflow, "on", "workflow");
+  if (Object.hasOwn(triggers ?? {}, "workflow_dispatch")) {
+    fail(path, "workflow must not use workflow_dispatch as launch or image evidence");
   }
 }
 
-expectEqual(workflow?.name, "Node CI", "workflow name");
+expectEqual(CI_WORKFLOW_PATH, ciWorkflow?.name, "CI", "workflow name");
+expectTrigger(CI_WORKFLOW_PATH, ciWorkflow, "pull_request");
+expectTrigger(CI_WORKFLOW_PATH, ciWorkflow, "merge_group");
+expectMainPush(CI_WORKFLOW_PATH, ciWorkflow);
+expectNoWorkflowDispatch(CI_WORKFLOW_PATH, ciWorkflow);
+expectEqual(CI_WORKFLOW_PATH, ciWorkflow?.permissions?.contents, "read", "permissions.contents");
+expectIncludes(CI_WORKFLOW_PATH, ciWorkflow?.concurrency?.group, "ci-${{ github.workflow }}-${{ github.ref }}", "concurrency.group");
+expectEqual(CI_WORKFLOW_PATH, ciWorkflow?.concurrency?.["cancel-in-progress"], true, "concurrency.cancel-in-progress");
 
-const triggers = expectOwnKey(workflow, "on", "workflow");
-expectOwnKey(triggers, "pull_request", "workflow triggers");
-expectOwnKey(triggers, "merge_group", "workflow triggers");
-if (Object.hasOwn(triggers ?? {}, "workflow_dispatch")) {
-  fail("workflow triggers must not use workflow_dispatch as an image-publish path");
-}
+const staticJob = ciWorkflow?.jobs?.static;
+if (!staticJob) fail(CI_WORKFLOW_PATH, "jobs must include static");
+const staticSteps = Array.isArray(staticJob?.steps) ? staticJob.steps : [];
+expectStep(CI_WORKFLOW_PATH, staticSteps, "Install dependencies");
+expectStep(CI_WORKFLOW_PATH, staticSteps, "Build workspace packages");
+expectStep(CI_WORKFLOW_PATH, staticSteps, "Type check");
+expectStep(CI_WORKFLOW_PATH, staticSteps, "Workflow contract check");
 
-const push = expectOwnKey(triggers, "push", "workflow triggers");
-const branches = Array.isArray(push?.branches) ? push.branches : [];
-if (!branches.includes("main")) {
-  fail("push trigger must include main");
-}
+const unitJob = ciWorkflow?.jobs?.unit;
+if (!unitJob) fail(CI_WORKFLOW_PATH, "jobs must include unit");
+expectEqual(CI_WORKFLOW_PATH, unitJob?.needs, "static", "jobs.unit.needs");
+const unitSteps = Array.isArray(unitJob?.steps) ? unitJob.steps : [];
+expectStep(CI_WORKFLOW_PATH, unitSteps, "Install dependencies");
+expectStep(CI_WORKFLOW_PATH, unitSteps, "Build workspace packages");
+expectStep(CI_WORKFLOW_PATH, unitSteps, "Unit + contract coverage tests");
 
-expectEqual(workflow?.permissions?.contents, "read", "permissions.contents");
-expectEqual(workflow?.permissions?.packages, "write", "permissions.packages");
-if (Object.hasOwn(workflow ?? {}, "env") && Object.hasOwn(workflow.env ?? {}, "IMAGE_TAG")) {
-  fail("workflow must derive IMAGE_TAG from event metadata, not a top-level default");
-}
-expectIncludes(workflow?.concurrency?.group, "node-ci-pr-{0}", "concurrency.group");
-expectIncludes(workflow?.concurrency?.group, "node-ci-mq-{0}", "concurrency.group");
-expectIncludes(workflow?.concurrency?.group, "github.ref", "concurrency.group");
-expectEqual(workflow?.concurrency?.["cancel-in-progress"], true, "concurrency.cancel-in-progress");
+expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.name, "PR Build", "workflow name");
+expectTrigger(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow, "pull_request");
+expectTrigger(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow, "merge_group");
+expectMainPush(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow);
+expectNoWorkflowDispatch(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow);
+expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.permissions?.contents, "read", "permissions.contents");
+expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.permissions?.packages, "write", "permissions.packages");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.concurrency?.group, "pr-build-pr-{0}", "concurrency.group");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.concurrency?.group, "pr-build-mq-{0}", "concurrency.group");
 
-const job = workflow?.jobs?.build;
+const resolveJob = prBuildWorkflow?.jobs?.resolve;
+if (!resolveJob) fail(PR_BUILD_WORKFLOW_PATH, "jobs must include resolve");
 expectIncludes(
-  job?.if,
+  PR_BUILD_WORKFLOW_PATH,
+  resolveJob?.if,
   "github.event.pull_request.head.repo.full_name == github.repository",
-  "jobs.build.if",
+  "jobs.resolve.if",
 );
+const resolveSteps = Array.isArray(resolveJob?.steps) ? resolveJob.steps : [];
+const resolveStep = resolveSteps.find((step) => step?.id === "r");
+const resolveRun = String(resolveStep?.run ?? "");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'IMAGE_TAG="pr-${PR_NUMBER}-${ORIGINAL_HEAD_SHA}"', "pull_request image tag");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'IMAGE_TAG="mq-${PR_NUMBER}-${BUILD_SHA}"', "merge_group image tag");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'IMAGE_TAG="sha-${BUILD_SHA}"', "push main image tag");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'image_name=ghcr.io/${owner_lc}/${repo_lc}-node', "node-owned image name");
 
-const steps = job?.steps;
-if (!Array.isArray(steps)) {
-  fail("jobs.build.steps must be a list");
-  process.exit();
-}
+const buildJob = prBuildWorkflow?.jobs?.build;
+if (!buildJob) fail(PR_BUILD_WORKFLOW_PATH, "jobs must include build");
+expectEqual(PR_BUILD_WORKFLOW_PATH, buildJob?.needs, "resolve", "jobs.build.needs");
+const buildSteps = Array.isArray(buildJob?.steps) ? buildJob.steps : [];
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Install dependencies");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Build workspace packages");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Set up Docker Buildx");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Login to GHCR");
+const buildImage = expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Build and push node");
+expectEqual(PR_BUILD_WORKFLOW_PATH, buildImage?.with?.push, true, "Build and push node push");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, buildImage?.with?.tags, "${{ needs.resolve.outputs.image_name }}:${{ needs.resolve.outputs.image_tag }}", "Build and push node tags");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Verify pushed image");
 
-const meta = steps.find((step) => step?.name === "Resolve build metadata");
-expectEqual(meta?.id, "meta", "Resolve build metadata id");
-const metaRun = String(meta?.run ?? "");
-expectIncludes(metaRun, "IMAGE_TAG=\"pr-${PR_NUMBER}-${PR_HEAD_SHA}\"", "pull_request image tag");
-expectIncludes(metaRun, "IMAGE_TAG=\"mq-${PR_NUMBER}-${PUSH_SHA}\"", "merge_group image tag");
-expectIncludes(metaRun, "IMAGE_TAG=\"sha-${PUSH_SHA}\"", "push main image tag");
-expectIncludes(metaRun, "BUILD_SHA=\"$PR_HEAD_SHA\"", "pull_request build SHA");
-expectIncludes(metaRun, "BUILD_SHA=\"$PUSH_SHA\"", "push/merge_group build SHA");
-
-const checkout = steps.find((step) => step?.name === "Checkout");
-expectEqual(
-  checkout?.uses,
-  "actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955",
-  "Checkout action",
-);
-expectEqual(
-  checkout?.with?.ref,
-  "${{ steps.meta.outputs.checkout_ref }}",
-  "Checkout ref",
-);
-
-const pnpmSetup = steps.find((step) => step?.name === "Set up pnpm");
-expectEqual(
-  pnpmSetup?.uses,
-  "pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c",
-  "Set up pnpm action",
-);
-
-const nodeSetup = steps.find((step) => step?.name === "Set up Node");
-expectEqual(
-  nodeSetup?.uses,
-  "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
-  "Set up Node action",
-);
-
-const imageMetadata = steps.find((step) => step?.name === "Prepare image metadata");
-const imageMetadataRun = String(imageMetadata?.run ?? "");
-expectIncludes(imageMetadataRun, 'tr \'[:upper:]\' \'[:lower:]\'', "Prepare image metadata");
-expectIncludes(
-  imageMetadataRun,
-  'repo_lc="$(printf \'%s\' "${GITHUB_REPOSITORY#*/}"',
-  "Prepare image metadata",
-);
-expectIncludes(
-  imageMetadataRun,
-  "ghcr.io/${owner_lc}/${repo_lc}-node",
-  "Prepare image metadata",
-);
-
-const ghcrLogin = steps.find((step) => step?.name === "Login to GHCR");
-expectEqual(ghcrLogin?.if, "steps.meta.outputs.push_image == 'true'", "Login to GHCR condition");
-expectEqual(ghcrLogin?.uses, "docker/login-action@v3", "Login to GHCR action");
-expectEqual(ghcrLogin?.with?.registry, "ghcr.io", "Login to GHCR registry");
-expectEqual(ghcrLogin?.with?.username, "${{ github.actor }}", "Login to GHCR username");
-expectEqual(
-  ghcrLogin?.with?.password,
-  "${{ secrets.GITHUB_TOKEN }}",
-  "Login to GHCR password",
-);
-
-const buildImage = steps.find((step) => step?.name === "Build app image");
-expectEqual(buildImage?.uses, "docker/build-push-action@v6", "Build app image action");
-expectEqual(buildImage?.with?.target, "runner", "Build app image target");
-expectEqual(
-  buildImage?.with?.push,
-  "${{ steps.meta.outputs.push_image == 'true' }}",
-  "Build app image push gate",
-);
-expectEqual(
-  buildImage?.with?.tags,
-  "${{ steps.image.outputs.name }}:${{ steps.meta.outputs.image_tag }}",
-  "Build app image tags",
-);
-expectIncludes(
-  buildImage?.with?.["build-args"],
-  "BUILD_SHA=${{ steps.meta.outputs.build_sha }}",
-  "Build app image build args",
-);
-
-const verifyImage = steps.find((step) => step?.name === "Verify pushed image");
-expectEqual(
-  verifyImage?.if,
-  "steps.meta.outputs.push_image == 'true'",
-  "Verify pushed image condition",
-);
-expectIncludes(
-  verifyImage?.run,
-  'docker buildx imagetools inspect "${{ steps.image.outputs.name }}:${{ steps.meta.outputs.image_tag }}"',
-  "Verify pushed image",
-);
-
-if (process.exitCode) {
-  process.exit();
-}
-
-console.log("Node CI workflow invariants passed");
-
-expectPrLintEqual(prLintWorkflow?.name, "Lint PR", "workflow name");
-const prLintTriggers = expectPrLintOwnKey(prLintWorkflow, "on", "workflow");
-const prLintPullRequest = expectPrLintOwnKey(
-  prLintTriggers,
-  "pull_request",
-  "workflow triggers",
-);
+expectEqual(PR_LINT_WORKFLOW_PATH, prLintWorkflow?.name, "Lint PR", "workflow name");
+const prLintPullRequest = expectTrigger(PR_LINT_WORKFLOW_PATH, prLintWorkflow, "pull_request");
 const prLintTypes = Array.isArray(prLintPullRequest?.types) ? prLintPullRequest.types : [];
 for (const type of ["opened", "edited", "reopened", "synchronize"]) {
   if (!prLintTypes.includes(type)) {
-    failPrLint(`pull_request trigger must include ${type}`);
+    fail(PR_LINT_WORKFLOW_PATH, `pull_request trigger must include ${type}`);
   }
 }
 
 const prLintJob = prLintWorkflow?.jobs?.main;
-expectPrLintEqual(prLintJob?.name, "Validate PR title", "job name");
-expectPrLintEqual(prLintJob?.permissions?.["pull-requests"], "read", "pull request permission");
+expectEqual(PR_LINT_WORKFLOW_PATH, prLintJob?.name, "Validate PR title", "job name");
+expectEqual(PR_LINT_WORKFLOW_PATH, prLintJob?.permissions?.["pull-requests"], "read", "pull request permission");
 const prLintSteps = Array.isArray(prLintJob?.steps) ? prLintJob.steps : [];
 const semanticTitleStep = prLintSteps.find(
   (step) => step?.uses === "amannn/action-semantic-pull-request@v6",
 );
-expectPrLintEqual(
+expectEqual(
+  PR_LINT_WORKFLOW_PATH,
   semanticTitleStep?.env?.GITHUB_TOKEN,
   "${{ secrets.GITHUB_TOKEN }}",
   "semantic PR title token",
@@ -231,14 +164,11 @@ for (const type of [
   "build",
   "release",
 ]) {
-  expectPrLintIncludes(semanticTitleStep?.with?.types, type, "semantic PR title types");
+  expectIncludes(PR_LINT_WORKFLOW_PATH, semanticTitleStep?.with?.types, type, "semantic PR title types");
 }
-expectPrLintIncludes(
-  semanticTitleStep?.with?.subjectPattern,
-  "[Cc]omplete",
-  "semantic PR title subjectPattern",
-);
-expectPrLintIncludes(
+expectIncludes(PR_LINT_WORKFLOW_PATH, semanticTitleStep?.with?.subjectPattern, "[Cc]omplete", "semantic PR title subjectPattern");
+expectIncludes(
+  PR_LINT_WORKFLOW_PATH,
   semanticTitleStep?.with?.subjectPattern,
   "[Pp]roduction[ ]+[Rr]eady",
   "semantic PR title subjectPattern",
@@ -248,4 +178,6 @@ if (process.exitCode) {
   process.exit();
 }
 
+console.log("CI workflow invariants passed");
+console.log("PR Build workflow invariants passed");
 console.log("PR lint workflow invariants passed");

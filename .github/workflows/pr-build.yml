@@ -1,0 +1,129 @@
+name: PR Build
+
+on:
+  pull_request:
+  merge_group:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('pr-build-pr-{0}', github.event.pull_request.number) || github.event_name == 'merge_group' && format('pr-build-mq-{0}', github.event.merge_group.head_ref) || format('pr-build-{0}', github.ref) }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    outputs:
+      pr_number: ${{ steps.r.outputs.pr_number }}
+      original_head_sha: ${{ steps.r.outputs.original_head_sha }}
+      build_sha: ${{ steps.r.outputs.build_sha }}
+      checkout_ref: ${{ steps.r.outputs.checkout_ref }}
+      image_tag: ${{ steps.r.outputs.image_tag }}
+      image_name: ${{ steps.r.outputs.image_name }}
+    steps:
+      - id: r
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_SHA: ${{ github.sha }}
+          PR_NUMBER_PR: ${{ github.event.pull_request.number }}
+          PR_HEAD_SHA_PR: ${{ github.event.pull_request.head.sha }}
+          MQ_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REPOSITORY_NAME: ${{ github.event.repository.name }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            PR_NUMBER="$PR_NUMBER_PR"
+            ORIGINAL_HEAD_SHA="$PR_HEAD_SHA_PR"
+            BUILD_SHA="$ORIGINAL_HEAD_SHA"
+            CHECKOUT_REF="$ORIGINAL_HEAD_SHA"
+            IMAGE_TAG="pr-${PR_NUMBER}-${ORIGINAL_HEAD_SHA}"
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
+            PR_PATH="${MQ_HEAD_REF##*/}"
+            if [[ ! "$PR_PATH" =~ ^pr-([0-9]+)- ]]; then
+              echo "::error::Could not parse PR number from merge_group head_ref: $MQ_HEAD_REF"
+              exit 1
+            fi
+            PR_NUMBER="${BASH_REMATCH[1]}"
+            ORIGINAL_HEAD_SHA=""
+            BUILD_SHA="$PUSH_SHA"
+            CHECKOUT_REF="$PUSH_SHA"
+            IMAGE_TAG="mq-${PR_NUMBER}-${BUILD_SHA}"
+          elif [ "$EVENT_NAME" = "push" ]; then
+            PR_NUMBER=""
+            ORIGINAL_HEAD_SHA="$PUSH_SHA"
+            BUILD_SHA="$PUSH_SHA"
+            CHECKOUT_REF="$PUSH_SHA"
+            IMAGE_TAG="sha-${BUILD_SHA}"
+          else
+            echo "::error::Unsupported event: $EVENT_NAME"
+            exit 1
+          fi
+
+          owner_lc="$(printf '%s' "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          repo_lc="$(printf '%s' "$REPOSITORY_NAME" | tr '[:upper:]' '[:lower:]')"
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "original_head_sha=$ORIGINAL_HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "build_sha=$BUILD_SHA" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$CHECKOUT_REF" >> "$GITHUB_OUTPUT"
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+          echo "image_name=ghcr.io/${owner_lc}/${repo_lc}-node" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
+
+      - uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
+        with:
+          version: 9.12.2
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace packages
+        run: pnpm packages:build
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push node
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          target: runner
+          push: true
+          tags: ${{ needs.resolve.outputs.image_name }}:${{ needs.resolve.outputs.image_tag }}
+          build-args: |
+            BUILD_SHA=${{ needs.resolve.outputs.build_sha }}
+          cache-from: type=gha,scope=node-template-app
+          cache-to: type=gha,mode=max,scope=node-template-app
+
+      - name: Verify pushed image
+        run: docker buildx imagetools inspect "${{ needs.resolve.outputs.image_name }}:${{ needs.resolve.outputs.image_tag }}"

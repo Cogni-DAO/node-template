@@ -6,12 +6,14 @@
   "scripts": {
     "build": "pnpm build:packages && pnpm build:app",
     "build:packages": "pnpm -r --if-present --filter \"./packages/**\" --filter \"./graphs\" build && tsc -b packages/*/tsconfig.json packages/langgraph-graphs/tsconfig.build.json packages/doltgres-schema/tsconfig.json",
+    "packages:build": "pnpm build:packages",
     "build:app": "pnpm --filter @cogni/node-template-app build",
     "check:workflow": "node scripts/check-node-ci-workflow.mjs",
     "conductor:setup": "bash scripts/conductor-worktree-setup.sh",
     "typecheck": "pnpm --filter @cogni/node-template-graphs typecheck && pnpm --filter @cogni/node-template-doltgres-schema typecheck && pnpm --filter @cogni/node-template-app typecheck",
     "test": "pnpm --filter @cogni/node-template-graphs test && pnpm --filter @cogni/node-template-app test",
-    "check": "pnpm check:workflow && pnpm build:packages"
+    "test:ci": "pnpm test",
+    "check": "pnpm check:workflow && pnpm packages:build && pnpm typecheck && pnpm test:ci"
   },
   "pnpm": {
     "overrides": {

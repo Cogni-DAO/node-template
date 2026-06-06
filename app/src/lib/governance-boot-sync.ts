@@ -43,7 +43,7 @@ export interface GovernanceBootSyncDeps {
 
 /** Resolve config straight from process.env (instrumentation runs before the env framework). */
 export function resolveBootSyncConfig(
-  env: NodeJS.ProcessEnv
+  env: Partial<NodeJS.ProcessEnv>
 ): GovernanceBootSyncConfig {
   return {
     port: Number(env.PORT ?? 3000),
