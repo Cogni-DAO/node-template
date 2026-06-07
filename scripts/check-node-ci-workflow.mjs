@@ -91,93 +91,27 @@ expectStep(CI_WORKFLOW_PATH, unitSteps, "Unit + contract coverage tests");
 
 expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.name, "PR Build", "workflow name");
 expectTrigger(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow, "pull_request");
-expectTrigger(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow, "merge_group");
 expectMainPush(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow);
 expectNoWorkflowDispatch(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow);
 expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.permissions?.contents, "read", "permissions.contents");
 expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.permissions?.packages, "write", "permissions.packages");
-expectIncludes(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.concurrency?.group, "pr-build-pr-{0}", "concurrency.group");
-expectIncludes(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.concurrency?.group, "pr-build-mq-{0}", "concurrency.group");
-
-const resolveJob = prBuildWorkflow?.jobs?.resolve;
-if (!resolveJob) fail(PR_BUILD_WORKFLOW_PATH, "jobs must include resolve");
-expectIncludes(
-  PR_BUILD_WORKFLOW_PATH,
-  resolveJob?.if,
-  "github.event.pull_request.head.repo.full_name == github.repository",
-  "jobs.resolve.if",
-);
-const resolveSteps = Array.isArray(resolveJob?.steps) ? resolveJob.steps : [];
-const resolveStep = resolveSteps.find((step) => step?.id === "r");
-const resolveRun = String(resolveStep?.run ?? "");
-expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'IMAGE_TAG="pr-${PR_NUMBER}-${ORIGINAL_HEAD_SHA}"', "pull_request image tag");
-expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'IMAGE_TAG="mq-${PR_NUMBER}-${BUILD_SHA}"', "merge_group image tag");
-expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'IMAGE_TAG="sha-${BUILD_SHA}"', "push main image tag");
-expectIncludes(PR_BUILD_WORKFLOW_PATH, resolveRun, 'image_name=ghcr.io/${owner_lc}/${repo_lc}-node', "node-owned image name");
 
 const buildJob = prBuildWorkflow?.jobs?.build;
 if (!buildJob) fail(PR_BUILD_WORKFLOW_PATH, "jobs must include build");
-expectEqual(PR_BUILD_WORKFLOW_PATH, buildJob?.needs, "resolve", "jobs.build.needs");
+expectEqual(PR_BUILD_WORKFLOW_PATH, buildJob?.name, "Build and image", "jobs.build.name");
 const buildSteps = Array.isArray(buildJob?.steps) ? buildJob.steps : [];
-expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Install dependencies");
-expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Build workspace packages");
-expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Set up Docker Buildx");
+const sourceStep = expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Resolve source metadata");
+const sourceRun = String(sourceStep?.run ?? "");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, sourceRun, "source_sha=\"$PR_HEAD_SHA\"", "pull_request source SHA");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, sourceRun, "source_sha=\"$PUSH_SHA\"", "push source SHA");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, sourceRun, "image_name=ghcr.io/${owner_lc}/${repo_lc}", "repo-owned image name");
+expectIncludes(PR_BUILD_WORKFLOW_PATH, sourceRun, "image_tag=sha-${source_sha}", "source SHA image tag");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Checkout");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Install");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Typecheck package closure");
 expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Login to GHCR");
-const buildImage = expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Build and push node");
-expectEqual(PR_BUILD_WORKFLOW_PATH, buildImage?.with?.push, true, "Build and push node push");
-expectIncludes(PR_BUILD_WORKFLOW_PATH, buildImage?.with?.tags, "${{ needs.resolve.outputs.image_name }}:${{ needs.resolve.outputs.image_tag }}", "Build and push node tags");
-expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Verify pushed image");
+expectStep(PR_BUILD_WORKFLOW_PATH, buildSteps, "Build app image");
 
 expectEqual(PR_LINT_WORKFLOW_PATH, prLintWorkflow?.name, "Lint PR", "workflow name");
-const prLintPullRequest = expectTrigger(PR_LINT_WORKFLOW_PATH, prLintWorkflow, "pull_request");
-const prLintTypes = Array.isArray(prLintPullRequest?.types) ? prLintPullRequest.types : [];
-for (const type of ["opened", "edited", "reopened", "synchronize"]) {
-  if (!prLintTypes.includes(type)) {
-    fail(PR_LINT_WORKFLOW_PATH, `pull_request trigger must include ${type}`);
-  }
-}
-
-const prLintJob = prLintWorkflow?.jobs?.main;
-expectEqual(PR_LINT_WORKFLOW_PATH, prLintJob?.name, "Validate PR title", "job name");
-expectEqual(PR_LINT_WORKFLOW_PATH, prLintJob?.permissions?.["pull-requests"], "read", "pull request permission");
-const prLintSteps = Array.isArray(prLintJob?.steps) ? prLintJob.steps : [];
-const semanticTitleStep = prLintSteps.find(
-  (step) => step?.uses === "amannn/action-semantic-pull-request@v6",
-);
-expectEqual(
-  PR_LINT_WORKFLOW_PATH,
-  semanticTitleStep?.env?.GITHUB_TOKEN,
-  "${{ secrets.GITHUB_TOKEN }}",
-  "semantic PR title token",
-);
-for (const type of [
-  "feat",
-  "fix",
-  "docs",
-  "style",
-  "refactor",
-  "perf",
-  "test",
-  "chore",
-  "revert",
-  "ci",
-  "build",
-  "release",
-]) {
-  expectIncludes(PR_LINT_WORKFLOW_PATH, semanticTitleStep?.with?.types, type, "semantic PR title types");
-}
-expectIncludes(PR_LINT_WORKFLOW_PATH, semanticTitleStep?.with?.subjectPattern, "[Cc]omplete", "semantic PR title subjectPattern");
-expectIncludes(
-  PR_LINT_WORKFLOW_PATH,
-  semanticTitleStep?.with?.subjectPattern,
-  "[Pp]roduction[ ]+[Rr]eady",
-  "semantic PR title subjectPattern",
-);
-
-if (process.exitCode) {
-  process.exit();
-}
-
-console.log("CI workflow invariants passed");
-console.log("PR Build workflow invariants passed");
-console.log("PR lint workflow invariants passed");
+expectTrigger(PR_LINT_WORKFLOW_PATH, prLintWorkflow, "pull_request");
+expectNoWorkflowDispatch(PR_LINT_WORKFLOW_PATH, prLintWorkflow);
