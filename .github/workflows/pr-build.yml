@@ -2,6 +2,7 @@ name: PR Build
 
 on:
   pull_request:
+  merge_group:
   push:
     branches: [main]
 
@@ -9,54 +10,105 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: pr-build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build:
-    name: Build and image
+  resolve:
     runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.r.outputs.source_sha }}
+      checkout_ref: ${{ steps.r.outputs.checkout_ref }}
+      image_name: ${{ steps.r.outputs.image_name }}
+      image_tag: ${{ steps.r.outputs.image_tag }}
+      should_push: ${{ steps.r.outputs.should_push }}
+      ref_name: ${{ steps.r.outputs.ref_name }}
     steps:
       - name: Resolve source metadata
-        id: source
+        id: r
         env:
           EVENT_NAME: ${{ github.event_name }}
           PUSH_SHA: ${{ github.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PR_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          MQ_HEAD_REF: ${{ github.event.merge_group.head_ref }}
           REPOSITORY: ${{ github.repository }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           set -euo pipefail
           if [ "$EVENT_NAME" = "pull_request" ]; then
             source_sha="$PR_HEAD_SHA"
+            checkout_ref="$PR_HEAD_SHA"
+            ref_name="$PR_HEAD_REF"
             if [ "$PR_HEAD_REPO" = "$REPOSITORY" ]; then
               should_push=true
             else
               should_push=false
             fi
-          else
+          elif [ "$EVENT_NAME" = "merge_group" ]; then
             source_sha="$PUSH_SHA"
+            checkout_ref="$PUSH_SHA"
+            ref_name="${MQ_HEAD_REF#refs/heads/}"
             should_push=true
+          elif [ "$EVENT_NAME" = "push" ]; then
+            source_sha="$PUSH_SHA"
+            checkout_ref="$PUSH_SHA"
+            ref_name="$REF_NAME"
+            should_push=true
+          else
+            echo "::error::Unsupported event: $EVENT_NAME"
+            exit 1
           fi
 
           owner_lc="$(printf '%s' "$REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
           repo_lc="$(printf '%s' "${REPOSITORY#*/}" | tr '[:upper:]' '[:lower:]')"
 
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
+          echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
           echo "image_name=ghcr.io/${owner_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
           echo "image_tag=sha-${source_sha}" >> "$GITHUB_OUTPUT"
           echo "should_push=$should_push" >> "$GITHUB_OUTPUT"
+          echo "ref_name=$ref_name" >> "$GITHUB_OUTPUT"
 
+  detect:
+    needs: resolve
+    runs-on: ubuntu-latest
+    outputs:
+      has_targets: ${{ steps.detect.outputs.has_targets }}
+      targets_json: ${{ steps.detect.outputs.targets_json }}
+      targets_csv: ${{ steps.detect.outputs.targets }}
+    steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
-          ref: ${{ steps.source.outputs.source_sha }}
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
+
+      - name: Detect node image targets
+        id: detect
+        run: node scripts/ci/detect-node-build-targets.mjs
+
+  build:
+    needs: [resolve, detect]
+    if: needs.detect.outputs.has_targets == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target: ${{ fromJson(needs.detect.outputs.targets_json) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
 
       - name: Set up pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9.12.2
+        uses: pnpm/action-setup@c5ba7f7862a0f64c1b1a05fbac13e0b8e86ba08c # v4
 
       - name: Set up Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: pnpm
@@ -71,7 +123,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
-        if: steps.source.outputs.should_push == 'true'
+        if: needs.resolve.outputs.should_push == 'true'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
@@ -79,17 +131,82 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build app image
+        id: image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           target: runner
-          push: ${{ steps.source.outputs.should_push == 'true' }}
-          tags: ${{ steps.source.outputs.image_name }}:${{ steps.source.outputs.image_tag }}
+          push: ${{ needs.resolve.outputs.should_push == 'true' }}
+          tags: ${{ needs.resolve.outputs.image_name }}:${{ needs.resolve.outputs.image_tag }}
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
-            org.opencontainers.image.revision=${{ steps.source.outputs.source_sha }}
+            org.opencontainers.image.revision=${{ needs.resolve.outputs.source_sha }}
           build-args: |
-            BUILD_SHA=${{ steps.source.outputs.source_sha }}
+            BUILD_SHA=${{ needs.resolve.outputs.source_sha }}
           cache-from: type=gha,scope=node-template-app
           cache-to: type=gha,mode=max,scope=node-template-app
+
+      - name: Write build fragment
+        env:
+          OUTPUT_FILE: ${{ runner.temp }}/build-fragment-${{ matrix.target }}.json
+          TARGET: ${{ matrix.target }}
+          IMAGE_NAME: ${{ needs.resolve.outputs.image_name }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          DIGEST: ${{ steps.image.outputs.digest }}
+          REPOSITORY: ${{ github.repository }}
+        run: node scripts/ci/write-node-build-fragment.mjs
+
+      - name: Upload build fragment
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr-build-fragment-${{ matrix.target }}-${{ needs.resolve.outputs.source_sha }}
+          path: ${{ runner.temp }}/build-fragment-${{ matrix.target }}.json
+          retention-days: 1
+          if-no-files-found: error
+          overwrite: true
+
+  manifest:
+    needs: [resolve, detect, build]
+    if: |
+      always() &&
+      needs.detect.result == 'success' &&
+      (needs.build.result == 'success' || needs.build.result == 'skipped')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
+        with:
+          ref: ${{ needs.resolve.outputs.checkout_ref }}
+
+      - name: Download build fragments
+        if: needs.detect.outputs.has_targets == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ runner.temp }}/build-fragments
+          pattern: pr-build-fragment-*-${{ needs.resolve.outputs.source_sha }}
+          merge-multiple: true
+
+      - name: Write build manifest
+        env:
+          FRAGMENTS_DIR: ${{ runner.temp }}/build-fragments
+          MANIFEST_FILE: ${{ runner.temp }}/build-manifest.json
+          IMAGE_NAME: ${{ needs.resolve.outputs.image_name }}
+          IMAGE_TAG: ${{ needs.resolve.outputs.image_tag }}
+          SOURCE_SHA: ${{ needs.resolve.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_ATTEMPT: ${{ github.run_attempt }}
+          WORKFLOW_NAME: ${{ github.workflow }}
+          REF_NAME: ${{ needs.resolve.outputs.ref_name }}
+        run: node scripts/ci/write-node-build-manifest.mjs
+
+      - name: Upload build manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: build-manifest-${{ needs.resolve.outputs.source_sha }}
+          path: ${{ runner.temp }}/build-manifest.json
+          retention-days: 7
+          if-no-files-found: error
+          overwrite: true
