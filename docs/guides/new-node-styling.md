@@ -16,6 +16,8 @@ tags: [nodes, styling, ui]
 
 Each Cogni node owns its visual identity while sharing the app shell and layout patterns. The first pass usually means editing five files under `app/src/`.
 
+> **Design quality:** this guide is the _where_ (which files to edit). For the _what_, use the `node-styling` skill (`.claude/skills/node-styling/`) — it makes the mission the driver and routes the homepage build to `/frontend-design`. Don't ship a one-token recolor and call it a customization; design the homepage for the mission.
+
 ## 1. Logo and Name
 
 Files:
