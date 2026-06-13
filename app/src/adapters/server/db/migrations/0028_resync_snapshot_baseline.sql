@@ -1,0 +1,11 @@
+-- Migration: Resync the drizzle snapshot baseline to current reality. NO-OP SQL by design.
+--
+-- Why this exists: the snapshot chain was frozen at 0023. Hand-written
+-- migrations 0024-0027 emit no _snapshot.json, so `drizzle-kit generate` diffed
+-- schema TS against the stale 0023 snapshot and emitted already-applied DDL
+-- (connections / openai-compatible provider schema). This migration ships a
+-- fresh 0028_snapshot.json so future `db:generate` produces a clean, minimal diff.
+--
+-- The SQL is intentionally empty: fresh DBs apply 0000..0027 before this file,
+-- and deployed DBs already have those schema changes. This is only a snapshot
+-- baseline repair, enforced going forward by scripts/db/check-generate-clean.mjs.

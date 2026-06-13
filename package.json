@@ -10,10 +10,15 @@
     "build:app": "pnpm --filter @cogni/node-template-app build",
     "check:workflow": "node scripts/check-node-ci-workflow.mjs",
     "conductor:setup": "bash scripts/conductor-worktree-setup.sh",
+    "db:generate": "tsx node_modules/drizzle-kit/bin.cjs generate --config=drizzle.config.ts",
+    "db:check": "pnpm db:check:drizzle && pnpm db:check:generate-clean",
+    "db:check:drizzle": "DATABASE_URL=postgres://check@localhost:0/check tsx node_modules/drizzle-kit/bin.cjs check --config=drizzle.config.ts",
+    "db:check:generate-clean": "node scripts/db/check-generate-clean.mjs",
+    "db:migrate:direct": "tsx node_modules/drizzle-kit/bin.cjs migrate --config=drizzle.config.ts",
     "typecheck": "pnpm --filter @cogni/node-template-graphs typecheck && pnpm --filter @cogni/node-template-doltgres-schema typecheck && pnpm --filter @cogni/node-template-app typecheck",
     "test": "pnpm --filter @cogni/node-template-graphs test && pnpm --filter @cogni/node-template-app test",
     "test:ci": "pnpm test",
-    "check": "pnpm check:workflow && pnpm packages:build && pnpm typecheck && pnpm test:ci"
+    "check": "pnpm check:workflow && pnpm db:check && pnpm packages:build && pnpm typecheck && pnpm test:ci"
   },
   "pnpm": {
     "overrides": {

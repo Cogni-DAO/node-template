@@ -129,6 +129,29 @@ export async function setup() {
     );
   }
 
+  // ── Preflight: every table with a FK to users must have RLS enabled ──────
+  // Catalog-derived (no hardcoded list): any public base table with a foreign
+  // key referencing `users` is tenant-scoped and MUST have row-level security.
+  // Combined with the FORCE check above: FK->users => ENABLE => FORCE.
+  // deny-all (ENABLE+FORCE, no policy) is accepted for service-role-only tables.
+  const coverageCheck = await c.exec([
+    "bash",
+    "-c",
+    `PGPASSWORD='${APP_DB_PASSWORD}' psql -h localhost -p 5432 -U ${APP_DB_USER} -d ${APP_DB_NAME} -tAc "SELECT DISTINCT c.relname FROM pg_constraint con JOIN pg_class c ON c.oid = con.conrelid JOIN pg_class ref ON ref.oid = con.confrelid JOIN pg_namespace n ON n.oid = c.relnamespace WHERE con.contype = 'f' AND ref.relname = 'users' AND n.nspname = 'public' AND c.relkind = 'r' AND NOT c.relrowsecurity"`,
+  ]);
+  const uncoveredUserTables = coverageCheck.output
+    .trim()
+    .split("\n")
+    .map((r) => r.trim())
+    .filter(Boolean);
+  if (uncoveredUserTables.length > 0) {
+    throw new Error(
+      `Preflight failed: tables with a FK to users lack RLS: ${uncoveredUserTables.join(", ")}. ` +
+        `Every tenant-scoped table (a foreign key to users) must ENABLE + FORCE row-level security. ` +
+        `Add an owner-scoped policy, or ENABLE+FORCE with no policy (deny-all) if the table is service-role-only.`
+    );
+  }
+
   // Sanity: at least one table should have RLS enabled (catch missing migration)
   const rlsCountCheck = await c.exec([
     "bash",
