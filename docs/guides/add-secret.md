@@ -14,7 +14,7 @@ tags: [secrets, nodes]
 
 # Add a Node Secret
 
-A node developer owns the secret declaration and typed consumption. The deploy-env owner writes the value and reconciles the pod.
+A node developer owns the secret declaration and typed consumption. The value is written through the operator — a node-owner can now self-serve it with only an API key (no kubectl, no OpenBao token).
 
 ## Secret or Plain Config
 
@@ -24,7 +24,7 @@ Plain non-sensitive config belongs in typed app config and the operator-owned de
 
 ## 1. Declare the Shape
 
-If `.cogni/secrets-catalog.yaml` does not exist, create it. Add one entry for the node-owned key:
+If `.cogni/secrets-catalog.yaml` does not exist, create it (a commented stub ships in this template). Add one entry for the node-owned key:
 
 ```yaml
 - name: MY_NEW_KEY
@@ -47,17 +47,39 @@ Read `process.env.MY_NEW_KEY` through the node's typed env boundary. Required se
 
 Do not log secret values, request headers, tokens, cookies, or full vendor payloads.
 
-## 3. Value Write
+## 3. Set the Value
 
-The value does not enter git, PR comments, chat, or committed YAML.
+The value never enters git, PR comments, chat, or committed YAML. Two paths write it to OpenBao:
 
-For Cogni-managed deploy environments, the deploy-env owner writes the value through the operator-side OpenBao path:
+**Self-serve via the operator (you, the node owner — recommended).** Granted OpenFGA
+`secrets_manager` on this node, you set the value through the operator with only your
+**API key** — no kubeconfig, no OpenBao writer token:
+
+```
+POST https://<operator-host>/api/v1/nodes/<node-id>/secrets
+Authorization: Bearer <your-api-key>
+content-type: application/json
+
+{ "key": "MY_NEW_KEY", "value": "…", "op": "set" }     # op:"rotate" to rotate
+
+→ 200 { "written": true, "version": <n>, "path": "cogni/<env>/<node>/MY_NEW_KEY" }
+```
+
+The operator authorizes the write per-node (`can_manage_secrets`), confirms `MY_NEW_KEY`
+is declared in this node's catalog (step 1), and writes it with its **own** in-cluster
+OpenBao identity — your key never carries cluster custody. ESO + Stakater Reloader then
+carry the value into the running pod. Confirm with the `version` in the response (no
+`kubectl` needed).
+
+**Ops / deploy-env owner (fallback).** Whoever holds the env's OpenBao writer role can
+also write it directly:
 
 ```bash
 pnpm secrets:set <env> <node-slug> MY_NEW_KEY
 ```
 
-The operator side owns ExternalSecret wiring, pod `envFrom`, DB/DNS provisioning, and rollout. A node PR should not edit those surfaces.
+Either way, the operator side owns ExternalSecret wiring, pod `envFrom`, DB/DNS
+provisioning, and rollout. A node PR should not edit those surfaces.
 
 ## What Not to Touch
 
