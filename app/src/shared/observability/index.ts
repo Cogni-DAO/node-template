@@ -10,6 +10,18 @@
  * @public
  */
 
+import { EVENT_NAMES as NODE_SHARED_EVENT_NAMES } from "@cogni/node-shared";
+
+// App-local event registry: the shared registry plus node-local events.
+export const EVENT_NAMES = {
+  ...NODE_SHARED_EVENT_NAMES,
+  // Auth perimeter (proxy): request rejected before reaching any route handler,
+  // so the request-scoped logger never sees it — emitted directly from the proxy.
+  AUTH_PERIMETER_DENIED: "auth.perimeter.denied",
+} as const;
+
+export type EventName = (typeof EVENT_NAMES)[keyof typeof EVENT_NAMES];
+
 // --- Extracted: events, context, client (from @cogni/node-shared) ---
 // NOTE: logEvent/logRequestWarn/etc. come through ./server (which re-exports from @cogni/node-shared)
 export {
@@ -21,10 +33,7 @@ export {
   clientLogger,
   // Context
   createRequestContext,
-  // Event registry
-  EVENT_NAMES,
   type EventBase,
-  type EventName,
   type PaymentsConfirmedEvent,
   type PaymentsIntentCreatedEvent,
   type PaymentsStateTransitionEvent,

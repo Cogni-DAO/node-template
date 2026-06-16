@@ -18,8 +18,8 @@ and injects it into context. Codex needs a one-time trust (`/hooks`).
 - Default source is the operator (`https://cognidao.org/api/v1/cognition`) — the shared Cogni
   agent contract. Set `COGNI_COGNITION_URL` to **your own** node once deployed
   (`https://<your-node>/api/v1/cognition`) to serve this node's cognition.
-- Self-serve any time: `curl -fsS "$COGNI_COGNITION_URL" | jq -r .markdown`.
-- This node serves its own bundle at `GET /api/v1/cognition` (public, index-only).
+- Self-serve any time (cognition needs a principal — pass your agent key): `curl -fsS -H "Authorization: Bearer $COGNI_API_KEY" "$COGNI_COGNITION_URL" | jq -r .markdown`.
+- This node serves its own bundle at `GET /api/v1/cognition` (authed, index-only — needs a principal; `/api/v1/agent/register` stays the one public bootstrap seam).
 
 ## What you own (node-dev half)
 
