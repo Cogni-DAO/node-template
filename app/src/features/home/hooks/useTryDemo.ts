@@ -8,7 +8,7 @@
  * Invariants: No navigation until authenticated; uses existing RainbowKit + SIWE flow; persists redirect intent in sessionStorage.
  * Side-effects: IO (opens modals, navigates via router, writes sessionStorage)
  * Notes: Prevents redirect loop by completing auth BEFORE pushing to /chat. Uses sessionStorage to survive SIWE redirects.
- * Links: src/features/home/components/NewHomeHero.tsx, src/app/providers/wallet.client.tsx
+ * Links: src/features/home/components/LandingHero.tsx, src/app/providers/wallet.client.tsx
  * @public
  */
 

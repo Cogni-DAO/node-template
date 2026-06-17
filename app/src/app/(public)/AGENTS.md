@@ -53,7 +53,7 @@ pnpm build   # build for production
 
 ## Dependencies
 
-- **Internal:** `@/features/layout` (AppHeader, AppFooter), `@/features/home` (HomeStats, NewHomeHero), `@/lib/auth/server` (getServerSessionUser)
+- **Internal:** `@/features/layout` (AppHeader, AppFooter), `@/features/home` (LandingHero, ShowcaseCards, ActivityFeed, HomeStats — all copy/data in `content.ts`), `@/lib/auth/server` (getServerSessionUser)
 - **External:** next, react
 
 ## Change Protocol

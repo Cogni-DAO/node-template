@@ -65,10 +65,12 @@ export const metadata: Metadata = {
 };
 ```
 
-### 4. Homepage (`src/app/(public)/page.tsx`) — the main event
-The public landing page. Hero, CTAs, and content must sell the mission to someone who has never heard of it. Signed-in users redirect to `/chat`.
+### 4. Homepage (`src/features/home/content.ts`) — the main event
+The template ships a **full, multi-section landing page** out of the box — animated hero + live agent-stream console, a showcase-cards grid, a public activity feed of explainable signals, and a stats band. This is the same framework the Poly and Resy nodes use. You do **not** design a page from scratch and you do **not** rebuild the layout.
 
-**This is a real design task — invoke [`/frontend-design`](../../../.claude/skills) (the frontend-design skill) to build a distinctive, production-grade landing page** for the mission. Do not ship the template hero with the node name find-replaced. Picture the mission, then design the page that makes a stranger get it in five seconds.
+**Customize the page by rewriting `app/src/features/home/content.ts`.** It is the single source of all homepage copy and placeholder data (`HERO`, `AGENT_STREAM_SEQUENCES`, `SHOWCASE_*`, `FEED_*`, `STATS`). Walk it top to bottom and replace every value with copy that sells *this* node's mission to a stranger in five seconds. Keep the data shapes; change the words. The hue from step 2 flows through every section automatically.
+
+The layout components in `src/features/home/components/*` are generic — only touch them to add or remove a whole section. If you decide the mission needs a genuinely different layout, *then* reach for [`/frontend-design`](../../../.claude/skills); otherwise content + hue is the first-class path. Signed-in users redirect to `/chat`.
 
 ### 5. Chat suggested messages (`src/features/ai/components/ChatComposerExtras.tsx`)
 Tailor the welcome suggestions to the node's domain. A prediction node shows market prompts; a reservation node shows booking prompts; a knowledge node shows discovery/search prompts. Generic prompts here are the same anti-pattern as a generic homepage.
@@ -77,12 +79,13 @@ Tailor the welcome suggestions to the node's domain. A prediction node shows mar
 - [ ] Lucide icon chosen *for the mission* — `AppHeader.tsx` + `AppSidebar.tsx`
 - [ ] Primary hue set in `tailwind.css` (both `:root` and `.dark`, accent + sidebar follow)
 - [ ] `layout.tsx` metadata: mission-expressing title + description
-- [ ] **Homepage redesigned for the mission via `/frontend-design`** — not a recolored template
+- [ ] **`content.ts` fully rewritten for the mission** — every section (hero, agent stream, showcase cards, activity feed, stats) speaks to *this* node, not the template defaults
 - [ ] Chat suggestions tailored to the domain
 - [ ] `pnpm check` passes
 - [ ] Dev server (or candidate) shows the right icon, colors, name, AND a homepage a stranger understands
 
 ## Anti-patterns
-- Changing only the icon + hue and calling the node "customized." (90% of the job is the homepage + chat.)
-- A homepage that is the template hero with the name swapped.
+- Changing only the icon + hue and calling the node "customized." (90% of the job is `content.ts` + chat.)
+- Shipping `content.ts` with the template defaults still in it (the "community-owned" hero, the v2-roadmap cards). A stranger should see *your* mission, not the scaffold.
+- Rebuilding the homepage layout from scratch when content + hue would have done the job.
 - An icon/palette with no stated connection to the mission.

@@ -96,11 +96,32 @@ export const metadata: Metadata = {
 
 ## 4. Homepage
 
-File:
+Primary file:
 
-- `app/src/app/(public)/page.tsx`
+- `app/src/features/home/content.ts` ← **edit this**
 
-Customize the public landing page hero, calls to action, and domain-specific copy. Signed-in users redirect to `/chat`.
+The template now ships a full, multi-section landing page (the same shape the Poly
+and Resy nodes use): an animated hero with a live agent-stream console, a "showcase
+cards" grid, a public "activity feed" of explainable signals, and a closing stats
+band. You do **not** rebuild this layout per node — the layout components in
+`app/src/features/home/components/*` are generic and read everything from
+`content.ts`.
+
+A first-class customization is **words + colors**:
+
+1. Open `content.ts` and walk it top to bottom. Replace every placeholder —
+   `HERO`, `AGENT_STREAM_SEQUENCES`, `SHOWCASE_*`, `FEED_*`, `STATS` — with copy and
+   data that sell **your** node's mission. Keep the data _shapes_; change the values.
+2. Set your brand hue in `tailwind.css` (section 2 above). The hero gradient,
+   pills, bars, and feed all follow `--primary` / `--accent-*` automatically.
+
+That's it for most nodes. The page (`app/src/app/(public)/page.tsx`) composes the
+sections and redirects signed-in users to `/chat`; you rarely touch it. Only edit
+the components in `components/*` if you need to add or remove a whole section.
+
+> Reference customizations: Poly (prediction markets — "Bet smarter. Together.")
+> and Resy (reservations) both started from this exact framework and changed only
+> content + hue. Aim for that bar, not a one-token recolor.
 
 ## 5. Chat Defaults
 
@@ -117,7 +138,7 @@ Tailor the default graph and graph list to the node's domain. Prediction-market 
 - [ ] Update visible node name and external links.
 - [ ] Pick a primary hue and update `tailwind.css` light and dark variables.
 - [ ] Set `layout.tsx` metadata.
-- [ ] Customize the public homepage.
+- [ ] Customize the public homepage by rewriting `app/src/features/home/content.ts` (hero, agent stream, showcase cards, activity feed, stats).
 - [ ] Customize chat graph defaults and suggestions.
 - [ ] Verify `pnpm check` passes.
 - [ ] Verify the dev server shows the expected logo, colors, and name.
