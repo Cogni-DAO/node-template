@@ -95,5 +95,15 @@ jobs:
       - name: Build workspace packages
         run: pnpm packages:build
 
+      # The repo/ripgrep-adapter component test shells out to `rg`; its adapter
+      # ships in the scaffold, so the binary must be present (mirrors operator).
+      - name: Install ripgrep
+        uses: taiki-e/install-action@735e5933943122c5ac182670a935f54a949265c1 # v2
+        with:
+          tool: ripgrep
+
+      - name: Verify ripgrep
+        run: rg --version
+
       - name: Component tests (testcontainers)
         run: pnpm test:component

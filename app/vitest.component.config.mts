@@ -32,6 +32,14 @@ export default defineConfig({
   plugins: [tsconfigPaths({ projects: ["./tsconfig.test.json"] })],
   test: {
     include: ["tests/component/**/*.int.test.ts"],
+    // The sandbox `docker/` component tests require the cogni-sandbox-runtime image,
+    // whose build script + `services/sandbox-runtime` source are NOT carried by the
+    // node-template scaffold (only the consuming adapter is). Until that runtime is
+    // ported into the template, this lane cannot gate them — exclude rather than
+    // ship a job that can never go green. Forks that adopt the sandbox runtime
+    // re-include this dir alongside the image build. (ripgrep tests DO run — their
+    // adapter ships and CI installs the binary.)
+    exclude: ["tests/component/docker/**"],
     environment: "node",
     setupFiles: ["./tests/setup.ts"],
     globalSetup: ["./tests/component/setup/testcontainers-postgres.global.ts"],
