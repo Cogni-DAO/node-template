@@ -65,9 +65,11 @@ content-type: application/json
 → 200 { "written": true, "version": <n>, "path": "cogni/<env>/<node>/MY_NEW_KEY" }
 ```
 
-The operator authorizes the write per-node (`can_manage_secrets`), confirms `MY_NEW_KEY`
-is declared in this node's catalog (step 1), and writes it with its **own** in-cluster
-OpenBao identity — your key never carries cluster custody. ESO + Stakater Reloader then
+The operator authorizes the write per-node (`can_manage_secrets`), then writes
+`MY_NEW_KEY` into your node's own namespace with its **own** in-cluster OpenBao
+identity — your key never carries cluster custody. You own your whole namespace, so
+new keys work immediately; only substrate-managed keys (DB passwords, DSNs, AUTH_SECRET)
+are reserved. ESO + Stakater Reloader then
 carry the value into the running pod. Confirm with the `version` in the response (no
 `kubectl` needed).
 
