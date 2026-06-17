@@ -9,6 +9,7 @@ next-env.d.ts
 .env*
 !.env.example
 !.env.local.example
+!.env.cogni.example
 .local-auth
 .DS_Store
 .turbo
