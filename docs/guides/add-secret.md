@@ -73,15 +73,18 @@ are reserved. ESO + Stakater Reloader then
 carry the value into the running pod. Confirm with the `version` in the response (no
 `kubectl` needed).
 
-**Ops / deploy-env owner (fallback).** Whoever holds the env's OpenBao writer role can
-also write it directly:
+Use **your operator-registered API key** (the one the operator knows you by — the
+same `.env.cogni`/agent key you authenticate every operator call with). You do **not**
+need cluster access, a kubeconfig, an OpenBao token, or `kubectl` — the operator's own
+CI/CD identity performs the write; your key only proves *you're allowed*.
 
-```bash
-pnpm secrets:set <env> <node-slug> MY_NEW_KEY
-```
+> `pnpm secrets:set …` is an **operator/admin tool**, not a node-dev step — it needs
+> cluster custody (OpenBao writer token via port-forward) that node devs don't have.
+> If the operator hasn't yet provisioned the self-serve writer on your env, ask the
+> operator to set the value once via that tool; steady-state is the API above.
 
-Either way, the operator side owns ExternalSecret wiring, pod `envFrom`, DB/DNS
-provisioning, and rollout. A node PR should not edit those surfaces.
+The operator side owns ExternalSecret wiring, pod `envFrom`, DB/DNS provisioning, and
+rollout. A node PR never edits those surfaces.
 
 ## What Not to Touch
 
