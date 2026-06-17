@@ -65,7 +65,7 @@ export const KnowledgeContributionEditSchema = z
       entry: KnowledgeEntryInputSchema,
     }),
     z.object({
-      op: z.literal("deprecate"),
+      op: z.literal("delete"),
       targetRowId: z.string().min(1).max(256),
       reason: z.string().min(1).max(512),
     }),

@@ -154,7 +154,7 @@ export function createContributionService(
     for (const edit of edits) {
       // deprecate + cite carry no knowledge-entry content to gate — a cite is
       // a typed edge between existing rows. Pass them through untouched.
-      if (edit.op === "deprecate" || edit.op === "cite") {
+      if (edit.op === "delete" || edit.op === "cite") {
         out.push(edit);
         continue;
       }
