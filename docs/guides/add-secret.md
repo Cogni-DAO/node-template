@@ -2,13 +2,13 @@
 id: guide.add-secret
 type: guide
 title: Add a Node Secret
-status: draft
-trust: draft
+status: active
+trust: reviewed
 summary: Node-repo half of adding a node-specific secret without touching operator deploy plumbing.
 read_when: Adding a credential or API key that this node's app code consumes.
 owner: derekg1729
 created: 2026-06-05
-verified: null
+verified: 2026-06-18
 tags: [secrets, nodes]
 ---
 
@@ -51,9 +51,11 @@ Do not log secret values, request headers, tokens, cookies, or full vendor paylo
 
 The value never enters git, PR comments, chat, or committed YAML. Two paths write it to OpenBao:
 
-**Self-serve via the operator (you, the node owner — recommended).** Granted OpenFGA
-`secrets_manager` on this node, you set the value through the operator with only your
-**API key** — no kubeconfig, no OpenBao writer token:
+**Self-serve via the operator (you, the node owner — the default, agent-friendly path).**
+First, an owner grants you OpenFGA `secrets_manager` on this node (operator Agents UI →
+"Manage secrets" — a distinct, least-privilege grant, not bundled with "Flight"). Then you
+set the value through the operator with only your **API key** — no kubeconfig, no OpenBao
+writer token:
 
 ```
 POST https://<operator-host>/api/v1/nodes/<node-id>/secrets
@@ -65,13 +67,16 @@ content-type: application/json
 → 200 { "written": true, "version": <n>, "path": "cogni/<env>/<node>/MY_NEW_KEY" }
 ```
 
-The operator authorizes the write per-node (`can_manage_secrets`), then writes
-`MY_NEW_KEY` into your node's own namespace with its **own** in-cluster OpenBao
-identity — your key never carries cluster custody. You own your whole namespace, so
-new keys work immediately; only substrate-managed keys (DB passwords, DSNs, AUTH_SECRET)
-are reserved. ESO + Stakater Reloader then
-carry the value into the running pod. Confirm with the `version` in the response (no
-`kubectl` needed).
+The operator authorizes the write **per-node** (`can_manage_secrets`, fail-closed), refuses
+**reserved substrate keys** (your node owns its own namespace — any non-reserved key is
+allowed; the catalog in step 1 is for typed consumption + shape, **not** a write gate), and
+writes with its **own** in-cluster OpenBao identity — your key never carries cluster custody.
+ESO + Stakater Reloader then carry the value into the running pod. Confirm with the `version`
+in the response (no `kubectl` needed).
+
+> **`503 secrets_plane_config_missing`?** This env's operator doesn't have the secrets-writer
+> identity provisioned yet. candidate-a is live; preview/production roll out with the operator
+> deploy — ping the operator team rather than reaching for the CLI.
 
 **Ops / deploy-env owner (fallback).** Whoever holds the env's OpenBao writer role can
 also write it directly:
