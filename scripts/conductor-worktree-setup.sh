@@ -11,7 +11,17 @@ set -euo pipefail
 
 DEFAULT_BRANCH="${CONDUCTOR_DEFAULT_BRANCH:-main}"
 WORKSPACE_ROOT="${CONDUCTOR_WORKSPACE_PATH:-$(pwd)}"
-AUTH_ROOT="${COGNI_NODE_AUTH_ROOT:-${COGNI_TEMPLATE_ROOT:-${CONDUCTOR_ROOT_PATH:-$HOME/dev/cogni-template}}}"
+
+# AUTH_ROOT is THIS node's canonical (main) workspace checkout — the single place
+# that holds .env.cogni and .local-auth. A Conductor worktree spawn is a git worktree
+# of that main checkout, so we derive its path from git: no hardcoded or personal path,
+# and never a reach into an unrelated repo. Override with COGNI_NODE_AUTH_ROOT if needed.
+derive_main_workspace() {
+  local common_dir
+  common_dir="$(git -C "$WORKSPACE_ROOT" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  (cd "$WORKSPACE_ROOT" && cd "$(dirname "$common_dir")" && pwd)
+}
+AUTH_ROOT="${COGNI_NODE_AUTH_ROOT:-${CONDUCTOR_ROOT_PATH:-$(derive_main_workspace || true)}}"
 
 warn() {
   printf 'warn: %s\n' "$1" >&2
@@ -22,6 +32,10 @@ refresh_workspace_base_ref() {
 }
 
 refresh_auth_root_main() {
+  if [[ -z "$AUTH_ROOT" || "$AUTH_ROOT" == "$WORKSPACE_ROOT" ]]; then
+    return
+  fi
+
   if ! git -C "$AUTH_ROOT" rev-parse --show-toplevel >/dev/null 2>&1; then
     warn "auth root is not a git checkout: $AUTH_ROOT"
     return
@@ -53,14 +67,21 @@ link_from_auth_root() {
   local name="$1"
   local src_path="$AUTH_ROOT/$name"
 
+  if [[ -z "$AUTH_ROOT" || "$AUTH_ROOT" == "$WORKSPACE_ROOT" ]]; then
+    warn "no separate main-workspace root resolved; using local $name as-is, skipped link"
+    return
+  fi
+
   if [[ ! -e "$src_path" ]]; then
     warn "$src_path missing; skipped $name symlink"
     return
   fi
 
   if [[ -e "$name" && ! -L "$name" ]]; then
-    printf '%s exists and is not a symlink; move it aside before running setup\n' "$name" >&2
-    exit 1
+    # A real (non-symlink) file is the source of truth — e.g. a node ships its own
+    # node-scoped .env.cogni that must not be replaced by the auth-root copy.
+    warn "$name is a real file, not a symlink; keeping it and skipping the auth-root link"
+    return
   fi
 
   ln -sfn "$src_path" "$name"
