@@ -9,7 +9,7 @@
 
 ## Purpose
 
-Protected (authenticated) pages wrapped in `SidebarProvider` + `AppSidebar` + `AppTopBar` shell. Auth enforced by layout-level `useSession()` guard — all child routes require authentication.
+Protected (authenticated) pages wrapped in `SidebarProvider` + `AppSidebar` + `AppTopBar` shell. Primary auth routing is enforced by `proxy.ts` before this shell renders; server page checks are defense-in-depth.
 
 ## Pointers
 
@@ -35,7 +35,7 @@ Protected (authenticated) pages wrapped in `SidebarProvider` + `AppSidebar` + `A
 
 ## Responsibilities
 
-- This directory **does**: Enforce authentication via `useSession()` redirect, render the sidebar layout shell (sidebar + top bar + content area).
+- This directory **does**: Render the sidebar layout shell (sidebar + top bar + content area) for authenticated app routes.
 - This directory **does not**: Handle sign-in/sign-out flows, contain business logic, manage session persistence.
 
 ## Usage
@@ -47,8 +47,8 @@ pnpm build   # build for production
 
 ## Standards
 
-- Auth guard lives in `layout.tsx` only. Do NOT add per-page auth checks.
-- Unauthenticated users are redirected to `/`. No auto sign-out — sign-out is an explicit user action.
+- Auth route coverage lives in `proxy.ts`. Add new protected top-level routes there before linking them in the shell.
+- Unauthenticated users are redirected to `/` before the app shell renders. No auto sign-out — sign-out is an explicit user action.
 - Sidebar navigation links stay within `(app)` routes. The sidebar logo links to `/chat`, not `/`.
 
 ## Dependencies

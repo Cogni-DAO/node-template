@@ -87,7 +87,7 @@ pnpm build   # build for production
 ## Route Group Conventions
 
 - **`(public)/*`**: Unauthenticated UI pages. No auth guard. Landing page, marketing, docs.
-- **`(app)/*`**: Protected UI pages. Auth enforced by `(app)/layout.tsx` using client-side `useSession()` redirect. All pages under `(app)` automatically require authentication. Do NOT add per-page auth checks.
+- **`(app)/*`**: Protected UI pages. Primary auth routing is enforced by `proxy.ts` before the app shell renders; server page checks may remain as defense-in-depth. Do NOT add client-side auth redirects.
 - **`(admin)/*`**: DAO-admin pages. Login gate via `proxy.ts` matcher; role gate via server-side `(admin)/layout.tsx` checking the SIWE wallet against `getLedgerApprovers()` (repo-spec `activity_ledger.approvers`). Non-approvers redirect to `/dashboard`. See `(admin)/AGENTS.md`.
 - **`(infra)/*`**: Infrastructure endpoints. Explicitly unauthenticated. Health checks, meta, OpenAPI specs.
 - **`api/*`**: JSON APIs. Keep under `api/v1/**` for versioned endpoints. Auth enforced per-route using `auth()` calls in route handlers (not via layout).

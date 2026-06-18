@@ -26,9 +26,11 @@ import { EVENT_NAMES, makeLogger } from "@/shared/observability";
 /** App routes that require authentication — unauthenticated visitors are redirected to /. */
 const APP_ROUTES = [
 	"/chat",
+	"/dashboard",
 	"/profile",
 	"/credits",
 	"/gov",
+	"/knowledge",
 	"/schedules",
 	"/setup",
 	"/work",
@@ -183,9 +185,11 @@ export const config = {
 	matcher: [
 		"/",
 		"/chat/:path*",
+		"/dashboard/:path*",
 		"/profile/:path*",
 		"/credits/:path*",
 		"/gov/:path*",
+		"/knowledge/:path*",
 		"/schedules/:path*",
 		"/setup/:path*",
 		"/work/:path*",
