@@ -1,79 +1,55 @@
 # Recurring work (scheduled tasks)
 
-Declare recurring work — metrics ingest, resolve loops, periodic syncs — in your
-node's `.cogni/repo-spec.yaml`. The operator reconciles each entry into a Temporal
-Schedule and runs it **on your behalf, under your node's own identity**. You write
-**zero Temporal code**.
+Run recurring work — metrics ingest, resolve loops, periodic syncs — by creating a
+**schedule** that targets one of your node's routes (or a graph). The operator
+reconciles it into a Temporal Schedule and runs it on cadence, **under your node's
+own identity**. You write **zero Temporal code**, no cron, no boot hook.
 
-> **The operator is the _trigger_, never the executor of your request path.** Scheduled
-> work runs against *your* node's routes/graphs with *your* node's grant. The managed
-> Temporal substrate is a hosted convenience — a sovereign node can later swap in its
-> own Temporal + worker behind this same contract (the schedule declaration doesn't change).
+> **One path.** Everything goes through `POST /api/v1/schedules` (the `/schedules`
+> page). `route` → `NodeTaskWorkflow` (an HTTP dispatch to your route); `graphId` →
+> `GraphRunWorkflow` (a graph run). Same converged substrate — there is no second way.
 
-## Declare it
+## 1. Build your work as a token-gated route
 
-```yaml
-# .cogni/repo-spec.yaml
-schedules:
-  - id: metrics-ingest # stable id → workflowId/scheduleId; rename = new schedule
-    cron: "*/15 * * * *" # standard 5-field cron
-    timezone: UTC # IANA tz, defaults to UTC
-    route: /api/internal/ops/metrics-ingest # http-dispatch: a route on YOUR node
-    payload: { window: "15m" } # opaque to the operator; your route owns its meaning
+Expose the work as an internal route on your node, e.g. `POST /api/internal/ops/metrics-ingest`:
 
-  - id: nightly-rollup
-    cron: "0 3 * * *"
-    graph: my-rollup-graph # graph: run one of your graphs instead of a route
-    payload: { scope: "all" }
+- accepts `Authorization: Bearer ${SCHEDULER_API_TOKEN}` (the operator dispatches with it);
+- is **idempotent** — it MUST dedup on the `Idempotency-Key` header
+  (`<nodeId>/<scheduleId>/<scheduledFor>`); delivery is at-least-once;
+- returns `200` and logs an event (so you can read it back in Loki).
+
+(Or skip the route and target a graph by `graphId` instead.)
+
+## 2. Create the schedule
+
+`POST /api/v1/schedules` (or the `/schedules` UI) — `route` **XOR** `graphId`:
+
+```jsonc
+// http-dispatch (a route on your node)
+{ "route": "/api/internal/ops/metrics-ingest", "input": { "window": "15m" }, "cron": "*/15 * * * *", "timezone": "UTC" }
+
+// graph run
+{ "graphId": "langgraph:my-rollup", "input": { "scope": "all" }, "cron": "0 3 * * *", "timezone": "UTC" }
 ```
 
-**Each entry is `route` XOR `graph`** — exactly one:
+That's it — it runs on cadence under your node's identity. `route` is **node-relative**
+(must start with `/`, no scheme / `//` / `..` — SSRF / cross-tenant guard).
 
-- **`route`** → **http-dispatch**: the operator POSTs your node-relative route on a
-  schedule. Use this for non-graph work (ingest, resolve, sync, cache warm).
-- **`graph`** → **graph run**: the operator runs one of your graphs on a schedule.
+## What you own vs what the operator owns
 
-`overlap` and `catchupWindow` are **operator-fixed** (overlap=skip, no backfill) — not
-node-tunable, so a slow run never stacks on itself.
-
-## The http-dispatch contract (read this if you use `route`)
-
-When your `route` fires, the operator sends:
-
-```
-POST https://<your-node-host><route>
-Authorization: Bearer <your node's own dispatch credential>
-Idempotency-Key: <nodeId>/<scheduleId>/<scheduledFor>
-Content-Type: application/json
-
-<your payload>
-```
-
-- **Your route MUST dedup on `Idempotency-Key`.** Deliveries are at-least-once; a key
-  your handler ignores is not idempotent. Treat the same key as the same run.
-- **`route` is relative to your own host.** Absolute or foreign URLs are rejected at
-  parse time (SSRF / cross-tenant guard) — you can only dispatch to yourself.
-- The call authenticates as **your node's tenant principal** under a per-node execution
-  grant scoped to exactly this `route`. It cannot touch another node.
-- The route should be **token-gated, internal, and side-effecting-but-idempotent**
-  (e.g. `/api/internal/ops/*`).
-
-## What you do NOT do
-
-- No Temporal SDK, no worker, no schedule CRUD — the operator owns all of that
-  (`SYSTEM_OPS_ONLY`). You declare; the operator reconciles.
-- Don't run recurring side-effects from a cron in your own container — declare a
-  schedule so it's observable, idempotent, and runs under your grant.
+| concern | owner |
+| --- | --- |
+| schedule lifecycle, Temporal, the execution grant, overlap/catchup | operator (you write none of it) |
+| the work itself + idempotency on `Idempotency-Key` | your route |
 
 ## Lifecycle
 
-- **Add/change**: edit `schedules` in your repo-spec; the operator reconciles on your
-  next provision/flight (create / update-on-drift / pause-on-removal).
-- **Remove**: delete the entry → the operator pauses it (reversible), never silently drops it.
+- **Change cadence / payload:** update the schedule (same API) — it reconciles.
+- **Stop it:** delete the schedule — it pauses, reversibly.
 
-## Availability
+## Proven
 
-Requires an operator + `@cogni/repo-spec` that ships the `schedules` block (operator
-story.5008). If `pnpm` reports `schedules` as an unknown key, your node's `@cogni/repo-spec`
-predates it — bump to the version that includes node schedules. See the operator design
-SoT: `docs/design/node-temporal-tenant-interface.md` and the `infrastructure` knowledge hub.
+Live on candidate-a: a `route` schedule created via `POST /api/v1/schedules` fired and
+dispatched to the node's route, idempotency-keyed `nodeId/scheduleId/scheduledFor`, read
+back in Loki (operator story.5008). See the operator `infrastructure` knowledge hub:
+*"How a node builds its first scheduled feature"* + *"NodeTask schedule dispatch proven live on candidate-a"*.
