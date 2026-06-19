@@ -6,10 +6,11 @@
  * Purpose: GET /api/v1/knowledge/graph — full node (entry) + edge (citation) set
  *   for the 3D knowledge graph view. Reads every domain's entries plus each
  *   entry's outgoing citations via container.knowledgeStorePort.
- * Scope: Cookie-session only (Bearer agents rejected 403, like /knowledge).
+ * Scope: Any authenticated principal (cookie-session human OR bearer agent), like /knowledge.
  *   Edges gathered from per-node outgoing citations — every citation has exactly
- *   one citing node in the set, so this yields the complete edge list.
- * Invariants: VALIDATE_IO, AUTH_VIA_GETSESSIONUSER, KNOWLEDGE_BROWSE_VIA_HTTP_REQUIRES_SESSION,
+ *   one citing node in the set, so this yields the complete edge list. Bearer
+ *   agents traverse the citation graph (link-pulling) just like the human 3D view.
+ * Invariants: VALIDATE_IO, AUTH_VIA_GETSESSIONUSER, KNOWLEDGE_READ_REQUIRES_PRINCIPAL,
  *   EDGE_ENDPOINTS_EXIST (edges whose cited target isn't in the node set are dropped).
  * Side-effects: IO (HTTP response, Doltgres reads via container port)
  * Links: docs/spec/knowledge-syntropy.md
@@ -52,19 +53,13 @@ export const GET = wrapRouteHandlerWithLogging(
     routeId: "knowledge.graph",
     auth: { mode: "required", getSessionUser },
   },
-  async (ctx, request, sessionUser) => {
+  async (ctx, _request, sessionUser) => {
     if (!sessionUser) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
-    // Mirror /api/v1/knowledge: Bearer agents must not browse the knowledge
-    // plane in v0 (KNOWLEDGE_BROWSE_VIA_HTTP_REQUIRES_SESSION).
-    const authz = request.headers.get("authorization") ?? "";
-    if (authz.toLowerCase().startsWith("bearer ")) {
-      return NextResponse.json(
-        { error: "knowledge graph requires a session cookie (v0)" },
-        { status: 403 }
-      );
-    }
+    // Any authenticated principal may read (KNOWLEDGE_READ_REQUIRES_PRINCIPAL).
+    // Mirror /api/v1/knowledge: bearer agents traverse the citation graph just
+    // like the human 3D view; per-principal x402 metering remains future work.
 
     const port = getContainer().knowledgeStorePort;
     if (!port) {

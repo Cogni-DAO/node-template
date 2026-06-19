@@ -3,10 +3,13 @@
 
 /**
  * Module: `@contracts/knowledge.domains.v1.contract`
- * Purpose: HTTP contract for the knowledge domain registry — GET list with entry counts and POST register (cookie-session only).
+ * Purpose: HTTP contract for the knowledge domain registry — GET list with entry counts and POST register.
  * Scope: Zod schemas for the wire format. Does not contain business logic, I/O, or auth policy.
  * Invariants:
- *   - DOMAIN_HTTP_COOKIE_ONLY (route enforces; contract does not).
+ *   - DOMAIN_HTTP_REQUIRES_PRINCIPAL (route enforces, contract does not): GET list
+ *     accepts any authenticated principal — session human or bearer agent
+ *     (DOMAIN_LIST_REQUIRES_PRINCIPAL); POST register accepts bearer or session
+ *     (DOMAIN_REGISTER_BEARER_OR_SESSION).
  *   - DOMAIN_REGISTRATION_IS_STICKY: no DELETE/PUT in v0.
  *   - id is short, slug-shaped (alnum, dash, underscore).
  * Side-effects: none
