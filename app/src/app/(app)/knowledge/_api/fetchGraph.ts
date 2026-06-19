@@ -8,7 +8,7 @@
  *   GET /api/v1/knowledge/graph (kept in-node, not @cogni/node-contracts, so
  *   the graph feature stays single-node-scoped).
  * Scope: Calls GET /api/v1/knowledge/graph with same-origin credentials.
- * Invariants: Cookie-session only — never sends a Bearer header (per KNOWLEDGE_BROWSE_VIA_HTTP_REQUIRES_SESSION).
+ * Invariants: Browser client — same-origin cookie credentials, never a Bearer header. The endpoint itself accepts any principal (KNOWLEDGE_READ_REQUIRES_PRINCIPAL); this UI path is cookie-only by construction.
  * Side-effects: IO
  * @internal
  */
