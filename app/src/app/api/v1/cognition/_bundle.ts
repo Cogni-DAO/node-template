@@ -31,14 +31,11 @@ import type {
  * domain expertise) is delivered live from the knowledge hub on top of this.
  */
 export const SESSION_BOOTSTRAP_INVARIANTS: readonly string[] = [
-	"Adopt exactly ONE production work item and ONE node per session (single-node-scope is a CI gate). Claim + heartbeat + link PR via /api/v1/work/items/{id}/{claims,heartbeat,pr,coordination}; coordination.nextAction is authoritative.",
-	"RECALL the node knowledge hub before designing or researching (RECALL_BEFORE_WRITE) — two planes: merged (/api/v1/knowledge?domain=) AND your own open contribution branch (GET /contributions/{id}/diff).",
-	"Every code change flows through the operator. Align to existing specs/skills/prior code before writing; refine and simplify in place over adding parallel artifacts.",
-	"Push to a feature branch and let CI verify — do not run broad local check/build suites. Monitor `gh pr checks` to green.",
-	"Definition of Done = merged AND validated on candidate-a: flight the PR, exercise the changed surface against the live deployed URL, read your own request back from Loki at the deployed SHA, then post a /validate-candidate scorecard on the PR. The posted scorecard IS the validation signal — not a work-item flag to flip.",
-	"Clean architecture: strict typing (no `any`), Zod boundaries, hexagonal layering, Pino→Loki observability, idempotent ops. Purge legacy — no backwards-compat shims unless the user asks.",
-	"Durable learning refines back into the knowledge hub (rare, recall→refine over write-new), never inline comments or docs sprawl.",
-	"A new knowledge entry nearly always cites an existing one (supports/contradicts/extends/supersedes) so the hub compounds as a DAG, not islands.",
+	"Adopt exactly ONE work item and ONE node per session (single-node-scope is a CI gate); claim + heartbeat + link the PR via /api/v1/work/items/{id}/{claims,heartbeat,pr}; coordination.nextAction is authoritative.",
+	"RECALL the node knowledge hub before designing, researching, or coding — both merged (/api/v1/knowledge?domain=) and your own open contribution branch — and refine in place over creating new.",
+	"Push a feature branch and let CI verify (gh pr checks). The operator is the deploy plane only — flight, logs, secrets — not where code, work items, or knowledge live.",
+	"Definition of Done = validated on candidate-a, not merely merged: flight the PR, exercise the live deployed surface, read your own request back from Loki at the deployed SHA, and post a /validate-candidate scorecard — that posted scorecard is the merge gate.",
+	"Recall this node's <slug>-agent-orientation entry for the operating map — architecture and observability standards, what's safe to run, what can break prod/candidate, and what to recall next — and refine it in the hub as the node changes.",
 ];
 
 const COGNITION_ENTRY_TYPES: ReadonlySet<string> = new Set([

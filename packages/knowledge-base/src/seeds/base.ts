@@ -48,6 +48,11 @@ export const BASE_KNOWLEDGE_SEEDS: NewKnowledge[] = [
       "- Deploys ship prebuilt images by SHA; verify the live build before validating.\n\n" +
       "## What to recall next\n" +
       "- `cognition-substrate-bootstrap` (why the session bundle exists) and the skills index in the session bundle. Then create this node's `<slug>-agent-orientation` and cite this entry.\n\n" +
+      "## Standards (refine for this node)\n" +
+      "- Strict typing (no `any`), Zod at boundaries, hexagonal layering, Pino→Loki observability, idempotent operations. Purge legacy — no backwards-compat shims unless asked.\n\n" +
+      "## Knowledge-hub conventions\n" +
+      "- Durable learnings refine back into the hub (recall→refine over write-new), never inline comments or docs sprawl.\n" +
+      "- A new entry nearly always cites an existing one (supports/contradicts/extends/supersedes) so the hub compounds as a DAG, not islands.\n\n" +
       "Refine whenever repo layout, scripts, CI, deploy, auth, or validation behavior changes.",
     sourceType: "human",
     confidencePct: 60,
