@@ -47,3 +47,5 @@ export COGNI_TEMPLATE_ROOT="$HOME/dev/cogni-template"
 ```
 
 The operator consumes the pushed digest and owns URL/DNS/deployment state.
+
+<!-- flock-leader e2e CICD proof — autonomous edit by the external AI agent, 2026-06-23 (6bd6e15 base) -->
