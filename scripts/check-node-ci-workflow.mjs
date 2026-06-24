@@ -93,10 +93,33 @@ expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.name, "PR Build", "workflow
 expectTrigger(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow, "pull_request");
 expectTrigger(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow, "merge_group");
 expectMainPush(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow);
-expectNoWorkflowDispatch(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow);
+// MONOREPO PARITY (bug.5057): pr-build MUST support the operator's RBAC-gated
+// trusted-build `workflow_dispatch` (build an approved fork PR head → flightable
+// image). This is the operator dispatch path, NOT a fork self-pushing — the
+// `should_push=false` fork guard below still holds. The old `expectNoWorkflowDispatch`
+// here was split-brain vs the monorepo and is removed; require the trusted-build
+// inputs instead so the dispatch contract can't silently drift.
+expectTrigger(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow, "workflow_dispatch");
+{
+  const dispatchInputs =
+    prBuildWorkflow?.on?.workflow_dispatch?.inputs ?? {};
+  for (const required of ["head_repo", "head_sha"]) {
+    if (!Object.hasOwn(dispatchInputs, required)) {
+      fail(
+        PR_BUILD_WORKFLOW_PATH,
+        `workflow_dispatch must declare the trusted-build input "${required}"`
+      );
+    }
+  }
+}
 expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.permissions?.contents, "read", "permissions.contents");
 expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.permissions?.packages, "write", "permissions.packages");
-expectEqual(PR_BUILD_WORKFLOW_PATH, prBuildWorkflow?.concurrency?.["cancel-in-progress"], true, "concurrency.cancel-in-progress");
+// cancel-in-progress must NOT cancel a push:main (publishes the deployable) or a
+// trusted dispatch (each fork build keyed by its own head_sha) — same as the monorepo.
+// So it is an expression, not a literal `true`; assert it is present.
+if (prBuildWorkflow?.concurrency?.["cancel-in-progress"] === undefined) {
+  fail(PR_BUILD_WORKFLOW_PATH, "concurrency.cancel-in-progress must be set");
+}
 
 const resolveJob = prBuildWorkflow?.jobs?.resolve;
 if (!resolveJob) fail(PR_BUILD_WORKFLOW_PATH, "jobs must include resolve");

@@ -5,14 +5,38 @@ on:
   merge_group:
   push:
     branches: [main]
+  # Operator-dispatched TRUSTED build of an approved PR head — MONOREPO PARITY
+  # (bug.5057). A fork PR's `pull_request` run is read-only and cannot push the
+  # image (should_push=false). The operator (POST /api/v1/vcs/run-ci →
+  # dispatchPrBuild), AFTER RBAC approval, dispatches THIS workflow in the base
+  # repo (packages:write) to build head_repo@head_sha → `sha-<head_sha>` so a fork
+  # PR is flightable. Identical trusted-build path to the monorepo's pr-build; the
+  # fork `should_push=false` self-push guard below is unchanged (forks never push
+  # themselves — only the RBAC-gated operator dispatch does).
+  workflow_dispatch:
+    inputs:
+      head_repo:
+        description: "PR head repo owner/name (fork or same-repo)"
+        required: true
+        type: string
+      head_sha:
+        description: "PR head SHA (40-char hex) — built + tagged sha-<head_sha>"
+        required: true
+        type: string
+      pr_number:
+        description: "PR number in this repo (informational)"
+        required: false
+        type: string
 
 permissions:
   contents: read
   packages: write
 
 concurrency:
-  group: pr-build-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Never cancel push:main (publishes the deployable) or a trusted dispatch (keyed
+  # by head_sha so concurrent fork builds don't evict each other).
+  group: pr-build-${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.head_sha || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'push' && github.event_name != 'workflow_dispatch' }}
 
 jobs:
   resolve:
@@ -20,6 +44,7 @@ jobs:
     outputs:
       source_sha: ${{ steps.r.outputs.source_sha }}
       checkout_ref: ${{ steps.r.outputs.checkout_ref }}
+      checkout_repo: ${{ steps.r.outputs.checkout_repo }}
       image_name: ${{ steps.r.outputs.image_name }}
       image_tag: ${{ steps.r.outputs.image_tag }}
       should_push: ${{ steps.r.outputs.should_push }}
@@ -37,8 +62,13 @@ jobs:
           REPOSITORY: ${{ github.repository }}
           REPOSITORY_OWNER: ${{ github.repository_owner }}
           REF_NAME: ${{ github.ref_name }}
+          DISPATCH_HEAD_REPO: ${{ inputs.head_repo }}
+          DISPATCH_HEAD_SHA: ${{ inputs.head_sha }}
         run: |
           set -euo pipefail
+          # checkout_repo defaults to THIS repo; only an operator workflow_dispatch
+          # of an approved (possibly fork) PR head overrides it.
+          checkout_repo="$REPOSITORY"
           if [ "$EVENT_NAME" = "pull_request" ]; then
             source_sha="$PR_HEAD_SHA"
             checkout_ref="$PR_HEAD_SHA"
@@ -58,6 +88,22 @@ jobs:
             checkout_ref="$PUSH_SHA"
             ref_name="$REF_NAME"
             should_push=true
+          elif [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            # Operator-dispatched trusted build of an approved PR head (monorepo
+            # parity). Build head_repo (fork or same-repo) @ head_sha and PUSH to
+            # THIS repo's GHCR so the operator can flight `sha-<head_sha>`. RBAC
+            # (node.flight) was enforced before dispatch.
+            if [[ ! "$DISPATCH_HEAD_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+              echo "::error::head_sha must be a 40-char hex SHA"; exit 1
+            fi
+            if [[ ! "$DISPATCH_HEAD_REPO" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]]; then
+              echo "::error::head_repo must be owner/name"; exit 1
+            fi
+            source_sha="$DISPATCH_HEAD_SHA"
+            checkout_ref="$DISPATCH_HEAD_SHA"
+            checkout_repo="$DISPATCH_HEAD_REPO"
+            ref_name="pr-dispatch"
+            should_push=true
           else
             echo "::error::Unsupported event: $EVENT_NAME"
             exit 1
@@ -68,6 +114,7 @@ jobs:
 
           echo "source_sha=$source_sha" >> "$GITHUB_OUTPUT"
           echo "checkout_ref=$checkout_ref" >> "$GITHUB_OUTPUT"
+          echo "checkout_repo=$checkout_repo" >> "$GITHUB_OUTPUT"
           echo "image_name=ghcr.io/${owner_lc}/${repo_lc}" >> "$GITHUB_OUTPUT"
           echo "image_tag=sha-${source_sha}" >> "$GITHUB_OUTPUT"
           echo "should_push=$should_push" >> "$GITHUB_OUTPUT"
@@ -84,6 +131,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
+          repository: ${{ needs.resolve.outputs.checkout_repo }}
           ref: ${{ needs.resolve.outputs.checkout_ref }}
 
       - name: Detect node image targets
@@ -102,6 +150,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
+          repository: ${{ needs.resolve.outputs.checkout_repo }}
           ref: ${{ needs.resolve.outputs.checkout_ref }}
 
       - name: Set up pnpm
@@ -178,6 +227,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4
         with:
+          repository: ${{ needs.resolve.outputs.checkout_repo }}
           ref: ${{ needs.resolve.outputs.checkout_ref }}
 
       - name: Download build fragments
