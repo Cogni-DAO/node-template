@@ -32,7 +32,12 @@ export * from "./config/repoSpec.schema";
 export * from "./constants";
 
 // --- Crypto ---
-export { type AeadAAD, aeadDecrypt, aeadEncrypt } from "./crypto/aead";
+export {
+  type AeadAAD,
+  aeadDecrypt,
+  aeadEncrypt,
+  decodeAeadKey,
+} from "./crypto/aead";
 
 // --- Errors ---
 export * from "./errors";

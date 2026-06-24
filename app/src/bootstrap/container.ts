@@ -47,6 +47,7 @@ import {
 import { parseMcpConfigFromEnv } from "@cogni/langgraph-graphs";
 import {
   COGNI_SYSTEM_PRINCIPAL_USER_ID,
+  decodeAeadKey,
   initAnalytics,
   shutdownAnalytics,
 } from "@cogni/node-shared";
@@ -779,10 +780,12 @@ function createContainer(): Container {
   // Undefined when CONNECTIONS_ENCRYPTION_KEY not set
   const connectionBroker: ConnectionBrokerPort | undefined = (() => {
     if (!env.CONNECTIONS_ENCRYPTION_KEY) return undefined;
-    const keyBuf = Buffer.from(env.CONNECTIONS_ENCRYPTION_KEY, "hex");
-    if (keyBuf.length !== 32) {
+    let keyBuf: Buffer;
+    try {
+      keyBuf = decodeAeadKey(env.CONNECTIONS_ENCRYPTION_KEY);
+    } catch {
       log.warn(
-        "CONNECTIONS_ENCRYPTION_KEY must be 64 hex chars (32 bytes). BYO-AI disabled."
+        "CONNECTIONS_ENCRYPTION_KEY must be 32 bytes (64 hex chars or base64). BYO-AI disabled."
       );
       return undefined;
     }
