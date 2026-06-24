@@ -4,11 +4,11 @@ type: guide
 title: Add a Node Secret
 status: active
 trust: reviewed
-summary: Node-repo half of adding a node-specific secret without touching operator deploy plumbing.
+summary: Node-repo half of adding a node secret (declare + consume); the operator-write contract lives in operator knowledge (node-self-serve-secrets).
 read_when: Adding a credential or API key that this node's app code consumes.
 owner: derekg1729
 created: 2026-06-05
-verified: 2026-06-18
+verified: 2026-06-24
 tags: [secrets, nodes]
 ---
 
@@ -49,62 +49,21 @@ Do not log secret values, request headers, tokens, cookies, or full vendor paylo
 
 ## 3. Set the Value
 
-The value never enters git, PR comments, chat, or committed YAML. Two paths write it to OpenBao:
+The value is written **through the operator** — you self-serve it with only your
+API key (no kubectl, no OpenBao token). The value never enters git, PR comments,
+chat, or committed YAML.
 
-**Self-serve via the operator (you, the node owner — the default, agent-friendly path).**
-First, an owner grants you OpenFGA `secrets_manager` on this node (operator Agents UI →
-"Manage secrets" — a distinct, least-privilege grant, not bundled with "Flight"). Then you
-set the value through the operator with only your **API key** — no kubeconfig, no OpenBao
-writer token:
+That write contract — the request shape, the `secrets_manager` grant (it is
+**authority, not custody**), the failure modes (`503` / `502`), and the **live
+per-env readiness** — is **operator-managed CICD knowledge your session already
+loads at startup** (the operator runs every node's CICD). It is not restated here
+so it cannot drift from what the operator actually enforces:
 
-```
-POST https://<operator-host>/api/v1/nodes/<node-id>/secrets
-Authorization: Bearer <your-api-key>
-content-type: application/json
+> Recall the guide **`node-self-serve-secrets`** —
+> `GET https://<operator-host>/api/v1/knowledge/node-self-serve-secrets`.
 
-{ "key": "MY_NEW_KEY", "value": "…", "op": "set" }     # op:"rotate" to rotate
-
-→ 200 { "written": true, "version": <n>, "path": "cogni/<env>/<node>/MY_NEW_KEY" }
-```
-
-The operator authorizes the write **per-node** (`can_manage_secrets`, fail-closed), refuses
-**reserved substrate keys** (your node owns its own namespace — any non-reserved key is
-allowed; the catalog in step 1 is for typed consumption + shape, **not** a write gate), and
-writes with its **own** in-cluster OpenBao identity — your key never carries cluster custody.
-ESO + Stakater Reloader then carry the value into the running pod. Confirm with the `version`
-in the response (no `kubectl` needed).
-
-### Holding `secrets_manager` is safe — it's authority, not custody
-
-This is the error to avoid: thinking the grant gives you operator-level / cluster
-power and declining it. It does not. `secrets_manager` is the secrets twin of
-`developer`/`production_promoter` — **per-node, least-privilege.** Two separate things:
-
-| | **You** (grant holder = authority) | **The operator** (mediator = custody) |
-| --- | --- | --- |
-| hold | only an API key | the OpenBao writer identity (projected SA token, kube) |
-| reach | **only `cogni/<env>/<your-node>/*`** | mediates the write; enforces the gates |
-| see | the `version` you wrote | never hands you a value; other nodes are invisible to you |
-
-So **request it for your node.** You never receive the writer token, a kubeconfig,
-cross-node reach, or any value but your own — the operator *mediates* the write, which
-is not the same as you holding operator power. Declining the grant and asking an operator
-to "just run it for me" is the **legacy admin path being retired** — it re-inserts a
-privileged human into every secret write and forfeits your node's self-sovereignty.
-
-> **`503 secrets_plane_config_missing`?** This env's operator doesn't have the secrets-writer
-> identity provisioned yet. candidate-a is live; preview/production roll out with the operator
-> deploy — ping the operator team rather than reaching for the CLI.
-
-**Ops / deploy-env owner (fallback).** Whoever holds the env's OpenBao writer role can
-also write it directly:
-
-```bash
-pnpm secrets:set <env> <node-slug> MY_NEW_KEY
-```
-
-Either way, the operator side owns ExternalSecret wiring, pod `envFrom`, DB/DNS
-provisioning, and rollout. A node PR should not edit those surfaces.
+The operator side owns ExternalSecret wiring, pod `envFrom`, DB/DNS provisioning,
+and rollout. A node PR should not edit those surfaces.
 
 ## What Not to Touch
 
