@@ -20,8 +20,11 @@ import {
   extractDaoTreasuryAddress,
   extractGovernanceConfig,
   extractLedgerApprovers,
+  extractNodeBrandColor,
+  extractNodeHook,
   extractNodeMission,
   extractNodeName,
+  extractNodeThumbnail,
   extractOperatorWalletConfig,
   extractPaymentConfig,
   type GovernanceConfig,
@@ -109,6 +112,21 @@ export function getNodeName(): string {
 /** One-line node mission from repo-spec `intent.mission`, or null when undeclared. */
 export function getNodeMission(): string | null {
   return extractNodeMission(loadRepoSpec());
+}
+
+/** Punchy ~5-word gallery/heading hook from repo-spec `intent.hook`, or null. */
+export function getNodeHook(): string | null {
+  return extractNodeHook(loadRepoSpec());
+}
+
+/** Self-hosted brand thumbnail URL from repo-spec `intent.brand.thumbnail`, or null. */
+export function getNodeThumbnail(): string | null {
+  return extractNodeThumbnail(loadRepoSpec());
+}
+
+/** Monogram-tint brand color from repo-spec `intent.brand.color`, or null. */
+export function getNodeBrandColor(): string | null {
+  return extractNodeBrandColor(loadRepoSpec());
 }
 
 let cachedScopeId: string | null = null;
