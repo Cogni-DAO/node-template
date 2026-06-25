@@ -15,10 +15,19 @@ scope_key: "default"
 
 intent:
   name: node-template
-  # `mission` is your node's one-line identity — surfaced at the top of every
-  # agent's session cognition (the node's reason to exist). Forkers: replace the
-  # default below with your node's actual mission (what it does + why it matters).
-  mission: "A Cogni node — a web3-governed, AI-powered organization with its own mission, built on the shared operator substrate."
+  # Identity projected to /.well-known/agent.json → the operator gallery reads it
+  # (never hardcodes). Forkers: replace hook/mission/brand with your node's own.
+  #   hook    — punchy ≤6-word gallery card tagline
+  #   mission — 1–3 sentence north-star, surfaced at the top of every agent's
+  #             session cognition (the node's reason to exist)
+  #   brand   — { thumbnail, color }; thumbnail is a self-hosted URL (here the
+  #             generated /opengraph-image, rendered from this identity), color
+  #             tints the monogram fallback.
+  hook: "Build from this shared foundation"
+  mission: "The first and most general Cogni template — an ever-improving foundation for a DAO-governed AI service app, carrying working CI/CD, governance, payments, and cognition so each fork builds only its mission, not its plumbing. The seed of a family of category-specific templates to come."
+  brand:
+    thumbnail: "/opengraph-image"
+    color: "#22c55e"
 
 cogni_dao:
   chain_id: "8453" # Base mainnet
