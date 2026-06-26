@@ -14,6 +14,7 @@
 import {
   extractChainId,
   extractGovernanceConfig,
+  extractKnowledgeConfig,
   extractLedgerApprovers,
   extractLedgerConfig,
   extractNodeId,
@@ -35,7 +36,7 @@ const TEST_CHAIN_ID = 8453;
 function buildSpec(overrides: Partial<RepoSpec> = {}): RepoSpec {
   return parseRepoSpec({
     node_id: TEST_NODE_ID,
-    cogni_dao: { chain_id: String(TEST_CHAIN_ID) },
+    governance: { chain_id: String(TEST_CHAIN_ID) },
     payments_in: {
       credits_topup: {
         provider: "cogni-usdc-backend-v1",
@@ -52,7 +53,6 @@ function buildFullSpec(): RepoSpec {
     node_id: TEST_NODE_ID,
     scope_id: TEST_SCOPE_ID,
     scope_key: "default",
-    cogni_dao: { chain_id: String(TEST_CHAIN_ID) },
     payments_in: {
       credits_topup: {
         provider: "cogni-usdc-backend-v1",
@@ -71,6 +71,7 @@ function buildFullSpec(): RepoSpec {
       },
     },
     governance: {
+      chain_id: String(TEST_CHAIN_ID),
       schedules: [
         {
           charter: "HEARTBEAT",
@@ -141,7 +142,7 @@ describe("extractChainId", () => {
   it("handles numeric chain_id", () => {
     const spec = parseRepoSpec({
       node_id: TEST_NODE_ID,
-      cogni_dao: { chain_id: 8453 },
+      governance: { chain_id: 8453 },
       payments_in: {
         credits_topup: {
           provider: "test",
@@ -155,7 +156,7 @@ describe("extractChainId", () => {
   it("throws on non-numeric string", () => {
     const spec = parseRepoSpec({
       node_id: TEST_NODE_ID,
-      cogni_dao: { chain_id: "not-a-number" },
+      governance: { chain_id: "not-a-number" },
       payments_in: {
         credits_topup: {
           provider: "test",
@@ -163,7 +164,7 @@ describe("extractChainId", () => {
         },
       },
     });
-    expect(() => extractChainId(spec)).toThrow(/Invalid cogni_dao\.chain_id/);
+    expect(() => extractChainId(spec)).toThrow(/Invalid governance\.chain_id/);
   });
 });
 
@@ -174,6 +175,8 @@ describe("extractPaymentConfig", () => {
       chainId: TEST_CHAIN_ID,
       receivingAddress: "0x1111111111111111111111111111111111111111",
       provider: "cogni-usdc-backend-v1",
+      markupFactor: 1.10803324099723,
+      revenueShare: 0,
     });
   });
 
@@ -186,7 +189,7 @@ describe("extractPaymentConfig", () => {
   it("trims whitespace from address and provider", () => {
     const spec = parseRepoSpec({
       node_id: TEST_NODE_ID,
-      cogni_dao: { chain_id: String(TEST_CHAIN_ID) },
+      governance: { chain_id: String(TEST_CHAIN_ID) },
       payments_in: {
         credits_topup: {
           provider: " cogni-usdc-backend-v1 ",
@@ -199,10 +202,44 @@ describe("extractPaymentConfig", () => {
   });
 });
 
+describe("extractKnowledgeConfig", () => {
+  it("returns undefined when knowledge is absent", () => {
+    expect(extractKnowledgeConfig(buildSpec())).toBeUndefined();
+  });
+
+  it("returns the node knowledge database and Cogni-owned DoltHub remote", () => {
+    const spec = buildSpec({
+      knowledge: {
+        database: "knowledge_my_node",
+        remote: {
+          provider: "dolthub",
+          owner: "cogni-dao-test",
+          repo: "knowledge-my-node",
+          url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+          custody: "cogni-owned",
+        },
+      },
+    });
+
+    expect(extractKnowledgeConfig(spec)).toEqual({
+      database: "knowledge_my_node",
+      remote: {
+        provider: "dolthub",
+        owner: "cogni-dao-test",
+        repo: "knowledge-my-node",
+        url: "https://doltremoteapi.dolthub.com/cogni-dao-test/knowledge-my-node",
+        custody: "cogni-owned",
+      },
+    });
+  });
+});
+
 describe("extractGovernanceConfig", () => {
   it("returns schedules and ledger config when fully specified", () => {
     const config = extractGovernanceConfig(buildFullSpec());
-    expect(config.schedules.some((schedule) => schedule.charter === "HEARTBEAT")).toBe(true);
+    expect(config.schedules).toHaveLength(2);
+    expect(config.schedules[0]?.charter).toBe("HEARTBEAT");
+    expect(config.schedules[1]?.charter).toBe("LEDGER_INGEST");
     expect(config.ledger).toBeDefined();
     expect(config.ledger?.scopeId).toBe(TEST_SCOPE_ID);
   });
@@ -239,7 +276,7 @@ describe("extractLedgerConfig", () => {
   it("returns null when scope_id is missing", () => {
     const spec = parseRepoSpec({
       node_id: TEST_NODE_ID,
-      cogni_dao: { chain_id: String(TEST_CHAIN_ID) },
+      governance: { chain_id: String(TEST_CHAIN_ID) },
       payments_in: {
         credits_topup: {
           provider: "test",
@@ -264,7 +301,7 @@ describe("extractLedgerConfig", () => {
       node_id: TEST_NODE_ID,
       scope_id: TEST_SCOPE_ID,
       scope_key: "default",
-      cogni_dao: { chain_id: String(TEST_CHAIN_ID) },
+      governance: { chain_id: String(TEST_CHAIN_ID) },
       payments_in: {
         credits_topup: {
           provider: "test",
@@ -301,7 +338,7 @@ describe("extractLedgerApprovers", () => {
       node_id: TEST_NODE_ID,
       scope_id: TEST_SCOPE_ID,
       scope_key: "default",
-      cogni_dao: { chain_id: String(TEST_CHAIN_ID) },
+      governance: { chain_id: String(TEST_CHAIN_ID) },
       payments_in: {
         credits_topup: {
           provider: "test",

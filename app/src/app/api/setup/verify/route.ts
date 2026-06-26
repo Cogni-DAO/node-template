@@ -396,7 +396,7 @@ node_id: "${nodeId}"
 scope_id: "${scopeId}"
 scope_key: "default"
 
-cogni_dao:
+governance:
   dao_contract: "${params.daoAddress}"
   plugin_contract: "${params.pluginAddress}"
   signal_contract: "${params.signalAddress}"

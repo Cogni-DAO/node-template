@@ -5,7 +5,7 @@
  * Module: `@shared/config/repoSpec.server`
  * Purpose: Server-only thin wrapper — file I/O, caching, and CHAIN_ID validation for repo-spec accessors including DAO governance config.
  * Scope: Reads and caches repo-spec on first access; does not define schemas, validation logic, or perform network I/O.
- * Invariants: Chain ID must match CHAIN_ID; ledger config requires scope_id + scope_key; DaoConfig requires all five cogni_dao fields.
+ * Invariants: Chain ID must match CHAIN_ID; ledger config requires scope_id + scope_key; DaoConfig requires the four on-chain governance identity fields (base_url optional).
  * Side-effects: IO (reads repo-spec from disk) on first call only.
  * Links: packages/repo-spec/src/index.ts, .cogni/repo-spec.yaml
  * @public
@@ -228,15 +228,16 @@ export function getGovernanceConfig(): GovernanceConfig {
 }
 
 // ---------------------------------------------------------------------------
-// DAO config — cogni_dao section (for governance signal execution + review deep links)
+// DAO config — governance section (for governance signal execution + review deep links)
 // ---------------------------------------------------------------------------
 
 let cachedDaoConfig: DaoConfig | null | undefined;
 
 /**
  * DAO governance configuration from repo-spec.
- * Returns null if cogni_dao section is missing or incomplete.
- * All five fields must be present for the config to be valid.
+ * Returns null only when the on-chain identity (dao/plugin/signal contracts +
+ * chain_id) is incomplete. `base_url` is the optional governance-UI deep-link
+ * host and does not gate this read.
  */
 export function getDaoConfig(): DaoConfig | null {
 	if (cachedDaoConfig !== undefined) return cachedDaoConfig;
@@ -303,7 +304,7 @@ export function getOperatorWalletConfig(): OperatorWalletSpec | undefined {
 let cachedDaoTreasuryAddress: string | undefined | null = null;
 
 /**
- * DAO treasury address from repo-spec (cogni_dao.dao_contract).
+ * DAO treasury address from repo-spec (governance.dao_contract).
  * Returns undefined if not present.
  */
 export function getDaoTreasuryAddress(): string | undefined {

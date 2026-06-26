@@ -35,7 +35,7 @@ intent:
     # directly. /opengraph-image now renders the icon, so the gallery shows it today.
     thumbnail: "/opengraph-image"
 
-cogni_dao:
+governance:
   chain_id: "8453" # Base mainnet
 
 # Activity ledger ingestion + approver allowlist.

@@ -44,13 +44,14 @@ Pure parsing and typed extraction for `.cogni/repo-spec.yaml` — the governance
   - `extractGovernanceConfig(spec)` — Maps governance schedules + ledger config
   - `extractLedgerConfig(spec)` — Extracts ledger config (requires scope identity)
   - `extractLedgerApprovers(spec)` — Lowercased EVM approver addresses
+  - `extractKnowledgeConfig(spec)` — Node-local knowledge DB + Cogni-owned DoltHub mirror declaration
   - `extractNodeId(spec)` — Node identity UUID
   - `extractNodes(spec)` — Node registry entries (operator-only, returns `[]` for non-operator specs)
   - `extractNodePath(spec, nodeId)` — Resolve a node UUID to its registered relative path; returns `null` on miss (caller decides fallback)
-  - `extractOwningNode(spec, paths)` — Paths → owning domain. Returns `single | conflict | miss`. Operator is a sovereign domain (catches `nodes/operator/**`, `packages/`, `.github/`, root configs); cross-domain mixing returns `conflict`. On `conflict`, the result also carries `operatorPaths` + `operatorNodeId` so downstream formatters can render the diagnostic without re-classifying. Bounded ride-along carve-out via `rideAlongApplied` flag (currently `pnpm-lock.yaml`, `work/**`, `docs/**`, `.claude/skills/poly-dev-manager/SKILL.md`, and exact single-node-scope policy maintenance files). Mirrors `tests/ci-invariants/classify.ts` per spec § Single-Domain Scope.
+  - `extractOwningNode(spec, paths)` — Paths → owning domain. Returns `single | conflict | miss`. Operator is a sovereign domain (catches `nodes/operator/**`, `packages/`, `.github/`, root configs); cross-domain mixing returns `conflict`. On `conflict`, the result also carries `operatorPaths` + `operatorNodeId` so downstream formatters can render the diagnostic without re-classifying. Bounded ride-along carve-out via `rideAlongApplied` flag (currently `pnpm-lock.yaml`, `work/**`, `docs/**`, `.claude/skills/poly-dev-manager/SKILL.md`, exact single-node-scope policy maintenance files, and the fast-check root app Vitest config exception). Mirrors `tests/ci-invariants/classify.ts` per spec § Single-Domain Scope.
   - `resolveRulePath(owningNode)` — Single source of truth for "where do this domain's `.cogni/rules/` live." Returns `<owningNode.path>/.cogni/rules` for every `single`-kind result — operator and sovereign nodes alike, no special case. Throws on `conflict`/`miss`. Routing code (e.g. `fetchPrContextActivity`) calls this rather than building paths inline.
   - `extractScopeId(spec)` — Scope identity UUID (throws if missing)
-  - `extractChainId(spec)` — Numeric chain ID from cogni_dao section
+  - `extractChainId(spec)` — Numeric chain ID from governance section
   - Zod schemas: `repoSpecSchema`, `nodeRegistryEntrySchema`, `creditsTopupSpecSchema`, `governanceScheduleSchema`, etc.
   - Types: `RepoSpec`, `NodeRegistryEntry`, `InboundPaymentConfig`, `GovernanceConfig`, `GovernanceSchedule`, `LedgerConfig`, `LedgerPoolConfig`
 - **Subpath `@cogni/repo-spec/testing`** — test-only fixtures; never imported from production code:

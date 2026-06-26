@@ -56,7 +56,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
         "  credits_topup:",
@@ -74,6 +74,8 @@ describe("getPaymentConfig (repo-spec)", () => {
         chainId: CHAIN_ID,
         receivingAddress: "0x1111111111111111111111111111111111111111",
         provider: "cogni-usdc-backend-v1",
+        markupFactor: 1.10803324099723,
+        revenueShare: 0,
       });
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -84,7 +86,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         "  chain_id: not-a-number",
         "payments_in:",
         "  credits_topup:",
@@ -96,7 +98,9 @@ describe("getPaymentConfig (repo-spec)", () => {
 
     try {
       const { getPaymentConfig } = await loadPaymentConfig();
-      expect(() => getPaymentConfig()).toThrow(/Invalid cogni_dao\.chain_id/i);
+      expect(() => getPaymentConfig()).toThrow(
+        /Invalid governance\.chain_id/i
+      );
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -106,7 +110,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: "${CHAIN_ID + 1}"`,
         "payments_in:",
         "  credits_topup:",
@@ -128,7 +132,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
         "  credits_topup:",
@@ -150,7 +154,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
         "  credits_topup:",
@@ -172,7 +176,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: ${CHAIN_ID}`,
         "payments_in:",
         "  credits_topup:",
@@ -196,7 +200,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
         "  credits_topup:",
@@ -218,7 +222,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:",
         "  credits_topup:",
@@ -246,7 +250,7 @@ describe("getPaymentConfig (repo-spec)", () => {
     const tmpDir = writeRepoSpec(
       [
         `node_id: "${TEST_NODE_ID}"`,
-        "cogni_dao:",
+        "governance:",
         `  chain_id: "${CHAIN_ID}"`,
         "payments_in:", // missing credits_topup
       ].join("\n")
@@ -262,16 +266,29 @@ describe("getPaymentConfig (repo-spec)", () => {
   });
 });
 
-/** Minimal valid base YAML for governance tests (cogni_dao + payments_in required by schema) */
+/** Minimal valid base YAML for governance tests (governance.chain_id + payments_in required by schema) */
 const BASE_YAML = [
   `node_id: "${TEST_NODE_ID}"`,
-  "cogni_dao:",
+  "governance:",
   `  chain_id: "${CHAIN_ID}"`,
   "payments_in:",
   "  credits_topup:",
   "    provider: cogni-usdc-backend-v1",
   '    receiving_address: "0x1111111111111111111111111111111111111111"',
 ].join("\n");
+
+function buildGovernanceYaml(governanceLines: string[]): string {
+  return [
+    `node_id: "${TEST_NODE_ID}"`,
+    "governance:",
+    `  chain_id: "${CHAIN_ID}"`,
+    ...governanceLines,
+  "payments_in:",
+  "  credits_topup:",
+  "    provider: cogni-usdc-backend-v1",
+  '    receiving_address: "0x1111111111111111111111111111111111111111"',
+  ].join("\n");
+}
 
 async function loadRepoSpecModule(): Promise<RepoSpecModule> {
   vi.resetModules();
@@ -280,9 +297,7 @@ async function loadRepoSpecModule(): Promise<RepoSpecModule> {
 
 describe("getGovernanceConfig (repo-spec)", () => {
   it("returns schedules when governance section is provided", async () => {
-    const yaml = [
-      BASE_YAML,
-      "governance:",
+    const yaml = buildGovernanceYaml([
       "  schedules:",
       "    - charter: COMMUNITY",
       '      cron: "0 */6 * * *"',
@@ -292,7 +307,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
       '      cron: "0 * * * *"',
       "      timezone: UTC",
       "      entrypoint: GOVERN",
-    ].join("\n");
+    ]);
 
     const tmpDir = writeRepoSpec(yaml);
     useTmpRoot(tmpDir);
@@ -319,7 +334,7 @@ describe("getGovernanceConfig (repo-spec)", () => {
     }
   });
 
-  it("returns empty schedules when governance section is omitted", async () => {
+  it("returns empty schedules when governance schedules are omitted", async () => {
     const tmpDir = writeRepoSpec(BASE_YAML);
     useTmpRoot(tmpDir);
 
@@ -334,14 +349,12 @@ describe("getGovernanceConfig (repo-spec)", () => {
   });
 
   it("defaults timezone to UTC when omitted", async () => {
-    const yaml = [
-      BASE_YAML,
-      "governance:",
+    const yaml = buildGovernanceYaml([
       "  schedules:",
       "    - charter: ENGINEERING",
       '      cron: "0 */4 * * *"',
       "      entrypoint: ENGINEERING",
-    ].join("\n");
+    ]);
 
     const tmpDir = writeRepoSpec(yaml);
     useTmpRoot(tmpDir);
@@ -357,14 +370,12 @@ describe("getGovernanceConfig (repo-spec)", () => {
   });
 
   it("rejects schedule with empty charter", async () => {
-    const yaml = [
-      BASE_YAML,
-      "governance:",
+    const yaml = buildGovernanceYaml([
       "  schedules:",
       '    - charter: ""',
       '      cron: "0 * * * *"',
       "      entrypoint: GOVERN",
-    ].join("\n");
+    ]);
 
     const tmpDir = writeRepoSpec(yaml);
     useTmpRoot(tmpDir);
@@ -380,14 +391,12 @@ describe("getGovernanceConfig (repo-spec)", () => {
   });
 
   it("rejects schedule with cron too short", async () => {
-    const yaml = [
-      BASE_YAML,
-      "governance:",
+    const yaml = buildGovernanceYaml([
       "  schedules:",
       "    - charter: GOVERN",
       '      cron: "* *"',
       "      entrypoint: GOVERN",
-    ].join("\n");
+    ]);
 
     const tmpDir = writeRepoSpec(yaml);
     useTmpRoot(tmpDir);
