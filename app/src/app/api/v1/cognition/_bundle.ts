@@ -33,7 +33,7 @@ import type {
 export const SESSION_BOOTSTRAP_INVARIANTS: readonly string[] = [
 	"Adopt exactly ONE work item and ONE node per session (single-node-scope is a CI gate); claim + heartbeat + link the PR via /api/v1/work/items/{id}/{claims,heartbeat,pr}; coordination.nextAction is authoritative.",
 	"RECALL the node knowledge hub before designing, researching, or coding — both merged (/api/v1/knowledge?domain=) and your own open contribution branch — and refine in place over creating new.",
-	"Push a feature branch and let CI verify (gh pr checks). The operator is the deploy plane only — flight, logs, secrets — not where code, work items, or knowledge live.",
+	"Git path: push a same-repo feature branch, open a PR, and let CI verify the exact head (gh pr checks). Flight that PR head to candidate-a before merge. The operator is the deploy plane only — flight, logs, secrets — not where code, work items, or knowledge live.",
 	"Definition of Done = validated on candidate-a, not merely merged: flight the PR, exercise the live deployed surface, read your own request back from Loki at the deployed SHA, and post a /validate-candidate scorecard — that posted scorecard is the merge gate.",
 	"Recall this node's <slug>-agent-orientation entry for the operating map — architecture and observability standards, what's safe to run, what can break prod/candidate, and what to recall next — and refine it in the hub as the node changes.",
 ];
