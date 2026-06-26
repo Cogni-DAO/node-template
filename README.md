@@ -48,6 +48,25 @@ export COGNI_TEMPLATE_ROOT="$HOME/dev/cogni-template"
 
 The operator consumes the pushed digest and owns URL/DNS/deployment state.
 
+### Codex session cognition
+
+Codex project-local hooks are trusted per absolute worktree path, so Conductor
+workspaces can miss the cognition bootstrap unless every new worktree is
+approved. Install the Cogni user-level hook once per machine instead:
+
+```bash
+pnpm codex:cognition:install
+```
+
+Then open `/hooks` in Codex once and trust the user-level `SessionStart` hook.
+The installed hook is generic across Cogni node clones/forks: it reads the
+current repo's `.cogni/repo-spec.yaml`, uses `.env.cogni`, and fetches
+`https://<node-slug>.cognidao.org/api/v1/cognition`.
+
+If the hook runs but cannot fetch cognition, it injects a loud bootstrap-blocked
+message into the agent context. If the agent receives no cognition message at all,
+Codex did not run the hook; check the one-time `/hooks` trust first.
+
 ## Inheriting from node-template (3-tier sync)
 
 The operator keeps every node aligned with `node-template` automatically (a GitHub App webhook fires on each node-template release). Changes propagate in **three tiers, by path** — know which tier your edit lands in:

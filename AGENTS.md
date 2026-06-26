@@ -9,11 +9,13 @@
 
 ## Your cognition is delivered at session start
 
-A SessionStart hook ([`.claude/settings.json`](.claude/settings.json) for Claude Code,
-[`.codex/config.toml`](.codex/config.toml) for Codex) runs the shared loader
+SessionStart hooks run the shared loader
 [`scripts/agent/session-cognition.sh`](scripts/agent/session-cognition.sh), which pulls a
 **cognition bundle** — tooling invariants + a live skills index + knowledge-domain pointers —
-and injects it into context. Codex needs a one-time trust (`/hooks`).
+and injects it into context. Claude Code uses the repo hook in
+[`.claude/settings.json`](.claude/settings.json). Codex should use the user-level
+machine hook installed by `pnpm codex:cognition:install`, then trust it once with
+`/hooks`; this avoids per-worktree trust prompts in Conductor.
 
 - The loader derives `https://<node-slug>.cognidao.org/api/v1/cognition` from
   `.cogni/repo-spec.yaml` `intent.name` and recalls **this node's own hub** with

@@ -10,6 +10,7 @@
     "build:app": "pnpm --filter @cogni/node-template-app build",
     "check:workflow": "node scripts/check-node-ci-workflow.mjs",
     "conductor:setup": "bash scripts/conductor-worktree-setup.sh",
+    "codex:cognition:install": "bash scripts/agent/install-codex-cognition-hook.sh",
     "db:generate": "tsx node_modules/drizzle-kit/bin.cjs generate --config=drizzle.config.ts",
     "db:check": "pnpm db:check:drizzle && pnpm db:check:generate-clean",
     "db:check:drizzle": "DATABASE_URL=postgres://check@localhost:0/check tsx node_modules/drizzle-kit/bin.cjs check --config=drizzle.config.ts",
