@@ -20,14 +20,18 @@ intent:
   #   hook    — punchy ≤6-word gallery card tagline
   #   mission — 1–3 sentence north-star, surfaced at the top of every agent's
   #             session cognition (the node's reason to exist)
-  #   brand   — { thumbnail, color }; thumbnail is a self-hosted URL (here the
-  #             generated /opengraph-image, rendered from this identity), color
-  #             tints the monogram fallback.
+  #   brand   — { icon, color }; `icon` is a Lucide icon NAME (PascalCase) and is the
+  #             SINGLE source for the node's mark — app header, gallery card, og:image,
+  #             favicon all render it (no hand-edited AppHeader JSX). `color` tints it.
+  #             Forks: set these two fields; never re-hardcode an icon in AppHeader.
   hook: "Build from this shared foundation"
   mission: "The first and most general Cogni template — an ever-improving foundation for a DAO-governed AI service app, carrying working CI/CD, governance, payments, and cognition so each fork builds only its mission, not its plumbing. The seed of a family of category-specific templates to come."
   brand:
-    thumbnail: "/opengraph-image"
+    icon: "GitFork"
     color: "#22c55e"
+    # Transitional: gallery still reads `thumbnail` until the operator renders `icon`
+    # directly. /opengraph-image now renders the icon, so the gallery shows it today.
+    thumbnail: "/opengraph-image"
 
 cogni_dao:
   chain_id: "8453" # Base mainnet

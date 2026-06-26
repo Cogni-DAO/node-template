@@ -17,8 +17,10 @@
  */
 
 import { ImageResponse } from "next/og";
+import { resolveBrandIcon } from "@/shared/brand/brandIcons";
 import {
   getNodeBrandColor,
+  getNodeBrandIcon,
   getNodeHook,
   getNodeName,
 } from "@/shared/config/repoSpec.server";
@@ -49,6 +51,8 @@ export default function OpengraphImage(): ImageResponse {
   const name = titleCase(getNodeName());
   const hook = getNodeHook();
   const color = getNodeBrandColor() ?? FALLBACK_COLOR;
+  // Same brand-icon registry the app header + gallery read — one source, every surface.
+  const BrandIcon = resolveBrandIcon(getNodeBrandIcon());
 
   return new ImageResponse(
     <div
@@ -59,16 +63,16 @@ export default function OpengraphImage(): ImageResponse {
         flexDirection: "column",
         justifyContent: "space-between",
         background: "#09090b",
-        backgroundImage: `radial-gradient(1000px circle at 100% 0%, ${color}33, transparent 55%)`,
+        backgroundImage: `radial-gradient(1100px circle at 50% 16%, ${color}26, transparent 60%)`,
         borderLeft: `16px solid ${color}`,
-        padding: "84px",
+        padding: "72px",
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "18px" }}>
+      <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
         <div
           style={{
-            width: "30px",
-            height: "30px",
+            width: "26px",
+            height: "26px",
             borderRadius: "9999px",
             background: color,
           }}
@@ -76,7 +80,7 @@ export default function OpengraphImage(): ImageResponse {
         <div
           style={{
             color: "#a1a1aa",
-            fontSize: "30px",
+            fontSize: "28px",
             fontWeight: 600,
             letterSpacing: "8px",
           }}
@@ -85,19 +89,29 @@ export default function OpengraphImage(): ImageResponse {
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: "28px" }}>
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-start",
+          gap: "10px",
+        }}
+      >
+        <div style={{ display: "flex", color, marginBottom: "20px" }}>
+          <BrandIcon width={200} height={200} strokeWidth={1.5} />
+        </div>
         <div
           style={{
             color: "#fafafa",
-            fontSize: "100px",
+            fontSize: "92px",
             fontWeight: 700,
-            lineHeight: 1.04,
+            lineHeight: 1.0,
           }}
         >
           {name}
         </div>
         {hook ? (
-          <div style={{ color, fontSize: "46px", fontWeight: 500 }}>{hook}</div>
+          <div style={{ color, fontSize: "42px", fontWeight: 500 }}>{hook}</div>
         ) : null}
       </div>
 
@@ -106,7 +120,7 @@ export default function OpengraphImage(): ImageResponse {
           display: "flex",
           justifyContent: "flex-start",
           color: "#71717a",
-          fontSize: "28px",
+          fontSize: "26px",
         }}
       >
         <span>cognidao.org</span>

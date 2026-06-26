@@ -21,6 +21,7 @@
 import { NextResponse } from "next/server";
 import {
 	getNodeBrandColor,
+	getNodeBrandIcon,
 	getNodeHook,
 	getNodeMission,
 	getNodeName,
@@ -62,7 +63,11 @@ export async function GET(request: Request) {
 			name: getNodeName(),
 			hook: getNodeHook(),
 			mission: getNodeMission(),
-			brand: { thumbnail: getNodeThumbnail(), color: getNodeBrandColor() },
+			brand: {
+				icon: getNodeBrandIcon(),
+				color: getNodeBrandColor(),
+				thumbnail: getNodeThumbnail(),
+			},
 		},
 		registrationUrl: `${origin}/api/v1/agent/register`,
 		auth: { type: "bearer", keyPrefix: "cogni_ag_sk_v1_" },

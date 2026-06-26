@@ -21,6 +21,7 @@ export {
   extractLedgerApprovers,
   extractLedgerConfig,
   extractNodeBrandColor,
+  extractNodeBrandIcon,
   extractNodeHook,
   extractNodeId,
   extractNodeMission,

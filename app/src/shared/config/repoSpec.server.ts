@@ -21,6 +21,7 @@ import {
   extractGovernanceConfig,
   extractLedgerApprovers,
   extractNodeBrandColor,
+  extractNodeBrandIcon,
   extractNodeHook,
   extractNodeMission,
   extractNodeName,
@@ -127,6 +128,69 @@ export function getNodeThumbnail(): string | null {
 /** Monogram-tint brand color from repo-spec `intent.brand.color`, or null. */
 export function getNodeBrandColor(): string | null {
   return extractNodeBrandColor(loadRepoSpec());
+}
+
+/** Lucide icon NAME (PascalCase) for the node's brand mark from repo-spec `intent.brand.icon`, or null. */
+export function getNodeBrandIcon(): string | null {
+  return extractNodeBrandIcon(loadRepoSpec());
+}
+
+/** The node's brand mark — slug + icon name + color — for the app header. */
+export interface BrandMark {
+  readonly slug: string;
+  readonly icon: string | null;
+  readonly color: string | null;
+}
+
+/**
+ * Resolve the repo root WITHOUT `serverEnv()`. The app header renders in statically
+ * prerendered `(public)` pages, where build-time prerender has no runtime env (no
+ * DATABASE_URL etc.) — so `serverEnv()` would throw. The brand is static per
+ * deployment and the `.cogni/repo-spec.yaml` file ships in the build, so we read it
+ * directly: env path first (runtime), else walk up from cwd (build-time).
+ */
+function resolveRepoRootBuildSafe(): string | null {
+  const fromEnv = process.env.COGNI_REPO_PATH ?? process.env.COGNI_REPO_ROOT;
+  if (fromEnv && fs.existsSync(path.join(fromEnv, ".cogni", "repo-spec.yaml"))) {
+    return fromEnv;
+  }
+  let dir = process.cwd();
+  for (let depth = 0; depth < 10; depth++) {
+    if (fs.existsSync(path.join(dir, ".cogni", "repo-spec.yaml"))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return null;
+}
+
+let cachedBrandMark: BrandMark | null = null;
+
+/**
+ * Brand mark for the app header: slug + `intent.brand.{icon,color}`. Build-safe
+ * (never calls serverEnv) with a neutral fallback, so static prerender never breaks.
+ */
+export function getBrandMark(): BrandMark {
+  if (cachedBrandMark) return cachedBrandMark;
+
+  const root = resolveRepoRootBuildSafe();
+  if (root) {
+    try {
+      const spec = parseRepoSpec(
+        fs.readFileSync(path.join(root, ".cogni", "repo-spec.yaml"), "utf8")
+      );
+      cachedBrandMark = {
+        slug: extractNodeName(spec),
+        icon: extractNodeBrandIcon(spec),
+        color: extractNodeBrandColor(spec),
+      };
+      return cachedBrandMark;
+    } catch {
+      // fall through to neutral default
+    }
+  }
+  cachedBrandMark = { slug: "cogni", icon: null, color: null };
+  return cachedBrandMark;
 }
 
 let cachedScopeId: string | null = null;
