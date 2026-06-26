@@ -7,34 +7,34 @@
  * Scope: Feature-layer orchestration for payment attempts; validates state transitions, enforces TTLs, triggers post-credit funding on CREDITED; does not expose HTTP handling.
  * Invariants: State transitions via core/rules; atomic settlement via confirmCreditsPayment; post-credit funding via runPostCreditFunding (fires exactly once on CREDITED transition); RPC_ERROR is transient (retried on next poll).
  * Side-effects: IO (via AccountService, ServiceAccountService, PaymentAttemptUserRepository, PaymentAttemptServiceRepository, OnChainVerifier, PostCreditFundingDeps ports)
- * Notes: RPC_ERROR from OnChainVerifier leaves attempt in PENDING_UNVERIFIED for automatic retry via getStatus polling. Post-credit funding (treasury settlement, TB co-writes, provider top-up) runs inline after CREDITED but never throws — all steps catch internally.
+ * Notes: RPC_ERROR from OnChainVerifier leaves attempt in PENDING_UNVERIFIED for automatic retry via getStatus polling. Post-credit settlement (treasury Split distribute + TB co-write) runs inline after CREDITED but never throws — all steps catch internally. The OpenRouter/Coinbase provider top-up was retired; outbound vendor funding now flows through the operator wallet's withdrawToSteward + a manual human checkout.
  * Links: docs/spec/payments-design.md
  * @public
  */
 
 import type {
-  PaymentAttempt,
-  PaymentAttemptStatus,
-  PaymentErrorCode,
+	PaymentAttempt,
+	PaymentAttemptStatus,
+	PaymentErrorCode,
 } from "@cogni/node-core";
 import {
-  isIntentExpired,
-  isValidPaymentAmount,
-  isValidTransition,
-  isVerificationTimedOut,
-  MAX_PAYMENT_CENTS,
-  MIN_PAYMENT_CENTS,
-  PAYMENT_INTENT_TTL_MS,
-  toClientVisibleStatus,
-  usdCentsToRawUsdc,
+	isIntentExpired,
+	isValidPaymentAmount,
+	isValidTransition,
+	isVerificationTimedOut,
+	MAX_PAYMENT_CENTS,
+	MIN_PAYMENT_CENTS,
+	PAYMENT_INTENT_TTL_MS,
+	toClientVisibleStatus,
+	usdCentsToRawUsdc,
 } from "@cogni/node-core";
 import type {
-  AccountService,
-  Clock,
-  OnChainVerifier,
-  PaymentAttemptServiceRepository,
-  PaymentAttemptUserRepository,
-  ServiceAccountService,
+	AccountService,
+	Clock,
+	OnChainVerifier,
+	PaymentAttemptServiceRepository,
+	PaymentAttemptUserRepository,
+	ServiceAccountService,
 } from "@/ports";
 import { getPaymentConfig } from "@/shared/config/repoSpec.server";
 import type { Logger } from "@/shared/observability";
@@ -49,52 +49,52 @@ import { confirmCreditsPayment } from "./creditsConfirm";
 // ============================================================================
 
 export interface CreateIntentInput {
-  billingAccountId: string;
-  fromAddress: string; // SIWE wallet address (checksummed via getAddress())
-  amountUsdCents: number;
+	billingAccountId: string;
+	fromAddress: string; // SIWE wallet address (checksummed via getAddress())
+	amountUsdCents: number;
 }
 
 export interface CreateIntentResult {
-  attemptId: string;
-  chainId: number;
-  token: string;
-  to: string;
-  amountRaw: string; // bigint serialized as string for JSON
-  amountUsdCents: number;
-  expiresAt: Date;
+	attemptId: string;
+	chainId: number;
+	token: string;
+	to: string;
+	amountRaw: string; // bigint serialized as string for JSON
+	amountUsdCents: number;
+	expiresAt: Date;
 }
 
 export interface SubmitTxHashInput {
-  attemptId: string;
-  billingAccountId: string;
-  defaultVirtualKeyId: string;
-  txHash: string;
+	attemptId: string;
+	billingAccountId: string;
+	defaultVirtualKeyId: string;
+	txHash: string;
 }
 
 export interface SubmitTxHashResult {
-  attemptId: string;
-  status: PaymentAttemptStatus;
-  chainId: number;
-  txHash: string;
-  errorCode?: PaymentErrorCode | undefined;
-  errorMessage?: string | undefined;
+	attemptId: string;
+	status: PaymentAttemptStatus;
+	chainId: number;
+	txHash: string;
+	errorCode?: PaymentErrorCode | undefined;
+	errorMessage?: string | undefined;
 }
 
 export interface GetStatusInput {
-  attemptId: string;
-  billingAccountId: string;
-  defaultVirtualKeyId: string;
+	attemptId: string;
+	billingAccountId: string;
+	defaultVirtualKeyId: string;
 }
 
 export interface GetStatusResult {
-  attemptId: string;
-  status: PaymentAttemptStatus;
-  chainId: number;
-  clientStatus: string; // ClientVisibleStatus from core
-  txHash: string | null;
-  amountUsdCents: number;
-  errorCode?: PaymentErrorCode | undefined;
-  createdAt: Date;
+	attemptId: string;
+	status: PaymentAttemptStatus;
+	chainId: number;
+	clientStatus: string; // ClientVisibleStatus from core
+	txHash: string | null;
+	amountUsdCents: number;
+	errorCode?: PaymentErrorCode | undefined;
+	createdAt: Date;
 }
 
 // ============================================================================
@@ -112,53 +112,53 @@ export interface GetStatusResult {
  * @throws Error if amount is invalid
  */
 export async function createIntent(
-  userRepo: PaymentAttemptUserRepository,
-  clock: Clock,
-  input: CreateIntentInput
+	userRepo: PaymentAttemptUserRepository,
+	clock: Clock,
+	input: CreateIntentInput,
 ): Promise<CreateIntentResult> {
-  if (!isValidPaymentAmount(input.amountUsdCents)) {
-    throw new Error(
-      `Invalid payment amount: ${input.amountUsdCents} cents. Must be between ${MIN_PAYMENT_CENTS} and ${MAX_PAYMENT_CENTS} cents.`
-    );
-  }
+	if (!isValidPaymentAmount(input.amountUsdCents)) {
+		throw new Error(
+			`Invalid payment amount: ${input.amountUsdCents} cents. Must be between ${MIN_PAYMENT_CENTS} and ${MAX_PAYMENT_CENTS} cents.`,
+		);
+	}
 
-  const paymentConfig = getPaymentConfig();
-  if (!paymentConfig) {
-    throw new Error(
-      "Payment rails not activated. Run `pnpm node:activate-payments` first."
-    );
-  }
-  const { chainId, receivingAddress } = paymentConfig;
-  const token = USDC_TOKEN_ADDRESS;
-  const amountRaw = usdCentsToRawUsdc(input.amountUsdCents);
+	const paymentConfig = getPaymentConfig();
+	if (!paymentConfig) {
+		throw new Error(
+			"Payment rails not activated. Run `pnpm node:activate-payments` first.",
+		);
+	}
+	const { chainId, receivingAddress } = paymentConfig;
+	const token = USDC_TOKEN_ADDRESS;
+	const amountRaw = usdCentsToRawUsdc(input.amountUsdCents);
 
-  const now = new Date(clock.now());
-  const expiresAt = new Date(now.getTime() + PAYMENT_INTENT_TTL_MS);
+	const now = new Date(clock.now());
+	const expiresAt = new Date(now.getTime() + PAYMENT_INTENT_TTL_MS);
 
-  const attempt = await userRepo.create({
-    billingAccountId: input.billingAccountId,
-    fromAddress: input.fromAddress,
-    chainId,
-    token,
-    toAddress: receivingAddress,
-    amountRaw,
-    amountUsdCents: input.amountUsdCents,
-    expiresAt,
-  });
+	const attempt = await userRepo.create({
+		billingAccountId: input.billingAccountId,
+		fromAddress: input.fromAddress,
+		chainId,
+		token,
+		toAddress: receivingAddress,
+		amountRaw,
+		amountUsdCents: input.amountUsdCents,
+		expiresAt,
+	});
 
-  if (!attempt.expiresAt) {
-    throw new Error("Internal error: expiresAt is null for CREATED_INTENT");
-  }
+	if (!attempt.expiresAt) {
+		throw new Error("Internal error: expiresAt is null for CREATED_INTENT");
+	}
 
-  return {
-    attemptId: attempt.id,
-    chainId: attempt.chainId,
-    token: attempt.token,
-    to: attempt.toAddress,
-    amountRaw: attempt.amountRaw.toString(),
-    amountUsdCents: attempt.amountUsdCents,
-    expiresAt: attempt.expiresAt,
-  };
+	return {
+		attemptId: attempt.id,
+		chainId: attempt.chainId,
+		token: attempt.token,
+		to: attempt.toAddress,
+		amountRaw: attempt.amountRaw.toString(),
+		amountUsdCents: attempt.amountUsdCents,
+		expiresAt: attempt.expiresAt,
+	};
 }
 
 // ============================================================================
@@ -180,92 +180,92 @@ export async function createIntent(
  * @throws TxHashAlreadyBoundPortError if txHash already bound to different attempt
  */
 export async function submitTxHash(
-  userRepo: PaymentAttemptUserRepository,
-  serviceRepo: PaymentAttemptServiceRepository,
-  accountService: AccountService,
-  serviceAccountService: ServiceAccountService,
-  onChainVerifier: OnChainVerifier,
-  clock: Clock,
-  log: Logger,
-  input: SubmitTxHashInput,
-  postCreditFundingDeps?: PostCreditFundingDeps
+	userRepo: PaymentAttemptUserRepository,
+	serviceRepo: PaymentAttemptServiceRepository,
+	accountService: AccountService,
+	serviceAccountService: ServiceAccountService,
+	onChainVerifier: OnChainVerifier,
+	clock: Clock,
+	log: Logger,
+	input: SubmitTxHashInput,
+	postCreditFundingDeps?: PostCreditFundingDeps,
 ): Promise<SubmitTxHashResult> {
-  const now = new Date(clock.now());
+	const now = new Date(clock.now());
 
-  let attempt = await userRepo.findById(
-    input.attemptId,
-    input.billingAccountId
-  );
-  if (!attempt) {
-    throw new PaymentNotFoundError(input.attemptId, input.billingAccountId);
-  }
+	let attempt = await userRepo.findById(
+		input.attemptId,
+		input.billingAccountId,
+	);
+	if (!attempt) {
+		throw new PaymentNotFoundError(input.attemptId, input.billingAccountId);
+	}
 
-  if (attempt.txHash === input.txHash) {
-    return {
-      attemptId: attempt.id,
-      status: attempt.status,
-      chainId: attempt.chainId,
-      txHash: attempt.txHash,
-      errorCode: attempt.errorCode ?? undefined,
-      errorMessage: attempt.errorCode
-        ? `Payment ${attempt.status.toLowerCase()}: ${attempt.errorCode}`
-        : undefined,
-    };
-  }
+	if (attempt.txHash === input.txHash) {
+		return {
+			attemptId: attempt.id,
+			status: attempt.status,
+			chainId: attempt.chainId,
+			txHash: attempt.txHash,
+			errorCode: attempt.errorCode ?? undefined,
+			errorMessage: attempt.errorCode
+				? `Payment ${attempt.status.toLowerCase()}: ${attempt.errorCode}`
+				: undefined,
+		};
+	}
 
-  if (isIntentExpired(attempt, now)) {
-    if (isValidTransition(attempt.status, "FAILED")) {
-      attempt = await serviceRepo.updateStatus(
-        attempt.id,
-        attempt.billingAccountId,
-        "FAILED",
-        "INTENT_EXPIRED"
-      );
-    }
+	if (isIntentExpired(attempt, now)) {
+		if (isValidTransition(attempt.status, "FAILED")) {
+			attempt = await serviceRepo.updateStatus(
+				attempt.id,
+				attempt.billingAccountId,
+				"FAILED",
+				"INTENT_EXPIRED",
+			);
+		}
 
-    return {
-      attemptId: attempt.id,
-      status: attempt.status,
-      chainId: attempt.chainId,
-      txHash: attempt.txHash ?? input.txHash,
-      errorCode: "INTENT_EXPIRED",
-      errorMessage: "Payment intent expired before transaction submission",
-    };
-  }
+		return {
+			attemptId: attempt.id,
+			status: attempt.status,
+			chainId: attempt.chainId,
+			txHash: attempt.txHash ?? input.txHash,
+			errorCode: "INTENT_EXPIRED",
+			errorMessage: "Payment intent expired before transaction submission",
+		};
+	}
 
-  attempt = await serviceRepo.bindTxHash(
-    attempt.id,
-    attempt.billingAccountId,
-    input.txHash,
-    now
-  );
+	attempt = await serviceRepo.bindTxHash(
+		attempt.id,
+		attempt.billingAccountId,
+		input.txHash,
+		now,
+	);
 
-  attempt = await verifyAndSettle(
-    attempt,
-    serviceRepo,
-    accountService,
-    serviceAccountService,
-    onChainVerifier,
-    clock,
-    log,
-    input.defaultVirtualKeyId,
-    postCreditFundingDeps
-  );
+	attempt = await verifyAndSettle(
+		attempt,
+		serviceRepo,
+		accountService,
+		serviceAccountService,
+		onChainVerifier,
+		clock,
+		log,
+		input.defaultVirtualKeyId,
+		postCreditFundingDeps,
+	);
 
-  if (!attempt.txHash) {
-    throw new Error("Internal error: txHash is null after bind operation");
-  }
+	if (!attempt.txHash) {
+		throw new Error("Internal error: txHash is null after bind operation");
+	}
 
-  return {
-    attemptId: attempt.id,
-    status: attempt.status,
-    chainId: attempt.chainId,
-    txHash: attempt.txHash,
-    errorCode: attempt.errorCode ?? undefined,
-    errorMessage: attempt.errorCode
-      ? `Payment ${attempt.status.toLowerCase()}: ${attempt.errorCode}`
-      : undefined,
-  };
+	return {
+		attemptId: attempt.id,
+		status: attempt.status,
+		chainId: attempt.chainId,
+		txHash: attempt.txHash,
+		errorCode: attempt.errorCode ?? undefined,
+		errorMessage: attempt.errorCode
+			? `Payment ${attempt.status.toLowerCase()}: ${attempt.errorCode}`
+			: undefined,
+	};
 }
 
 // ============================================================================
@@ -286,88 +286,88 @@ export async function submitTxHash(
  * @throws PaymentAttemptNotFoundPortError if attempt not found or not owned
  */
 export async function getStatus(
-  userRepo: PaymentAttemptUserRepository,
-  serviceRepo: PaymentAttemptServiceRepository,
-  accountService: AccountService,
-  serviceAccountService: ServiceAccountService,
-  onChainVerifier: OnChainVerifier,
-  clock: Clock,
-  log: Logger,
-  input: GetStatusInput,
-  postCreditFundingDeps?: PostCreditFundingDeps
+	userRepo: PaymentAttemptUserRepository,
+	serviceRepo: PaymentAttemptServiceRepository,
+	accountService: AccountService,
+	serviceAccountService: ServiceAccountService,
+	onChainVerifier: OnChainVerifier,
+	clock: Clock,
+	log: Logger,
+	input: GetStatusInput,
+	postCreditFundingDeps?: PostCreditFundingDeps,
 ): Promise<GetStatusResult> {
-  const now = new Date(clock.now());
+	const now = new Date(clock.now());
 
-  let attempt = await userRepo.findById(
-    input.attemptId,
-    input.billingAccountId
-  );
-  if (!attempt) {
-    throw new PaymentNotFoundError(input.attemptId, input.billingAccountId);
-  }
+	let attempt = await userRepo.findById(
+		input.attemptId,
+		input.billingAccountId,
+	);
+	if (!attempt) {
+		throw new PaymentNotFoundError(input.attemptId, input.billingAccountId);
+	}
 
-  if (attempt.status === "CREATED_INTENT" && isIntentExpired(attempt, now)) {
-    if (isValidTransition(attempt.status, "FAILED")) {
-      attempt = await serviceRepo.updateStatus(
-        attempt.id,
-        attempt.billingAccountId,
-        "FAILED",
-        "INTENT_EXPIRED"
-      );
-    }
-  }
+	if (attempt.status === "CREATED_INTENT" && isIntentExpired(attempt, now)) {
+		if (isValidTransition(attempt.status, "FAILED")) {
+			attempt = await serviceRepo.updateStatus(
+				attempt.id,
+				attempt.billingAccountId,
+				"FAILED",
+				"INTENT_EXPIRED",
+			);
+		}
+	}
 
-  if (
-    attempt.status === "PENDING_UNVERIFIED" &&
-    isVerificationTimedOut(attempt, now)
-  ) {
-    if (isValidTransition(attempt.status, "FAILED")) {
-      attempt = await serviceRepo.updateStatus(
-        attempt.id,
-        attempt.billingAccountId,
-        "FAILED",
-        "RECEIPT_NOT_FOUND"
-      );
-    }
-  }
+	if (
+		attempt.status === "PENDING_UNVERIFIED" &&
+		isVerificationTimedOut(attempt, now)
+	) {
+		if (isValidTransition(attempt.status, "FAILED")) {
+			attempt = await serviceRepo.updateStatus(
+				attempt.id,
+				attempt.billingAccountId,
+				"FAILED",
+				"RECEIPT_NOT_FOUND",
+			);
+		}
+	}
 
-  if (attempt.status === "PENDING_UNVERIFIED") {
-    const shouldVerify =
-      !attempt.lastVerifyAttemptAt ||
-      now.getTime() - attempt.lastVerifyAttemptAt.getTime() >=
-        VERIFY_THROTTLE_SECONDS * 1000;
+	if (attempt.status === "PENDING_UNVERIFIED") {
+		const shouldVerify =
+			!attempt.lastVerifyAttemptAt ||
+			now.getTime() - attempt.lastVerifyAttemptAt.getTime() >=
+				VERIFY_THROTTLE_SECONDS * 1000;
 
-    if (shouldVerify) {
-      attempt = await serviceRepo.recordVerificationAttempt(
-        attempt.id,
-        attempt.billingAccountId,
-        now
-      );
+		if (shouldVerify) {
+			attempt = await serviceRepo.recordVerificationAttempt(
+				attempt.id,
+				attempt.billingAccountId,
+				now,
+			);
 
-      attempt = await verifyAndSettle(
-        attempt,
-        serviceRepo,
-        accountService,
-        serviceAccountService,
-        onChainVerifier,
-        clock,
-        log,
-        input.defaultVirtualKeyId,
-        postCreditFundingDeps
-      );
-    }
-  }
+			attempt = await verifyAndSettle(
+				attempt,
+				serviceRepo,
+				accountService,
+				serviceAccountService,
+				onChainVerifier,
+				clock,
+				log,
+				input.defaultVirtualKeyId,
+				postCreditFundingDeps,
+			);
+		}
+	}
 
-  return {
-    attemptId: attempt.id,
-    status: attempt.status,
-    chainId: attempt.chainId,
-    clientStatus: toClientVisibleStatus(attempt.status),
-    txHash: attempt.txHash,
-    amountUsdCents: attempt.amountUsdCents,
-    errorCode: attempt.errorCode ?? undefined,
-    createdAt: attempt.createdAt,
-  };
+	return {
+		attemptId: attempt.id,
+		status: attempt.status,
+		chainId: attempt.chainId,
+		clientStatus: toClientVisibleStatus(attempt.status),
+		txHash: attempt.txHash,
+		amountUsdCents: attempt.amountUsdCents,
+		errorCode: attempt.errorCode ?? undefined,
+		createdAt: attempt.createdAt,
+	};
 }
 
 // ============================================================================
@@ -386,123 +386,127 @@ export async function getStatus(
  * @returns Updated payment attempt after verification/settlement
  */
 async function verifyAndSettle(
-  attempt: PaymentAttempt,
-  serviceRepo: PaymentAttemptServiceRepository,
-  accountService: AccountService,
-  serviceAccountService: ServiceAccountService,
-  onChainVerifier: OnChainVerifier,
-  _clock: Clock,
-  log: Logger,
-  defaultVirtualKeyId: string,
-  postCreditFundingDeps?: PostCreditFundingDeps
+	attempt: PaymentAttempt,
+	serviceRepo: PaymentAttemptServiceRepository,
+	accountService: AccountService,
+	serviceAccountService: ServiceAccountService,
+	onChainVerifier: OnChainVerifier,
+	_clock: Clock,
+	log: Logger,
+	defaultVirtualKeyId: string,
+	postCreditFundingDeps?: PostCreditFundingDeps,
 ): Promise<PaymentAttempt> {
-  if (!attempt.txHash) {
-    return attempt;
-  }
+	if (!attempt.txHash) {
+		return attempt;
+	}
 
-  // Call OnChainVerifier port
-  const verificationResult = await onChainVerifier.verify({
-    chainId: attempt.chainId,
-    txHash: attempt.txHash,
-    expectedTo: attempt.toAddress,
-    expectedToken: attempt.token,
-    expectedAmount: attempt.amountRaw,
-  });
+	// Call OnChainVerifier port
+	const verificationResult = await onChainVerifier.verify({
+		chainId: attempt.chainId,
+		txHash: attempt.txHash,
+		expectedTo: attempt.toAddress,
+		expectedToken: attempt.token,
+		expectedAmount: attempt.amountRaw,
+	});
 
-  if (verificationResult.status === "PENDING") {
-    return attempt;
-  }
+	if (verificationResult.status === "PENDING") {
+		return attempt;
+	}
 
-  if (verificationResult.status === "FAILED") {
-    const errorCode = verificationResult.errorCode ?? "TX_REVERTED";
+	if (verificationResult.status === "FAILED") {
+		const errorCode = verificationResult.errorCode ?? "TX_REVERTED";
 
-    // RPC_ERROR is transient — leave in PENDING_UNVERIFIED so next poll retries
-    if (errorCode === "RPC_ERROR") {
-      log.warn(
-        { attemptId: attempt.id, txHash: attempt.txHash, errorCode },
-        "RPC error during verification — will retry on next poll"
-      );
-      return attempt;
-    }
+		// RPC_ERROR is transient — leave in PENDING_UNVERIFIED so next poll retries
+		if (errorCode === "RPC_ERROR") {
+			log.warn(
+				{ attemptId: attempt.id, txHash: attempt.txHash, errorCode },
+				"RPC error during verification — will retry on next poll",
+			);
+			return attempt;
+		}
 
-    const targetStatus: PaymentAttemptStatus =
-      errorCode === "TX_REVERTED" ? "FAILED" : "REJECTED";
+		const targetStatus: PaymentAttemptStatus =
+			errorCode === "TX_REVERTED" ? "FAILED" : "REJECTED";
 
-    if (isValidTransition(attempt.status, targetStatus)) {
-      attempt = await serviceRepo.updateStatus(
-        attempt.id,
-        attempt.billingAccountId,
-        targetStatus,
-        errorCode
-      );
-    }
+		if (isValidTransition(attempt.status, targetStatus)) {
+			attempt = await serviceRepo.updateStatus(
+				attempt.id,
+				attempt.billingAccountId,
+				targetStatus,
+				errorCode,
+			);
+		}
 
-    return attempt;
-  }
+		return attempt;
+	}
 
-  if (verificationResult.status === "VERIFIED") {
-    if (
-      verificationResult.actualFrom &&
-      verificationResult.actualFrom.toLowerCase() !==
-        attempt.fromAddress.toLowerCase()
-    ) {
-      if (isValidTransition(attempt.status, "REJECTED")) {
-        attempt = await serviceRepo.updateStatus(
-          attempt.id,
-          attempt.billingAccountId,
-          "REJECTED",
-          "SENDER_MISMATCH"
-        );
-      }
+	if (verificationResult.status === "VERIFIED") {
+		if (
+			verificationResult.actualFrom &&
+			verificationResult.actualFrom.toLowerCase() !==
+				attempt.fromAddress.toLowerCase()
+		) {
+			if (isValidTransition(attempt.status, "REJECTED")) {
+				attempt = await serviceRepo.updateStatus(
+					attempt.id,
+					attempt.billingAccountId,
+					"REJECTED",
+					"SENDER_MISMATCH",
+				);
+			}
 
-      return attempt;
-    }
+			return attempt;
+		}
 
-    const clientPaymentId = `${attempt.chainId}:${attempt.txHash}`;
+		const clientPaymentId = `${attempt.chainId}:${attempt.txHash}`;
 
-    try {
-      await confirmCreditsPayment(accountService, serviceAccountService, {
-        billingAccountId: attempt.billingAccountId,
-        defaultVirtualKeyId,
-        amountUsdCents: attempt.amountUsdCents,
-        clientPaymentId,
-        metadata: {
-          paymentAttemptId: attempt.id,
-          txHash: attempt.txHash,
-          chainId: attempt.chainId,
-          fromAddress: attempt.fromAddress,
-        },
-      });
+		try {
+			await confirmCreditsPayment(accountService, serviceAccountService, {
+				billingAccountId: attempt.billingAccountId,
+				defaultVirtualKeyId,
+				amountUsdCents: attempt.amountUsdCents,
+				clientPaymentId,
+				metadata: {
+					paymentAttemptId: attempt.id,
+					txHash: attempt.txHash,
+					chainId: attempt.chainId,
+					fromAddress: attempt.fromAddress,
+				},
+			});
 
-      if (isValidTransition(attempt.status, "CREDITED")) {
-        attempt = await serviceRepo.updateStatus(
-          attempt.id,
-          attempt.billingAccountId,
-          "CREDITED"
-        );
+			if (isValidTransition(attempt.status, "CREDITED")) {
+				attempt = await serviceRepo.updateStatus(
+					attempt.id,
+					attempt.billingAccountId,
+					"CREDITED",
+				);
 
-        // Post-credit funding: treasury settlement + TB co-writes + provider top-up
-        // Runs inline (not fire-and-forget) but never throws (all steps catch internally).
-        // Uses chainId:txHash as canonical funding key (matches clientPaymentId used for crediting).
-        if (postCreditFundingDeps) {
-          await runPostCreditFunding(postCreditFundingDeps, {
-            paymentIntentId: clientPaymentId,
-            amountUsdCents: attempt.amountUsdCents,
-          });
-        }
-      }
-    } catch (error) {
-      log.error(
-        {
-          attemptId: attempt.id,
-          error: error instanceof Error ? error.message : error,
-        },
-        "Settlement failed for payment attempt"
-      );
-    }
+				// Post-credit settlement: treasury Split distribute + TB co-write.
+				// Runs inline (not fire-and-forget) but never throws (all steps catch internally).
+				// Uses chainId:txHash as canonical key (matches clientPaymentId used for crediting).
+				// NOTE: the OpenRouter/Coinbase provider top-up (old steps 5-6) was retired —
+				// OpenRouter 410'd programmatic crypto top-up; outbound vendor funding now flows
+				// through the operator wallet's withdrawToSteward + a manual human checkout. The
+				// outbound half here is now just Split distribute (operator + DAO shares).
+				if (postCreditFundingDeps) {
+					await runPostCreditFunding(postCreditFundingDeps, {
+						paymentIntentId: clientPaymentId,
+						amountUsdCents: attempt.amountUsdCents,
+					});
+				}
+			}
+		} catch (error) {
+			log.error(
+				{
+					attemptId: attempt.id,
+					error: error instanceof Error ? error.message : error,
+				},
+				"Settlement failed for payment attempt",
+			);
+		}
 
-    return attempt;
-  }
+		return attempt;
+	}
 
-  return attempt;
+	return attempt;
 }

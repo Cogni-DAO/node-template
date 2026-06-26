@@ -108,7 +108,6 @@ import {
 } from "@/adapters/server/ai/providers";
 import { getServiceDb } from "@/adapters/server/db/drizzle.service-client";
 import { ServiceDrizzlePaymentAttemptRepository } from "@/adapters/server/payments/drizzle-payment-attempt.adapter";
-import { OpenRouterFundingAdapter } from "@/adapters/server/treasury/openrouter-funding.adapter";
 import { SplitTreasurySettlementAdapter } from "@/adapters/server/treasury/split-treasury-settlement.adapter";
 import {
 	FakeMetricsAdapter,
@@ -145,7 +144,6 @@ import type {
 	OperatorWalletPort,
 	PaymentAttemptServiceRepository,
 	PaymentAttemptUserRepository,
-	ProviderFundingPort,
 	RunStreamPort,
 	ServiceAccountService,
 	ThreadPersistencePort,
@@ -244,8 +242,6 @@ export interface Container {
 	operatorWallet: OperatorWalletPort | undefined;
 	/** Treasury settlement — undefined when operator wallet not configured */
 	treasurySettlement: TreasurySettlementPort | undefined;
-	/** Provider funding — undefined when OPENROUTER_API_KEY not set */
-	providerFunding: ProviderFundingPort | undefined;
 	/** Connection broker — undefined when CONNECTIONS_ENCRYPTION_KEY not set */
 	connectionBroker: ConnectionBrokerPort | undefined;
 	/** Model catalog — aggregates all providers for model listing */
@@ -758,29 +754,10 @@ function createContainer(): Container {
 				});
 			})();
 
-	// ProviderFunding: optional — only when OPENROUTER_API_KEY is configured + operator wallet available
-	// Per MARGIN_PRESERVED: fail fast if pricing constants don't preserve positive margin
-	const providerFunding: ProviderFundingPort | undefined = (() => {
-		if (!env.OPENROUTER_API_KEY || !operatorWallet) return undefined;
-
-		// MARGIN_PRESERVED: markup × (1 - fee) must be > 1 + revenueShare
-		const effectiveMarkup =
-			env.USER_PRICE_MARKUP_FACTOR * (1 - env.OPENROUTER_CRYPTO_FEE);
-		if (effectiveMarkup <= 1 + env.SYSTEM_TENANT_REVENUE_SHARE) {
-			throw new Error(
-				`MARGIN_PRESERVED violation: markup(${env.USER_PRICE_MARKUP_FACTOR}) × (1 - fee(${env.OPENROUTER_CRYPTO_FEE})) ` +
-					`must be > 1 + revenueShare(${env.SYSTEM_TENANT_REVENUE_SHARE}). ` +
-					"DAO would lose money on every purchase.",
-			);
-		}
-
-		return new OpenRouterFundingAdapter(
-			getServiceDb(),
-			operatorWallet,
-			{ apiKey: env.OPENROUTER_API_KEY },
-			log.child({ component: "OpenRouterFundingAdapter" }),
-		);
-	})();
+	// ProviderFunding (OpenRouter/Coinbase top-up) was retired — OpenRouter 410'd
+	// programmatic crypto top-up. Outbound vendor funding now flows through the
+	// operator wallet's withdrawToSteward + a manual human checkout. The post-credit
+	// chain here is now just inbound credit + Split distribute (treasurySettlement below).
 
 	// Connection broker — BYO-AI credential resolution
 	// Undefined when CONNECTIONS_ENCRYPTION_KEY not set
@@ -872,7 +849,6 @@ function createContainer(): Container {
 		treasurySettlement: operatorWallet
 			? new SplitTreasurySettlementAdapter(operatorWallet, USDC_TOKEN_ADDRESS)
 			: undefined,
-		providerFunding,
 		connectionBroker,
 		// Multi-provider model ports
 		...(() => {

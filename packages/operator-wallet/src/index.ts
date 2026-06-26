@@ -12,14 +12,11 @@
  */
 
 export {
-  calculateSplitAllocations,
-  MINIMUM_PAYMENT_USD,
-  numberToPpm,
-  OPENROUTER_CRYPTO_FEE_PPM,
-  PPM,
-  SPLIT_TOTAL_ALLOCATION,
+	calculateSplitAllocations,
+	MINIMUM_PAYMENT_USD,
+	numberToPpm,
+	OPENROUTER_CRYPTO_FEE_PPM,
+	PPM,
+	SPLIT_TOTAL_ALLOCATION,
 } from "./domain/split-allocation.js";
-export type {
-  OperatorWalletPort,
-  TransferIntent,
-} from "./port/operator-wallet.port.js";
+export type { OperatorWalletPort } from "./port/operator-wallet.port.js";
