@@ -44,18 +44,26 @@ recurring work.
 
 The substrate exists. The remaining sovereignty delta is node-direct schedule create: the
 node app should hold its own Temporal client and namespace-scoped credentials, then create
-schedules against its own per-node task queue.
+schedules itself instead of routing create through the operator.
 
 ## Create vs execute
 
 1. **Create -- node-direct target.** The node's app holds its own Temporal client and calls
-   `schedule.create(...)` for `NodeTaskWorkflow` or `GraphRunWorkflow` on its own queue.
+   `schedule.create(...)` for `NodeTaskWorkflow` or `GraphRunWorkflow`.
    Today schedule create may still run through the app/operator-owned adapter path; node-direct
    client credentials are the build target.
-2. **Execute -- shared and generic.** The shared worker polls the node queue, runs the generic
-   workflow, and dispatches into the node route or graph. The work runs in the node.
+2. **Execute -- shared and generic.** The shared worker polls shared workload queues, runs the
+   generic workflow, and dispatches into the owning node route or graph. The work runs in the
+   node.
 
 The shared worker is substrate plumbing, not node-specific business logic.
+
+## Queue model
+
+Tenancy lives in the workflow payload (`nodeId`, grant, route/graph), not in queue topology.
+The target worker pool polls a bounded set of workload queues such as `dispatch` and
+`graph-exec`. Current deployments may still poll transitional per-node queues; that is
+compatibility, not the architecture target.
 
 ## Dispatch hop
 
@@ -76,12 +84,13 @@ and graphs.
 ## Escape hatch: per-node worker
 
 A node runs its own Temporal worker only for custom durable orchestration the generic engine
-cannot express. That worker registers node-owned workflow definitions and polls the node queue.
+cannot express. That worker registers node-owned workflow definitions and polls its own queue.
 This costs a worker pod per node and is not the node-template default.
 
 ## Not this
 
 - per-node worker as the default;
+- one queue per node as the default isolation model;
 - a second scheduler such as pg-boss or cron;
 - an operator-in-the-loop schedule create API as the long-term node contract.
 

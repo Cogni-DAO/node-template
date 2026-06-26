@@ -94,7 +94,7 @@ Ensure all Temporal workflows are replay-safe, Workflow code performs no I/O dir
 // Workflow: deterministic orchestration only
 export async function CollectSourceStreamWorkflow(
   source: string,
-  streamId: string
+  streamId: string,
 ): Promise<void> {
   // Activity: load cursor from DB
   const cursor = await loadCursorActivity(source, streamId);
@@ -103,7 +103,7 @@ export async function CollectSourceStreamWorkflow(
   const { events, nextCursor } = await collectSignalsActivity(
     source,
     streamId,
-    cursor
+    cursor,
   );
 
   // Activity: ingest signals (DB write)
@@ -120,7 +120,7 @@ export async function CollectSourceStreamWorkflow(
 // Triggered by incident lifecycle event, not timer
 export async function GovernanceAgentWorkflow(
   incidentId: string,
-  eventType: IncidentLifecycleEvent["type"]
+  eventType: IncidentLifecycleEvent["type"],
 ): Promise<void> {
   // Activity: check cooldown
   const shouldRun = await checkCooldownActivity(incidentId, COOLDOWN_MINUTES);
@@ -183,26 +183,19 @@ This is the canonical pattern for a node to run recurring or scheduled work on t
 Temporal substrate. The substrate is **one shared generic worker**. For normal recurring
 route/graph work, a node runs **no worker** and writes **no** Temporal workflow code.
 
-The model is three parts: **declare -> create -> execute**.
+The model is three parts: **author -> create -> execute**.
 
-**1. Declare** the recurring jobs as `schedules[]` in the node repo-spec (`route` XOR `graph`):
+**1. Author** the node-owned work as a route or graph:
 
-```yaml
-schedules:
-  - id: metrics-ingest
-    cron: "*/15 * * * *"
-    timezone: UTC
-    route: /api/internal/ops/metrics-ingest
-    payload: { window: "15m" }
-  - id: nightly-report
-    cron: "0 0 * * *"
-    graph: my-node:report
-```
+- For AI work that fits one run, add a graph in `graphs/`.
+- For plain recurring work, add a route or use `defineScheduledJob`.
+- Optional repo-spec `schedules[]` is an infra-as-code declaration path, not the
+  runtime tenant create path.
 
-**2. Create -- node-direct target.** The node app holds its own Temporal client and creates
-the schedule against its own per-node task queue (`scheduler-tasks-<nodeId>`), with
-`NodeTaskWorkflow` for `route` or `GraphRunWorkflow` for `graph`. The long-term contract keeps
-the operator out of the create path.
+**2. Create.** Node users create schedules through the node app (`POST /api/v1/schedules`).
+`graphId` schedules start `GraphRunWorkflow`; `route` schedules start `NodeTaskWorkflow`.
+The node-direct target is that the node app holds its own Temporal client and creates the
+schedule itself. The long-term contract keeps the operator out of the create path.
 
 **3. Execute -- shared generic worker.** On each tick the shared worker runs the generic
 workflow under the node tenant identity. `NodeTaskWorkflow` calls the node route;
@@ -210,7 +203,7 @@ workflow under the node tenant identity. `NodeTaskWorkflow` calls the node route
 workflow code.
 
 ```
-schedule.create on scheduler-tasks-<nodeId>
+schedule.create
   route -> NodeTaskWorkflow
   graph -> GraphRunWorkflow
 
@@ -222,6 +215,10 @@ NodeTaskWorkflow
 
 The route must dedup on the idempotency key. A key the receiver ignores does not make a POST
 idempotent.
+
+Queue topology is shared-worker infrastructure. Tenancy is carried in workflow input; the
+target is a bounded set of workload queues, not one queue or worker per node. Transitional
+per-node queues may exist during migration and as the sovereign escape hatch.
 
 #### Durable multi-step / HITL roadmap
 

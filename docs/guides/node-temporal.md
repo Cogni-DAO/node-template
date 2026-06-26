@@ -30,6 +30,18 @@ You almost never run your own worker -- you write a **graph** or a **route**.
 The first two are the default and the substrate already runs them. Durable composition
 between runs is not solved by pretending one graph is the whole answer; it is roadmap work.
 
+## Create schedules from the node app
+
+Node users create recurring work through the node app's schedule surface:
+
+- `POST /api/v1/schedules` with `graphId` starts `GraphRunWorkflow`.
+- `POST /api/v1/schedules` with `route` starts `NodeTaskWorkflow`.
+- `defineScheduledJob` is the node-author shortcut for plain recurring route work.
+
+The node provides a graph or route. The shared worker runs the generic workflow and
+dispatches into the node. Do not add workflow code or a worker service for ordinary
+scheduled AI, cron, or route work.
+
 ## Default: AI work is a graph
 
 If the work can complete inside one graph run, keep the AI pipeline **inside one LangGraph
@@ -76,6 +88,8 @@ cannot express.
 
 - Use Temporal Schedules, not cron.
 - Schedule lifecycle belongs to app CRUD endpoints.
+- Tenancy lives in the schedule/workflow payload. Queue topology is shared-worker
+  infrastructure; do not create one worker per node by default.
 - AI runs inside graphs/activities, never in workflow code.
 - Dispatch is at-most-once for v0; make routes idempotent.
 
