@@ -30,6 +30,13 @@ and injects it into context. Codex needs a one-time trust (`/hooks`).
 - **Your CI** (`.github/workflows/`), policy (`biome`, `tsconfig`, `.dependency-cruiser.cjs`), and `Dockerfile` — `POLICY_STAYS_LOCAL`. Your CI builds + pushes your own image (`FORK_FREEDOM`).
 - **Review policy**: `.cogni/repo-spec.yaml` `gates:` + `.cogni/rules/`. A PR here routes + reviews against these (born-reviewable). Tune the gate set to your node's mission.
 
+## Agent delivery default
+
+For code changes, do not stop at an uncommitted local diff unless the user explicitly asks
+for local-only work. Commit coherent checkpoints, push a branch, open a draft PR for major
+checkpoints, and use the candidate-flight + `/validate-candidate` loop for live render or
+behavior proof before merge.
+
 ## Add a secret (node-dev half)
 
 Declare the key's **shape** in `.cogni/secrets-catalog.yaml` and consume it via typed env in app code (fail-fast if missing). You do **not** set the value or wire the ExternalSecret — whoever owns the deploy env does that (`pnpm secrets:set <env> <slug> <KEY>`).
