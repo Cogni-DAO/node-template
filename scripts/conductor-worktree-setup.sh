@@ -22,9 +22,39 @@ derive_main_workspace() {
   (cd "$WORKSPACE_ROOT" && cd "$(dirname "$common_dir")" && pwd)
 }
 AUTH_ROOT="${COGNI_NODE_AUTH_ROOT:-${CONDUCTOR_ROOT_PATH:-$(derive_main_workspace || true)}}"
+COGNI_NODE_KEY_LOCK_DIR=""
+COGNI_NODE_KEY_LOCK_OWNER=""
 
 warn() {
   printf 'warn: %s\n' "$1" >&2
+}
+
+derive_node_slug() {
+  [[ -f "$WORKSPACE_ROOT/.cogni/repo-spec.yaml" ]] || return 0
+  awk '
+    /^intent:/ { in_intent = 1; next }
+    in_intent && /^[^[:space:]]/ { in_intent = 0 }
+    in_intent && /^[[:space:]]+name:/ {
+      sub(/^[[:space:]]+name:[[:space:]]*/, ""); gsub(/["'\''"]/, ""); print; exit
+    }
+  ' "$WORKSPACE_ROOT/.cogni/repo-spec.yaml" 2>/dev/null
+}
+
+node_base_url() {
+  local node_slug="$1"
+  case "$node_slug" in
+    operator | cogni-template | "") printf 'https://cognidao.org\n' ;;
+    *) printf 'https://%s.cognidao.org\n' "$node_slug" ;;
+  esac
+}
+
+cleanup_node_key_lock() {
+  if [[ -n "$COGNI_NODE_KEY_LOCK_OWNER" ]]; then
+    rm -f "$COGNI_NODE_KEY_LOCK_OWNER" 2>/dev/null || true
+  fi
+  if [[ -n "$COGNI_NODE_KEY_LOCK_DIR" ]]; then
+    rmdir "$COGNI_NODE_KEY_LOCK_DIR" 2>/dev/null || true
+  fi
 }
 
 read_env_file_value() {
@@ -37,10 +67,29 @@ read_env_file_value() {
       value = substr($0, length(key) + 2)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
       gsub(/^["'\''"]|["'\''"]$/, "", value)
-      print value
-      exit
+      found = value
+    }
+    END {
+      if (found != "") print found
     }
   ' "$env_file" 2>/dev/null
+}
+
+auth_root_node_cogni_key_is_rejected() {
+  local env_file="$AUTH_ROOT/.env.cogni"
+  local key status register_base_url
+
+  key="$(read_env_file_value COGNI_NODE_API_KEY "$env_file")"
+  [[ -n "$key" ]] || return 1
+
+  register_base_url="$(node_base_url "$(derive_node_slug)")"
+  status="$(
+    curl -sS --max-time 6 -o /dev/null -w '%{http_code}' \
+      -H "Authorization: Bearer $key" \
+      "$register_base_url/api/v1/cognition" 2>/dev/null || true
+  )"
+
+  [[ "$status" == "401" || "$status" == "403" ]]
 }
 
 refresh_workspace_base_ref() {
@@ -112,20 +161,24 @@ auth_root_has_node_cogni_key() {
 
 register_auth_root_cogni_agent() {
   local env_file="$AUTH_ROOT/.env.cogni"
-  local agent_name response key
+  local agent_name response key user_id billing_account node_slug register_base_url
 
   if ! command -v curl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
     warn "curl and jq are required to auto-register Cogni credentials"
     return 1
   fi
 
-  agent_name="${USER:-agent}-conductor-$(hostname -s 2>/dev/null || printf 'local')-$(date -u +%Y%m%dT%H%M%SZ)"
+  node_slug="$(derive_node_slug)"
+  register_base_url="$(node_base_url "$node_slug")"
+  agent_name="${USER:-agent}-${node_slug:-node}-conductor-$(hostname -s 2>/dev/null || printf 'local')-$(date -u +%Y%m%dT%H%M%SZ)"
   response="$(
-    curl -fsS --max-time 10 -X POST https://cognidao.org/api/v1/agent/register \
+    curl -fsS --max-time 10 -X POST "$register_base_url/api/v1/agent/register" \
       -H 'content-type: application/json' \
       -d "$(jq -cn --arg name "$agent_name" '{name:$name}')"
   )" || return 1
   key="$(printf '%s\n' "$response" | jq -r '.apiKey // empty')"
+  user_id="$(printf '%s\n' "$response" | jq -r '.userId // empty')"
+  billing_account="$(printf '%s\n' "$response" | jq -r '.billingAccountId // empty')"
   [[ -n "$key" ]] || return 1
 
   {
@@ -135,44 +188,70 @@ register_auth_root_cogni_agent() {
       printf '# Cogni node API keys (gitignored via .env*)\n'
     fi
     printf '# Agent name: %s\n' "$agent_name"
+    printf '# Registered via: %s/api/v1/agent/register\n' "$register_base_url"
     printf 'COGNI_NODE_API_KEY=%s\n' "$key"
+    [[ -n "$user_id" ]] && printf 'COGNI_NODE_USER_ID=%s\n' "$user_id"
+    [[ -n "$billing_account" ]] && printf 'COGNI_NODE_BILLING_ACCOUNT=%s\n' "$billing_account"
   } >>"$env_file"
   chmod 600 "$env_file"
 }
 
 ensure_auth_root_cogni_env() {
-  local lock_dir
+  local lock_dir owner_file
 
   if [[ -z "$AUTH_ROOT" ]]; then
     warn "no auth root resolved; cannot auto-register COGNI_NODE_API_KEY safely"
     exit 1
   fi
 
-  if auth_root_has_node_cogni_key; then
+  if auth_root_has_node_cogni_key && ! auth_root_node_cogni_key_is_rejected; then
     return
   fi
 
   mkdir -p "$AUTH_ROOT/.context"
   lock_dir="$AUTH_ROOT/.context/cogni-node-key.lock"
+  owner_file="$lock_dir/owner"
   if ! mkdir "$lock_dir" 2>/dev/null; then
     for _ in {1..20}; do
       sleep 1
-      auth_root_has_node_cogni_key && return
+      if auth_root_has_node_cogni_key && ! auth_root_node_cogni_key_is_rejected; then
+        return
+      fi
     done
-    warn "$AUTH_ROOT/.env.cogni still missing COGNI_NODE_API_KEY after waiting for another setup"
-    exit 1
-  fi
-  trap 'rmdir "$lock_dir" 2>/dev/null || true' EXIT
 
-  if auth_root_has_node_cogni_key; then
+    if rmdir "$lock_dir" 2>/dev/null; then
+      warn "removed stale empty Cogni node key lock: $lock_dir"
+      mkdir "$lock_dir" 2>/dev/null || {
+        warn "could not acquire Cogni node key lock after removing stale lock: $lock_dir"
+        exit 1
+      }
+    else
+      warn "$AUTH_ROOT/.env.cogni still missing COGNI_NODE_API_KEY after waiting for another setup"
+      warn "lock is still present at $lock_dir; remove it if no setup process is active"
+      exit 1
+    fi
+  fi
+
+  {
+    printf 'pid=%s\n' "$$"
+    printf 'workspace=%s\n' "$WORKSPACE_ROOT"
+    printf 'createdAt=%s\n' "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  } >"$owner_file"
+  COGNI_NODE_KEY_LOCK_DIR="$lock_dir"
+  COGNI_NODE_KEY_LOCK_OWNER="$owner_file"
+  trap cleanup_node_key_lock EXIT
+
+  if auth_root_has_node_cogni_key && ! auth_root_node_cogni_key_is_rejected; then
     return
   fi
 
-  warn "$AUTH_ROOT/.env.cogni missing COGNI_NODE_API_KEY; attempting NODE agent registration"
+  warn "$AUTH_ROOT/.env.cogni missing a usable COGNI_NODE_API_KEY for $(node_base_url "$(derive_node_slug)"); attempting NODE agent registration"
   if register_auth_root_cogni_agent; then
     printf 'registered Cogni NODE agent and saved COGNI_NODE_API_KEY in %s\n' "$AUTH_ROOT/.env.cogni"
   else
-    warn "could not auto-register Cogni NODE agent; run /api/v1/agent/register and save COGNI_NODE_API_KEY in $AUTH_ROOT/.env.cogni"
+    local register_base_url
+    register_base_url="$(node_base_url "$(derive_node_slug)")"
+    warn "could not auto-register Cogni NODE agent; POST $register_base_url/api/v1/agent/register and save COGNI_NODE_API_KEY in $AUTH_ROOT/.env.cogni"
     exit 1
   fi
 }

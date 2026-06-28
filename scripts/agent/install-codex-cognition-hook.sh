@@ -44,8 +44,10 @@ read_env_file_value() {
       value = substr($0, length(key) + 2)
       gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
       gsub(/^["'\''"]|["'\''"]$/, "", value)
-      print value
-      exit
+      found = value
+    }
+    END {
+      if (found != "") print found
     }
   ' "$env_file" 2>/dev/null
 }
@@ -119,7 +121,7 @@ Do not continue silently. Tell the user that session cognition did not load and
 ask them to bootstrap the node credentials, then restart or resume the agent.
 
 Most common fixes:
-- register a NODE agent via /api/v1/agent/register
+- register a NODE agent via ${url%/cognition}/agent/register
 - save COGNI_NODE_API_KEY in the clone-root .env.cogni
 - for Codex, run pnpm codex:cognition:install once and trust the user-level hook with /hooks
 
@@ -132,7 +134,8 @@ HOOK
 chmod +x "$HOOK_PATH"
 touch "$CONFIG_PATH"
 
-if ! grep -Fq 'BEGIN COGNI CODEX COGNITION HOOK' "$CONFIG_PATH"; then
+if ! grep -Fq 'BEGIN COGNI CODEX COGNITION HOOK' "$CONFIG_PATH" &&
+  ! grep -Fq "$HOOK_PATH" "$CONFIG_PATH"; then
   escaped_hook_path="${HOOK_PATH//\\/\\\\}"
   escaped_hook_path="${escaped_hook_path//\"/\\\"}"
   cat >>"$CONFIG_PATH" <<EOF

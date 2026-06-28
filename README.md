@@ -36,14 +36,15 @@ This template ships a shared Conductor setup entrypoint:
 When a node repo minted from this template is added as a Conductor project,
 Conductor runs the setup script from the new workspace. The script refreshes
 `origin/main`, symlinks `.env.cogni` and `.local-auth` from
-`COGNI_NODE_AUTH_ROOT` or `COGNI_TEMPLATE_ROOT` when available, installs
-dependencies, builds package declarations, and writes
+`COGNI_NODE_AUTH_ROOT` when available, registers missing NODE credentials
+against this node's own `https://<slug>.cognidao.org/api/v1/agent/register`
+endpoint, installs dependencies, builds package declarations, and writes
 `.context/conductor-setup.json` as proof that setup ran.
 
-For a laptop that stores Cogni auth in the main monorepo checkout:
+For a laptop that stores Cogni auth in a canonical checkout:
 
 ```bash
-export COGNI_TEMPLATE_ROOT="$HOME/dev/cogni-template"
+export COGNI_NODE_AUTH_ROOT="$HOME/dev/<node-slug>"
 ```
 
 The operator consumes the pushed digest and owns URL/DNS/deployment state.
